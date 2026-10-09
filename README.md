@@ -13,10 +13,15 @@ This is a reimplementation of the classic game Interstate 76 in Godot engine.
 * Single player campaign, scenarios and auto melee
 * Multiplayer with modern netcode
 * Auto-reverse (optional)
+* Mission checkpoints (optional)
 * Support for upscaled textures
 
 # Installation
-Unpack the i26 directory from the zip into the installation directory of the [GoG version](https://www.gog.com/en/game/interstate76) or Nitro Pack, and run `i26.exe`
+Copy the Interstate 76 directory from [GoG](https://www.gog.com/en/game/interstate76) into the `i26` directory named `i76`, and/or the Nitro pack directory named `nitro`.
+
+Alternatively, place the `setup_interstate_76_*.exe` offline backup installers into the `i26` directory and they will be unpacked automatically.
+
+On Linux, ensure Microsoft core fonts are installed for Impact and Arial.
 
 # Source code
 Please stand by...

@@ -6,6 +6,8 @@ This is a reimplementation of the classic game Interstate 76 in Godot engine.
 
 <img width="2256" height="1504" alt="SCR0000" src="https://github.com/user-attachments/assets/30354b8f-5243-43ae-9357-40768950d77e" />
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G4Q128JK2B)
+
 # Features
 
 * Modernized graphics

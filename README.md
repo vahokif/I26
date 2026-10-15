@@ -14,6 +14,7 @@ This is a reimplementation of the classic game Interstate 76 in Godot engine.
 * 1997 mode - toggle the original graphics any time with F12
 * Single player campaign, scenarios and auto melee
 * Multiplayer with modern netcode
+* Easy to use 3D map editor
 
 ## Optional
 * Auto-reverse

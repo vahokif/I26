@@ -16,6 +16,7 @@ This is a reimplementation of the classic game Interstate 76 in Godot engine.
 * Multiplayer with modern netcode
 * Online coop mode for campaign and scenarios
 * Easy to use 3D map editor
+* 3D garage with respraying
 
 ## Optional
 * Auto-reverse

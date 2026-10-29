@@ -23,6 +23,8 @@ This is a reimplementation of the classic game Interstate 76 in Godot engine.
 * Mission checkpoints
 * Botanically accurate vegetation
 * Support for upscaled textures
+* CB radio in multiplayer
+* Car interiors
 
 # Installation
 Install the [GoG](https://www.gog.com/en/game/interstate76) version (and Nitro pack) from GoG Galaxy, and the game should find them automatically. If not, copy the Interstate 76 directory into the `i26` directory named `i76`, and/or the Nitro pack into the directory named `nitro`.

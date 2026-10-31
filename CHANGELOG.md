@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 (31 October 2026)
+
+Network games use protocol 21: 0.11.0 does not play with 0.10.0 or earlier, so everyone in a game needs 0.11.0.
+
+The source code is now public on GitHub.
 
 ### New
 - Graphic Detail has a Renderer row (Auto, Vulkan, D3D12 on Windows, OpenGL), applied at the next start, so a machine whose graphics driver misbehaves can switch to another without the command line.

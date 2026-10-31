@@ -8,7 +8,8 @@ Details for players. The [README](../README.md) has the features and a short ins
   content). A macOS build is made too, but it is unsigned and untested on a Mac.
 - A GPU with a Vulkan 1.2 driver (or, on Windows, Direct3D 12) for the intended look. A machine with neither falls back to
   OpenGL (Godot's Compatibility renderer): the game runs, with no SSAO and some small differences; it says so once in the
-  shell and in the log (see [docs/compatibility-renderer.md](compatibility-renderer.md)).
+  shell and in the log (see [docs/compatibility-renderer.md](compatibility-renderer.md)). If the picture is wrong on your
+  machine, Graphic Detail's **Renderer** row switches between Vulkan, Direct3D 12 (Windows) and OpenGL at the next start.
 
 ## Installing and starting
 
@@ -110,7 +111,8 @@ on or off. `freelance` and `thirdnostril` do nothing, in the original too. None 
 
 **Game pads.** A pad is the original's joystick 1: the left stick steers, the right trigger accelerates and the
 left brakes, the right stick swings the camera (and is a head look in the car), A and RB fire, B cycles, X and Y
-target, the D-pad links, reverses and changes target. Start opens the game menu. The pad also drives every menu
+target, the D-pad links, reverses and changes target. Start opens the game menu and, in a network game, holding Back (View) shows the standings; bind Start or Back to a
+command on the Controller screen and they do only that command instead. The pad also drives every menu
 (D-pad or left stick to move, A to click, B and Start to go back); A, B or Start skips a movie, and B or Start a
 skippable cut-scene, as Esc does. Everything is rebindable on the Controller
 screen (Control Configuration > Calibrate).

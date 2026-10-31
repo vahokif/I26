@@ -1,0 +1,170 @@
+; Engine configuration file.
+
+config_version=5
+
+[application]
+
+config/name="I26"
+config/icon="res://Assets/icon.svg"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="I26"
+config/project_settings_override="user://log_settings.cfg"
+run/main_scene="res://Scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/image="res://Assets/boot_splash.png"
+boot_splash/stretch_mode=1
+boot_splash/use_filter=true
+
+[audio]
+
+; the CB voice chat's microphone: the input is only opened when the CB Transmit key is first pressed
+driver/enable_input=true
+
+[debug]
+
+file_logging/enable_file_logging=false
+file_logging/enable_file_logging.pc=false
+file_logging/max_log_files=3
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=3
+
+[dotnet]
+
+project/assembly_name="I76.Game"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+
+[shader_globals]
+
+i76_car_materials={
+"type": "bool",
+"value": true
+}
+
+i76_car_interiors={
+"type": "bool",
+"value": true
+}
+
+i76_mode_1997={
+"type": "bool",
+"value": false
+}
+i76_software={
+"type": "bool",
+"value": false
+}
+i76_sw_ground={
+"type": "sampler2D",
+"value": ""
+}
+i76_sw_ground_on={
+"type": "bool",
+"value": false
+}
+i76_light_dir={
+"type": "vec3",
+"value": Vector3(0.7071, 0.7071, 0)
+}
+i76_light_intensity={
+"type": "float",
+"value": 1.0
+}
+i76_smoke={
+"type": "sampler2D",
+"value": ""
+}
+i76_smoke_cap={
+"type": "float",
+"value": 0.0
+}
+i76_ambient={
+"type": "float",
+"value": 0.0
+}
+i76_fade={
+"type": "vec2",
+"value": Vector2(0.000417, 0.74958)
+}
+i76_luma={
+"type": "sampler2D",
+"value": ""
+}
+i76_night={
+"type": "bool",
+"value": false
+}
+i76_night_light_count={
+"type": "int",
+"value": 0
+}
+i76_night_lights={
+"type": "sampler2D",
+"value": ""
+}
+i76_cab_inv={
+"type": "transform",
+"value": Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+}
+i76_cab_half={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+i76_cars={
+"type": "sampler2D",
+"value": ""
+}
+i76_car_count={
+"type": "int",
+"value": 0
+}
+i76_sward={
+"type": "sampler2D",
+"value": ""
+}
+i76_sward_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_sward_tint={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_brush={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_surface={
+"type": "sampler2D",
+"value": ""
+}
+i76_surface_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_surface_on={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_brush_style={
+"type": "vec4",
+"value": Vector4(1, 0.7, 0.2, 0)
+}
+
+[importer_defaults]
+
+texture={
+"compress/mode": 2,
+"mipmaps/generate": true
+}

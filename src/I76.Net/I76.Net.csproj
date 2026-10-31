@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>I76.Net</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- LiteNetLib: reliable UDP, MIT licence (https://github.com/RevenantX/LiteNetLib) -->
+    <PackageReference Include="LiteNetLib" Version="2.1.4" />
+    <!-- Concentus: the Opus codec in C#, BSD-3-Clause (https://github.com/lostromb/concentus); the CB voice chat -->
+    <PackageReference Include="Concentus" Version="2.2.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../I76.Sim/I76.Sim.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,128 @@
+# The modern look's car materials, by hand: which finish each part of each car texture has.
+#
+# One row per line, tab-separated:   TEXTURE   PRESET   [RECT]   [COLOURS]
+#   TEXTURE  a texture's name without folder or extension (CM11MDL1), ? for one character, * for any run. Cars' paint schemes
+#            number their textures (AL11MDL1..4) with the same layout, so one row with a ? serves them all. Shared textures
+#            (the weapon gizmos, GMLP*) are named once.
+#   PRESET   one of the names below.
+#   RECT     x,y,w,h in the texture's texels (the .m16 as the PPM sheets show it, origin top left), or * for the whole texture.
+#   COLOURS  colour classes joined with |, a leading ! negates one; a texel must be in one of them. * for any.
+#            any black dark grey light white glass red orange yellow green blue colour (see CarMaterialTable.InClass).
+# Rows apply in file order, a later row over an earlier one, to the texels its rectangle and colours pick: first a texture's base
+# row (no rectangle, no colours), then its regions. A texture no row names is not in the table and keeps the all-over clear coat.
+# A respray recolours only the texels whose preset is a paint (gloss-paint, metallic-paint, satin-paint, matte-paint).
+# '#' starts a comment. Review with: i76 car-table sheet OUT_DIR (the textures beside their preset colours), and the game's
+# I76_CAR_MATERIAL_IDS=1 (the cars drawn in their presets' colours).
+#
+# Presets (roughness, metallic, clear coat; colours on the review sheets in CarMaterialTable.Presets):
+#   gloss-paint      clear-coated paint (what every car texture has until listed)
+#   metallic-paint   paint with flake under the coat
+#   satin-paint      semi-matt paint, a faded or utility finish
+#   matte-paint      flat paint, no coat: military, primer
+#   chrome           polished plating: bumpers, trim, hubcaps
+#   steel            bare or brushed metal: engine, exhaust, guns, grille bars
+#   chassis-steel    dull painted or oily steel: underside, axles, frame
+#   rust             weathered, rusted metal
+#   rubber           tyres, mats, boots
+#   liner            a pickup bed's ribbed spray-on liner
+#   glass            windows painted into panels
+#   lens             head, tail and signal lamp lenses
+#   plastic          moulded plastic and trim
+#   vinyl            vinyl and leather: seats, door cards
+#   canvas           canvas and cloth: tilts, tarps, carpets
+#   wood             varnished wood
+
+# For now only these are listed (2026-10-27): the hand-drawn regions were not accurate enough, so every other car keeps the
+# all-over clear coat until the parts can be picked out reliably (e.g. segmenting rendered views and projecting back onto the textures).
+
+# ---- Hacienda -----------------------------------------------------------------------------------------------------------------
+# the Hacienda's bed (a clear coat over the ribbed black mirrored the sky in streaks, #123)
+CH11BED1	liner
+
+# ---- Goon (GO11): the army jeep, camouflaged -- flat paint, no coat, all over ------------------------------------------------
+GO11BKB?	matte-paint
+GO11BKL?	matte-paint
+GO11BKR?	matte-paint
+GO11BKT?	matte-paint
+GO11FTF?	matte-paint
+GO11FTL?	matte-paint
+GO11FTR?	matte-paint
+GO11FTT?	matte-paint
+GO11MDL?	matte-paint
+GO11MDR?	matte-paint
+GO11TP_?	matte-paint
+
+# the Leopard XLC's convertible top (the segmentation takes the whole canopy for glass): the cloth, the blue panels stay windows
+LE11TP_?	canvas	*	orange|yellow
+
+# the hearse's curtained windows (the segmentation takes them for glass): all cloth, the folds' dark gaps too, and the black frame round
+# them its paint (it was glass, so the curtained window read as one long window with the door's)
+XH11MDL?	canvas	60,32,68,29	!black
+XH11MDL?	gloss-paint	58,28,70,36	black|dark|glass
+XH11BKB?	canvas	17,35,96,27	!black
+
+# the Limo's rear window (the segmentation misses it): the blue pane above the trunk
+JD11BKT?	glass	14,9,100,16	glass
+
+# the Moth cab (Cargo Truck, Loadmaster): the rear window into the cabin and the side window's darker wrap-round strip (the segmentation misses both)
+ML11MDB?	glass	20,44,89,16	glass|blue|dark
+ML11MDL?	glass	8,9,40,30	glass
+# the milk tanker's wrap-round corner window (its darker half missed)
+MX11TPL?	glass	0,2,37,50	glass|blue|dark
+
+# the school bus (Winston High): the segmentation takes its black bands, the dark round the grille and the lettering for glass;
+# only the windshield (front) and the emergency door's two panes (back) are windows
+XB11FTF1	gloss-paint	0,0,128,15	*
+XB11FTF1	steel	43,15,41,34	*
+XB11FTF1	gloss-paint	0,48,128,9	*
+XB11FTF1	gloss-paint	0,107,128,21	!red
+XB11BKB1	gloss-paint	0,0,128,32	*
+XB11BKB1	gloss-paint	0,56,128,17	*
+XB11BKB1	gloss-paint	0,103,128,25	!red
+# the school bus's orange window pillars (the trim prompts took them for chrome)
+XB11MDL1	gloss-paint	0,0,128,64	orange|yellow
+XB11MDR1	gloss-paint	0,0,128,64	orange|yellow
+XB11FTL1	gloss-paint	0,0,128,64	orange|yellow
+XB11FTR1	gloss-paint	0,0,128,64	orange|yellow
+XB11BKL1	gloss-paint	0,0,128,64	orange|yellow
+XB11BKR1	gloss-paint	0,0,128,64	orange|yellow
+
+# the Phaedra Rattler's windshield, the dark band across its roof texture (the segmentation took only its highlight)
+FR11TP_1	glass	2,1,124,26	dark|glass
+# and the sliver along the black band beside the windows (rows 31-32: the segmentation reached into it; in the game it cut the pillars short)
+XB11MDL1	gloss-paint	0,31,128,2	*
+XB11MDR1	gloss-paint	0,31,128,2	*
+XB11FTL1	gloss-paint	0,31,128,2	*
+XB11FTR1	gloss-paint	0,31,128,2	*
+XB11BKL1	gloss-paint	0,31,128,2	*
+XB11BKR1	gloss-paint	0,31,128,2	*
+
+# the Piranha's side windows: a dark line along the pane split off a thin sliver of glass, which drew as a stripe across the window
+PP11TP_?	glass	11,28,5,48	dark|glass
+PP11TP_?	glass	112,28,5,48	dark|glass
+
+# the Palomino's side windows: the darker strip along the bottom of the pane's rear corner was left out, a sliver under the glass
+FP11MDL?	glass	92,56,22,6	dark|glass
+
+# the Jackrabbit's left front quarter light (the segmentation found the right one only)
+PJ11TP_?	glass	0,1,13,24	glass|blue
+
+# the Piranha's black stripes across its tail (the segmentation took them for windows): paint
+PP11BKT?	gloss-paint	0,0,128,64	*
+
+# the Royale's side windows run to their bottom edge (the roof texture's outer columns): the texel or two along it was left out and drew as a light sliver
+CR11TP_?	glass	0,14,3,42	glass|blue|dark|grey
+CR11TP_?	glass	0,60,3,45	glass|blue|dark|grey
+CR11TP_?	glass	125,14,3,42	glass|blue|dark|grey
+CR11TP_?	glass	125,60,3,45	glass|blue|dark|grey
+
+# the Limo's side windows run to their bottom edge (the roof texture's outer columns, each pane apart): the texels along it drew as light slivers
+JD11TP_?	glass	0,15,3,23	glass|blue|dark|grey
+JD11TP_?	glass	0,45,3,30	glass|blue|dark|grey
+JD11TP_?	glass	0,80,3,29	glass|blue|dark|grey
+JD11TP_?	glass	125,15,3,23	glass|blue|dark|grey
+JD11TP_?	glass	125,45,3,30	glass|blue|dark|grey
+JD11TP_?	glass	125,80,3,29	glass|blue|dark|grey
+
+# the Moth Truck's and milk tanker's cab rear window (the tanker's projection, where its tank hides it, overwrote the truck's map)
+MX11TPB?	glass	14,2,36,20	blue|dark|glass

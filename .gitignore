@@ -1,0 +1,67 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.idea/
+TestResults/
+
+# Godot
+game/.godot/
+game/.import/
+*.translation
+
+# Never commit anything that came out of the game. Original files, extracted
+# media, traces and goldens recorded from it all stay outside the repo.
+work/
+traces/
+goldens/
+*.zfs
+*.zix
+*.pak
+*.pix
+*.geo
+*.map
+*.vqm
+*.cbk
+*.act
+*.tmt
+*.ter
+*.msn
+*.wdf
+*.vdf
+*.vcf
+*.sdf
+*.gdf
+*.smk
+*.wav
+*.exe
+*.dll
+*.m16
+
+# Third-party flipbooks fetched by tools/fetch-vfx.sh (CC0, not committed)
+game/vfx
+# Third-party ground materials fetched by tools/fetch-ground.sh (CC0, not committed)
+game/ground
+__pycache__/
+
+# Godot-generated
+*.uid
+game/Assets/*.import
+dist/
+
+# Stray local artifacts: scratch images and archives in the root, never game art
+/*.jpg
+/*.jpeg
+/*.png
+/*.svg
+/*.mp3
+/*.txt
+*.zip
+.env
+*.key
+*.pem
+
+# game installers and their parts, never committed
+/*.exe
+/*.bin

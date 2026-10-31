@@ -1,0 +1,18 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>I76.Game</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/I76.Formats/I76.Formats.csproj" />
+    <ProjectReference Include="../src/I76.Sim/I76.Sim.csproj" />
+    <ProjectReference Include="../src/I76.Editor/I76.Editor.csproj" />
+    <ProjectReference Include="../src/I76.Net/I76.Net.csproj" />
+    <ProjectReference Include="../src/I76.Server/I76.Server.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- art read from the assembly (Embedded/ has a .gdignore: Godot neither imports nor packs it) -->
+    <EmbeddedResource Include="Embedded/moon_lroc_1k.jpg" LogicalName="moon_lroc_1k.jpg" />
+  </ItemGroup>
+</Project>

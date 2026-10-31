@@ -1,0 +1,888 @@
+using Godot;
+using I76.Formats.Assembly;
+using I76.Formats.Mission;
+
+namespace I76.Game.World;
+
+/// <summary>
+/// The modern look's distant terrain: real 3D mountains in a ring round the
+/// playable map, out to past the far clip, in place of the sky's sprite
+/// horizon panels (which the 1997 look keeps on its dome).
+///
+/// Each mission keeps its own skyline. The original's 16 panels (a 360°
+/// ring at radius 6000) are read column by column for the height of their
+/// silhouette; the profile is cut into features at its prominent peaks, and
+/// each feature's own outline is revolved about its peak and stood at that
+/// bearing, a few km out, scaled so that from the map's centre it fills the
+/// same angle the panel did. A butte in the art becomes a round butte, a
+/// spire a spire, a jagged range a jagged range; a second, farther ring of
+/// the same shapes (turned half round) shows through the gaps. Procedural
+/// detail (warped outlines, ridged noise on the peaks, rolling foothills,
+/// ridged background ranges) goes on top, and colours come from the panels'
+/// pixels (rock by bearing, the scrub at their foot) and the ground texture.
+///
+/// One fixed polar mesh, centred on the map, rings spaced geometrically so
+/// its cells stay square and grow with distance: the camera is always inside
+/// the map, so a cell's size on screen stays about the same and nothing ever
+/// pops. Heights are baked once on the CPU; inside the map's tiles it sinks
+/// under the playable heightfield, and at the map's edge it starts at the
+/// rim's own height. Sunlight is shadowed by a march over the baked heights;
+/// the chunks receive Godot's shadow map (1.5 km, the map's own walls and
+/// scenery) but cast none, the march standing in for their own. Faces turned
+/// from the sun take a warm fill from the sunlit desert floor, and distance
+/// hazes it all toward the modern sky's own horizon colour
+/// (horizon_terrain.gdshader).
+/// The shader sinks the ring's base onto the cone through the panels' foot, 10.2 x the reference eye's game height (the map's average ground + 3) below
+/// the eye at radius 6000 (Lighting.HorizonCone), fixed per mission; the features keep their angular size.
+/// </summary>
+public partial class HorizonTerrain : Node3D
+{
+    /// <summary>The panels' ring radius and panel height.</summary>
+    private const float RefRadius = HorizonList.Radius;
+    private static float PanelHeight => HorizonList.PanelHeight;
+
+    /// <summary>A mission's skyline and colours, from its horizon panels.</summary>
+    public sealed record Profile(float[] Height, Color[] Rock, Color Scrub, Color RockLight, Color RockDark, float Snow, bool Dark)
+    {
+        public int Columns => Height.Length;
+    }
+
+    /// <summary>
+    /// Reads each panel column's silhouette (the highest opaque texel; the art
+    /// is stored foot first) as metres above the panels' foot at radius 6000,
+    /// less the band of scrub drawn along every foot; and the colours.
+    /// Column c looks along bearing (c + 0.5)/N · 360° from game +Z toward +X.
+    /// </summary>
+    public static Profile? Measure(Texture2DArray? panels)
+    {
+        if (panels is null || panels.GetLayers() != HorizonList.Panels) return null;
+        var imgs = new Image[HorizonList.Panels];
+        for (int i = 0; i < imgs.Length; i++) imgs[i] = panels.GetLayerData(i);
+        return Measure(imgs);
+    }
+
+    /// <summary>As <see cref="Measure(Texture2DArray?)"/>, from the panels' images (any thread; they are decompressed and left without mipmaps).</summary>
+    public static Profile? Measure(Image[] imgs)
+    {
+        if (imgs.Length != HorizonList.Panels) return null;
+        foreach (var im in imgs)
+        {
+            if (im.IsCompressed()) im.Decompress();
+            if (im.HasMipmaps()) im.ClearMipmaps();
+        }
+        int w = imgs[0].GetWidth(), h = imgs[0].GetHeight(), n = w * imgs.Length;
+        var top = new int[n];
+        for (int c = 0; c < n; c++)
+        {
+            var im = imgs[c / w];
+            int x = c % w, t = 0;
+            for (int y = h - 1; y >= 0; y--) if (im.GetPixel(x, y).A >= 0.5f) { t = y + 1; break; }
+            top[c] = t;
+        }
+        var sorted = top.Order().ToArray();
+        // the scrub band along the foot: as high as the lowest columns, up to an eighth of the panel
+        int scrub = Math.Min(sorted[n / 50], h / 8);
+        var height = new float[n];
+        var rock = new Color[n];
+        var lums = new List<(float L, Color C)>();
+        var col = new List<(float L, Color C)>();
+        Color scrubSum = new(0, 0, 0, 0);
+        for (int c = 0; c < n; c++)
+        {
+            var im = imgs[c / w];
+            int x = c % w;
+            height[c] = Math.Max(top[c] - scrub, 0) / (float)h * PanelHeight;
+            col.Clear();
+            for (int y = 0; y < top[c]; y++)
+            {
+                var p = im.GetPixel(x, y);
+                if (p.A < 0.5f) continue;
+                var lin = p.SrgbToLinear();
+                if (y < scrub * 3 / 4) { scrubSum += new Color(lin.R, lin.G, lin.B, 1); continue; }
+                float l = 0.299f * lin.R + 0.587f * lin.G + 0.114f * lin.B;
+                col.Add((l, lin));
+                lums.Add((l, lin));
+            }
+            // the rock's own colour is its sunlit side: the brighter half of the column (the darker half is the
+            // panel's painted shade, which the lighting here adds again; averaged in, the rock came out a muddy
+            // grey-brown that read as dark smears on the steep faces)
+            col.Sort((a, b) => a.L.CompareTo(b.L));
+            Color sum = new(0, 0, 0, 0);
+            for (int i = col.Count / 2; i < col.Count; i++) sum += new Color(col[i].C.R, col[i].C.G, col[i].C.B, 1);
+            rock[c] = sum.A > 0 ? new Color(sum.R / sum.A, sum.G / sum.A, sum.B / sum.A) : new Color(-1, 0, 0);
+        }
+        // columns with no rock (scrub only) take their neighbours' colour
+        for (int pass = 0; pass < n && rock.Any(r => r.R < 0); pass++)
+            for (int c = 0; c < n; c++)
+                if (rock[c].R < 0 && rock[(c + 1) % n].R >= 0) rock[c] = rock[(c + 1) % n];
+                else if (rock[c].R < 0 && rock[(c + n - 1) % n].R >= 0) rock[c] = rock[(c + n - 1) % n];
+        if (rock.Any(r => r.R < 0)) for (int c = 0; c < n; c++) rock[c] = new Color(0.3f, 0.2f, 0.12f);
+        // smooth the colours by bearing: a panel's light and shade are its own painted lighting, not the rock's
+        var sm = new Color[n];
+        const int k = 24;
+        for (int c = 0; c < n; c++)
+        {
+            Color s = new(0, 0, 0, 0);
+            for (int d = -k; d <= k; d++) s += rock[(c + d + n) % n];
+            sm[c] = new Color(s.R / (2 * k + 1), s.G / (2 * k + 1), s.B / (2 * k + 1)).LinearToSrgb();
+        }
+        lums.Sort((a, b) => a.L.CompareTo(b.L));
+        Color Mean(double from, double to)
+        {
+            if (lums.Count == 0) return new Color(0.3f, 0.2f, 0.12f);
+            int a = (int)(lums.Count * from), b = Math.Max(a + 1, (int)(lums.Count * to));
+            float r = 0, g = 0, bl = 0;
+            for (int i = a; i < b; i++) { r += lums[i].C.R; g += lums[i].C.G; bl += lums[i].C.B; }
+            return new Color(r / (b - a), g / (b - a), bl / (b - a)).LinearToSrgb();
+        }
+        float snow = lums.Count == 0 ? 0 : lums.Count(p => p.L > 0.45f && Math.Max(p.C.R, Math.Max(p.C.G, p.C.B)) - Math.Min(p.C.R, Math.Min(p.C.G, p.C.B)) < 0.08f) / (float)lums.Count;
+        float meanL = lums.Count == 0 ? 0 : lums.Average(p => p.L);
+        var scrubC = scrubSum.A > 0 ? new Color(scrubSum.R / scrubSum.A, scrubSum.G / scrubSum.A, scrubSum.B / scrubSum.A).LinearToSrgb() : Mean(0, 0.3);
+        return new Profile(height, sm, scrubC, Mean(0.75, 1), Mean(0, 0.25), snow, meanL < 0.02f);
+    }
+
+    /// <summary>A skyline for a mission without panels: rolling ranges.</summary>
+    public static Profile Default()
+    {
+        const int n = 2048;
+        var h = new float[n];
+        for (int c = 0; c < n; c++)
+        {
+            float a = c / (float)n * MathF.Tau;
+            h[c] = 120 + 260 * Fbm(MathF.Cos(a) * 6 + 40, MathF.Sin(a) * 6 + 40, 4);
+        }
+        var rock = Enumerable.Repeat(new Color(0.55f, 0.36f, 0.24f), n).ToArray();
+        return new Profile(h, rock, new Color(0.35f, 0.3f, 0.22f), new Color(0.7f, 0.5f, 0.35f), new Color(0.3f, 0.18f, 0.12f), 0, false);
+    }
+
+    // ---- the height field ----
+
+    private sealed class Feature
+    {
+        public float X, Z;          // game frame, from the map centre
+        public float Scale;         // world metres per reference metre
+        public float ColW;          // world metres per profile column
+        public float[] F = [];      // reference height by lateral distance in columns, falling to 0
+        public float Reach;         // world radius where F reaches 0, plus the warp
+        public float Style;         // 0 peaks .. 1 mesas
+        public float Warp;          // world metres the outline wanders
+        public int Seed;
+    }
+
+    private readonly List<Feature> _features = [];
+    private List<Feature>[] _grid = [];
+    private float _gridMin, _gridCell;
+    private int _gridN;
+
+    /// <summary>Metres a texel of the floor grid.</summary>
+    public const float FloorTexel = 10f;
+    /// <summary>How far under the ground the ring may show inside the map.</summary>
+    public const float FloorMargin = 3f;
+    private float[]? _floor;
+    private bool[]? _rim;
+
+
+
+
+    /// <summary>
+    /// The lowest the drawn ground can be near each texel of the map's bounds (centre-relative game frame, row by row from the
+    /// bounds' low corner), less <see cref="FloorMargin"/>; 1e9 where there is no tile (nothing to hide the ring there). The modern
+    /// look draws cliff faces and the map's edge walls off the simulation's heightfield by up to 2 x TerrainSurface.MaxFree, so within
+    /// 60 m of the map's edge (where the ring's cells reach in) it is the drawn surface that is sampled, every 2.5 m, over the
+    /// texel and its neighbours two texels out (the surface moves points sideways by as much); deeper in, the heightfield (the ring
+    /// is far under it there).
+    /// </summary>
+    public static float[] FloorGrid(MissionWorld world, ITerrainSurface surface, (float X0, float Z0, float X1, float Z1)[] tiles, (float X0, float Z0, float X1, float Z1) bounds, System.Numerics.Vector2 centre, out bool[] rim)
+    {
+        int w = (int)MathF.Ceiling((bounds.X1 - bounds.X0) / FloorTexel), h = (int)MathF.Ceiling((bounds.Z1 - bounds.Z0) / FloorTexel);
+        var low = new float[w * h];
+        var inside = new bool[w * h];
+        foreach (var (x0, z0, x1, z1) in tiles)
+        {
+            int i0 = (int)MathF.Round((x0 - bounds.X0) / FloorTexel), i1 = (int)MathF.Round((x1 - bounds.X0) / FloorTexel);
+            int j0 = (int)MathF.Round((z0 - bounds.Z0) / FloorTexel), j1 = (int)MathF.Round((z1 - bounds.Z0) / FloorTexel);
+            for (int j = j0; j < j1 && j < h; j++)
+                for (int i = i0; i < i1 && i < w; i++) inside[j * w + i] = true;
+        }
+        const int band = 6;   // texels from the edge
+        bool Out(int i, int j) => i < 0 || j < 0 || i >= w || j >= h || !inside[j * w + i];
+        System.Threading.Tasks.Parallel.For(0, h, j =>
+        {
+            for (int i = 0; i < w; i++)
+            {
+                if (!inside[j * w + i]) { low[j * w + i] = 1e9f; continue; }
+                bool edge = false;
+                for (int dj = -band; dj <= band && !edge; dj++)
+                    for (int di = -band; di <= band && !edge; di++) edge = Out(i + di, j + dj);
+                float lo = float.MaxValue;
+                int steps = edge ? 4 : 2;
+                for (int sj = 0; sj <= steps; sj++)
+                    for (int si = 0; si <= steps; si++)
+                    {
+                        float x = centre.X + bounds.X0 + (i + si / (float)steps) * FloorTexel, z = centre.Y + bounds.Z0 + (j + sj / (float)steps) * FloorTexel;
+                        lo = MathF.Min(lo, (float)world.BilinearHeight(x, z));
+                        if (edge) lo = MathF.Min(lo, surface.Point(x / TerrainNode.SampleSize, z / TerrainNode.SampleSize, out _).Y);
+                    }
+                low[j * w + i] = lo;
+            }
+        });
+        var grid = new float[w * h];
+        rim = new bool[w * h];
+        for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
+            {
+                if (!inside[j * w + i]) { grid[j * w + i] = 1e9f; continue; }
+                for (int dj = -1; dj <= 1; dj++)
+                    for (int di = -1; di <= 1; di++) rim[j * w + i] |= Out(i + di, j + dj);
+                float lo = low[j * w + i];
+                for (int dj = -2; dj <= 2; dj++)
+                    for (int di = -2; di <= 2; di++)
+                        if (!Out(i + di, j + dj)) lo = MathF.Min(lo, low[(j + dj) * w + i + di]);
+                grid[j * w + i] = lo - FloorMargin;
+            }
+        return grid;
+    }
+
+    private (float X0, float Z0, float X1, float Z1)[] _tiles = [], _holes = [];
+    private (float X0, float Z0, float X1, float Z1) _bounds;
+    private float[] _rimByBearing = [];
+    private float _base;
+    private float _meanRef;
+
+    /// <summary>Vertices in the mesh; build time in ms; the inner and outer radii.</summary>
+    public int Vertices { get; private set; }
+    public long BuildMs { get; private set; }
+    public string Timing { get; private set; } = "";
+    public float InnerRadius { get; private set; }
+    public float OuterRadius { get; private set; }
+    public ShaderMaterial Material { get; private set; } = null!;
+
+    /// <summary>Angular resolution: vertices round each ring.</summary>
+    public int Segments { get; set; } = 1024;
+    /// <summary>Radial cell size against the angular: seen from inside the map the radial direction is foreshortened.</summary>
+    public float Aspect { get; set; } = 2f;
+    /// <summary>Metres past the map's farthest corner the ring reaches: the far clip (20 km) from anywhere inside.</summary>
+    public float Reach { get; set; } = 21000f;
+
+    private System.Numerics.Vector2 _centre;
+    /// <summary>The ring's centre (the map's tiles' centre), game frame XZ: the node stands there.</summary>
+    public System.Numerics.Vector2 Centre => _centre;
+
+    /// <summary>
+    /// Builds the ring for a mission: <paramref name="lightGame"/> points toward
+    /// the sun or moon (game frame), for the baked shadows.
+    /// </summary>
+    public void Build(MissionWorld world, Profile profile, System.Numerics.Vector3 lightGame, Color ground)
+    {
+        Compute(world, profile, lightGame, ground);
+        Finish();
+    }
+
+    private readonly List<(string Name, Godot.Collections.Array Arrays)> _pending = [];
+    private Profile? _profile;
+    private Color _ground;
+    private float _farCorner;
+    private long _tHeights, _tShadow, _tArrays, _finishFrom = -1;
+    private System.Diagnostics.Stopwatch? _sw;
+
+    /// <summary>Builds the ring's arrays: pure CPU, safe on any thread (no GPU resource, no node). <see cref="Finish"/> then makes the meshes on the main thread.</summary>
+    public void Compute(MissionWorld world, Profile profile, System.Numerics.Vector3 lightGame, Color ground)
+    {
+        var sw = _sw = System.Diagnostics.Stopwatch.StartNew();
+        // night panels are painted as black silhouettes: the rock is lit here, so it takes the ground's colours
+        if (profile.Dark)
+            profile = profile with
+            {
+                Rock = Enumerable.Repeat(ground.Darkened(0.1f), profile.Columns).ToArray(),
+                RockLight = ground.Lightened(0.15f), RockDark = ground.Darkened(0.45f), Scrub = ground.Darkened(0.3f),
+            };
+        // the map's tiles, as squares in the game frame
+        var (r0, r1, c0, c1) = world.Terrain.Bounds();
+        float tileW = TerrainTiles.Tile * TerrainNode.SampleSize;
+        _centre = new System.Numerics.Vector2((c0 + c1 + 1) * 0.5f * tileW, (r0 + r1 + 1) * 0.5f * tileW);
+        var tiles = new List<(float, float, float, float)>();
+        for (int r = r0; r <= r1; r++)
+            for (int c = c0; c <= c1; c++)
+                if (world.Terrain.TileAt(r, c) != MissionFile.ZmapEmpty)
+                    tiles.Add((c * tileW - _centre.X, r * tileW - _centre.Y, (c + 1) * tileW - _centre.X, (r + 1) * tileW - _centre.Y));
+        _tiles = tiles.ToArray();
+        var holes = new List<(float, float, float, float)>();
+        for (int r = r0; r <= r1; r++)
+            for (int c = c0; c <= c1; c++)
+                if (world.Terrain.TileAt(r, c) == MissionFile.ZmapEmpty)
+                    holes.Add((c * tileW - _centre.X, r * tileW - _centre.Y, (c + 1) * tileW - _centre.X, (r + 1) * tileW - _centre.Y));
+        _holes = holes.ToArray();
+        _bounds = (c0 * tileW - _centre.X, r0 * tileW - _centre.Y, (c1 + 1) * tileW - _centre.X, (r1 + 1) * tileW - _centre.Y);
+        _floor = FloorGrid(world, TerrainNode.SurfaceFor(world), _tiles, _bounds, _centre, out _rim);
+        float farCorner = _tiles.Max(t => MathF.Max(MathF.Max(Len(t.Item1, t.Item2), Len(t.Item3, t.Item2)), MathF.Max(Len(t.Item1, t.Item4), Len(t.Item3, t.Item4))));
+
+        // the rim: along each bearing, the last ground inside the map, as high as the wall tops just inside it
+        int nb = 1024;
+        var rim = new float[nb];
+        for (int b = 0; b < nb; b++)
+        {
+            float a = (b + 0.5f) / nb * MathF.Tau, sx = MathF.Sin(a), sz = MathF.Cos(a);
+            float last = -1;
+            for (float t = 0; t < farCorner + 10; t += 10) if (SignedDistance(sx * t, sz * t) <= 0) last = t;
+            float top = 0;
+            if (last >= 0)
+                for (float t = MathF.Max(0, last - 60); t <= last; t += 5)
+                    top = MathF.Max(top, (float)world.BilinearHeight(_centre.X + sx * t, _centre.Y + sz * t));
+            rim[b] = top;
+        }
+        _rimByBearing = new float[nb];
+        for (int b = 0; b < nb; b++)
+        {
+            float s = 0;
+            for (int d = -8; d <= 8; d++) s += rim[(b + d + nb) % nb];
+            _rimByBearing[b] = s / 17;
+        }
+        _base = _rimByBearing.Order().ElementAt(nb / 2);
+        _meanRef = profile.Height.Average();
+
+        PlaceFeatures(profile, farCorner);
+
+        // ---- the polar mesh ----
+        int n = Segments;
+        float q = 1 + Aspect * MathF.Tau / n;
+        // the inner ring: just inside the nearest point of the map's edge, an empty tile's too (t01's comes within
+        // 320 m of the centre: a floor of 500 m left a hole there through to the sky). Not under 40 m: the rings
+        // are geometric, and the chunks wholly under the map are left out anyway.
+        float inner = float.MaxValue;
+        for (int b = 0; b < 720; b++)
+        {
+            float a = b / 720f * MathF.Tau, sx = MathF.Sin(a), sz = MathF.Cos(a);
+            for (float t = 0; t < farCorner + 10; t += 10)
+                if (SignedDistance(sx * t, sz * t) > 0) { inner = MathF.Min(inner, t); break; }
+        }
+        inner = MathF.Max(40, MathF.Min(inner, farCorner) - 60);
+        float outer = farCorner + Reach;
+        int rings = (int)MathF.Ceiling(MathF.Log(outer / inner) / MathF.Log(q)) + 1;
+        InnerRadius = inner; OuterRadius = inner * MathF.Pow(q, rings - 1);
+        var radius = new float[rings];
+        for (int j = 0; j < rings; j++) radius[j] = inner * MathF.Pow(q, j);
+        var sin = new float[n + 1]; var cos = new float[n + 1];
+        for (int i = 0; i <= n; i++) { sin[i] = MathF.Sin(i / (float)n * MathF.Tau); cos[i] = MathF.Cos(i / (float)n * MathF.Tau); }
+        var hgt = new float[rings * n];      // the drawn height
+        var shadowH = new float[rings * n];  // the height that shadows: the playable ground inside the map
+        var aux = new Vector4[rings * n];    // per vertex: height above the base, distance from the map, rockiness, style
+        float hmin = float.MaxValue;
+        System.Threading.Tasks.Parallel.For(0, rings, j =>
+        {
+            float r = radius[j];
+            for (int i = 0; i < n; i++)
+            {
+                float x = sin[i] * r, z = cos[i] * r;
+                var (hh, ab) = Height(world, x, z);
+                hgt[j * n + i] = hh;
+                aux[j * n + i] = ab;
+                shadowH[j * n + i] = ab.Y < 0 ? (float)world.BilinearHeight(_centre.X + x, _centre.Y + z) : hh;
+            }
+        });
+        hmin = hgt.Min();
+        long tHeights = _tHeights = sw.ElapsedMilliseconds;
+
+        // sunlight: march toward the light over the baked heights (bilinear on the polar grid)
+        var vis = new float[rings * n];
+        var l = System.Numerics.Vector3.Normalize(lightGame);
+        float lh = MathF.Sqrt(l.X * l.X + l.Z * l.Z);
+        float tanElev = l.Y / MathF.Max(lh, 1e-4f);
+        float lx = lh > 1e-4f ? l.X / lh : 0, lz = lh > 1e-4f ? l.Z / lh : 0;
+        float lnq = MathF.Log(q);
+        float Sample(float x, float z)
+        {
+            float r = MathF.Sqrt(x * x + z * z);
+            float fj = MathF.Log(MathF.Max(r, inner) / inner) / lnq;
+            if (fj >= rings - 1) return hmin;
+            float fi = (MathF.Atan2(x, z) / MathF.Tau + 1) % 1 * n;
+            int j0 = (int)fj, i0 = (int)fi % n, i1 = (i0 + 1) % n;
+            float tj = fj - j0, ti = fi - MathF.Floor(fi);
+            float a0 = shadowH[j0 * n + i0] + (shadowH[j0 * n + i1] - shadowH[j0 * n + i0]) * ti;
+            float a1 = shadowH[(j0 + 1) * n + i0] + (shadowH[(j0 + 1) * n + i1] - shadowH[(j0 + 1) * n + i0]) * ti;
+            return a0 + (a1 - a0) * tj;
+        }
+        float hmax = hgt.Max();
+        System.Threading.Tasks.Parallel.For(0, rings, j =>
+        {
+            float r = radius[j], step0 = MathF.Max(r * MathF.Tau / n, 8);
+            for (int i = 0; i < n; i++)
+            {
+                if (lh < 1e-4f || aux[j * n + i].Y < -50) { vis[j * n + i] = 1; continue; }
+                float x = sin[i] * r, z = cos[i] * r;
+                float h0 = hgt[j * n + i] + 2, v = 1;
+                for (float t = step0; t < 9000; t *= 1.12f)
+                {
+                    float ray = h0 + t * tanElev;
+                    if (ray > hmax) break;
+                    float above = ray - Sample(x + lx * t, z + lz * t);
+                    // a soft edge: a ridge that just clips the ray darkens a little
+                    v = MathF.Min(v, Math.Clamp(above / (t * 0.04f + 3) + 0.5f, 0, 1));
+                    if (v <= 0) break;
+                }
+                vis[j * n + i] = v;
+            }
+        });
+
+        long tShadow = _tShadow = sw.ElapsedMilliseconds;
+        if (System.Environment.GetEnvironmentVariable("I76_HORIZON_DEBUG") == "1")
+        {
+            // the skyline from the centre, at the base height: the 3D ring's against the panels'
+            var sb = new System.Text.StringBuilder($"horizon: heights {tHeights} ms, shadows {tShadow - tHeights} ms, {_features.Count} features, base {_base:0}, rings {rings}, centre {_centre.X:0},{_centre.Y:0}, tiles {string.Join(" ", _tiles.Select(t => $"{t.X0 + _centre.X:0},{t.Z0 + _centre.Y:0}"))}\n");
+            for (int b = 0; b < 64; b++)
+            {
+                int i = b * n / 64;
+                float best = -90;
+                for (int j = 0; j < rings; j++)
+                {
+                    float r = radius[j];
+                    best = MathF.Max(best, MathF.Atan2(hgt[j * n + i] - _base, r) * 180 / MathF.PI);
+                }
+                int c = (int)((i + 0.5f) / n * profile.Columns);
+                float panel = MathF.Atan2(profile.Height[c], RefRadius) * 180 / MathF.PI;
+                sb.Append($"  {i * 360f / n,6:0.0}°  3d {best,5:0.0}  panel {panel,5:0.0}\n");
+            }
+            GD.Print(sb.ToString());
+        }
+
+        // ---- the chunks ----
+        _profile = profile; _ground = ground; _farCorner = farCorner;
+        const int sector = 64, band = 48;
+        int count = 0;
+        Vector3 P(int j, int i)
+        {
+            i = (i % n + n) % n;
+            return new Vector3(sin[i] * radius[j], hgt[j * n + i], -cos[i] * radius[j]);
+        }
+        for (int j0 = 0; j0 < rings - 1; j0 += band)
+        {
+            int j1 = Math.Min(j0 + band, rings - 1);
+            for (int i0 = 0; i0 < n; i0 += sector)
+            {
+                int i1 = i0 + sector;
+                bool any = false;
+                for (int j = j0; j <= j1 && !any; j++)
+                    for (int i = i0; i <= i1; i++)
+                        if (aux[j * n + i % n].Y > -30) { any = true; break; }
+                if (!any) continue;   // wholly under the map
+                int cols = i1 - i0 + 1, rws = j1 - j0 + 1;
+                var v = new Vector3[cols * rws];
+                var nr = new Vector3[cols * rws];
+                var col = new Color[cols * rws];
+                var uv = new Vector2[cols * rws];
+                var uv2 = new Vector2[cols * rws];
+                for (int j = j0; j <= j1; j++)
+                    for (int i = i0; i <= i1; i++)
+                    {
+                        int k = (j - j0) * cols + (i - i0), g = j * n + i % n;
+                        v[k] = P(j, i);
+                        var dr = P(Math.Min(j + 1, rings - 1), i) - P(Math.Max(j - 1, 0), i);
+                        var da = P(j, i + 1) - P(j, i - 1);
+                        var nn = dr.Cross(da).Normalized();
+                        nr[k] = nn.Y < 0 ? -nn : nn;
+                        var ax = aux[g];
+                        col[k] = new Color(vis[g], ax.Z, ax.W, 1);
+                        uv[k] = new Vector2(ax.X, ax.Y);
+                        uv2[k] = new Vector2(hgt[g] - _base, 0);
+                    }
+                var idx = new int[(cols - 1) * (rws - 1) * 6];
+                int w = 0;
+                // which winding faces up (Godot's front face is clockwise seen from the front)
+                var t0 = v[0]; var t1 = v[cols]; var t2 = v[1];
+                bool flip = (t2 - t0).Cross(t1 - t0).Y < 0;
+                for (int j = 0; j < rws - 1; j++)
+                    for (int i = 0; i < cols - 1; i++)
+                    {
+                        int a = j * cols + i, b = a + 1, c = a + cols, d = c + 1;
+                        if (!flip) { idx[w++] = a; idx[w++] = c; idx[w++] = b; idx[w++] = b; idx[w++] = c; idx[w++] = d; }
+                        else { idx[w++] = a; idx[w++] = b; idx[w++] = c; idx[w++] = b; idx[w++] = d; idx[w++] = c; }
+                    }
+                var arrays = new Godot.Collections.Array();
+                arrays.Resize((int)Mesh.ArrayType.Max);
+                arrays[(int)Mesh.ArrayType.Vertex] = v;
+                arrays[(int)Mesh.ArrayType.Normal] = nr;
+                arrays[(int)Mesh.ArrayType.Color] = col;
+                arrays[(int)Mesh.ArrayType.TexUV] = uv;
+                arrays[(int)Mesh.ArrayType.TexUV2] = uv2;
+                arrays[(int)Mesh.ArrayType.Index] = idx;
+                _pending.Add(($"horizon_{j0}_{i0}", arrays));
+                count += v.Length;
+            }
+        }
+        Vertices = count;
+        _tArrays = sw.ElapsedMilliseconds;
+        if (MissionBuilder.HashOn)
+        {
+            using var hh = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+            foreach (var (_, arr) in _pending)
+                foreach (var v in arr)
+                    switch (v.Obj)
+                    {
+                        case Vector3[] a: hh.AppendData(System.Runtime.InteropServices.MemoryMarshal.AsBytes(a.AsSpan())); break;
+                        case Vector2[] a: hh.AppendData(System.Runtime.InteropServices.MemoryMarshal.AsBytes(a.AsSpan())); break;
+                        case Color[] a: hh.AppendData(System.Runtime.InteropServices.MemoryMarshal.AsBytes(a.AsSpan())); break;
+                        case int[] a: hh.AppendData(System.Runtime.InteropServices.MemoryMarshal.AsBytes(a.AsSpan())); break;
+                    }
+            GD.Print($"horizon arrays hash {Convert.ToHexString(hh.GetHashAndReset())[..16]}, profile {string.Join(",", profile.Height.Take(4))} {profile.Rock[0]}");
+        }
+    }
+
+    /// <summary>
+    /// Gives each chunk the bounds of what it draws. The shader sinks the ring onto the cone through the panels' foot
+    /// (horizon_terrain.gdshader: y += smoothstep(0, 800, from_map) * min(cone - base, 0)), which the mesh's own bounds
+    /// know nothing of: they sit up at the unsunk heights, so a camera looking down (or off the map's high ground) saw
+    /// chunks culled that were wholly in view, and the sky through the hole. The same arithmetic as the shader, over
+    /// the chunk's vertices, for the box.
+    /// </summary>
+    public void FitCullBounds(float eyeY, float footK)
+    {
+        foreach (var child in GetChildren())
+        {
+            if (child is not MeshInstance3D { Mesh: ArrayMesh mesh } mi || mesh.GetSurfaceCount() == 0) continue;
+            var arrays = mesh.SurfaceGetArrays(0);
+            var verts = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            var uvs = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+            Vector3 lo = verts[0], hi = verts[0];
+            for (int k = 0; k < verts.Length; k++)
+            {
+                var v = verts[k];
+                float y = v.Y;
+                if (footK > 0)
+                {
+                    float rho = MathF.Sqrt(v.X * v.X + v.Z * v.Z);
+                    float cone = eyeY * (1 - footK * rho);
+                    float baseY = v.Y - uvs[k].X;
+                    float t = Math.Clamp(uvs[k].Y / 800f, 0, 1);
+                    y += t * t * (3 - 2 * t) * MathF.Min(cone - baseY, 0);
+                }
+                lo = new Vector3(MathF.Min(lo.X, v.X), MathF.Min(lo.Y, MathF.Min(y, v.Y)), MathF.Min(lo.Z, v.Z));
+                hi = new Vector3(MathF.Max(hi.X, v.X), MathF.Max(hi.Y, MathF.Max(y, v.Y)), MathF.Max(hi.Z, v.Z));
+            }
+            mi.CustomAabb = new Aabb(lo - Vector3.One, hi - lo + Vector3.One * 2);
+        }
+    }
+
+    /// <summary>The meshes, material and textures from <see cref="Compute"/>'s arrays (main thread). Returns the chunks to go: call until 0.</summary>
+    public int Finish(int max = int.MaxValue)
+    {
+        if (_profile is null) return 0;
+        if (_finishFrom < 0) _finishFrom = _sw!.ElapsedMilliseconds;   // (Compute may have finished a while before)
+        Material ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/horizon_terrain.gdshader") };
+        for (int k = 0; k < max && _pending.Count > 0; k++)
+        {
+            var (name, arrays) = _pending[0];
+            _pending.RemoveAt(0);
+            var mesh = new ArrayMesh();
+            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+            AddChild(new MeshInstance3D
+            {
+                Mesh = mesh, MaterialOverride = Material, Name = name, Layers = TerrainNode.TerrainLayer,
+                // it receives the map's shadows but casts none: its own come from the march above (cast into the
+                // shadow map too, its coarse cells would shadow themselves in blotches)
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            });
+        }
+        if (_pending.Count > 0) return _pending.Count;
+        var profile = _profile; var ground = _ground; var farCorner = _farCorner;
+        _profile = null;
+
+        // the colours: rock by bearing from the panels, the ground's own colour near the map
+        var rockImg = Image.CreateEmpty(profile.Columns, 1, false, Image.Format.Rgba8);
+        for (int c = 0; c < profile.Columns; c++) rockImg.SetPixel(c, 0, profile.Rock[c]);
+        var m = Material;
+        m.SetShaderParameter("rock_by_bearing", ImageTexture.CreateFromImage(rockImg));
+        m.SetShaderParameter("rock_light", profile.RockLight);
+        m.SetShaderParameter("rock_dark", profile.RockDark);
+        m.SetShaderParameter("scrub_color", profile.Scrub);
+        m.SetShaderParameter("ground_color", ground);
+        m.SetShaderParameter("snow", profile.Snow);
+        m.SetShaderParameter("base_height", _base);
+        m.SetShaderParameter("map_radius", farCorner);
+        // inside the map the ring is a backstop under the terrain (no skirt hides a grazing view under its edge), and must never
+        // show above it: its polar cells (~100 m across out at the map's far edge) straddle the edge, and a cell's outside corner
+        // at a wall's height drew a slab through the playable ground. The shader draws a fragment over a tile only if it is under
+        // the lowest ground near it (FloorTexel metres a texel, the least ground over it and its neighbours, less FloorMargin).
+        var (fx0, fz0, fx1, fz1) = _bounds;
+        int fw = (int)MathF.Ceiling((fx1 - fx0) / FloorTexel), fh = (int)MathF.Ceiling((fz1 - fz0) / FloorTexel);
+        var floor = _floor ?? [];
+        var rimTexels = _rim ?? [];
+        var both = new float[floor.Length * 2];
+        for (int k = 0; k < floor.Length; k++) { both[2 * k] = floor[k]; both[2 * k + 1] = rimTexels.Length > k && rimTexels[k] ? 1f : 0f; }
+        var floorImg = Image.CreateFromData(fw, fh, false, Image.Format.Rgf, System.Runtime.InteropServices.MemoryMarshal.AsBytes(both.AsSpan()).ToArray());
+        m.SetShaderParameter("map_floor", ImageTexture.CreateFromImage(floorImg));
+        m.SetShaderParameter("map_origin", new Vector2(fx0, fz0));
+        m.SetShaderParameter("map_extent", System.Environment.GetEnvironmentVariable("I76_HORIZON_MASK") == "0" ? Vector2.Zero : new Vector2(fw * FloorTexel, fh * FloorTexel));   // I76_HORIZON_MASK=0: as it was, for before captures
+        _floor = null; _rim = null;
+        // the work, not the wait between Compute and Finish
+        BuildMs = _tArrays + _sw!.ElapsedMilliseconds - _finishFrom;
+        Timing = $"heights {_tHeights} ms, shadows {_tShadow - _tHeights} ms, arrays {_tArrays - _tShadow} ms, meshes {BuildMs - _tArrays} ms";
+        return 0;
+    }
+
+    /// <summary>Places the profile's features: a near ring at the panels' own distance and a farther one behind.</summary>
+    private void PlaceFeatures(Profile p, float farCorner)
+    {
+        int n = p.Columns;
+        var e = p.Height;
+        float colRef = MathF.Tau * RefRadius / n;   // metres per column at the panels' radius
+        var s = new float[n];
+        for (int c = 0; c < n; c++)
+        {
+            float acc = 0;
+            for (int d = -2; d <= 2; d++) acc += e[(c + d + n) % n];
+            s[c] = acc / 5;
+        }
+        var peaks = new List<(int C, float Prom)>();
+        for (int c = 0; c < n; c++)
+        {
+            bool max = s[c] > 15;
+            for (int d = 1; d <= 3 && max; d++) max = s[c] >= s[(c + d) % n] && s[c] > s[(c - d + n) % n];
+            if (!max) continue;
+            float minL = s[c], minR = s[c];
+            for (int d = 1; d < n / 2; d++) { float v = s[(c - d + n) % n]; if (v > s[c]) break; minL = MathF.Min(minL, v); }
+            for (int d = 1; d < n / 2; d++) { float v = s[(c + d) % n]; if (v > s[c]) break; minR = MathF.Min(minR, v); }
+            float prom = s[c] - MathF.Max(minL, minR);
+            if (prom >= MathF.Max(20, 0.1f * s[c])) peaks.Add((c, prom));
+        }
+        if (peaks.Count == 0) peaks.Add((Array.IndexOf(e, e.Max()), e.Max()));
+        var shapes = new List<(int C, float[] F, float Style)>();
+        foreach (var (c, prom) in peaks)
+        {
+            float tol = MathF.Max(12, 0.25f * prom);
+            float[] Side(int dir)
+            {
+                var g = new List<float>();
+                float peak = 0;
+                for (int d = -1; d <= 1; d++) peak = MathF.Max(peak, e[(c + d + n) % n]);
+                float m = peak;
+                g.Add(m);
+                for (int k = 1; k < n / 4; k++)
+                {
+                    float v = e[((c + dir * k) % n + n) % n];
+                    if (v > m + tol || m <= 0) break;
+                    m = MathF.Min(m, v);
+                    g.Add(m);
+                }
+                // past the walk: down to the ground at about 40°
+                float last = g[^1];
+                int tail = (int)MathF.Ceiling(last / MathF.Tan(40 * MathF.PI / 180) / colRef);
+                for (int k = 1; k <= tail; k++) g.Add(last * (1 - k / (float)tail) * (1 - k / (float)tail));
+                g.Add(0);
+                return g.ToArray();
+            }
+            var l = Side(-1); var r = Side(1);
+            var f = new float[Math.Max(l.Length, r.Length)];
+            for (int k = 0; k < f.Length; k++) f[k] = MathF.Max(k < l.Length ? l[k] : 0, k < r.Length ? r[k] : 0);
+            // flat-topped (a mesa, a butte) or pointed: its width at 85% of its height against at 40%
+            float W(float frac) { int k = 0; while (k < f.Length && f[k] >= f[0] * frac) k++; return k; }
+            float style = Math.Clamp((W(0.85f) / MathF.Max(W(0.4f), 1) - 0.25f) / 0.45f, 0, 1);
+            shapes.Add((c, f, style));
+        }
+
+        var rng = new Random(12345 + n);
+        void Ring(float distance, float bearingShift, float heightScale, float jitter)
+        {
+            foreach (var (c, f, style) in shapes)
+            {
+                float a = ((c + 0.5f) / n + bearingShift) * MathF.Tau;
+                float sx = MathF.Sin(a), sz = MathF.Cos(a);
+                float edge = 0;
+                for (float t = 0; t < farCorner + 10; t += 20) if (SignedDistance(sx * t, sz * t) <= 0) edge = t;
+                float rad = MathF.Max(distance, edge + 2200 * distance / RefRadius) * (1 + jitter * (float)(rng.NextDouble() * 2 - 1));
+                float scale = rad / RefRadius;
+                var feat = new Feature
+                {
+                    X = sx * rad, Z = sz * rad, Scale = scale * heightScale, ColW = colRef * scale, F = f, Style = style,
+                    Seed = rng.Next(1 << 20),
+                };
+                feat.Warp = f.Length * feat.ColW * 0.22f;
+                feat.Reach = f.Length * feat.ColW + feat.Warp;
+                _features.Add(feat);
+            }
+        }
+        // the panels' own size: the shader stands the ring's base on the cone through their foot (foot_k)
+        Ring(RefRadius * 0.95f, 0, 1.0f, 0.15f);
+        Ring(RefRadius * 1.9f, 0.5f, 0.9f, 0.2f);
+
+        // a coarse grid over the features' reach
+        float ext = _features.Max(f => Len(f.X, f.Z) + f.Reach) + 10;
+        _gridCell = 1000;
+        _gridMin = -ext;
+        _gridN = (int)MathF.Ceiling(2 * ext / _gridCell);
+        _grid = new List<Feature>[_gridN * _gridN];
+        for (int i = 0; i < _grid.Length; i++) _grid[i] = [];
+        foreach (var f in _features)
+        {
+            int x0 = Cell(f.X - f.Reach), x1 = Cell(f.X + f.Reach), z0 = Cell(f.Z - f.Reach), z1 = Cell(f.Z + f.Reach);
+            for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) _grid[z * _gridN + x].Add(f);
+        }
+    }
+
+    private int Cell(float v) => Math.Clamp((int)((v - _gridMin) / _gridCell), 0, _gridN - 1);
+
+    private static float Len(float x, float z) => MathF.Sqrt(x * x + z * z);
+
+    /// <summary>Distance from the map's tiles, negative inside them (centre-relative game XZ).</summary>
+    private float SignedDistance(float x, float z)
+    {
+        float best = float.MaxValue;
+        bool inside = false;
+        foreach (var (x0, z0, x1, z1) in _tiles)
+        {
+            float dx = MathF.Max(MathF.Max(x0 - x, x - x1), 0), dz = MathF.Max(MathF.Max(z0 - z, z - z1), 0);
+            if (dx == 0 && dz == 0) { inside = true; break; }
+            best = MathF.Min(best, MathF.Sqrt(dx * dx + dz * dz));
+        }
+        if (!inside) return best;
+        // inside: the distance to the nearest ground that is not the map's (the empty cells, and past its bounds)
+        var (bx0, bz0, bx1, bz1) = _bounds;
+        best = MathF.Min(MathF.Min(x - bx0, bx1 - x), MathF.Min(z - bz0, bz1 - z));
+        foreach (var (x0, z0, x1, z1) in _holes)
+        {
+            float dx = MathF.Max(MathF.Max(x0 - x, x - x1), 0), dz = MathF.Max(MathF.Max(z0 - z, z - z1), 0);
+            best = MathF.Min(best, MathF.Sqrt(dx * dx + dz * dz));
+        }
+        return -best;
+    }
+
+    /// <summary>The nearest point of the map's tiles to an outside point, 2.5 m in from the edge.</summary>
+    private (float X, float Z) NearestInside(float x, float z)
+    {
+        float best = float.MaxValue, bx = x, bz = z;
+        foreach (var (x0, z0, x1, z1) in _tiles)
+        {
+            float cx = Math.Clamp(x, x0 + 2.5f, x1 - 2.5f), cz = Math.Clamp(z, z0 + 2.5f, z1 - 2.5f);
+            float dd = (cx - x) * (cx - x) + (cz - z) * (cz - z);
+            if (dd < best) { best = dd; bx = cx; bz = cz; }
+        }
+        return (bx, bz);
+    }
+
+    /// <summary>
+    /// The height at a centre-relative game point, and (height above the
+    /// base, distance from the map, rockiness, style).
+    /// </summary>
+    private (float H, Vector4 Aux) Height(MissionWorld world, float x, float z)
+    {
+        float d = SignedDistance(x, z);
+        float r = Len(x, z);
+        float bearing = (MathF.Atan2(x, z) / MathF.Tau + 1) % 1;
+        float rim = _rimByBearing[(int)(bearing * _rimByBearing.Length) % _rimByBearing.Length];
+        if (d < 0)
+        {
+            // under the map: just below its own ground near the edge (a cell of this mesh can straddle the edge, and
+            // its outside part must not dip into a trench), deeper further in
+            float ground = (float)world.BilinearHeight(_centre.X + x, _centre.Y + z);
+            return (ground - 3 + 2 * MathF.Min(d + 30, 0), new Vector4(0, d, 0, 0));
+        }
+        float baseH = rim + (_base - rim) * SmoothStep(0, 1500, d);
+        if (d < 300)
+        {
+            // at the map's edge: just under the edge's own ground, so nothing shows above it, then out to the rim's level
+            var (ex, ez) = NearestInside(x, z);
+            float edge = (float)world.BilinearHeight(_centre.X + ex, _centre.Y + ez) - 0.5f;
+            baseH = edge + (baseH - edge) * SmoothStep(0, 300, d);
+        }
+        // the features: the highest of them here
+        float best = 0, style = 0, rock = 0;
+        // the noise the features share, made once here: a warp field (two scales) and ridges
+        bool noise = false;
+        float wx = 0, wz = 0, ridged = 0;
+        foreach (var f in _grid[Cell(z) * _gridN + Cell(x)])
+        {
+            float dx = x - f.X, dz = z - f.Z;
+            if (dx * dx + dz * dz > f.Reach * f.Reach) continue;
+            if (!noise)
+            {
+                noise = true;
+                wx = (Fbm(x / 2200 + 11.3f, z / 2200, 3) - 0.5f) * 1.4f + (Fbm(x / 650, z / 650 + 5.1f, 3) - 0.5f) * 0.9f;
+                wz = (Fbm(x / 2200 + 31.7f, z / 2200 + 3.9f, 3) - 0.5f) * 1.4f + (Fbm(x / 650 + 8.7f, z / 650, 3) - 0.5f) * 0.9f;
+                ridged = Ridged(x / 450, z / 450, 4);
+            }
+            // the outline wanders by the warp, scaled to the feature
+            float rho = Len(dx + wx * f.Warp, dz + wz * f.Warp) / f.ColW;
+            int k = (int)rho;
+            if (k >= f.F.Length - 1) continue;
+            float hRef = f.F[k] + (f.F[k + 1] - f.F[k]) * (rho - k);
+            float h = hRef * f.Scale;
+            if (h <= 0) continue;
+            // pointed shapes take ridges and gullies; flat-topped ones keep their tops and get a talus foot
+            float frac = hRef / MathF.Max(f.F[0], 1);
+            h *= 1 + (1 - f.Style) * (ridged - 0.55f) * 0.5f * MathF.Sqrt(frac);
+            h *= 1 + f.Style * (ridged - 0.5f) * 0.12f * (1 - frac);
+            if (h > best) { best = h; style = f.Style; rock = frac; }
+        }
+        // the ground between: rolling foothills near, ridged ranges farther out
+        float near = SmoothStep(250, 1800, d);
+        float hills = 35 * Fbm(x / 700, z / 700, 4) * near;
+        float far = SmoothStep(3000, 12000, r);
+        float ranges = _meanRef * 0.55f * (r / RefRadius) * MathF.Pow(Ridged(x / 3200 + 7.3f, z / 3200 - 1.9f, 5), 2.2f) * far;
+        float bg = hills + ranges;
+        float rise = SmoothStep(80, 900, d);
+        float hrel = SmoothMax(best, bg, 30) * rise;
+        // a little wind-blown roughness everywhere
+        hrel += 6 * (Fbm(x / 160, z / 160, 3) - 0.5f) * SmoothStep(100, 500, d);
+        float rocky = MathF.Max(rock, Math.Clamp(bg / 250, 0, 1));
+        return (baseH + hrel, new Vector4(hrel, d, rocky, style));
+    }
+
+    private static float SmoothStep(float a, float b, float x)
+    {
+        float t = Math.Clamp((x - a) / (b - a), 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
+    private static float SmoothMax(float a, float b, float k)
+    {
+        float h = Math.Clamp(0.5f + 0.5f * (a - b) / k, 0, 1);
+        return b + (a - b) * h + k * h * (1 - h);
+    }
+
+    // value noise, 0..1
+    private static float Hash(int x, int y)
+    {
+        unchecked
+        {
+            uint h = (uint)x * 374761393u + (uint)y * 668265263u;
+            h = (h ^ (h >> 13)) * 1274126177u;
+            h ^= h >> 16;
+            return (h & 0xffffff) / 16777216f;
+        }
+    }
+
+    private static float Noise(float x, float y)
+    {
+        int ix = (int)MathF.Floor(x), iy = (int)MathF.Floor(y);
+        float fx = x - ix, fy = y - iy;
+        float ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10), uy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+        float a = Hash(ix, iy), b = Hash(ix + 1, iy), c = Hash(ix, iy + 1), d = Hash(ix + 1, iy + 1);
+        return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+    }
+
+    private static float Fbm(float x, float y, int octaves)
+    {
+        float s = 0, amp = 0.5f, norm = 0;
+        for (int i = 0; i < octaves; i++)
+        {
+            s += amp * Noise(x, y); norm += amp;
+            (x, y) = (x * 1.6f - y * 1.2f + 17.3f, x * 1.2f + y * 1.6f + 9.1f);
+            amp *= 0.5f;
+        }
+        return s / norm;
+    }
+
+    /// <summary>Ridged multifractal, 0..1: sharp crests, each octave weighted by the one before.</summary>
+    private static float Ridged(float x, float y, int octaves)
+    {
+        float s = 0, amp = 0.5f, w = 1, norm = 0;
+        for (int i = 0; i < octaves; i++)
+        {
+            float n = 1 - MathF.Abs(Noise(x, y) * 2 - 1);
+            n *= n;
+            s += n * amp * w; norm += amp;
+            w = Math.Clamp(n * 1.5f, 0, 1);
+            (x, y) = (x * 1.6f - y * 1.2f + 17.3f, x * 1.2f + y * 1.6f + 9.1f);
+            amp *= 0.5f;
+        }
+        return s / norm;
+    }
+}

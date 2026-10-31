@@ -1,0 +1,151 @@
+I26: third-party notices
+========================
+
+I26 ships no Interstate '76 data. It contains the following third-party
+software and assets.
+
+Free art (CC0, public domain dedication; no attribution required, given anyway)
+- Explosion and smoke flipbooks: Unity Labs, "Free VFX Image Sequences &
+  Flipbooks", https://unity.com/blog/engine-platform/free-vfx-image-sequences-flipbooks
+- Ground materials (Ground102, Ground031, Ground079S, Rock061): ambientCG,
+  https://ambientcg.com, by Lennart Demes.
+  CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+- The moon's surface (the modern look's night sky): NASA's Scientific
+  Visualization Studio, "CGI Moon Kit" (LRO / LROC colour map),
+  https://svs.gsfc.nasa.gov/4720. NASA imagery, public domain.
+
+Godot Engine (MIT)
+  Copyright (c) 2014-present Godot Engine contributors.
+  Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.
+  https://godotengine.org. The engine also bundles further libraries under
+  their own permissive licences (listed in Godot's COPYRIGHT.txt and at
+  https://godotengine.org/license), among them FreeType, HarfBuzz, ICU,
+  libpng, libvorbis, libogg, zlib, Zstandard, mbedTLS, SDL, ENet, glslang,
+  Vulkan Memory Allocator and the Jolt Physics library below.
+
+Jolt Physics (MIT), bundled in Godot
+  Copyright (c) 2021 Jorrit Rouwe. https://github.com/jrouwe/JoltPhysics
+
+.NET runtime (MIT), bundled self-contained in the data_I76.Game_* folders
+  Copyright (c) .NET Foundation and Contributors. https://github.com/dotnet/runtime
+
+LiteNetLib 2.1.4 (MIT)
+  Copyright (c) 2020 Ruslan Pyrch. https://github.com/RevenantX/LiteNetLib
+
+The MIT licence, which applies to each of the four components above with its
+own copyright line:
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
+
+Concentus 2.2.2 (BSD-3-Clause), the Opus audio codec in C# (the CB voice chat). https://github.com/lostromb/concentus
+
+  Copyright (c) by various holding parties, including (but not limited to): 
+  Skype Limited, Xiph.Org Foundation, CSIRO, Microsoft Corporation,
+  Jean-Marc Valin, Gregory Maxwell, Mark Borgerding, Timothy B. Terriberry,
+  Logan Stromberg. All rights are reserved by their respective holders.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+  * Neither the name of Internet Society, IETF or IETF Trust, nor the
+     names of specific contributors, may be used to endorse or promote
+     products derived from this software without specific prior written
+     permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+innoextract (zlib licence): the format knowledge behind the GOG installer reader
+  (src/I76.Formats/Installers). The reader is C# written for I26; its Inno Setup
+  layouts, versions and stream structures were ported from innoextract's source.
+  Copyright (C) 2011-2020 Daniel Scharrer <daniel@constexpr.org>
+  https://constexpr.org/innoextract/
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the author(s) be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+anet 0.10 (GNU LGPL 2.1): the lobby protocol behind INTERNET's game lists
+  (src/I76.Net/Anet). I26's client is C# written for it; the dpio reliable
+  transport, the dptab table packets, the session record, the login,
+  INDIRECT_JOIN and REQUEST_OPEN were ported from anet's source (h/dppkt.h,
+  h/dptab.h, h/anet.h, src/dp/dpio.c, src/dp/dptab.c, src/dp/dp2.c,
+  demo/utils/dpcrc32.c). LGPL 2.1 section 3 allows such code to be carried
+  under the GNU GPL, which covers I26 as a whole (version 3).
+  Copyright (C) 1995-2001 Activision, Inc. Released under the LGPL in 2001,
+  maintained by Dan Kegel: http://kegel.com/anet/ (mirror:
+  https://github.com/Nielk1/anet). I26 contains none of anet's binaries and
+  speaks to anet game servers only to list games and introduce players.
+
+LZMA SDK (public domain): the LZMA and LZMA2 formats as the SDK by Igor Pavlov
+  describes them (https://www.7-zip.org/sdk.html); I26's decoder
+  (src/I76.Formats/Installers/Lzma.cs) is its own compact implementation of them.
+
+The Complete Asset Bible for Interstate '76/Gold/Nitro (html 4th edition, 23 Feb 2017)
+  by DIVER, building on a text version by Skull N. Bones (8 Mar 1998) and an original
+  document by Brian Dean Jennings. https://route380.stars.ne.jp/i76/resource_i76/i76cab4.zip
+  The map editor's object picker takes its labels from it: the object names' descriptions
+  (src/I76.Editor/Objects/asset-bible.tsv, which lists only each name, its description and the
+  section it sits in; none of the bible's pictures, tables or pages), and its notes on which
+  objects are broken or never appear.
+
+Data sources used at runtime (the map editor's New map from real world; fetched from the internet when the player asks,
+  kept in the user's own cache folder, never shipped with I26):
+  OpenStreetMap: the map picker's tiles (tile.openstreetmap.org), the place search (Nominatim) and the roads of a map made
+  from the real world (the Overpass API). (c) OpenStreetMap contributors, available under the Open Database Licence (ODbL):
+  https://www.openstreetmap.org/copyright. Maps made with the roads carry that credit in a text file beside the map files
+  and the ODbL's share-alike applies to the road data in them. The tile server's usage policy is followed (a User-Agent naming
+  I26, a disk cache, at most two connections, no bulk downloads): https://operations.osmfoundation.org/policies/tiles/
+  Terrain heights: Mapzen / AWS Terrain Tiles (https://registry.opendata.aws/terrain-tiles/), which are made from several
+  public datasets, among them USGS 3DEP and NASA SRTM (credits: https://github.com/tilezen/joerd/blob/master/docs/attribution.md).
+
+Sources of the bundled free assets, as recorded when they were fetched:
+
+Game icon
+---------
+The Interstate 26 route shield (game/Assets/icon.svg, and icon.ico made from it), from Wikimedia Commons
+(https://commons.wikimedia.org/wiki/File:I-26.svg): public domain. The Interstate shield design is a trademark of the
+American Association of State Highway and Transportation Officials (AASHTO); I26 is not affiliated with or endorsed by AASHTO.

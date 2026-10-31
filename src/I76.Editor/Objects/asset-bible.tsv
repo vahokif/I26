@@ -1,0 +1,379 @@
+# Object names from the Complete Asset Bible for Interstate '76/Gold/Nitro (html 4th edition, 23 Feb 2017)
+# by DIVER, building on a text version by Skull N. Bones (8 Mar 1998) and an original document by Brian Dean Jennings.
+# https://route380.stars.ne.jp/i76/resource_i76/i76cab4.zip
+# Only the object names, their descriptions and the section they are listed under are kept here; the bible's images, tables and pages are not.
+# Columns: name, description, section, gold_nitro_only (1 = marked * in the bible), note (the bible's remark on a broken or odd object).
+# The map editor shows the description as the label in its object picker and searches it.
+name	description	section	gold_nitro_only	note
+a1flag1	Team flag "CTF only" (red)	Miscellaneous Objects	1	
+a1flag2	Team flag "CTF only" (green)	Miscellaneous Objects	1	
+a1flag3	Team flag "CTF only" (purple)	Miscellaneous Objects	1	
+a1flag4	Team flag "CTF only" (black)	Miscellaneous Objects	1	
+a2finsg1	Start/Finish line gate	Ambient Objects	1	
+a3pline1	Oil pipeline	Ambient Objects	1	
+a4tank1	Oil tank	Ambient Objects	1	
+a4tank2	Oil tank (w/graffity)	Ambient Objects	1	
+aaramp1	Thrill Show ramp (16mhigh)	Ramps	0	
+aaramp2	Steel ramp (11m high)	Ramps	0	
+aaramp3	Wood ramp (2m high)	Ramps	0	
+aaramp4	Unfinished overpass (7m high)	Ramps	0	
+aaramp5	Broken wooden bridge (7m high)	Ramps	0	
+aaramp6	Unfinished overpass (7m high, green)	Ramps	0	
+aaramp7	Wood ramp (7m high)	Ramps	0	
+aaramp8		Broken or unusable	0	a kind of a ramp, which came with Gold/Nitro, but will not appear.
+aarampa	Wood ramp (7m high, Indestructable)	Ramps	1	
+aarampb	Wood ramp (7m high, Indestructable)	Ramps	1	
+abarrel1	Barrel	Ambient Objects	0	
+actrash1	Trash can	Ambient Objects	0	
+adumpst1	Dumpster	Ambient Objects	0	
+aendrd1	End-of-road berm	Ambient Objects	0	
+afence1	Barbed-wire fence as string / as non-string	Fence/Guardrail	0	
+afence2	Split-rail fence as string	Fence/Guardrail	0	
+afence3	Guardrail as string / as non-string	Fence/Guardrail	0	
+afence4	Concrete barrier as string / as non-string	Fence/Guardrail	0	
+afence5	Roadblock barrier (should be used as an NON-String object)	Fence/Guardrail	0	
+agstlgt1		Broken or unusable	0	kind of a street light, it exist in all version of i76. It might be a combind object, not for a single use.
+ahut1	Hut - (collapses into ramp)	Ramps	0	
+aitire1	Stack of tires	Ambient Objects	0	
+ajplane1	Jet fighter	Ambient Objects	1	
+ajplane2	Helicopter	Ambient Objects	1	
+akwreck1		Broken or unusable	0	deleted from asset bible++, because it will never appear functionally. a wrecked car. Car hulk
+akwreck2	Car hulk on fire	Ambient Objects	0	
+akwreck3	Taurus' car, wrecked	Ambient Objects	0	
+akwreck4	Jade's car, wrecked	Ambient Objects	1	
+aleanto1	Lean-to - (collapses into ramp)	Ramps	0	
+amoilpm2	Walker beam oil pump	Ambient Objects	0	
+anbunkr1	Bunker (regen bunker)	Ambient Objects	0	
+aobilbd0	PotMan Cigarettes When I smoke...	Billboards	0	
+aobilbd1	KSCK FM95 Lubbock	Billboards	0	
+aobilbd2	Mod wheels '77 Courcheval Manta	Billboards	0	
+aobilbd3	Gas Parade/Ropesville	Billboards	0	
+aobilbd4	Bar-D Tavern	Billboards	0	
+aobilbd5	Aces & Eights/Plains	Billboards	0	
+aobilbd6	Milky Way Motel/Plains	Billboards	0	
+aobilbd7	Giant Robot/54 mi.	Billboards	0	
+aobilbd8	Entering Texas	Billboards	0	
+aobilbd9	Entering New Mexico	Billboards	0	
+aobilbda	Foxy Cat Topless Bar	Billboards	1	
+aobilbdb	Gila Truck Stop	Billboards	1	
+aobilbdc	Gila w/graffity	Billboards	1	
+aobilbdd	Sincere Gas	Billboards	1	
+aobilbde	Quick-E Freeze	Billboards	1	
+aphoneb1	Phone booth	Ambient Objects	0	
+arpropn1	Propane tank (struct1=explosion)	Ambient Objects	0	
+ashack1	Abandoned shack - (collapses into NO!ramp)	Ramps	0	
+atpole1	Telephone pole in case you want to make a pole as a climbable object, set class ID as RAMP	Ambient Objects	0	
+augate1	Tahoka Regional Air Park (gate)	Ambient Objects	1	
+awatert1	Water tower - (collapses into ramp)	Ramps	0	
+axlot1		Broken or unusable	0	axlot2 is gold/nitro only. They are not an usable objects. When you assign TM151AS_.MAP for surface texture, there will be a lot of parking lots. yes this is PART OF surface texture.
+axlot2		Broken or unusable	1	gold/nitro only; not usable (see axlot1)
+ayhay1	Hay bales	Ambient Objects	0	
+bcaik1	Building No.100(large)	Industrial Park Buildings	0	
+bcaik2	Building No.200(large)	Industrial Park Buildings	0	
+bcaik3	Building No.300(large)	Industrial Park Buildings	0	
+bcaik4	Building No.400(large)	Industrial Park Buildings	0	
+bcaik5	Building No.500(large)	Industrial Park Buildings	0	
+bcaik6	Building No.600(large) and after destroyed	Industrial Park Buildings	0	
+bcaik7	Building No.700(large)	Industrial Park Buildings	0	
+bcaik8	Building No.800(large) Ramp inside, be sure to use RAMP ClassID	Industrial Park Buildings	0	
+bcaik_s1	Building No.150(small)	Industrial Park Buildings	0	
+bcaik_s2	Building No.250(small)	Industrial Park Buildings	0	
+bcaik_s3	Building No.350(small)	Industrial Park Buildings	0	
+bcaik_s4	Building No.450(small)	Industrial Park Buildings	0	
+bcaik_s5	Building No.550(small)	Industrial Park Buildings	0	
+bcaik_s6	Building No.650(small)	Industrial Park Buildings	0	
+bcaik_s7	Building No.750(small)	Industrial Park Buildings	0	
+bcaik_s8	Building No.850(small)	Industrial Park Buildings	0	
+bcaikgat	Autowerks compound gate	Industrial Park Buildings	0	
+bcaikwal	Autowerks wall-set This object exists only in Original I'76. Gold/Nitro does not have this object. Be sure to use RAMP-ClassID or the game will sure to crash with WP mortar.	Industrial Park Buildings	0	
+bcaikwl1	Autowerks wall piece (open ends)	Industrial Park Buildings	0	
+bcaikwl2	Autowerks wall piece	Industrial Park Buildings	0	
+bcaikwl3	Autowerks wall piece "L"shaped	Industrial Park Buildings	0	
+bcaikwl4	Autowerks wall piece with sign	Industrial Park Buildings	0	
+bcaikwl5	Autowerks wall piece	Industrial Park Buildings	0	
+bcaikwl6	Autowerks wall piece (pillar)	Industrial Park Buildings	0	
+bcbank1	1st Bank of West Texas	Commercial Structures	0	
+bcbank2	Generic general store	Commercial Structures	0	
+bcfirew1	Red Deacon Fireworks	Commercial Structures	0	
+bcgarag1	Santana's Auto Repair	Commercial Structures	0	
+bcgarag2	Krager Mags	Commercial Structures	0	
+bcgarag3	State DOT garage	Commercial Structures	0	
+bchotel1	Ghost town hotel	Commercial Structures	0	
+bcindia1	Silver Eagle Trading Post	Commercial Structures	0	
+bcindia2	Real estate office	Commercial Structures	0	
+bclivry1	Ghost town livery stable	Commercial Structures	0	
+bcnofcb3	Catch-E-Na Inn	Commercial Structures	0	
+bcofcb3	AutoKare Centre	Commercial Structures	0	
+bcpost1	Post Office (Seagraves, TX)	Commercial Structures	0	
+bcpost2	Empty storefront	Commercial Structures	0	
+bcrhopr1	Grain hopper - (collapses into ramp)	Ramps	0	
+bcstrak0	Drinky's bleachers (wooden bench)	Race Track Objects	1	
+bcstrak1	Spectator stands	Race Track Objects	0	
+bcstrak2	Pit garages	Race Track Objects	0	
+bcstrak3	Race track snack bar	Dining Structures	0	
+bcstrak4	Race track gate in order never to get a bump, change classID as RAMP	Race Track Objects	0	
+bcstrak5	Race track corrugated metal tower	Race Track Objects	0	
+bcstrak6	Race track wall (low)	Race Track Objects	0	
+bcstrak7	Race track wall (high)	Race Track Objects	0	
+bcstrak8	Drinky's Thrill-O-Rama gate	Race Track Objects	1	
+bcstrak9	Durango Speedway gate	Race Track Objects	1	
+bctatto1	Dave's Tattoos	Commercial Structures	0	
+bctatto2	Generic bar	Commercial Structures	0	
+bcwwhse1	Warehouse (Bertoldo Imports Inc.)	Commercial Structures	0	
+bcwwhse2	Warehouse (generic tan, for lease)	Commercial Structures	0	
+bcxwhse1	Warehouse (Dear Jane Tractors)	Commercial Structures	0	
+bcxwhse2	Warehouse (generic tan/orange)	Commercial Structures	0	
+bcxwhse5	Hangar (Airfield)	Commercial Structures	0	
+bcywhse1	Warehouse (Fletcher & Sons)	Commercial Structures	0	
+bcywhse2	Warehouse (generic gray)	Commercial Structures	0	
+bcywhse3	Warehouse (JC Fasteners)	Commercial Structures	0	
+bcywhse4	Warehouse (Arnuld Petroleum Svc.)	Commercial Structures	0	
+bczlite1	Parking lot floodlight (shines in the night)	Miscellaneous Objects	0	
+bczlite2	Streetlight (shines in the night)	Miscellaneous Objects	0	
+bczlite3	Area floodlight. (This is not a visible object) bczlite series light up 20x20 area between 22-03 night.	Miscellaneous Objects	0	
+bczstag4	Drag strip staging light	Ambient Objects	1	
+bdbard1	Bar-D Tavern	Dining Structures	0	
+bddonut1	Real-Lite Donuts	Dining Structures	0	
+bdfoxy1	Foxy Cat Topless bar (mainly for night)	Dining Structures	1	
+bdmight1	Mondo Burger	Dining Structures	0	
+bdmight2	Mondo Burger w/drivethru +sign	Dining Structures	1	
+bdsaloo1	Ghost town saloon	Dining Structures	0	
+bdwgnwl1	Wagon Wheel	Dining Structures	0	
+bdzfrez1	Quick-E Freeze	Dining Structures	0	
+bdzfrez2	Chicken stand	Dining Structures	0	
+bebridg1	Truss bridge (short)	Bridges	0	
+bebridg2	Highway bridge (long)	Bridges	0	
+bebridg3	Highway bridge (short)	Bridges	0	
+bebridg4	Truss bridge (long)	Bridges	0	
+bebridga	Highway bridge (long, immortal)	Bridges	1	
+bebridgb	Highway bridge (short, immortal)	Bridges	1	
+beovrps1	Overpass	Bridges	0	
+betunnl1	Tunnel (short)	Tunnels	1	
+betunnl2	Tunnel (medium)	Tunnels	1	
+betunnl3	Tunnel (long)	Tunnels	1	
+bewdbrg1	Wooden bridge (long, indestructable)	Bridges	1	
+bewdbrg2	Wooden bridge (short, indestructable)	Bridges	1	
+bfdepot1	Fuel depot with pipe lines	Filling Stations	1	
+bfdepot2	Fuel depot	Filling Stations	1	
+bfgastf1	Gas4Cash	Filling Stations	0	
+bflgila1	Gila Truck Stop	Filling Stations	1	
+bfnspan1	Spanner's Truck Stop	Filling Stations	0	
+bfparad1	Gas Parade	Filling Stations	0	
+bfparad2	Gas Parade (night version)	Filling Stations	0	
+bfsince1	Sincere Gas	Filling Stations	0	
+bhbarn1	Barn (red, closed)	Housing Structures	0	
+bhbarn2	Barn (old wood, open)	Housing Structures	0	
+bhchrch1	Mission church	Housing Structures	1	
+bhesher1	Valdes County Sheriff's Substation	Housing Structures	0	
+bhftdav1	Ft. Davis	Housing Structures	0	
+bhgsglw1	Mobile home (single, blue)	Housing Structures	0	
+bhgsglw2	Mobile home (single, green)	Housing Structures	0	
+bhhouse1	House (1-story shotgun, yellow)	Housing Structures	0	
+bhhouse2	House (1-story shotgun, white)	Housing Structures	0	
+bhhouse4	House (airfield office)	Housing Structures	0	
+bhihous1	House (1-story w/porch)	Housing Structures	0	
+bhjhous1	House (1-story ranch, tan)	Housing Structures	0	
+bhjhous2	House (1-story ranch, gray)	Housing Structures	1	
+bhmfarm1	Farmhouse (2-story, white)	Housing Structures	0	
+bhschol1	Jim Bowie Elementary School	Housing Structures	0	
+bhtslip1	Slipstream trailer	Housing Structures	0	
+bhwtowr1	Airfield control tower	Housing Structures	0	
+bhwtowr2	Control tower (red stripe)	Housing Structures	1	
+bhwtowr3	Control tower (green stripe)	Housing Structures	1	
+bhwtowr4	Control tower (purple stripe)	Housing Structures	1	
+bhwtowr5	Control tower (black stripe)	Housing Structures	1	
+bhyceme1	Cemetery gate	Housing Structures	1	
+bhyceme2	Cemetery wall (low)	Housing Structures	1	
+bhyceme3	Cemetery wall (L-piece)	Housing Structures	1	
+bhyceme4	Cemetery grave (cross)	Housing Structures	1	
+bhyceme5	Cemetery grave (stone)	Housing Structures	1	
+bhyceme6	Cemetery grave (stone)	Housing Structures	1	
+ica21_1	asphalt, cul-de-sac1	Roads & Intersections	0	
+ica22_1	asphalt, cul-de-sac2	Roads & Intersections	0	
+ica23_1	asphalt, cul-de-sac3	Roads & Intersections	0	
+idisect1	asphalt, trans to dirt/nothing1	Roads & Intersections	0	
+idisect2	dirt, trans to nothing1	Roads & Intersections	0	
+ieisect1	asphalt, cul-de-sac4	Roads & Intersections	0	
+iga21_1	asphalt, branch right1	Roads & Intersections	0	
+iga21_2	asphalt, branch right1-n1	Roads & Intersections	1	
+iga22_1	asphalt, branch right2	Roads & Intersections	0	
+iga22_2	asphalt, branch right2-n2	Roads & Intersections	1	
+iga23_1	asphalt, branch right3	Roads & Intersections	0	
+iga23_2	asphalt, branch right3-n3	Roads & Intersections	1	
+igd27_1	dirt, branch right1	Roads & Intersections	0	
+igw29_1	wash, branch right1	Roads & Intersections	0	
+ija2171	asphalt, trans to dirt/nothing2	Roads & Intersections	0	
+ija2271	asphalt, trans to dirt/nothing3	Roads & Intersections	0	
+ija2371	asphalt, trans to dirt/nothing4	Roads & Intersections	0	
+ijd27t1	dirt, trans to nothing2	Roads & Intersections	0	
+ijd28t1		Broken or unusable	0	This Object crashes the game before you play. "ijd" means intersection-junction-dirt
+ijw29t1	wash, trans to nothing	Roads & Intersections	1	
+ila21_1	asphalt, branch left1	Roads & Intersections	0	
+ila21_2	asphalt, branch left1-n1	Roads & Intersections	1	
+ila22_1	asphalt, branch left2	Roads & Intersections	0	
+ila22_2	asphalt, branch left2-n1	Roads & Intersections	1	
+ila23_1	asphalt, branch left3	Roads & Intersections	0	
+ila23_2	asphalt, branch left3-n1	Roads & Intersections	1	
+ild27_1	dirt, branch left1	Roads & Intersections	0	
+ilw29_1	wash, branch left1	Roads & Intersections	0	
+ima21_1	Start line	Roads & Intersections	1	
+ima21_2	Finish line	Roads & Intersections	1	
+ima22_1	Start line	Roads & Intersections	1	
+ima22_2	Finish line	Roads & Intersections	1	
+ima23_1	Start line	Roads & Intersections	1	
+ima23_2	Finish line	Roads & Intersections	1	
+ita21_1	asphalt, 3-way1	Roads & Intersections	0	
+ita22_1	asphalt, 3-way2	Roads & Intersections	0	
+ita23_1	asphalt, 3-way3 (not displayed in I'76)	Roads & Intersections	0	
+itd27_1	dirt, 3-way1	Roads & Intersections	0	
+itisect1	asphalt, 3-way4	Roads & Intersections	0	
+itisect2	dirt, 3-way2	Roads & Intersections	0	
+ixa21_1	asphalt, 4-way1	Roads & Intersections	0	
+ixa22_1	asphalt, 4-way2	Roads & Intersections	0	
+ixa23_1	asphalt, 4-way3	Roads & Intersections	0	
+ixd27_1	dirt, 4-way1	Roads & Intersections	0	
+ixisect1	asphalt, 4-way4	Roads & Intersections	0	
+ixisect2	dirt, 4-way2	Roads & Intersections	0	
+iyd27_1	dirt, Y junction	Roads & Intersections	0	
+iyisect1	asphalt, branch right4	Roads & Intersections	0	
+iyisect2	dirt, branch right2	Roads & Intersections	0	
+iyisect3	wash, branch right2	Roads & Intersections	0	
+iyisect4	asphalt, branch left4	Roads & Intersections	0	
+iyisect5	dirt, branch left2	Roads & Intersections	0	
+iyisect6	wash, branch left2	Roads & Intersections	0	
+iyisect8	dirt, Y junction2	Roads & Intersections	0	
+nadillo1	Armadillo (sometimes its being unseen)	Nature	0	
+ngscrng1		Broken or unusable	0	These are not an Object. but we can use them by assigning it in World Defs. Gold and Nitro have ngscrng2 (forest).
+ngscrng2		Broken or unusable	1	not an object; assigned in World Defs (forest)
+npinetr1	Pine tree (real)	Nature	0	
+npinetr2	Pine tree (real)	Nature	1	
+nsaguar1	Saguaro cactus	Nature	0	
+ntree1	Shrub (tiny)	Nature	1	
+ntree2	Shrub (small)	Nature	1	
+ntree3	Shrub (medium)	Nature	1	
+ntree4	Shrub (large)	Nature	1	
+rerwend1	Runway end, 03	Roads & Intersections	0	
+rerwend2	Runway end, 21	Roads & Intersections	0	
+rerwend3	Runway end, 17	Roads & Intersections	0	
+rerwend4	Runway end, 35	Roads & Intersections	0	
+rmrwmid1	Runway	Roads & Intersections	0	
+scros_1	Roswell new mexco City Limits	City Signs	0	
+sdarm_1	Armadillo X-ing	Warning Signs	0	
+sdbrd_1	Bridge out horse	Regulatory Signs	0	
+sdcon_1	Road construction 500 ft sign	Regulatory Signs	0	
+sdcrv_1	"S" curve sign	Warning Signs	0	
+sdded_1	Dead end sign	Warning Signs	0	
+sdrcl_1	Landslide road closed horse	Regulatory Signs	0	
+sdroc_1	Landslide area	Warning Signs	0	
+sdsch_1	School zone ahead	Warning Signs	0	
+sdslo_1	SLOW sign (not "blow")	Warning Signs	1	
+sdstp_1	Stop sign ahead sign	Warning Signs	0	
+sdtin_1	"T" intersection sign	Warning Signs	0	
+sdtin_2	Left pointing "T" intersection sign	Warning Signs	0	
+sdtin_3	Right pointing "T" intersection sign	Warning Signs	0	
+sdtrn_1	Curve right	Warning Signs	0	
+sdtrn_2	Curve left	Warning Signs	0	
+sdxin_1	4-way intersection sign	Warning Signs	0	
+sdyin_1	"Y" intersection ahead	Warning Signs	0	
+seair_1	Airport [ Left ]	Guide Signs	1	
+sebau_1	Bauxite Rd.	Guide Signs	0	
+seclr_1	Clairmont next exit (gas/food)	Guide Signs	1	
+sedet_1	Detour arrow horse	Regulatory Signs	0	
+sedon_1	Real-Lite Donuts	Guide Signs	0	
+seevr_1	Evers Rd.	Guide Signs	1	
+seftd_1	Ft.Davis Historical Site Ahead	Guide Signs	0	
+seg50_1	Gas Food Next Exit	Guide Signs	0	
+segrp_1	Grapevine Pass	City Signs	1	
+sehop_1	Hope Springs Recreation Area	City Signs	0	
+seker_1	Kerosene Rd.	Guide Signs	0	
+semor_1	Morton [1 mile]	Guide Signs	0	
+seoil_1	Oil Well Road Next Right	Guide Signs	0	
+sesem_1	Seminole [1 mile]	Guide Signs	0	
+sespn_1	Spanner's Truck Stop	Guide Signs	0	
+setwo_1	This way out	Guide Signs	0	
+sewgw_1	Wagon Wheel Exit 1 mile	Guide Signs	0	
+sh11n_1	Texas Rt. sign (North 114)	Highway Route No. Signs	0	
+sh11s_1	Texas Rt. sign (South 114)	Highway Route No. Signs	0	
+sh12e_1	Texas Rt. sign (East 125)	Highway Route No. Signs	0	
+sh12n_1	N. Mexico Rt. sign (North 125)	Highway Route No. Signs	0	
+sh12s_1	N. Mexico Rt. sign (South 125)	Highway Route No. Signs	0	
+sh12w_1	Texas Rt. sign (West 125)	Highway Route No. Signs	0	
+sh13n_1	Texas Rt. sign (North 137)	Highway Route No. Signs	0	
+sh13s_1	Texas Rt. sign (South 137)	Highway Route No. Signs	0	
+sh15n_1	N. Mexico Rt. sign (North 15)	Highway Route No. Signs	1	
+sh15s_1	N. Mexico Rt. sign (South 15)	Highway Route No. Signs	1	
+sh17e_1	N. Mexico Rt. sign (East 172)	Highway Route No. Signs	1	
+sh17w_1	N. Mexico Rt. sign (West 172)	Highway Route No. Signs	1	
+sh20n_1	N. Mexico Rt. sign (North 206)	Highway Route No. Signs	0	
+sh20s_1	N. Mexico Rt. sign (South 206)	Highway Route No. Signs	0	
+sh21n_1	Texas Rt. sign (North 214)	Highway Route No. Signs	0	
+sh21s_1	Texas Rt. sign (South 214 Night)	Highway Route No. Signs	0	
+sh28n_1	US. Rt. (North 285)	Highway Route No. Signs	0	
+sh28s_1	US. Rt. (South 285)	Highway Route No. Signs	0	
+sh38e_1	US. Rt. (East 380)	Highway Route No. Signs	0	
+sh38e_2	US. Rt. (East 380 Night)	Highway Route No. Signs	0	
+sh38n_1	US. Rt. (North 385)	Highway Route No. Signs	0	
+sh38s_1	US. Rt. (South 385)	Highway Route No. Signs	0	
+sh38w_1	US. Rt. (West 380)	Highway Route No. Signs	0	
+sh38w_2	US. Rt. (West 380 Night)	Highway Route No. Signs	0	
+sh55e_1	US. Rt. (East 550)	Highway Route No. Signs	1	
+sh55w_1	US. Rt. (West 550)	Highway Route No. Signs	1	
+sh62e_1	US. Rt. (East 62)	Highway Route No. Signs	0	
+sh62w_1	US. Rt. (West 62)	Highway Route No. Signs	0	
+sh70e_1	Texas Rt. sign (East 70)	Highway Route No. Signs	1	
+sh70w_1	Texas Rt. sign (West 70)	Highway Route No. Signs	1	
+sh82e_1	US. Rt. (East 82)	Highway Route No. Signs	0	
+sh82e_2	US. Rt. (East 82 Night)	Highway Route No. Signs	0	
+sh82w_1	US. Rt. (West 82)	Highway Route No. Signs	0	
+sh82w_2	US. Rt. (West 82 Night)	Highway Route No. Signs	0	
+sh87n_1	US. Rt. (North 87)	Highway Route No. Signs	0	
+sh87s_1	US. Rt. (South 87)	Highway Route No. Signs	0	
+sj13l_1	Texas Rt. sign (South 137 Left)	Highway Route No. Signs	0	
+sj13r_1	Texas Rt. sign (South 137 Right)	Highway Route No. Signs	0	
+sj20l_1	N. Mexico Rt. sign (206 North=Left, South=Right)	Highway Route No. Signs	0	
+sj20r_1	N. Mexico Rt. sign (206 North=Right, South=Left)	Highway Route No. Signs	0	
+sj21l_1	Texas Rt. sign (North 214 Left)	Highway Route No. Signs	0	
+sj21r_1	Texas Rt. sign (North 214 Right)	Highway Route No. Signs	0	
+sj38l_1	US. Rt. (West 380 Left)	Highway Route No. Signs	0	
+sj38n_1	US. Rt. (North 385, East 62)	Highway Route No. Signs	0	
+sj38r_1	US. Rt. (West 380 Right)	Highway Route No. Signs	0	
+sj38s_1	US. Rt. (South 385, West 62)	Highway Route No. Signs	0	
+sj62l_1	US. Rt. (East 62 Left)	Highway Route No. Signs	0	
+sj62r_1	US. Rt. (East 62 Right)	Highway Route No. Signs	0	
+sj87l_1	US. Rt. (87 North=Left, South=Right)	Highway Route No. Signs	0	
+sj87r_1	US. Rt. (87 North=Right, South=Left)	Highway Route No. Signs	0	
+sl35x_1	Speed Limit 35	Regulatory Signs	0	
+sl50x_1	Speed Limit 50	Regulatory Signs	0	
+sl55x_1	Speed Limit 55	Regulatory Signs	0	
+sl55x_2	Speed Limit 55 (for night)	Regulatory Signs	0	
+slacf_1	Speed Checked by Aircraft	Regulatory Signs	0	
+slzon_1	Speed Zone Ahead	Regulatory Signs	0	
+smbrn_1	Distance to 4 cities1 (Brownfield,Levelland, Tahoka, Lubbock)	Guide Signs	0	
+smcar_1	Carlsbad [1 mile]	Guide Signs	0	
+smcty_1	COUNTRY LINE (see trip day 14th)	Guide Signs	0	
+smfis_1	For Sale	Etc Signs	0	
+smftd_1	Ft. Davis [forward]	Guide Signs	0	
+smhot_1	Hot Springs [right]	Guide Signs	0	
+smj87_1	Jcn U.S.87 [1 mile]	Guide Signs	0	
+smmal_1	Malochio's HQ 1 mile	Guide Signs	0	
+smpln_1	Plains [1 mile to go]	Guide Signs	0	
+smsea_1	Distance to 4 cities2 (Seagraves,Wellman, Brownfield, Lubbock)	Guide Signs	0	
+smset_1	Lethal Vengeance 4	Guide Signs	1	
+sstop_1	STOP sign	Regulatory Signs	0	
+swafb_1	Restricted Area No trespassing	City Signs	1	
+swarn_1	Warning sign (unused)	Broken or unusable	0	a road sign warning something. probably it was replaced to a sign of "danger dog on duty"
+swbrn_1	Historic Brownfield welcomes you	City Signs	0	
+swclr_1	Clairmont	City Signs	1	
+swdog_1	Danger Dog on Duty	Etc Signs	0	
+swend_1	Black/yellow construction horse	Regulatory Signs	0	
+swfed_1	West TX. Federal Stock	City Signs	0	
+swftl_1	construction horse (flightline stay clear)	Regulatory Signs	1	
+swmtr_1	Restricted Area	City Signs	0	
+swpec_1	Historic Pecos River Bridge	Guide Signs	0	
+swpla_1	Plains	City Signs	0	
+swqar_1	Health Emergency Quarntine Area by U.S Public Health Service	City Signs	1	
+swrop_1	Ropesville	City Signs	0	
+swsea_1	Welcome to Seagraves	City Signs	0	
+swsem_1	Seminole	City Signs	0	
+swtat_1	Tatum,N.M.(now go home!)	City Signs	0	
+swwht_1	Welcome to Whiteface	City Signs	0	

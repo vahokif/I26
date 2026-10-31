@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- as i26-server: the load test's server writes its snapshots on every core -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/I76.Net/I76.Net.csproj" />
+    <ProjectReference Include="../../src/I76.Server/I76.Server.csproj" />
+  </ItemGroup>
+</Project>

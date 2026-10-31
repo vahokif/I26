@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>I76.Editor</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Objects/asset-bible.tsv" LogicalName="asset-bible.tsv" />
+    <ProjectReference Include="../I76.Formats/I76.Formats.csproj" />
+  </ItemGroup>
+</Project>

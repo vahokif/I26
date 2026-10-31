@@ -34,4 +34,9 @@ Alternatively, place the `setup_interstate_76_*.exe` offline backup installers i
 On Linux, ensure Microsoft core fonts are installed for Impact and Arial.
 
 # Source code
-Please stand by...
+I26 is free software under the [GNU GPL v3](LICENSE). To build it, run the tests or contribute, see [DEVELOPMENT.md](DEVELOPMENT.md); [docs/playing.md](docs/playing.md) has the details for players (how the game finds your install, settings and saves, controls, custom maps, system requirements and status).
+
+I26 contains no game data. It is an unofficial fan project and it needs your own legal copy of Interstate 76.
+
+# Credits
+Thanks to the Interstate 76 community for testing, ideas, and supporting this project.

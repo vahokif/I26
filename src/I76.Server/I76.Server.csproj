@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>I76.Server</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../I76.Formats/I76.Formats.csproj" />
+    <ProjectReference Include="../I76.Sim/I76.Sim.csproj" />
+    <ProjectReference Include="../I76.Net/I76.Net.csproj" />
+  </ItemGroup>
+</Project>

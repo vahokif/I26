@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>I76.Formats</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Imaging/CarMaterials.tsv" LogicalName="CarMaterials.tsv" />
+    <EmbeddedResource Include="Imaging/CarMasks.bin" LogicalName="CarMasks.bin" Condition="Exists('Imaging/CarMasks.bin')" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="I76.Formats.Tests" />
+  </ItemGroup>
+</Project>

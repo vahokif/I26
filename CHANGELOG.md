@@ -14,6 +14,7 @@
 - The 1997 look's ground may no longer draw almost all black, lit only along the triangle edges and striped on the cliffs, on AMD graphics under Vulkan on Windows (#133). The light table the terrain and roads read is now passed to the shaders as plain values, which that driver should handle; we could not try it on that hardware, so tell us if it still happens (the new Renderer row in Graphic Detail can switch to D3D12 or OpenGL meanwhile).
 - Unpacking a GOG installer now keeps the game's own executable (i76.exe or nitro.exe), which I26 reads the computer drivers' tactics from. A game folder unpacked by an earlier version lacks it: I26 now restores it from the GOG installer if that sits next to I26 (or in its user folder), otherwise missions say what to do (put the installer next to I26, or copy the executable from your GOG install).
 - A resprayed car no longer keeps a ring of its old paint round the windows: the body colour, frame and trim the windows are drawn with now take the new colours too.
+- A car no longer starts a mission or a melee puffing grey smoke as if damaged, that vanished a moment later, most visible in the cut-scenes and chase views where you first see your car (#134): the smoke of the burning-wreck rehearsal behind the loading card is cleared away with it.
 - The Jefferson Sovereign's left front door window and the small window before it are glass in the modern look again, where they were drawn as body with a stray triangle and a bare pillar.
 
 ## 0.10.0 (29 October 2026)

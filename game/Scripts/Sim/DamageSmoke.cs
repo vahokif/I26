@@ -397,6 +397,13 @@ public partial class DamageSmoke : Node3D
     /// <summary>The wreck is done: forget its carry.</summary>
     public void Extinguish(object key) => _burnCarry.Remove(key);
 
+    /// <summary>Every puff gone at once: the rehearsal of a burning wreck behind the loading card leaves none of its smoke to rise from a whole car.</summary>
+    public void Clear()
+    {
+        Array.Clear(_pool); Array.Clear(_mp); _burnCarry.Clear(); _liveM = 0;
+        if (_ready) { SmokeLayer.Submit(this, _layerBuf, 0, System.Numerics.Vector3.One); HideBillows(); _mm.VisibleInstanceCount = 0; }   // and what was handed to the layer, which would show for one more frame
+    }
+
     private void SpawnModern(System.Numerics.Vector3 at, System.Numerics.Vector3 vel, float level, float back, float lift)
     {
         var j = new System.Numerics.Vector3((float)_rng.NextDouble() - 0.5f, 0.3f * (float)_rng.NextDouble(), (float)_rng.NextDouble() - 0.5f);

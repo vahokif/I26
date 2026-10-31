@@ -216,6 +216,7 @@ public partial class DamageView : Node3D
         if (_warmDebris is { } wd) { _debris.RemoveAll(d => d.Body == wd); wd.QueueFree(); _warmDebris = null; }
         foreach (var n in new[] { "SmokeLayer", "DamageSmoke" }) if (GetNodeOrNull(n) is { } sn) sn.ProcessMode = ProcessModeEnum.Inherit;
         Restore(car);
+        DamageSmoke.Current?.Clear();
     }
 
     private static bool IsHeli(CarNode car) => car.Sim?.IsHeli == true;

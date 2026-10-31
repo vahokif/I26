@@ -119,4 +119,11 @@ public interface IFsmHost
     void LeaveWarning(int seat, string sound, int priority) { }
     /// <summary>The seat of the human whose hit made <paramref name="victim"/> the player's kill (isGroovesFault), −1 for none.</summary>
     int KillerSeat(object victim) => -1;
+    /// <summary>
+    /// An object's gate standing open, so that a trigger now shuts it: a point on its line and the way it slides
+    /// (along the line, in the world); null for anything else (no gate, shut, or sliding).
+    /// </summary>
+    (Vector3 At, Vector3 Slide)? OpenGate(object o) => null;
+    /// <summary>A human left on the near side of a gate the script shuts: put beside a teammate who is through it.</summary>
+    void BringThrough(int seat, int beside) { }
 }

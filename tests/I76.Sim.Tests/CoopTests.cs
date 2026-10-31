@@ -1,6 +1,7 @@
 using System.Numerics;
 using I76.Formats.Mission;
 using I76.Formats.Vfs;
+using I76.Sim.Collision;
 using I76.Sim.Fsm;
 using I76.Sim.Missions;
 using I76.Sim.Rng;
@@ -62,6 +63,16 @@ public sealed class CoopFakeHost : RecordingHost, IFsmHost
         return back;
     }
     public void LeaveWarning(int seat, string sound, int priority) => Calls.Add($"warn {seat} {sound}");
+
+    /// <summary>The gates standing open: their line's point and slide.</summary>
+    public readonly Dictionary<object, (Vector3 At, Vector3 Slide)> OpenGates = [];
+    public new void TriggerGate(object o) { Calls.Add($"gate {o}"); OpenGates.Remove(o); }
+    public (Vector3 At, Vector3 Slide)? OpenGate(object o) => OpenGates.TryGetValue(o, out var g) ? g : null;
+    public void BringThrough(int seat, int beside)
+    {
+        Calls.Add($"through {seat} beside {beside}");
+        At[Seats[seat]] = At.GetValueOrDefault(Seats[beside]) + new Vector3(0, 0, 5);
+    }
 }
 
 /// <summary>A small FSM assembler for the tests: statements as the mission compiler lays them out.</summary>
@@ -132,6 +143,96 @@ public class CoopVmTests
         host.At[host.Seats[2]] = new(3, 0, 4);
         vm.Tick();
         Assert.Equal(["destroy s2"], host.Calls);
+    }
+
+    /// <summary>
+    /// isWithinNav(zone, player, 10) → triggerGate(gate): a gate across x = 0 (sliding along z), the zone past it at x = −60.
+    /// The program as S06's nowayback has it.
+    /// </summary>
+    private static (FsmVm Vm, CoopFakeHost Host, object Gate) GateProgram(int seats, bool open = true)
+    {
+        var a = new FsmAsm();
+        int top = a.Pc;
+        a.Exec("isWithinNav", new FsmAsm.P(3), new FsmAsm.P(2), 10);
+        int bf = a.Bf();
+        a.Exec("triggerGate", new FsmAsm.P(4));
+        a.Ret(3);
+        a.Patch(bf, a.Pc);
+        a.Exec("null");
+        a.Yield(top);
+        var host = new CoopFakeHost(seats);
+        // the thread's parameters: data 1 (the gate, actor 1) fp−4, data 2 (the zone, path 0) fp−3, data 0 (the player) fp−2
+        var vm = new FsmVm(a.Build(["user", "gate"], [Zone(-60, 0)], [0, 1, 0], (0, [1, 2, 0])), host, new CrtRand());
+        var gate = vm.Actors[1].Handle!;
+        if (open) host.OpenGates[gate] = (new Vector3(0, 0, 0), new Vector3(0, 0, -10));
+        return (vm, host, gate);
+    }
+
+    private static void Run(FsmVm vm, CoopFakeHost host, float seconds)
+    {
+        for (float end = host.Now + seconds; host.Now < end; host.Now += 0.05f) vm.Tick();
+    }
+
+    /// <summary>The first human in the zone does not shut the gate on the second, still on the near side; it shuts once they are through.</summary>
+    [Fact]
+    public void AGateTheScriptShutsBehindThePlayerWaitsForTheHumansBehindIt()
+    {
+        var (vm, host, gate) = GateProgram(2);
+        Assert.Single(vm.GateSites);
+        host.At[host.Seats[0]] = new(-60, 0, 2);     // in the zone
+        host.At[host.Seats[1]] = new(80, 0, 0);      // still on the approach
+        Run(vm, host, 10);
+        Assert.Empty(host.Calls);
+        host.At[host.Seats[0]] = new(-400, 0, 0);    // drove on: the hold stands
+        host.At[host.Seats[1]] = new(1, 0, 0);       // in the gateway: not through yet
+        Run(vm, host, 1);
+        Assert.Empty(host.Calls);
+        host.At[host.Seats[1]] = new(-20, 0, 0);     // through, short of the zone
+        vm.Tick();
+        Assert.Equal([$"gate {gate}"], host.Calls);
+    }
+
+    /// <summary>A human who never comes is brought through beside the teammate furthest past the gate after the hold, and the gate shuts.</summary>
+    [Fact]
+    public void AStragglerIsBroughtThroughWhenTheHoldRunsOut()
+    {
+        var (vm, host, gate) = GateProgram(3);
+        host.At[host.Seats[0]] = new(-60, 0, 2);
+        host.At[host.Seats[1]] = new(-30, 0, 0);     // through
+        host.At[host.Seats[2]] = new(2000, 0, 0);    // far behind
+        Run(vm, host, FsmVm.GateHoldSeconds - 1);
+        Assert.Empty(host.Calls);
+        Run(vm, host, 2);
+        Assert.Equal(2, host.Calls.Count);
+        Assert.Equal("through 2 beside 0", host.Calls[0]);
+        Assert.StartsWith("gate ", host.Calls[1]);
+        Assert.True(host.At[host.Seats[2]].X < -FsmVm.GateClear);
+    }
+
+    /// <summary>
+    /// Nobody behind: it shuts at once, as single player's. A dead human is nobody to wait for. A gate that is shut (or the
+    /// test before it opened) is the script's as before; one human alone is single player's.
+    /// </summary>
+    [Fact]
+    public void AGateShutsAtOnceWithNobodyBehindIt()
+    {
+        var (vm, host, _) = GateProgram(2);
+        host.At[host.Seats[0]] = new(-60, 0, 2);
+        host.At[host.Seats[1]] = new(80, 0, 0);
+        host.Dead.Add(host.Seats[1]);
+        vm.Tick();
+        Assert.Single(host.Calls, c => c.StartsWith("gate "));
+
+        (vm, host, _) = GateProgram(2, open: false);
+        host.At[host.Seats[0]] = new(-60, 0, 2);
+        host.At[host.Seats[1]] = new(80, 0, 0);
+        vm.Tick();
+        Assert.Single(host.Calls, c => c.StartsWith("gate "));
+
+        (vm, host, _) = GateProgram(1);
+        host.At[host.Seats[0]] = new(-60, 0, 2);
+        vm.Tick();
+        Assert.Single(host.Calls, c => c.StartsWith("gate "));
     }
 
     /// <summary>isDead(player) → success: true only once every human is dead.</summary>
@@ -391,6 +492,144 @@ public class CoopMissionTests(ITestOutputHelper output)
             Assert.All(setup.Humans, h => Assert.False(Damage.DamageModel.IsDead(h)));
             output.WriteLine($"{mission}: seats at {string.Join("; ", setup.Humans.Select(h => $"{h.Pos.X:0},{h.Pos.Z:0}"))}");
         }
+    }
+
+    /// <summary>
+    /// The gates the scripts shut behind the player (CoopGates): a position test on the player whose branch runs
+    /// triggerGate first. S06's nowayback (twopill), T07's gate1 (gateblock), the Nitro trainer B01's four walls; no other
+    /// stock mission has one (T10, T12, S07, P18 and P19 move their gates on flags, timers or a computer car).
+    /// </summary>
+    [Fact]
+    public void TheGatesShutBehindThePlayerAreFoundByTheirBytecode()
+    {
+        var found = new Dictionary<string, int>();
+        foreach (var dir in new[] { SnapshotRig.Install, SnapshotRig.NitroInstall })
+        {
+            if (dir is null) continue;
+            var install = new GameInstall(dir);
+            foreach (var m in SnapshotRig.Missions(dir))
+            {
+                if (install.FindMission(m) is not { } path || new MissionFile(path) is var mf && mf.ReadFsmProgram() is not { Code.Length: > 0 } p) continue;
+                var objs = mf.PlacedObjects();
+                bool IsPlayer(int a) => a >= 0 && a < p.Actors.Count && objs.LastOrDefault(o => o.Raw.Length >= 8
+                    && o.Raw.AsSpan(0, 8).SequenceEqual(p.Actors[a].InstanceId.AsSpan(0, System.Math.Min(8, p.Actors[a].InstanceId.Length))))?.IsPlayer == true;
+                var sites = CoopGates.Analyze(p, IsPlayer);
+                if (sites.Count == 0) continue;
+                found[m] = sites.Count;
+                output.WriteLine($"{m}: {string.Join(", ", sites.Values.Select(x => $"{p.Prototypes[(int)p.Code[x.Test].Arg]} at {x.Test} → triggerGate at {x.GatePc}"))}");
+            }
+        }
+        var expected = new Dictionary<string, int>();
+        if (SnapshotRig.Install is not null) { expected["s06"] = 1; expected["t07"] = 1; }
+        if (SnapshotRig.NitroInstall is not null) expected["b01"] = 4;
+        Assert.Equal(expected.OrderBy(kv => kv.Key), found.OrderBy(kv => kv.Key));
+    }
+
+    /// <summary>T07's gate1 (afence5 across the road at x 1455) and its leaf's box, as GateTests has them.</summary>
+    private static (StaticObject Gate1, GateMotion Gate, Func<Vector3> Arm) T07Gate(MissionSetup setup)
+    {
+        var gate1 = setup.Statics.Objects.Single(o => o.Name == "afence5" && o.Centre.X > 1000);
+        int gi = gate1.Nodes.FindIndex(n => n.Gate is not null);
+        return (gate1, gate1.Nodes[gi].Gate!, () => gate1.Boxes.Single(b => b.Node == gi).Centre);
+    }
+
+    private static void Place(MissionSetup setup, Vehicle v, float x, float z, Vector3 heading, float speed)
+    {
+        setup.World.Ai.Remove(v);   // nobody else at the wheel (the intro's goto)
+        v.Pos = new Math.Double3(x, setup.Ground.BareHeight(x, z) + 0.5f, z);
+        v.Rot = new Math.Rows(Vector3.Cross(Vector3.UnitY, heading), Vector3.UnitY, heading);
+        v.Vel = heading * speed;
+        v.AngVel = default;
+    }
+
+    private static void Drive(SimSession s, float seconds, int seat = -1, float throttle = 0, Func<bool>? until = null)
+    {
+        var inputs = new CarInput[s.Drivers.Count];
+        if (seat >= 0) inputs[seat] = new CarInput { Buttons = CarButtons.Analog, Throttle = (short)(throttle * 32767) };
+        for (float t = 0; t < seconds && until?.Invoke() != true; t += s.TickSeconds) { s.Tick(inputs); SnapshotRig.TakeEvents(s); }
+    }
+
+    /// <summary>
+    /// T07 with two humans: A drives through gate1 and comes within 600 of gateblock, where single player's shuts the gate
+    /// behind the player. B is still on the road behind it: the gate stands open until B has driven through, then shuts.
+    /// </summary>
+    [Fact]
+    public void T07sRoadBlockWaitsForTheHumanBehindIt()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var (s, setup) = Make(new SnapshotRig.Loaded(dir), "t07", 2);
+        var (_, gate, arm) = T07Gate(setup);
+        var across = arm();
+        var (a, b) = (setup.Humans[0], setup.Humans[1]);
+        Drive(s, 26);
+        Assert.Equal(1f, gate.X);                    // opened at the start
+        Place(setup, a, across.X + 25, across.Z, -Vector3.UnitX, 15);
+        Place(setup, b, across.X + 400, across.Z, -Vector3.UnitX, 0);
+        Drive(s, 4, 0, 0.6f);
+        Assert.True(a.Pos.X < across.X - 10, $"A stopped at {a.Pos.X:0.0}");
+        Place(setup, a, 1000, 47750, -Vector3.UnitX, 0);
+        Drive(s, 20, until: () => gate.Moving);
+        Assert.False(gate.Moving, "gate1 shut with B behind it");
+        Assert.Equal(1f, gate.X);
+        // B drives through where the arm stands when shut
+        Place(setup, b, across.X + 25, across.Z, -Vector3.UnitX, 15);
+        Drive(s, 4, 1, 0.6f, () => gate.Moving);
+        Drive(s, 0.5f);
+        Assert.True(b.Pos.X < across.X - FsmVm.GateClear, $"B stopped at {b.Pos.X:0.0}");
+        Assert.True(gate.Moving || gate.X == 0, "gate1 did not shut once B was through");
+        Drive(s, 25);
+        Assert.Equal(0f, gate.X);
+        Assert.True(b.Pos.X < across.X && a.Pos.X < across.X);
+        Assert.Null(setup.Script!.Host.End);
+    }
+
+    /// <summary>S06's nowayback (opened at the start, shut once the player is within 10 of twopill, past it): held while B is on the near side, shut once B is through.</summary>
+    [Fact]
+    public void S06sNoWayBackWaitsForTheHumanBehindIt()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var (s, setup) = Make(new SnapshotRig.Loaded(dir), "s06", 2);
+        var vm = setup.Script!.Vm!;
+        var e = (Entity)vm.Actors.First(x => x.Label.Equals("nowayback", StringComparison.OrdinalIgnoreCase)).Handle!;
+        var gate = e.Static!.Nodes.First(n => n.Gate is not null).Gate!;
+        var (a, b) = (setup.Humans[0], setup.Humans[1]);
+        var zone = Path(setup, "twopill");
+        setup.Script!.Host.Logged += m => output.WriteLine($"{setup.Script!.Host.Now:0.0}: {m}");
+        setup.Damage.UnlimitedArmour = setup.Damage.UnlimitedChassis = true;   // the race's opening fire is not the test's
+        Drive(s, 25);
+        Assert.Equal(1f, gate.X);
+        Place(setup, a, zone.X, zone.Z, -Vector3.UnitX, 0);
+        Place(setup, b, zone.X + 250, zone.Z, -Vector3.UnitX, 0);
+        Drive(s, 10, until: () => gate.Moving);
+        Assert.False(gate.Moving, "nowayback shut with B behind it");
+        Place(setup, b, zone.X - 30, zone.Z, -Vector3.UnitX, 0);
+        Drive(s, 1, until: () => gate.Moving);
+        Assert.True(gate.Moving, "nowayback did not shut once B was through");
+    }
+
+    /// <summary>T07 with two humans, B left far behind at the start: after the hold B is brought through beside A and gate1 shuts.</summary>
+    [Fact]
+    public void T07sRoadBlockBringsAStragglerThroughWhenTheHoldRunsOut()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var (s, setup) = Make(new SnapshotRig.Loaded(dir), "t07", 2);
+        var (_, gate, arm) = T07Gate(setup);
+        var across = arm();
+        var (a, b) = (setup.Humans[0], setup.Humans[1]);
+        var events = new List<CoopEvent>();
+        setup.Script!.Host.Coop!.Happened += events.Add;
+        Drive(s, 26);
+        Place(setup, a, across.X + 25, across.Z, -Vector3.UnitX, 15);
+        Place(setup, b, 2900, 48000, -Vector3.UnitX, 0);
+        Drive(s, 4, 0, 0.6f);
+        Place(setup, a, 1000, 47750, -Vector3.UnitX, 0);
+        Drive(s, FsmVm.GateHoldSeconds - 2, until: () => gate.Moving);
+        Assert.False(gate.Moving);
+        Drive(s, 4, until: () => gate.Moving);
+        Assert.True(gate.Moving, "gate1 did not shut after the hold");
+        Assert.True(b.Pos.X < across.X - FsmVm.GateClear, $"B left at {b.Pos.X:0.0}");
+        Assert.InRange(Vector3.Distance(a.Pos.ToVector3(), b.Pos.ToVector3()), 3f, 60f);
+        Assert.Contains(events, e => e is CoopRespawned { Seat: 1, Why: CoopReturn.Gate, Beside: 0 });
     }
 
     /// <summary>T12's jump zone (isWithinNav(gotair, user, 15) → destroy(user)) takes the human who is in it, not the others.</summary>

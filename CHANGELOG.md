@@ -9,6 +9,7 @@
 - The in-game Audio Control in a network game has a CB Microphone row, the same choice as the front end's: switch the input device while you play, even mid-talk, without leaving the game (#135).
 
 ### Fixed
+- Online co-op: a gate a mission shuts behind you (two of Interstate '76's missions and the Nitro Pack's training course have one) no longer shuts on your teammates when the first player gets through: it stays open while anyone is still on the other side, and after 30 seconds the ones left behind are brought through beside a teammate before it shuts.
 - The map editor's New map from real world downloads roads again when the main road server is overloaded: it now also asks that server's own machines and the French road server, which answer when the main address turns requests away.
 - A controller's View and Menu buttons, when bound to a command in Control Configuration, now do only that command instead of also opening the standings / the menu.
 - The 1997 look's ground may no longer draw almost all black, lit only along the triangle edges and striped on the cliffs, on AMD graphics under Vulkan on Windows (#133). The light table the terrain and roads read is now passed to the shaders as plain values, which that driver should handle; we could not try it on that hardware, so tell us if it still happens (the new Renderer row in Graphic Detail can switch to D3D12 or OpenGL meanwhile).

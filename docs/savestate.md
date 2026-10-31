@@ -67,7 +67,7 @@ The header (`SnapshotHeader`) is the magic `I76SNAP\0`, the format version, the 
 near/far policy, the tick, and the host's bytes; then the body's length and the body. **Any change to what a
 snapshot holds or how it is laid out bumps `SnapshotHeader.CurrentVersion`.** A snapshot of another version
 is refused with a clear message; there is no migration. Snapshots are for checkpoints within a session and
-quick saves, not archives. Version 13 added the cars' paint (the VTAB entries, the melee players). Version 14 added a co-op game's personal camera scenes (a camera per seat, and the seat a script thread's scene is in).
+quick saves, not archives. Version 13 added the cars' paint (the VTAB entries, the melee players). Version 14 added a co-op game's personal camera scenes (a camera per seat, and the seat a script thread's scene is in). Version 15 added a co-op script thread's hold on a gate it shuts behind the player (the test it waits at and since when).
 
 ## The completeness guard
 

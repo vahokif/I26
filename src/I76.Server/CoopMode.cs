@@ -303,7 +303,8 @@ public sealed class CoopMode : IHostMode
                     break;
                 case CoopRespawned r when SlotOf(r.Seat) is { } slot:
                     string mate = SlotOf(r.Beside) is { } ms ? Name(ms) : $"seat {r.Beside}";
-                    _host.Emit(new ChatEvent(-1, $"*** {Name(slot)} drove off the map and is back beside {mate}"));
+                    _host.Emit(new ChatEvent(-1, r.Why == CoopReturn.Gate ? $"*** {Name(slot)} was brought through the gate beside {mate}"
+                        : $"*** {Name(slot)} drove off the map and is back beside {mate}"));
                     break;
             }
         _happened.Clear();

@@ -20,10 +20,11 @@ public sealed partial class FsmVm
         a.For<FsmVm>()
             .Saved(nameof(Data), nameof(Threads), nameof(Actors), nameof(TickCount), nameof(Watchdog), nameof(_warned), nameof(_shadows))
             .Structural("the mission's program and the script host, and the session's rand stream", nameof(_p), nameof(_host), nameof(_rand))
-            .Structural("co-op's group slots and routines, found again from the program and the seats by the build", nameof(_group), nameof(_coop), nameof(Routines), nameof(_personalCams), nameof(CameraSites))
+            .Structural("co-op's group slots and routines, found again from the program and the seats by the build", nameof(_group), nameof(_coop), nameof(Routines), nameof(_personalCams), nameof(CameraSites), nameof(GateSites))
             .Transient("set and taken within one instruction", nameof(_restart));
         a.For<Thread>().Saved(nameof(Thread.Stack), nameof(Thread.Args), nameof(Thread.Pc), nameof(Thread.Fp), nameof(Thread.Sp), nameof(Thread.Cond),
-            nameof(Thread.Finished), nameof(Thread.Index), nameof(Thread.Match), nameof(Thread.Prefer), nameof(Thread.Scene), nameof(Thread.SceneDepth))
+            nameof(Thread.Finished), nameof(Thread.Index), nameof(Thread.Match), nameof(Thread.Prefer), nameof(Thread.Scene), nameof(Thread.SceneDepth),
+            nameof(Thread.GatePc), nameof(Thread.GateSince))
             .Structural("a co-op per-human copy, made again by the build", nameof(Thread.Bound), nameof(Thread.Source), nameof(Thread.LeaveMap));
         a.For<Slot>().Saved(nameof(Slot.Value), nameof(Slot.Ptr));
         a.For<CoopRoutines.Cell>().Structural("a co-op counter's cell, found in the program by the build (the snapshot checks it)", nameof(CoopRoutines.Cell.Thread), nameof(CoopRoutines.Cell.Index));
@@ -51,7 +52,7 @@ public sealed partial class FsmVm
         w.VarU((ulong)Threads.Count);
         foreach (var t in Threads)
         {
-            w.Int(t.Index); w.Int(t.Pc); w.Int(t.Fp); w.Int(t.Sp); w.Bool(t.Cond); w.Bool(t.Finished); w.Obj(t.Match); w.Int(t.Prefer); w.Int(t.Scene); w.Int(t.SceneDepth);
+            w.Int(t.Index); w.Int(t.Pc); w.Int(t.Fp); w.Int(t.Sp); w.Bool(t.Cond); w.Bool(t.Finished); w.Obj(t.Match); w.Int(t.Prefer); w.Int(t.Scene); w.Int(t.SceneDepth); w.Int(t.GatePc); w.F32(t.GateSince);
             w.VarU((ulong)t.Args.Count); foreach (var r in t.Args) WriteRef(w, r);
             int used = t.Stack.Length;
             while (used > 0 && t.Stack[used - 1].Value == 0 && t.Stack[used - 1].Ptr is null) used--;
@@ -104,7 +105,7 @@ public sealed partial class FsmVm
         foreach (var t in Threads)
         {
             if (r.Int() != t.Index) throw r.Mismatch("an FSM thread's index");
-            t.Pc = r.Int(); t.Fp = r.Int(); t.Sp = r.Int(); t.Cond = r.Bool(); t.Finished = r.Bool(); t.Match = r.Obj(); t.Prefer = r.Int(); t.Scene = r.Int(); t.SceneDepth = r.Int();
+            t.Pc = r.Int(); t.Fp = r.Int(); t.Sp = r.Int(); t.Cond = r.Bool(); t.Finished = r.Bool(); t.Match = r.Obj(); t.Prefer = r.Int(); t.Scene = r.Int(); t.SceneDepth = r.Int(); t.GatePc = r.Int(); t.GateSince = r.F32();
             t.Args.Clear();
             for (int k = r.Count(); k > 0; k--) t.Args.Add(ReadRef(r));
             int used = r.Count(t.Stack.Length);

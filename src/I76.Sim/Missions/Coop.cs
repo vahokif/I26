@@ -31,11 +31,11 @@ public sealed class CoopSeat
 }
 
 /// <summary>Why a human came back.</summary>
-public enum CoopReturn { Died, LeftMap, Joined }
+public enum CoopReturn { Died, LeftMap, Joined, Gate }
 
 /// <summary>What the host shows a co-op game's players (the sim's part; their screens are the game's).</summary>
 public abstract record CoopEvent(int Seat);
-/// <summary>A human is back in the game beside the seat <paramref name="Beside"/>: a fresh car after a death or a join, the same car after leaving the map.</summary>
+/// <summary>A human is back in the game beside the seat <paramref name="Beside"/>: a fresh car after a death or a join, the same car after leaving the map or being brought through a gate the script shut.</summary>
 public sealed record CoopRespawned(int Seat, CoopReturn Why, int Beside) : CoopEvent(Seat);
 /// <summary>The leave-map routine's warning for one human: its CB line (sound, priority), for that player's radio alone.</summary>
 public sealed record CoopLeaveWarning(int Seat, string Sound, int Priority) : CoopEvent(Seat);
@@ -192,6 +192,29 @@ public sealed partial class ScriptHost
     }
 
     public void LeaveWarning(int seat, string sound, int priority) => Coop?.Raise(new CoopLeaveWarning(seat, sound, priority));
+
+    /// <summary>A gate the script shuts, standing open and idle: a point on its line (its leaf's middle) and its slide.</summary>
+    public (System.Numerics.Vector3 At, System.Numerics.Vector3 Slide)? OpenGate(object o)
+    {
+        var e = E(o);
+        if (e.Static is not { } st) return null;
+        int gi = st.Nodes.FindIndex(n => n.Type == 7 && n.Gate is not null);
+        if (gi < 0 || st.Nodes[gi].Gate is not { Moving: false, Target: 0 } g || g.World.LengthSquared() < 1e-4f) return null;
+        var leaf = st.Boxes.Where(b => b.Node == gi).ToList();
+        var at = leaf.Count > 0 ? leaf.Aggregate(System.Numerics.Vector3.Zero, (a, b) => a + b.Centre) / leaf.Count : e.Position;
+        return (at, g.World);
+    }
+
+    /// <summary>A human left behind a gate the script shuts: beside a teammate through it, in the same car, moving as they move.</summary>
+    public void BringThrough(int seat, int beside)
+    {
+        if (Coop is not { } c || seat < 0 || seat >= c.Seats.Count || beside < 0 || beside >= c.Seats.Count || !c.Seats[seat].Alive || !c.Seats[beside].Alive) return;
+        var mate = c.Seats[beside];
+        PutBeside(c.Seats[seat], mate.Car, mate.Car.Vel, mate.Car.Speed);
+        EndPersonalScene(seat);
+        Log($"co-op: seat {seat} brought through a shutting gate beside seat {beside}");
+        c.Raise(new CoopRespawned(seat, CoopReturn.Gate, beside));
+    }
 
     /// <summary>
     /// Co-op's frame, before the script ticks: a destroyed human comes back <see cref="CoopGroup.RespawnDelay"/> after

@@ -40,6 +40,10 @@ public sealed partial class FsmVm
         public int Scene = -1;
         /// <summary>The pushCams of that scene not yet popped.</summary>
         public int SceneDepth;
+        /// <summary>Co-op: the gate site (<see cref="CoopGates"/>, its test's pc) whose shutting this thread holds for the humans still behind the gate; −1 none.</summary>
+        public int GatePc = -1;
+        /// <summary>When that hold began (mission time).</summary>
+        public float GateSince;
     }
 
     private readonly FsmProgram _p;
@@ -84,6 +88,7 @@ public sealed partial class FsmVm
         t.Pc = pc;
         t.Cond = false;
         t.Match = null;
+        t.GatePc = -1;
         EndScene(t);
     }
 
@@ -101,6 +106,12 @@ public sealed partial class FsmVm
     private readonly HashSet<int> _personalCams = [];
     /// <summary>What <see cref="CoopCameras"/> made of every pushCam.</summary>
     public IReadOnlyList<CoopCameras.Site> CameraSites { get; private set; } = [];
+    /// <summary>The gates the script shuts behind the player (<see cref="CoopGates"/>), by their test's pc.</summary>
+    public IReadOnlyDictionary<int, CoopGates.Site> GateSites { get; private set; } = new Dictionary<int, CoopGates.Site>();
+    /// <summary>How long a gate the script shuts behind the player waits for the humans still behind it before they are brought through (mission seconds).</summary>
+    public const float GateHoldSeconds = 30;
+    /// <summary>How far past a gate's line a human must be to count as through it (metres).</summary>
+    public const float GateClear = 3;
 
     /// <summary>
     /// The group slots, then the routines that run per human: each leave-map thread is the first seat's, and a copy
@@ -114,6 +125,7 @@ public sealed partial class FsmVm
         Routines = CoopRoutines.Analyze(_p, i => _group.Contains(i), i => i >= 0 && i < Actors.Count && Actors[i].Handle is { } h ? _host.Team(h) : null);
         CameraSites = CoopCameras.Analyze(_p, i => _group.Contains(i));
         foreach (var site in CameraSites) if (site.Kind == CoopCameras.Kind.Personal) _personalCams.Add(site.Pc);
+        GateSites = CoopGates.Analyze(_p, i => _group.Contains(i));
         foreach (var c in Routines.Counters.Keys) _shadows[c] = null;
         foreach (int ti in Routines.LeaveMapThreads)
         {
@@ -158,6 +170,50 @@ public sealed partial class FsmVm
 
     /// <summary>Whether argument i names the human group.</summary>
     private bool Group(Thread t, int i) => _coop && _group.Contains(V(t, i)) && O(t, i) is not null;
+
+    /// <summary>
+    /// A gate the script shuts behind the player (<see cref="CoopGates"/>): the test at <paramref name="t"/>'s pc came
+    /// true for a human (<paramref name="cond"/>), or a hold of it goes on. While a living human is still on the near
+    /// side of the gate's line (the side away from <paramref name="zone"/>, the test's point) the test reads false and
+    /// the gate stays open, for <see cref="GateHoldSeconds"/> at most; then those humans are brought through beside the
+    /// teammate furthest past it and the gate shuts. The test stands as it is with nobody behind, for a gate already
+    /// shut or sliding, and outside co-op.
+    /// </summary>
+    private bool GateHold(Thread t, Vector3 zone, bool cond)
+    {
+        if (!_coop || Pin(t) >= 0 || !GateSites.TryGetValue(t.Pc, out var site)) return cond;
+        if (!cond && t.GatePc != t.Pc) return false;
+        var arg = site.ArgOp == 5 ? t.Stack[t.Fp + site.Arg].Ptr ?? new Ref(false, t.Fp + site.Arg, t) : new Ref(false, t.Fp + site.Arg, t);
+        int gi = Get(arg);
+        var gate = gi >= 0 && gi < Actors.Count ? Actors[gi].Handle : null;
+        if (gate is null || _host.IsRemoved(gate) || _host.OpenGate(gate) is not var (at, slide)) { t.GatePc = -1; return cond; }
+        var n = Vector3.Normalize(new Vector3(-slide.Z, 0, slide.X));
+        float Side(Vector3 p) => (p.X - at.X) * n.X + (p.Z - at.Z) * n.Z;
+        float far = Side(zone);
+        if (MathF.Abs(far) < 1) { t.GatePc = -1; return cond; }
+        far = MathF.Sign(far);
+        var behind = new List<int>();
+        int anchor = -1; float best = GateClear;
+        for (int k = 0; k < _host.CoopSeats; k++)
+        {
+            if (!_host.HumanAlive(k) || _host.Human(k) is not { } o) continue;
+            float d = Side(_host.Position(o)) * far;
+            if (d < GateClear) behind.Add(k);
+            else if (d >= best) { best = d; anchor = k; }
+        }
+        if (behind.Count == 0) { t.GatePc = -1; return true; }
+        // nobody through to wait for or bring the others beside: the hold starts over when someone passes again
+        if (anchor < 0) { t.GatePc = -1; return false; }
+        if (t.GatePc != t.Pc)
+        {
+            t.GatePc = t.Pc; t.GateSince = _host.Now;
+            _host.Log($"co-op: gate held open for seat{(behind.Count > 1 ? "s" : "")} {string.Join(", ", behind)} behind it");
+        }
+        if (_host.Now - t.GateSince < GateHoldSeconds) return false;
+        foreach (int k in behind) _host.BringThrough(k, anchor);
+        t.GatePc = -1;
+        return true;
+    }
 
     /// <summary>The living humans a group argument stands for: the bound seat alone, else the matched (or last matched) first, then by seat.</summary>
     private IEnumerable<object> Members(Thread t)
@@ -401,8 +457,8 @@ public sealed partial class FsmVm
                 bool Near(object a, object b) => Vector3.DistanceSquared(h.Position(a), h.Position(b)) < r * r;
                 bool ga = Group(t, 0), gb = Group(t, 1);
                 if (ga && gb) t.Cond = Any(t, _ => 0 < r * r);
-                else if (ga) t.Cond = O(t, 1) is { } b && Any(t, a => Near(a, b));
-                else if (gb) t.Cond = O(t, 0) is { } a && Any(t, b => Near(a, b));
+                else if (ga) t.Cond = O(t, 1) is { } b && GateHold(t, h.Position(b), Any(t, a => Near(a, b)));
+                else if (gb) t.Cond = O(t, 0) is { } a && GateHold(t, h.Position(a), Any(t, b => Near(a, b)));
                 else { var a = O(t, 0); var b = O(t, 1); t.Cond = a is not null && b is not null && Near(a, b); }
                 break;
             }
@@ -417,6 +473,7 @@ public sealed partial class FsmVm
                     float dx = path[0].X - p.X, dz = path[0].Z - p.Z;
                     return !sq ? dx * dx + dz * dz < r * r : MathF.Abs(dx) < r && MathF.Abs(dz) < r;
                 });
+                if (Group(t, 1)) t.Cond = GateHold(t, path[0], t.Cond);
                 break;
             }
             case "iswithinenemy":

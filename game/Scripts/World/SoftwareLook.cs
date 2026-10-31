@@ -25,7 +25,8 @@ public partial class SoftwareLook : Node
 
     private Palette? _palette;
     private byte[]? _lum;
-    private ImageTexture? _ramp, _lut, _ground, _band;
+    private float[]? _ramp;
+    private ImageTexture? _lut, _ground, _band;
     private Texture2D? _sky;
     private CanvasLayer? _layer;
     private ShaderMaterial? _grade;
@@ -72,9 +73,8 @@ public partial class SoftwareLook : Node
         if (_lum is not null)
         {
             var ramp = SoftwarePalette.Ramp(_palette, _lum);
-            var img = Image.CreateEmpty(32, 1, false, Image.Format.Rg8);
-            for (int j = 0; j < 32; j++) img.SetPixel(j, 0, new Color(ramp[j].A, ramp[j].B, 0));
-            _ramp = ImageTexture.CreateFromImage(img);
+            _ramp = new float[64];
+            for (int j = 0; j < 32; j++) { _ramp[2 * j] = Byte8(ramp[j].A); _ramp[2 * j + 1] = Byte8(ramp[j].B); }
             // the sky band's 32 rows of palette 0xef
             var band = Image.CreateEmpty(32, 1, false, Image.Format.Rgb8);
             var rows = SoftwarePalette.SkyGradient(_palette, _lum);
@@ -84,6 +84,9 @@ public partial class SoftwareLook : Node
         GD.Print($"software look: palette {PaletteName}, sky {SkyName ?? "-"}, ground {GroundName ?? "-"}");
     }
 
+    /// <summary>A ramp value as the 8-bit texture it used to be held in kept it (the look's pixels stay as they were).</summary>
+    private static float Byte8(float v) => (byte)Math.Clamp(v * 255.0, 0.0, 255.0) / 255f;
+
     public bool Ready => _palette is not null;
 
     /// <summary>
@@ -91,14 +94,14 @@ public partial class SoftwareLook : Node
     /// modern look's palette grade. The 3D card's ramp, the dome's own clouds and the card's transfer curve
     /// (<paramref name="cardRamp"/>, <paramref name="cardSky"/>, <paramref name="cardCurve"/>) are what it puts back. <paramref name="brightness"/>: Monitor Brightness, 1..10 (3 the shipped default).
     /// </summary>
-    public void Apply(bool look1997, bool software, bool grade, Texture2D cardRamp, ShaderMaterial? dome, Texture2D? cardSky,
+    public void Apply(bool look1997, bool software, bool grade, float[] cardRamp, ShaderMaterial? dome, Texture2D? cardSky,
         Godot.Environment env1997, Texture? cardCurve, int brightness)
     {
         _software = Ready && look1997 && software;
         Active = _software;
         _grading = Ready && ((_software && !NoFinalPass) || (!look1997 && grade));
         RenderingServer.GlobalShaderParameterSet("i76_software", _software);
-        I76.Game.World.ObjectLight.Set("i76_luma", _software && _ramp is not null ? _ramp : cardRamp);
+        I76.Game.World.ObjectLight.SetRamp(_software && _ramp is not null ? _ramp : cardRamp);
         if (_ground is not null) RenderingServer.GlobalShaderParameterSet("i76_sw_ground", _ground);
         RenderingServer.GlobalShaderParameterSet("i76_sw_ground_on", _software && _ground is not null);
         if (dome is not null && cardSky is not null) dome.SetShaderParameter("clouds", _software && _sky is not null ? _sky : cardSky);

@@ -334,7 +334,7 @@ public partial class Shell : CanvasLayer
         catch (Exception ex) { Recover(ex, "the way back from the mission"); return; }
         Go(first);
         // on the Compatibility renderer (no Vulkan or D3D12 on this machine), once a run: what is different
-        if (I76.Game.Boot.RenderBackend.Compatibility && !I76.Game.Boot.RenderBackend.NoticeShown)
+        if (I76.Game.Boot.RenderBackend.Compatibility && Settings.Renderer != I76.Game.Boot.RendererChoice.OpenGL && !I76.Game.Boot.RenderBackend.NoticeShown)
         {
             I76.Game.Boot.RenderBackend.NoticeShown = true;
             Modal(new NoticePopup { Sprite = 17, Ok = new Rect2I(119, 61, 42, 16), Closed = () => { _screen?.Repaint(); FontsNotice(); }, Text = I76.Game.Boot.RenderBackend.Notice });
@@ -1165,6 +1165,8 @@ public sealed class ShellSettings
     public bool UnlimTurrets { get; set; }
     /// <summary>The port's own: Graphic Detail's Log File (user://logs/godot.log; off). Godot reads it at start, so a change shows from the next start (<see cref="I76.Game.Boot.LogFile"/>).</summary>
     public bool LogFile { get; set; }
+    /// <summary>The port's own: Graphic Detail's Renderer (Auto, Vulkan, D3D12, OpenGL; shell.cfg [port] renderer, written only when not Auto). Godot reads it at start, so a change shows from the next start (<see cref="I76.Game.Boot.StartupSettings"/>).</summary>
+    public I76.Game.Boot.RendererChoice Renderer { get; set; }
     /// <summary>A co-op seat is in the mission's own car (the default) rather than the player's pick on the melee forms' car panel.</summary>
     public bool CoopOwnCar { get; set; } = true;
     /// <summary>The port's own: CONFIGURE CHASSIS as a 3D garage (Graphic Detail's 3D Garage; shell.cfg [port] garage_3d, written only when off). On unless the player turned it off; off is the original's 2D form.</summary>
@@ -1252,6 +1254,7 @@ public sealed class ShellSettings
         s.NetNames = (bool)c.GetValue("port", "net_names", true);
         // no version step: absent, it is off. The override file is what Godot reads; the setting is the player's word for it
         s.LogFile = (bool)c.GetValue("port", "log_file", false);
+        s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
         HdAssets.Enabled = s.HdMenuArt;
         return s;
     }
@@ -1308,7 +1311,8 @@ public sealed class ShellSettings
         if (!ZoomReset) c.SetValue("port", "zoom_reset", false);
         if (!NetNames) c.SetValue("port", "net_names", false);
         if (LogFile) c.SetValue("port", "log_file", true);
+        if (Renderer != I76.Game.Boot.RendererChoice.Auto) c.SetValue("port", "renderer", Renderer.ToString());
         c.Save(Path);
-        I76.Game.Boot.LogFile.Write(LogFile);
+        I76.Game.Boot.StartupSettings.Write(LogFile, Renderer);
     }
 }

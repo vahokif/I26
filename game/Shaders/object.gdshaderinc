@@ -15,13 +15,12 @@ global uniform float i76_light_intensity;
 global uniform float i76_ambient;
 global uniform vec2 i76_fade;
 // the engine's light ramp (the mission's .act and .lum): a vertex lit `light` takes LUMA[round(31·light)]
-global uniform sampler2D i76_luma;
+#include "res://Shaders/ramp.gdshaderinc"
 // a night preset (the light's other branch): no view-depth fade on the moon's term, and the cars' lights
 // (NightLights.cs: row 0 position and exponent, row 1 the nose and 1/range², global space)
 global uniform bool i76_night;
 global uniform int i76_night_light_count;
 global uniform sampler2D i76_night_lights : filter_nearest;
-vec2 i76_ramp(float light) { return texelFetch(i76_luma, ivec2(int(round(31.0 * clamp(light, 0.0, 1.0))), 0), 0).rg; }
 #include "res://Shaders/software.gdshaderinc"
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;

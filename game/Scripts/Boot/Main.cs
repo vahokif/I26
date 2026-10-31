@@ -208,7 +208,7 @@ public partial class Main : Node3D
             GD.Print(BuildInfo.Line);
             GD.Print(RenderBackend.Describe());
             if (RenderBackend.Compatibility)
-                GD.Print("renderer: Compatibility (OpenGL): the driver has no Vulkan or D3D12, so SSAO and some finer effects are off (docs/compatibility-renderer.md)");
+                GD.Print("renderer: Compatibility (OpenGL): SSAO and some finer effects are off (docs/compatibility-renderer.md)");
         }
         // release.sh, before the export: the terrain's compressed material pack, for builds that cannot compress (World/TerrainMaterials.WritePrebaked)
         if (OS.GetCmdlineUserArgs() is var cl && Array.IndexOf(cl, "--bake-ground-pack") is var bk and >= 0 && bk + 1 < cl.Length)
@@ -1546,7 +1546,7 @@ public partial class Main : Node3D
         I76.Game.World.ObjectLight.Set("i76_ambient", light.Ambient);
         I76.Game.World.ObjectLight.Set("i76_night", !light.IsDay);
         I76.Game.World.ObjectLight.Set("i76_fade", new Vector2(I76.Formats.Mission.Lighting.FadeA, I76.Formats.Mission.Lighting.FadeB));
-        I76.Game.World.ObjectLight.Set("i76_luma", _cardRamp = LumaRamp());
+        I76.Game.World.ObjectLight.SetRamp(_cardRamp = LumaRamp());
         var sky = new Sky { SkyMaterial = mat, ProcessMode = Sky.ProcessModeEnum.Realtime };
         var modernSky = ModernSky(mat, light);
         AddHorizonTerrain(modernSky, light);
@@ -2062,12 +2062,12 @@ public partial class Main : Node3D
     /// The mission's light ramp as a 32x1 texture (LumaTable, built from
     /// its palette and .lum); without them a plain light^0.4 curve.
     /// </summary>
-    private ImageTexture LumaRamp()
+    private float[] LumaRamp()
     {
         byte[]? table = LumaBytes();
-        var img = Image.CreateEmpty(32, 1, false, Image.Format.R8);
-        for (int j = 0; j < 32; j++) img.SetPixel(j, 0, new Color((table?[j] ?? (byte)(255 * Mathf.Pow(j / 31f, 0.4f))) / 255f, 0, 0));
-        return ImageTexture.CreateFromImage(img);
+        var ab = new float[64];
+        for (int j = 0; j < 32; j++) ab[2 * j] = (table?[j] ?? (byte)(255 * Mathf.Pow(j / 31f, 0.4f))) / 255f;
+        return ab;
     }
 
     /// <summary>The modern look's Monitor Brightness: 7% a step either side of the shipped 3.</summary>

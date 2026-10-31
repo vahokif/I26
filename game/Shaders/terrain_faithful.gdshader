@@ -45,8 +45,7 @@ uniform float chunk_units = 160.0;
 uniform float road_light_y = 0.2588;
 
 // the engine's light ramp (the mission's .act and .lum): a vertex lit `light` takes LUMA[round(31·light)]
-global uniform sampler2D i76_luma;
-vec2 i76_ramp(float light) { return texelFetch(i76_luma, ivec2(int(round(31.0 * clamp(light, 0.0, 1.0))), 0), 0).rg; }
+#include "res://Shaders/ramp.gdshaderinc"
 #include "res://Shaders/software.gdshaderinc"
 // the Software renderer's ground: the miss8 mission's family (tt…sd_, 128x128), when there is one
 global uniform sampler2D i76_sw_ground;   // no source_color on a global: its texels come raw (sRGB)

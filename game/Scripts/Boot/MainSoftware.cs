@@ -14,7 +14,7 @@ public partial class Main
 {
     private SoftwareLook? _software;
     /// <summary>The 3D card's light ramp (LumaRamp), which the Software renderer swaps out.</summary>
-    private Texture2D? _cardRamp;
+    private float[]? _cardRamp;
 
     private static bool? EnvSwitch(string name) => System.Environment.GetEnvironmentVariable(name) switch
     {

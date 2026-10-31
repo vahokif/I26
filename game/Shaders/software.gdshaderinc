@@ -1,6 +1,6 @@
 // The 1997 look's Software renderer (SoftwareLook.cs): the original's own
 // 8-bit rasteriser point-samples its textures (every textured span routine reads one texel, no blend), and its
-// light goes through the palette's .lum rows rather than a grey multiply. i76_luma then holds, per light level,
+// light goes through the palette's .lum rows rather than a grey multiply. the ramp (ramp.gdshaderinc) then holds, per light level,
 // the row's fit colour·a + b (SoftwarePalette.Ramp) in r and g; the 3D card's ramp is r alone (g reads 0).
 #include "res://Shaders/compat.gdshaderinc"
 global uniform bool i76_software;

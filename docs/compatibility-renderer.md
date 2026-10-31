@@ -6,8 +6,10 @@ whose driver has neither (an old GPU, a virtual machine, Wine without Vulkan) ma
 differently. The log's second line says which renderer is in use (`renderer: forward_plus (...)` or `gl_compatibility`),
 and in Compatibility the shell shows a notice once a run.
 
+Graphic Detail's Renderer (restart) row (Auto, Vulkan, D3D12 on Windows, OpenGL) picks the renderer from the next start: it writes the settings-override file
+(`user://log_settings.cfg`, shared with the Log row), and a `--rendering-driver` on the command line still wins. Auto removes the file.
 Force it for a test with `--rendering-method gl_compatibility --rendering-driver opengl3` (before the `--`), or
-`I76_SHOT_GL=1 tools/shot.sh ...` for a capture; `I76_SHADER_SMOKE=1` draws every shader once and quits, so the log shows
+`I76_SHOT_GL=1 tools/shot.sh ...` for a capture (`I76_SHOT_SETTINGS=1` leaves the renderer off the command line, so the Renderer row's file in `I76_SHOT_DATA` decides); `I76_SHADER_SMOKE=1` draws every shader once and quits, so the log shows
 any the renderer refuses.
 
 ## What Compatibility lacks, and what the game does

@@ -12,6 +12,7 @@
 #   the game seeds its rand stream with 1 under --screenshot (not the clock), so a capture repeats; --seed N for another
 #   I76_SHOT_GL=1 renders with Godot's OpenGL (Compatibility) renderer instead of Vulkan Forward+ (what a machine without Vulkan/D3D12 gets);
 #     under GPU mode the game runs on EGL in the headless Weston, under software on Mesa's llvmpipe
+#   I76_SHOT_SETTINGS=1 leaves the renderer off the command line, so Graphic Detail's Renderer (the override file in user://, see I76_SHOT_DATA) picks it
 #   I76_FRAME_PROFILE=1 adds Godot's --gpu-profile, whose timestamps the game's FrameProfiler groups into passes
 # Two ways to render, both off-screen and private (nothing reaches the desktop, its displays or settings):
 #   GPU, the default: a private headless Weston (its own XDG_RUNTIME_DIR under /tmp, its own socket, an
@@ -45,7 +46,8 @@ godot_bin=${GODOT:-}
 install_args=(--install "${I76_INSTALL:?set I76_INSTALL (none: no install)}")
 [ "$I76_INSTALL" = none ] && { install_args=(); unset I76_INSTALL; }   # and the game must not see "none" either
 
-if [ -n "${I76_SHOT_GL:-}" ]; then render_args=(--rendering-driver opengl3 --rendering-method gl_compatibility); gpu_ok='OpenGL API'
+if [ -n "${I76_SHOT_SETTINGS:-}" ]; then render_args=(); gpu_ok='OpenGL API|^Vulkan .* Using Device'   # no renderer on the command line: the Graphic Detail Renderer row's override file (in I76_SHOT_DATA) decides
+elif [ -n "${I76_SHOT_GL:-}" ]; then render_args=(--rendering-driver opengl3 --rendering-method gl_compatibility); gpu_ok='OpenGL API'
 else render_args=(--rendering-driver vulkan); gpu_ok='^Vulkan .* Using Device'; fi
 
 godot() { # godot [display args...]: the game, with the shot args
@@ -102,7 +104,7 @@ shot_gpu() { # sets gpu_failed if the GPU path couldn't be brought up (then noth
     # (and no libdecor plugins: the kiosk shell draws no frames, and the GTK one only complains)
     (unset DISPLAY; export XDG_RUNTIME_DIR=$rt WAYLAND_DISPLAY=shot VK_ICD_FILENAMES=$icd LIBDECOR_PLUGIN_DIR=$rt
      godot --display-driver wayland "${render_args[@]}") 2>&1 | tee "$log" || rc=$?
-    if ! grep -q "$gpu_ok" "$log"; then
+    if ! grep -qE "$gpu_ok" "$log"; then
         no_gpu "the game didn't bring up Vulkan on the GPU (exit $rc)" || return
     fi
     return $rc

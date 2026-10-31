@@ -97,9 +97,69 @@ i76_fade={
 "type": "vec2",
 "value": Vector2(0.000417, 0.74958)
 }
-i76_luma={
-"type": "sampler2D",
-"value": ""
+i76_luma_0={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_1={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_2={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_3={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_4={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_5={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_6={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_7={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_8={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_9={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_10={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_11={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_12={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_13={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_14={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+i76_luma_15={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
 }
 i76_night={
 "type": "bool",

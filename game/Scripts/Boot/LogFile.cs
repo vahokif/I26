@@ -8,12 +8,11 @@ namespace I76.Game.Boot;
 /// <summary>
 /// The log file (user://logs/godot.log, Godot's own). Off unless the player turns on Graphic Detail's Log File or forces it for a
 /// bug report with --log or I76_LOG=1 (docs/dev-hooks.md). Godot reads file logging only at start, from project settings, so the
-/// setting is written to the override file project.godot names (application/config/project_settings_override) and takes effect on
+/// setting is written to the override file project.godot names (application/config/project_settings_override; <see cref="StartupSettings"/>) and takes effect on
 /// the next start. A forced run gets the same file from <see cref="ForcedLogger"/>, which needs no restart. Stdout is unaffected.
 /// </summary>
 public static partial class LogFile
 {
-    public const string OverridePath = "user://log_settings.cfg";
     public const string LogDir = "user://logs";
 
     /// <summary>--log or I76_LOG (anything but empty or 0) on this run.</summary>
@@ -22,19 +21,6 @@ public static partial class LogFile
 
     /// <summary>Whether Godot itself is writing the log this run.</summary>
     public static bool NativeOn => (bool)ProjectSettings.GetSetting("debug/file_logging/enable_file_logging", false);
-
-    /// <summary>The next start's setting: the override file with file logging on, or none (project.godot's off).</summary>
-    public static void Write(bool on)
-    {
-        string path = ProjectSettings.GlobalizePath(OverridePath);
-        try
-        {
-            if (!on) { if (File.Exists(path)) File.Delete(path); return; }
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, "[debug]\n\nfile_logging/enable_file_logging=true\nfile_logging/enable_file_logging.pc=true\nfile_logging/max_log_files=3\n");
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { GD.PrintErr($"log file setting not saved: {e.Message}"); }
-    }
 
     /// <summary>A forced run whose Godot is not logging gets a logger of ours, before the first line.</summary>
     public static void InstallForced()

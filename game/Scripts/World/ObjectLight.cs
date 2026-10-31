@@ -17,6 +17,19 @@ public static class ObjectLight
         RenderingServer.GlobalShaderParameterSet(name, value);
     }
 
+    /// <summary>
+    /// The light ramp (ramp.gdshaderinc): 32 entries of (a, b), interleaved in <paramref name="ab"/>, as 16 vec4 globals of two entries
+    /// each. Plain uniforms rather than a texture, which the vertex stage of some drivers cannot fetch (#133).
+    /// </summary>
+    public static void SetRamp(float[] ab, bool hold = true)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            var v = new Vector4(ab[4 * i], ab[4 * i + 1], ab[4 * i + 2], ab[4 * i + 3]);
+            if (hold) Set("i76_luma_" + i, v); else RenderingServer.GlobalShaderParameterSet("i76_luma_" + i, v);
+        }
+    }
+
     /// <summary>Every global as the last mission setting set it again; those never set are left as the garage had them.</summary>
     public static void Reapply()
     {

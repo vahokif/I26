@@ -102,13 +102,13 @@ public sealed class GarageAssets
         RenderingServer.GlobalShaderParameterSet("i76_night", false);
         RenderingServer.GlobalShaderParameterSet("i76_fade", new Vector2(I76.Formats.Mission.Lighting.FadeA, I76.Formats.Mission.Lighting.FadeB));
         RenderingServer.GlobalShaderParameterSet("i76_mode_1997", mode1997);
-        RenderingServer.GlobalShaderParameterSet("i76_luma", LumaRamp());
+        I76.Game.World.ObjectLight.SetRamp(LumaRamp(), hold: false);
     }
 
-    private ImageTexture LumaRamp()
+    private float[] LumaRamp()
     {
-        var img = Image.CreateEmpty(32, 1, false, Image.Format.R8);
-        for (int j = 0; j < 32; j++) img.SetPixel(j, 0, new Color((Luma?[j] ?? (byte)(255 * Mathf.Pow(j / 31f, 0.4f))) / 255f, 0, 0));
-        return ImageTexture.CreateFromImage(img);
+        var ab = new float[64];
+        for (int j = 0; j < 32; j++) ab[2 * j] = (Luma?[j] ?? (byte)(255 * Mathf.Pow(j / 31f, 0.4f))) / 255f;
+        return ab;
     }
 }

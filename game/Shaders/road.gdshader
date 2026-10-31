@@ -19,8 +19,7 @@ uniform float fade_b = 0.7496;
 uniform float pull = 0.004;
 
 // the engine's light ramp (the mission's .act and .lum): a vertex lit `light` takes LUMA[round(31·light)]
-global uniform sampler2D i76_luma;
-vec2 i76_ramp(float light) { return texelFetch(i76_luma, ivec2(int(round(31.0 * clamp(light, 0.0, 1.0))), 0), 0).rg; }
+#include "res://Shaders/ramp.gdshaderinc"
 #include "res://Shaders/software.gdshaderinc"
 
 varying vec2 v_intensity;

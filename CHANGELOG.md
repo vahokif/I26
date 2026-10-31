@@ -3,10 +3,12 @@
 ## Unreleased
 
 ### New
+- Graphic Detail has a Renderer row (Auto, Vulkan, D3D12 on Windows, OpenGL), applied at the next start, so a machine whose graphics driver misbehaves can switch to another without the command line.
 - The modern look's night sky has a real moon: a sharp, detailed full moon (from NASA's public-domain map of its surface) with a soft cold glow, the clouds drifting in front of it, in place of the old blurry sprite (Two Days Before and the other night missions). The night sky round it is the original's deep navy with blue-violet clouds again, where the modern look had turned it a flat grey.
 - Graphic Detail has a View Zoom Reset row. On (as before), the outside views' mouse-wheel zoom goes back to the normal framing when you switch views, after a cut-scene and on a retry; off, each view (the F2 chase view included) keeps the zoom you set until you start another mission. End still resets it by hand.
 
 ### Fixed
+- The 1997 look's ground may no longer draw almost all black, lit only along the triangle edges and striped on the cliffs, on AMD graphics under Vulkan on Windows (#133). The light table the terrain and roads read is now passed to the shaders as plain values, which that driver should handle; we could not try it on that hardware, so tell us if it still happens (the new Renderer row in Graphic Detail can switch to D3D12 or OpenGL meanwhile).
 - Unpacking a GOG installer now keeps the game's own executable (i76.exe or nitro.exe), which I26 reads the computer drivers' tactics from. A game folder unpacked by an earlier version lacks it: I26 now restores it from the GOG installer if that sits next to I26 (or in its user folder), otherwise missions say what to do (put the installer next to I26, or copy the executable from your GOG install).
 - A resprayed car no longer keeps a ring of its old paint round the windows: the body colour, frame and trim the windows are drawn with now take the new colours too.
 - The Jefferson Sovereign's left front door window and the small window before it are glass in the modern look again, where they were drawn as body with a stray triangle and a bare pillar.

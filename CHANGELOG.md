@@ -8,6 +8,7 @@
 - Graphic Detail has a View Zoom Reset row. On (as before), the outside views' mouse-wheel zoom goes back to the normal framing when you switch views, after a cut-scene and on a retry; off, each view (the F2 chase view included) keeps the zoom you set until you start another mission. End still resets it by hand.
 
 ### Fixed
+- The map editor's New map from real world downloads roads again when the main road server is overloaded: it now also asks that server's own machines and the French road server, which answer when the main address turns requests away.
 - A controller's View and Menu buttons, when bound to a command in Control Configuration, now do only that command instead of also opening the standings / the menu.
 - The 1997 look's ground may no longer draw almost all black, lit only along the triangle edges and striped on the cliffs, on AMD graphics under Vulkan on Windows (#133). The light table the terrain and roads read is now passed to the shaders as plain values, which that driver should handle; we could not try it on that hardware, so tell us if it still happens (the new Renderer row in Graphic Detail can switch to D3D12 or OpenGL meanwhile).
 - Unpacking a GOG installer now keeps the game's own executable (i76.exe or nitro.exe), which I26 reads the computer drivers' tactics from. A game folder unpacked by an earlier version lacks it: I26 now restores it from the GOG installer if that sits next to I26 (or in its user folder), otherwise missions say what to do (put the installer next to I26, or copy the executable from your GOG install).

@@ -11,9 +11,14 @@ namespace I76.Editor.Geo;
 public sealed class GeoFetch
 {
     public const string TileUrl = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{0}/{1}/{2}.png";
+    // overpass-api.de's own name sits behind a balancer that turns about half the requests away at once (502) when it is
+    // busy, while its member servers z. and lz4. still take them; overpass.openstreetmap.fr is the French instance (world
+    // data), first as it answered fastest when this list was made. Servers whose status page does not answer are asked only when
+    // the rest have not delivered (Answers), so dead mirrors cost seconds, not minutes.
     public static readonly string[] OverpassServers =
     [
-        "https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter",
+        "https://overpass.openstreetmap.fr/api/interpreter", "https://overpass-api.de/api/interpreter", "https://z.overpass-api.de/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter",
     ];
 
     private readonly HttpClient _http;
@@ -96,41 +101,52 @@ public sealed class GeoFetch
         if (File.Exists(path)) return File.ReadAllText(path);
         string last = "no answer";
         bool timedOut = false;
+        string? Ask(string server)
+        {
+            Cancel.ThrowIfCancellationRequested();
+            string host = new Uri(server).Host;
+            try
+            {
+                Log?.Invoke($"overpass: {server}");
+                var post = _http.PostAsync(server, new FormUrlEncodedContent([new("data", query)]), Cancel);
+                // the answer only starts when the query has run: tell the seconds so a slow server does not look like a hang
+                for (int secs = 0; !((IAsyncResult)post).AsyncWaitHandle.WaitOne(1000);) OverpassTrying?.Invoke(host, ++secs);
+                using var resp = post.GetAwaiter().GetResult();
+                Log?.Invoke($"overpass: HTTP {(int)resp.StatusCode}, reading the answer");
+                var body = resp.Content.ReadAsByteArrayAsync(Cancel).GetAwaiter().GetResult();
+                var text = Encoding.UTF8.GetString(body);
+                var outcome = OverpassReply.Classify((int)resp.StatusCode, text);
+                if (outcome == OverpassOutcome.Ok)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllBytes(path, body);
+                    Downloaded += body.Length;
+                    return text;
+                }
+                timedOut |= outcome == OverpassOutcome.TimedOut;
+                last = $"{host}: {(outcome == OverpassOutcome.TimedOut ? "the query ran out of time" : outcome == OverpassOutcome.Busy ? "busy" : "HTTP " + (int)resp.StatusCode)}";
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !Cancel.IsCancellationRequested)
+            {
+                last = $"{host}: {(e is TaskCanceledException ? "no answer" : e.Message)}";
+                Log?.Invoke("overpass: " + last);
+                if (e is TaskCanceledException) _silent.Add(server);
+            }
+            return null;
+        }
         for (int round = 0; round < OverpassRounds; round++)
         {
+            // the servers whose status page answers first; the others (a busy server's status page can take longer than a query)
+            // only when none of those delivered, so a slow or dead one is waited on only as a last resort
+            var later = new List<string>();
             foreach (var server in OverpassServers)
             {
-                Cancel.ThrowIfCancellationRequested();
-                string host = new Uri(server).Host;
-                if (_silent.Contains(server) || !Answers(server)) { _silent.Add(server); continue; }
-                try
-                {
-                    Log?.Invoke($"overpass: {server}");
-                    var post = _http.PostAsync(server, new FormUrlEncodedContent([new("data", query)]), Cancel);
-                    // the answer only starts when the query has run: tell the seconds so a slow server does not look like a hang
-                    for (int secs = 0; !((IAsyncResult)post).AsyncWaitHandle.WaitOne(1000);) OverpassTrying?.Invoke(host, ++secs);
-                    using var resp = post.GetAwaiter().GetResult();
-                    Log?.Invoke($"overpass: HTTP {(int)resp.StatusCode}, reading the answer");
-                    var body = resp.Content.ReadAsByteArrayAsync(Cancel).GetAwaiter().GetResult();
-                    var text = Encoding.UTF8.GetString(body);
-                    var outcome = OverpassReply.Classify((int)resp.StatusCode, text);
-                    if (outcome == OverpassOutcome.Ok)
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                        File.WriteAllBytes(path, body);
-                        Downloaded += body.Length;
-                        return text;
-                    }
-                    timedOut |= outcome == OverpassOutcome.TimedOut;
-                    last = $"{new Uri(server).Host}: {(outcome == OverpassOutcome.TimedOut ? "the query ran out of time" : outcome == OverpassOutcome.Busy ? "busy" : "HTTP " + (int)resp.StatusCode)}";
-                }
-                catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !Cancel.IsCancellationRequested)
-                {
-                    last = $"{host}: {(e is TaskCanceledException ? "no answer" : e.Message)}";
-                    Log?.Invoke("overpass: " + last);
-                    if (e is TaskCanceledException) _silent.Add(server);
-                }
+                if (_silent.Contains(server)) continue;
+                if (!Answers(server)) { later.Add(server); continue; }
+                if (Ask(server) is { } text) return text;
             }
+            foreach (var server in later)
+                if (!_silent.Contains(server) && Ask(server) is { } text) return text;
             if (round + 1 < OverpassRounds) { OverpassWait?.Invoke(round + 1, 5 * (round + 1)); Pause(TimeSpan.FromSeconds(5 * (round + 1))); }
         }
         if (_silent.Count == OverpassServers.Length) last = "none of the road servers answered";
@@ -138,8 +154,8 @@ public sealed class GeoFetch
     }
 
     /// <summary>
-    /// Whether a road server answers at all: its status page (api/status), any HTTP answer within <see cref="StatusWait"/>. Mirrors that
-    /// take the connection and then never answer would otherwise hold the query for the whole request timeout, every round.
+    /// Whether a road server's status page (api/status) gives any HTTP answer within <see cref="StatusWait"/>: those are asked first.
+    /// A mirror that takes the connection and then never answers is then waited on only when nothing else delivered.
     /// </summary>
     private bool Answers(string server)
     {
@@ -153,7 +169,7 @@ public sealed class GeoFetch
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException && !Cancel.IsCancellationRequested)
         {
-            Log?.Invoke($"overpass: {new Uri(server).Host} does not answer, left out");
+            Log?.Invoke($"overpass: {new Uri(server).Host}'s status page does not answer, tried last");
             return false;
         }
     }

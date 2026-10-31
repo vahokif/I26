@@ -541,12 +541,19 @@ public partial class CombatView : Node3D
         }
     }
 
-    /// <summary>The first-use rehearsal of the explosion effects (ModernFx.Warm) 8 m ahead of the camera, alive while the tree is paused; <see cref="EndWarm"/> removes it.</summary>
-    public void Warm(Camera3D cam)
+    private ModernFx? _warmFx;
+
+    /// <summary>
+    /// The first-use rehearsal of the explosion effects, in a private ModernFx (the game's own is not touched) at <paramref name="at"/>,
+    /// out of everyone's sight; <see cref="EndWarm"/> frees it. The renderer makes a material's pipelines when its instance is made,
+    /// seen or not.
+    /// </summary>
+    public void Warm(Vector3 at)
     {
         if (!IsModern || !_fx.HasExplosions) return;
-        _fx.ProcessMode = ProcessModeEnum.Always;
-        _fx.Warm(cam.GlobalPosition - cam.GlobalBasis.Z * 8f);
+        _warmFx = new ModernFx { Name = "WarmFx", SceneLight = SceneLight, ProcessMode = ProcessModeEnum.Always };
+        AddChild(_warmFx);
+        _warmFx.Warm(at);
         // the sounds a blast and a death use, decoded now rather than in the frame of the first one
         Audio?.Get("vexplode.wav");
         Audio?.Get("tblow.wav");
@@ -556,10 +563,10 @@ public partial class CombatView : Node3D
 
     /// <summary>
     /// The impacts of every weapon on the field, made ready behind the loading card: the sprite look of each impact effect
-    /// (its geometry and textures) and its sound, and one sprite drawn 6 m ahead of the camera so that its pipeline compiles.
+    /// (its geometry and textures) and its sound, and one sprite at <paramref name="at"/> so that its pipeline is made.
     /// The first bullet that hit a car cost 20 ms (the effect's look 10, its sound 4), a stall as the fight began.
     /// </summary>
-    public void WarmImpacts(Camera3D cam)
+    public void WarmImpacts(Vector3 at)
     {
         var ords = Combat.World.Vehicles.Select(v => v.Armory).OfType<Armory>().SelectMany(a => a.Weapons).Select(w => w.Def.Ordnance)
             .Append(Armory.HandgunDef(1).Ordnance).OfType<I76.Formats.Bwd2.OrdnanceDef>().DistinctBy(o => string.Join('|', o.ImpactXdf) + string.Join('|', o.ImpactWav));
@@ -576,7 +583,7 @@ public partial class CombatView : Node3D
         {
             Texture = tex, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Shaded = false, DoubleSided = true,
             AlphaCut = SpriteBase3D.AlphaCutMode.Discard, PixelSize = any.Size / MathF.Max(1, tex.GetWidth()),
-            Position = cam.GlobalPosition - cam.GlobalBasis.Z * 6f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Position = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         AddChild(sp);
         _warmSprites.Add(sp);
@@ -586,12 +593,13 @@ public partial class CombatView : Node3D
     {
         foreach (var sp in _warmSprites) sp.QueueFree();
         _warmSprites.Clear();
-        _fx.Clear();
-        _fx.ProcessMode = ProcessModeEnum.Inherit;
+        _warmFx?.QueueFree();
+        _warmFx = null;
     }
 
     public override void _Process(double delta)
     {
+        using var _view = Hitch.Time(Hitch.Phase.Views);
         _t += delta;
         bool skipBlast = false;
         foreach (var e in Combat.Events)

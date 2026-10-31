@@ -369,6 +369,7 @@ public sealed partial class SimSession
         {
             var parts = entry.Split(',');
             if (!int.TryParse(parts[0], out int bt) || bt != _boomTick) continue;
+            Console.WriteLine($"[boom] tick {bt}: {(parts.Length > 1 ? parts[1] : "explosion")}");   // marks the event in the hitch log between the frames it falls in
             // "kill-all": every other car still alive destroyed (the FSM's destroy), as the I76_KILL_AT dev hook does to type-1 objects
             if (parts.Length > 1 && parts[1] == "kill-all")
             {

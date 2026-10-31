@@ -112,6 +112,7 @@ public partial class WreckFire : Node3D
 
     public override void _Process(double delta)
     {
+        using var _view = Hitch.Time(Hitch.Phase.Views);
         _age += delta;
         bool carGone = !IsInstanceValid(Car) || !Car.IsInsideTree();
         if (carGone && _gone < 0) _gone = _age;

@@ -98,6 +98,7 @@ public partial class SmokeLayer : Node3D
 
     public override void _Process(double delta)
     {
+        using var _view = Hitch.Time(Hitch.Phase.Views);
         var cam = GetViewport().GetCamera3D();
         if (cam is not null) cam.CullMask &= ~MirrorLayer;   // the mirror's own puffs (MirrorDraw) are for the mirror's camera alone
         if (_off || _failed || _quad is null)

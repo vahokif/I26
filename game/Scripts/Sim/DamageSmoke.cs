@@ -220,6 +220,7 @@ public partial class DamageSmoke : Node3D
 
     public override void _Process(double delta)
     {
+        using var _view = Hitch.Time(Hitch.Phase.Views);
         if (!_ready) return;
         bool modern = Cars.Values.FirstOrDefault()?.Modern ?? true;
         if (modern != _modern) { _modern = modern; Array.Clear(_pool); Array.Clear(_mp); _carry.Clear(); _lvl.Clear(); _lastAt.Clear(); }

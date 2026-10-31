@@ -181,9 +181,9 @@ public partial class DamageView : Node3D
     }
 
     /// <summary>
-    /// A rehearsal of a death behind the loading card: the car burnt out and its fire lit, kept alive while the tree is paused so the
-    /// renderer compiles the wreck's and the fire's pipelines and the code that builds them has run once (the first death of a
-    /// game cost half a second); <see cref="EndWarm"/> makes the car whole again.
+    /// A rehearsal of a death behind the loading card, on a stand-in for a car: burnt out and its fire lit, kept alive while the tree is paused so the
+    /// renderer makes the wreck's and the fire's pipelines and the code that builds them has run once (the first death of a
+    /// game cost half a second); <see cref="EndWarm"/> takes the fire and the debris away (the caller frees the stand-in).
     /// </summary>
     public void Warm(CarNode car)
     {
@@ -195,9 +195,8 @@ public partial class DamageView : Node3D
         // the smoke is drawn by a layer of its own (SmokeLayer), whose compositor compiles on the first puff it gets
         foreach (var n in new[] { "SmokeLayer", "DamageSmoke" }) if (GetNodeOrNull(n) is { } sn) sn.ProcessMode = ProcessModeEnum.Always;
         // the chunks a wreck throws off (a Standard material on a box)
-        if (GetViewport().GetCamera3D() is { } cam)
         {
-            _warmChunk = new MeshInstance3D { Mesh = _chunk, MaterialOverride = _chunkMat, Position = cam.GlobalPosition - cam.GlobalBasis.Z * 6f };
+            _warmChunk = new MeshInstance3D { Mesh = _chunk, MaterialOverride = _chunkMat, Position = car.GlobalPosition };
             AddChild(_warmChunk);
             // and a piece thrown as a wheel or gun is (a copy of a node on a rigid body, the first of which costs the physics server a setup)
             int before = _debris.Count;
@@ -215,7 +214,7 @@ public partial class DamageView : Node3D
         _warmChunk = null;
         if (_warmDebris is { } wd) { _debris.RemoveAll(d => d.Body == wd); wd.QueueFree(); _warmDebris = null; }
         foreach (var n in new[] { "SmokeLayer", "DamageSmoke" }) if (GetNodeOrNull(n) is { } sn) sn.ProcessMode = ProcessModeEnum.Inherit;
-        Restore(car);
+        if (_fires.Remove(car, out var fire)) { fire.Detach(); fire.QueueFree(); }
         DamageSmoke.Current?.Clear();
     }
 
@@ -312,6 +311,7 @@ public partial class DamageView : Node3D
 
     public override void _Process(double delta)
     {
+        using var _view = Hitch.Time(Hitch.Phase.Views);
         _t += delta;
         foreach (var e in Damage.Events)
             switch (e)

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading;
 using System.Diagnostics;
 using Godot;
@@ -11,13 +12,17 @@ namespace I76.Game;
 /// </summary>
 public static class Hitch
 {
-    public enum Phase { Input, Rumble, Force, Sim, Shell, PadEnum, PadPlug, Load, Count }
+    public enum Phase { Input, Rumble, Force, Sim, Shell, PadEnum, PadPlug, Load, Views, Count }
 
     public static readonly double LimitMs = double.TryParse(System.Environment.GetEnvironmentVariable("I76_HITCH_MS"), out var lim) ? lim : 200;   // I76_HITCH_MS lowers it, to hunt small hitches
     private static long _pipes;
+    private static long[] _kinds = new long[5];
+
+    /// <summary>The render pipelines compiled so far, by kind: canvas, mesh (at load), surface (first draw), draw (a stall in the draw call), specialization (in the background).</summary>
+    private static long[] Kinds() => new[] { RenderingServer.RenderingInfo.PipelineCompilationsCanvas, RenderingServer.RenderingInfo.PipelineCompilationsMesh, RenderingServer.RenderingInfo.PipelineCompilationsSurface, RenderingServer.RenderingInfo.PipelineCompilationsDraw, RenderingServer.RenderingInfo.PipelineCompilationsSpecialization }.Select(k => (long)RenderingServer.GetRenderingInfo(k)).ToArray();
     private static readonly long[] Ticks = new long[(int)Phase.Count];
     private static readonly long[] Worst = new long[(int)Phase.Count];     // the longest single scope of each phase this frame
-    private static readonly string[] Names = ["input sampling", "rumble driver call", "force feedback tick", "sim tick", "shell", "joypad enumeration", "pad hot-plug handling", "mission build (behind the loading card)"];
+    private static readonly string[] Names = ["input sampling", "rumble driver call", "force feedback tick", "sim tick", "shell", "joypad enumeration", "pad hot-plug handling", "mission build (behind the loading card)", "effect views (combat, damage, fire, smoke)"];
 
     /// <summary>Time the phase until the scope is disposed (a struct: no allocation).</summary>
     public static Scope Time(Phase p) => new(p);
@@ -61,10 +66,10 @@ public static class Hitch
                 ? $"hitch: frame {Godot.Engine.GetProcessFrames()} {ms:0} ms, slowest phase {Names[top]} {topMs:0} ms (longest single call {Worst[top] * 1000.0 / Stopwatch.Frequency:0} ms)"
                 : $"hitch: frame {Godot.Engine.GetProcessFrames()} {ms:0} ms, mostly outside the measured phases (render/loading/engine; slowest measured: {Names[top]} {topMs:0} ms)";
             _ = sum;
-            if (LimitMs < 200) { long pc = 0; foreach (var k in new[] { RenderingServer.RenderingInfo.PipelineCompilationsCanvas, RenderingServer.RenderingInfo.PipelineCompilationsMesh, RenderingServer.RenderingInfo.PipelineCompilationsSurface, RenderingServer.RenderingInfo.PipelineCompilationsDraw, RenderingServer.RenderingInfo.PipelineCompilationsSpecialization }) pc += (long)RenderingServer.GetRenderingInfo(k); line += $" pipelines {pc - _pipes} (total {pc})"; }
+            if (LimitMs < 200) { var now = Kinds(); line += $" pipelines {now.Sum() - _pipes} (total {now.Sum()}; canvas/mesh/surface/draw/specialization {string.Join('/', now.Select((n, k) => n - _kinds[k]))})"; }
             if (LimitMs < 200) line += $" [terrain update {I76.Game.Boot.FrameProfiler.TerrainUpdateMs:0.0} ms, gc0 {GC.CollectionCount(0)} gc2 {GC.CollectionCount(2)}]";
         }
-        { long pc = 0; foreach (var k in new[] { RenderingServer.RenderingInfo.PipelineCompilationsCanvas, RenderingServer.RenderingInfo.PipelineCompilationsMesh, RenderingServer.RenderingInfo.PipelineCompilationsSurface, RenderingServer.RenderingInfo.PipelineCompilationsDraw, RenderingServer.RenderingInfo.PipelineCompilationsSpecialization }) pc += (long)RenderingServer.GetRenderingInfo(k); _pipes = pc; }
+        { _kinds = Kinds(); _pipes = _kinds.Sum(); }
         if (reset) { Array.Clear(Ticks); Array.Clear(Worst); }
         return line;
     }

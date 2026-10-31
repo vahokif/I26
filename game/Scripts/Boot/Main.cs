@@ -1014,9 +1014,22 @@ public partial class Main : Node3D
         if (System.Environment.GetEnvironmentVariable("I76_NO_WARMUP") == "1" || GetViewport().GetCamera3D() is not { } cam) return;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         GetTree().Paused = true;
-        _combatView?.Warm(cam);
-        _combatView?.WarmImpacts(cam);
-        if (_car is { } car) _damageView?.Warm(car);
+        // all of it at a spot far below the world, out of sight (the renderer makes a material's pipelines when its instance is made, seen
+        // or not), and on stand-ins of its own: nothing of the game's is touched, nothing is left to take away but what was made
+        var away = cam.GlobalPosition + Vector3.Down * 400f;
+        _combatView?.Warm(away);
+        _combatView?.WarmImpacts(away);
+        // the death is rehearsed on a stand-in for the player's car (never in the sim's list, freed after)
+        // so the real car is never burnt and restored
+        CarNode? stage = null;
+        if (_car is { Definition: { } def, Sim: { IsHeli: false } sv } && _builder is { } sb && sb.CarParts.Get(def, false) is { } sp)
+        {
+            stage = new CarNode { Name = "WarmStage", Definition = def, Modern = !_mode1997 };
+            AddChild(stage);
+            stage.Init(sv, sp.Body);
+            stage.GlobalPosition = away;
+            _damageView?.Warm(stage);
+        }
         // the views' own per-frame code (the cockpit's panels, the HUD, the shadows, the weeds, the combat and damage views) runs for these
         // frames too: its first run is the first frame of play, a 150 ms stall (the code compiled, the panels' textures made)
         var views = new List<Node>();
@@ -1034,7 +1047,7 @@ public partial class Main : Node3D
         foreach (var v in views) v.ProcessMode = Node.ProcessModeEnum.Always;
         for (int i = 0; i < 4; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         for (int i = 0; i < views.Count; i++) if (IsInstanceValid(views[i])) views[i].ProcessMode = was[i];
-        if (_car is { } car2) _damageView?.EndWarm(car2);
+        if (stage is not null) { _damageView?.EndWarm(stage); stage.QueueFree(); }
         _combatView?.EndWarm();
         GetTree().Paused = false;
         GD.Print($"effects warmed up in {(System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0} ms");

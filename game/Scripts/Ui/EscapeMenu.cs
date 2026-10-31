@@ -328,6 +328,17 @@ public sealed partial class EscapeMenu : Control
             CancelButton(),
         ];
 
+        if (Net)
+        {
+            // the port's own, on the row under the levels: the CB voice chat's microphone (the same setting as the shell's Audio Control), live
+            var mics = new List<string> { "" };
+            try { mics.AddRange(Godot.AudioServer.GetInputDeviceList().Where(d => d != "Default")); } catch { }
+            if (!mics.Contains(Settings.CbMic)) mics.Add(Settings.CbMic);
+            var names = mics.Select(PlayOptionsScreen.MicLabel).ToArray();
+            _audio.Items.Insert(3, Setting(Cycle, "CB Microphone", 32, mics.Count, names, s => Math.Max(0, mics.IndexOf(s.CbMic)), (s, v) => s.CbMic = mics[v],
+                apply: () => Live?.Invoke(Settings)));
+        }
+
         if (End is { } netEnd && Net)
         {
             // a network co-op mission's end: nothing to replay or reconfigure here, the host's game is over for everyone
@@ -627,6 +638,7 @@ public sealed partial class EscapeMenu : Control
         31 => Box(9),                                  // Force Feedback, Auto Reverse
         30 => Box(10),
         25 => Box(11),
+        32 => (RowA(11), new Rect4(24, RowY(12), 301, RowY(12) + 24)),   // the net game's CB Microphone: the label on the row, the device's name under it
         24 => (RowA(13), new Rect4(226, 360, 301, 384)),
         27 => (new(40, 245, 80, 269), null),
         28 => (new(130, 245, 180, 269), null),

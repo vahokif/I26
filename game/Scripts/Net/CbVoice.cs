@@ -32,11 +32,13 @@ public partial class CbVoice : Node
     public Func<bool>? CanTalk { get; init; }
 
     public const double IdleCloseSeconds = 30, ReleaseTail = 0.12, MaxTalkSeconds = 28;
+    /// <summary>The CB of the running network game (null outside one): Audio Control's CB Microphone reaches it here.</summary>
+    public static CbVoice? Active { get; private set; }
     private const string MicBus = "CbMic";
 
     /// <summary>CB Voice in Play Options: off neither sends nor plays (also /cb on and /cb off for this game).</summary>
     public bool Enabled { get; set; } = I76.Game.Shell.ShellSettings.Load().CbVoice;
-    private readonly string _micDevice = I76.Game.Shell.ShellSettings.Load().CbMic;
+    private string _micDevice = I76.Game.Shell.ShellSettings.Load().CbMic;
 
     /// <summary>The key is down (or the pad's Misc1 button).</summary>
     private bool _held, _padHeld;
@@ -98,6 +100,7 @@ public partial class CbVoice : Node
 
     public override void _Ready()
     {
+        Active = this;
         _mixRate = AudioServer.GetMixRate();
         ProcessMode = ProcessModeEnum.Always;
         if (_inputFile is not null)
@@ -116,6 +119,7 @@ public partial class CbVoice : Node
 
     public override void _ExitTree()
     {
+        if (Active == this) Active = null;
         StopMic();
         WriteRecord();
     }
@@ -246,6 +250,21 @@ public partial class CbVoice : Node
         if (_micDevice.Length > 0) AudioServer.InputDevice = _micDevice;
         _mic = new AudioStreamPlayer { Name = "CbMic", Stream = new AudioStreamMicrophone(), Bus = MicBus, ProcessMode = ProcessModeEnum.Always };
         AddChild(_mic);
+        _mic.Play();
+    }
+
+    /// <summary>
+    /// CB Microphone changed in the in-game Audio Control: the next talk uses the new input device, and an open microphone (or a
+    /// transmission in progress) moves to it at once, without leaving the game or the session.
+    /// </summary>
+    public void ApplyMic(string device)
+    {
+        if (device == _micDevice) return;
+        _micDevice = device;
+        try { AudioServer.InputDevice = device.Length > 0 ? device : "Default"; } catch { }
+        if (_mic is null) return;
+        _mic.Stop();            // the stream is opened again on the new device; what the old one had buffered is dropped
+        _capture?.ClearBuffer();
         _mic.Play();
     }
 

@@ -6,6 +6,7 @@
 - Graphic Detail has a Renderer row (Auto, Vulkan, D3D12 on Windows, OpenGL), applied at the next start, so a machine whose graphics driver misbehaves can switch to another without the command line.
 - The modern look's night sky has a real moon: a sharp, detailed full moon (from NASA's public-domain map of its surface) with a soft cold glow, the clouds drifting in front of it, in place of the old blurry sprite (Two Days Before and the other night missions). The night sky round it is the original's deep navy with blue-violet clouds again, where the modern look had turned it a flat grey.
 - Graphic Detail has a View Zoom Reset row. On (as before), the outside views' mouse-wheel zoom goes back to the normal framing when you switch views, after a cut-scene and on a retry; off, each view (the F2 chase view included) keeps the zoom you set until you start another mission. End still resets it by hand.
+- The in-game Audio Control in a network game has a CB Microphone row, the same choice as the front end's: switch the input device while you play, even mid-talk, without leaving the game (#135).
 
 ### Fixed
 - The map editor's New map from real world downloads roads again when the main road server is overloaded: it now also asks that server's own machines and the French road server, which answer when the main address turns requests away.

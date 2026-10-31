@@ -757,6 +757,7 @@ public partial class Main : Node3D
         // Master the output stage hard-clips them, which is a crackle, loudest on headphones. A look-ahead limiter keeps the peak under -1 dB
         if (!Enumerable.Range(0, AudioServer.GetBusEffectCount(0)).Any(e => AudioServer.GetBusEffect(0, e) is AudioEffectHardLimiter))
             AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = -1f, PreGainDb = 0f, Release = 0.1f }, 0);
+        I76.Game.Net.CbVoice.Active?.ApplyMic(s.CbMic);
         Bus("Music", s.Audio[0]);
         Bus("SFX", s.Audio[1]);
         Bus("Voice", s.Audio[2]);

@@ -67,8 +67,9 @@ JD11BKT?	glass	14,9,100,16	glass
 # the Sovereign's left side (the roof texture's right edge): the front door window and the wing window before it, both missed by the
 # segmentation, so the dark blue panes read as body (the rear door window below is found)
 JS11TP_?	glass	121,12,7,44	glass|blue|dark
-# and the rear door window's lower outer corner, squared off (the cut corner left a one-texel tail the straightening trimmed into a slanted edge, a light wedge along the window's rear)
-JS11TP_?	glass	123,96,5,6	*
+# and the rear door window's cut lower rear corner (a one-texel tail the straightening trimmed into a slanted edge, a light wedge along the
+# window's rear): the corner texels go to the body, so the pane ends level
+JS11TP_?	gloss-paint	123,96,5,7	*
 
 # the Moth cab (Cargo Truck, Loadmaster): the rear window into the cabin and the side window's darker wrap-round strip (the segmentation misses both)
 ML11MDB?	glass	20,44,89,16	glass|blue|dark

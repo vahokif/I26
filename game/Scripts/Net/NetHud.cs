@@ -333,7 +333,7 @@ public partial class NetHud : CanvasLayer
     /// <summary>The standings' pad button: Back (View), on a pad with the standard layout. In a network game the map it opens in a mission is shut, so the button is free.</summary>
     private static bool PadBackHeld()
     {
-        if (Controls.Suspended || !Controls.Focused()) return false;
+        if (Controls.Suspended || !Controls.Focused() || Controls.PadButtonBound(JoyButton.Back)) return false;
         foreach (var d in Godot.Input.GetConnectedJoypads())
             if (GodotPads.IsStandard(d) && Godot.Input.IsJoyButtonPressed(d, JoyButton.Back)) return true;
         return false;

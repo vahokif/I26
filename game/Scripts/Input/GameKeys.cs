@@ -94,9 +94,9 @@ public static class GameKeys
     /// <summary>The game key a press is (modifiers matched exactly), or None; repeats count.</summary>
     public static GameKey CommandOf(InputEventKey k) => k.Pressed && CodeOf(k) is >= 0 and var c ? (GameKey)Map.Lookup(c) : GameKey.None;
 
-    /// <summary>The game key a pad button press is (the pad's stock game keys: Start is the menu key), or None; the pad must be one with a standard layout.</summary>
+    /// <summary>The game key a pad button press is (the pad's stock game keys: Start is the menu key, unless the player bound that button to a command), or None; the pad must be one with a standard layout.</summary>
     public static GameKey CommandOf(InputEventJoypadButton b) =>
-        b.Pressed && GodotPads.IsStandard(b.Device) ? (GameKey)GameKeyMap.PadLookup((int)b.ButtonIndex) : GameKey.None;
+        b.Pressed && GodotPads.IsStandard(b.Device) && !Controls.PadButtonBound(b.ButtonIndex) ? (GameKey)GameKeyMap.PadLookup((int)b.ButtonIndex) : GameKey.None;
 
     /// <summary>The F-key's view command (0xe..0x19), or 0 when the game key is not a view.</summary>
     public static int ViewOf(GameKey g) => (int)g is >= 0xe and <= 0x19 ? (int)g : 0;

@@ -87,6 +87,9 @@ public static class Controls
         if (_table.AddPadSideIfNone(PadDefaults)) _axes = new AxisControls(_table.Blocks);
     }
 
+    /// <summary>Whether the player has bound this pad button (Start, Back) to a command in Control Configuration; its stock action then does not happen. The pad preset has Back on the map, which does not count (the standings there are in network games, where the map is shut).</summary>
+    public static bool PadButtonBound(JoyButton b) => Table.PadButtonBound((int)b, b == JoyButton.Back ? "SHOW_MAP" : null);
+
     /// <summary>Whether a pad is connected.</summary>
     public static bool HasPad { get { Refresh(); return Pads.Count > 0; } }
     /// <summary>The connected pads' joystick names: "joystick1" and on.</summary>

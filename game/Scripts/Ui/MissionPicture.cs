@@ -49,7 +49,8 @@ public partial class MissionPicture : Control
         // keyboard only: the original reads the keyboard's buffered key for the frame (the port's pad: A, B and Back close it, Start is Esc)
         if (_done) return;
         InputEventKey? k = e as InputEventKey;
-        if (e is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.A or JoyButton.B or JoyButton.Back or JoyButton.Start } jb && GodotPads.IsStandard(jb.Device))
+        if (e is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.A or JoyButton.B or JoyButton.Back or JoyButton.Start } jb && GodotPads.IsStandard(jb.Device)
+            && (jb.ButtonIndex is JoyButton.A or JoyButton.B || !Controls.PadButtonBound(jb.ButtonIndex)))
             k = new InputEventKey { Pressed = true, Keycode = jb.ButtonIndex == JoyButton.Start ? Key.Escape : Key.None };
         if (k is not { Pressed: true, Echo: false }) return;
         GetViewport().SetInputAsHandled();

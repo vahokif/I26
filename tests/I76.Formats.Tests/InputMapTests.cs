@@ -410,4 +410,20 @@ public class InputMapTests
         // nothing in input.def at all: Tab all the same
         Assert.Equal("Tab", new BindingTable().WithScoreboardOnTab().Of("show_player_scores").Single().Terms[0].Channel);
     }
+
+    [Fact]
+    public void AStandardPadsStartAndBackAreBoundOnlyWhenTheTableHasThem()
+    {
+        var none = BindingTable.Parse("honk_horn {\n   + keyboard   X\n}\nfire_weapon_1 {\n   + joystick1   Button1\n}\n");
+        Assert.False(none.PadButtonBound(PadButton.Start));
+        Assert.False(none.PadButtonBound(PadButton.Back));
+        var t = BindingTable.Parse("weapon_dropper {\n   + joystick1   Button8\n}\nSHOW_MAP {\n   + joystick1   Button7\n}\n");
+        Assert.True(t.PadButtonBound(PadButton.Start));
+        Assert.True(t.PadButtonBound(PadButton.Back));
+        // the map sharing Back by design does not count
+        Assert.False(t.PadButtonBound(PadButton.Back, "SHOW_MAP"));
+        Assert.False(t.PadButtonBound(PadButton.A));
+        // a chord's term counts too
+        Assert.True(BindingTable.Parse("e_brake {\n   + joystick1   Button1\n   + joystick1   Button7\n}\n").PadButtonBound(PadButton.Back));
+    }
 }

@@ -144,6 +144,9 @@ public partial class NetHudModern : Control
         return x - at.X;
     }
 
+    /// <summary>The standings hint's pad glyph: none once the player has bound that button to a command.</summary>
+    private static char? PadV => Controls.PadButtonBound(JoyButton.Back) ? null : 'V';
+
     private float HintWidth(float h, string[] keys, char? pad, string action)
     {
         float x = 0;
@@ -287,8 +290,8 @@ public partial class NetHudModern : Control
             Gap();
             float hh = U(22);
             string[] k = [f.ScoresKey];
-            if (draw) Hint(new Vector2(x, at.Y + (sh - hh) / 2), hh, k, 'V', "STANDINGS", HudStyle.ParchmentDim);
-            x += HintWidth(hh, k, 'V', "STANDINGS");
+            if (draw) Hint(new Vector2(x, at.Y + (sh - hh) / 2), hh, k, PadV, "STANDINGS", HudStyle.ParchmentDim);
+            x += HintWidth(hh, k, PadV, "STANDINGS");
         }
         return first ? 0 : x + pad - at.X;     // 0: nothing to show
     }

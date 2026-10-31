@@ -98,6 +98,14 @@ public sealed class BindingTable
     }
 
     /// <summary>Whether a block is a pad's (its first term on a joystick); the rest is the keyboard's and the mouse's.</summary>
+    /// <summary>Whether a standard pad's button (a PadButton) is in any command's binding on a pad, as a button or a chord's term: the stock action it has outside the game's commands (Start the menu, Back the standings) then gives way to the command; <paramref name="except"/> is a command that does not count (the map on Back, which shares it by design).</summary>
+    public bool PadButtonBound(int padButton, string? except = null)
+    {
+        int id = VirtualStick.DiscreteIdOfPadButton(padButton, default);
+        if (id < 0) return false;
+        return Blocks.Any(b => !b.Command.Equals(except, StringComparison.OrdinalIgnoreCase) && b.Terms.Any(t => JoystickBank.DeviceOf(t.Device) >= 0 && VirtualStick.DiscreteId(t.Channel) == id));
+    }
+
     public static bool IsPad(InputBlock b) => b.Terms.Length > 0 && JoystickBank.DeviceOf(b.Terms[0].Device) >= 0;
 
     /// <summary>The binding a device's side shows for a command: the first term of the last block of that side, or null.</summary>

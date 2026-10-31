@@ -64,6 +64,10 @@ XH11BKB?	canvas	17,35,96,27	!black
 # the Limo's rear window (the segmentation misses it): the blue pane above the trunk
 JD11BKT?	glass	14,9,100,16	glass
 
+# the Sovereign's left side (the roof texture's right edge): the front door window and the wing window before it, both missed by the
+# segmentation, so the dark blue panes read as body (the rear door window below is found)
+JS11TP_?	glass	121,12,7,44	glass|blue|dark
+
 # the Moth cab (Cargo Truck, Loadmaster): the rear window into the cabin and the side window's darker wrap-round strip (the segmentation misses both)
 ML11MDB?	glass	20,44,89,16	glass|blue|dark
 ML11MDL?	glass	8,9,40,30	glass

@@ -4,7 +4,7 @@
 
 This is a reimplementation of the classic game Interstate 76 in Godot engine.
 
-<img width="1920" height="1080" alt="01_desert_chase_far_draw" src="https://github.com/user-attachments/assets/773fedb7-24ad-4593-8553-4b40590b5e09" />
+[![I26 - Interstate '76 remastered (video)](https://img.youtube.com/vi/ph6Zrzbycx0/maxresdefault.jpg)](https://www.youtube.com/watch?v=ph6Zrzbycx0)
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G4Q128JK2B)
 

@@ -17,7 +17,7 @@ namespace I76.Net.Tests;
 /// mission's script; each client's mirror builds the mission as the server did and shows what a single player sees of the
 /// script from the server's events and snapshots: the radio, the objectives, the cut-scene camera, the end.
 /// </summary>
-public class CoopNetTests(ITestOutputHelper output)
+public partial class CoopNetTests(ITestOutputHelper output)
 {
     private static string? Nitro =>
         Environment.GetEnvironmentVariable("I76_NITRO_INSTALL") is { Length: > 0 } e && Directory.Exists(e) ? e : null;

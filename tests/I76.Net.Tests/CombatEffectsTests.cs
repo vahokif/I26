@@ -18,7 +18,7 @@ namespace I76.Net.Tests;
 /// shots drawn the moment they are fired and kept square with the server's, the flame throwers' streams on every client,
 /// and the Chemical Mortar's cloud hurting on the server and showing on the clients.
 /// </summary>
-public class CombatEffectsTests(Xunit.Abstractions.ITestOutputHelper output)
+public partial class CombatEffectsTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static string? Nitro =>
         Environment.GetEnvironmentVariable("I76_NITRO_INSTALL") is { Length: > 0 } d && Directory.Exists(d) ? d : null;

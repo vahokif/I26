@@ -29,6 +29,8 @@
           pkgs.imagemagick
           # runs an unpacked release zip as a player's machine would (tools/release.sh's output)
           pkgs.steam-run
+          # signs the macOS bundle again (tools/release.sh): Godot's own signer writes entitlements macOS rejects
+          pkgs.rcodesign
         ];
         shellHook = ''
           export DOTNET_CLI_TELEMETRY_OPTOUT=1

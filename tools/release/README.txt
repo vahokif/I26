@@ -75,6 +75,10 @@ Open, and Open again; or, in a Terminal in this folder:
 
     xattr -dr com.apple.quarantine I26.app
 
+The second is the safer: an app opened while it still has the flag runs from a
+temporary copy elsewhere (App Translocation), where "i76" and "nitro" beside it
+are not found.
+
 The dedicated server is not part of the macOS build.
 
 Keep the files of this folder together: the .pck file and the data_* folders

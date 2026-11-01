@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The macOS build starts on a Mac now. Godot's own signer, which the release uses on Linux, wrote the app's entitlements in a form macOS 26 refuses, so the app was killed as it opened ("The application cannot be opened", "Launchd job spawn failed") although it looked validly signed. The release now signs the app again with rcodesign, which writes them as Apple's tools do, and checks the result. Tried on an Apple-silicon Mac with macOS 26.6.2.
+
 ## 0.11.0 (31 October 2026)
 
 Network games use protocol 21: 0.11.0 does not play with 0.10.0 or earlier, so everyone in a game needs 0.11.0.

@@ -11,6 +11,7 @@
 - I26 tells you when a newer release is out: at start-up it quietly checks GitHub and shows "version X available" under the version in the corner of the game chooser and the main menu (click it to open the release page). Play Options (second page) has a Check for Updates row to turn it off (#138).
 
 ### Fixed
+- The macOS build starts again: on macOS 26 it was killed as it opened ("The application cannot be opened", "Launchd job spawn failed"). Tried on an Apple-silicon Mac with macOS 26 (#144).
 - Black parts of a car's paint (stripes, trim, grilles, tyres) may no longer look corrupt on some graphics cards (may fix the reported black car textures): the cars' per-part finishes are gone, every car is clear-coated paint all over with only the windows kept as glass.
 - Memory use no longer climbs with every mission you start in one session (some 400 MB each in a big map): a finished mission's smoke and the force feedback no longer keep it alive.
 - Memory use stays level when you restart a mission or go between the map editor and its playtest over and over: the cars' tail-lamp glow, a stray node per scene and the memory a freed scene left in the allocator's heap (10 to 20 MB every time) no longer pile up.

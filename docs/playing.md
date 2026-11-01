@@ -5,7 +5,8 @@ Details for players. The [README](../README.md) has the features and a short ins
 ## System requirements
 
 - Windows 10 or later, or a 64-bit Linux (x86_64 or ARM64), with your own copy of Interstate '76 (and the Nitro Pack for its
-  content). A macOS build is made too, but it is unsigned and untested on a Mac.
+  content), or macOS (one app for Apple silicon and Intel; signed ad hoc, not notarized by Apple, and so far
+  tried on one Apple-silicon Mac with macOS 26, not on an Intel Mac).
 - A GPU with a Vulkan 1.2 driver (or, on Windows, Direct3D 12) for the intended look. A machine with neither falls back to
   OpenGL (Godot's Compatibility renderer): the game runs, with no SSAO and some small differences; it says so once in the
   shell and in the log (see [docs/compatibility-renderer.md](compatibility-renderer.md)). If the picture is wrong on your
@@ -15,8 +16,12 @@ Details for players. The [README](../README.md) has the features and a short ins
 
 1. Download the release zip for your system (`i26-<version>-windows.zip`, `-linux.zip`, `-linux-arm64.zip` or
    `-macos.zip`) from the GitHub releases page.
-2. Run `i26.exe` (Windows) or `i26.x86_64` (Linux) from inside the unpacked `i26-<version>` folder. Nothing needs
-   installing. Give it the game in one of these ways; if it cannot find one it says so and lists the places it looked.
+2. Run `i26.exe` (Windows) or `i26.x86_64` (Linux) from inside the unpacked `i26-<version>` folder, or open `I26.app`
+   there (macOS). Nothing needs installing. On macOS, first clear the quarantine flag the browser put on the download, in
+   Terminal: `xattr -dr com.apple.quarantine i26-<version>`. Otherwise macOS stops the app (it is not notarized), and an
+   app opened while it still has the flag runs from a temporary copy elsewhere (App Translocation), where the `i76` and
+   `nitro` folders beside it are not found. Give it the game in one of these ways; if
+   it cannot find one it says so and lists the places it looked.
    - **Installed GOG game (including GOG Galaxy):** either copy your game folder into the I26 folder as `i76` (and
      `nitro` for the Nitro Pack), or unpack the I26 folder into your game's folder (only that game is found then).
    - **GOG offline installers:** put `setup_*.exe` next to `i26.exe` (or in the folder above it). I26 unpacks it into

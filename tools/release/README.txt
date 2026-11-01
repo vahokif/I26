@@ -73,7 +73,11 @@ silicon, 10.15 on Intel). It is not notarized (I26 has no Apple developer
 account), so macOS stops it the first time. Either right-click I26.app, choose
 Open, and Open again; or, in a Terminal in this folder:
 
-    xattr -dr com.apple.quarantine I26.app
+    xattr -dr com.apple.quarantine .
+
+The second is the safer: an app opened while it still has the flag runs from a
+temporary copy elsewhere (App Translocation), where "i76" and "nitro" beside it
+are not found.
 
 The dedicated server is not part of the macOS build.
 

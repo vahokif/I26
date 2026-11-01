@@ -123,51 +123,6 @@ done
 cmp -s "$out/win/i26.pck" "$out/linux/i26.pck" || { echo "the two .pck files differ: ship one each" >&2; exit 1; }
 for dir in win linux linux-arm64; do [ -d "$out"/$dir/data_I76.Game_* ] || { echo "no .NET data folder in $dir" >&2; exit 1; }; done
 
-# the macOS export: universal (both runtimes, one data folder each), ad-hoc signed by Godot; checked without a Mac
-python3 - "$out/macos/I26.zip" <<'PY'
-import os, plistlib, struct, sys, zipfile
-z = zipfile.ZipFile(sys.argv[1])
-names = set(z.namelist())
-def die(m): sys.exit("macOS bundle: " + m)
-def slices(b):   # [(arch, bytes_of_slice)] of a Mach-O, fat or thin
-    CPU = {0x01000007: "x86_64", 0x0100000c: "arm64"}
-    if b[:4] == b"\xca\xfe\xba\xbe":
-        n = struct.unpack(">I", b[4:8])[0]
-        out = []
-        for i in range(n):
-            ct, _, off, size, _ = struct.unpack(">IIIII", b[8 + 20 * i:28 + 20 * i])
-            out.append((CPU.get(ct, hex(ct)), b[off:off + size]))
-        return out
-    if b[:4] == b"\xcf\xfa\xed\xfe": return [(CPU.get(struct.unpack("<I", b[4:8])[0], "?"), b)]
-    die("not a Mach-O")
-def signed(sl):  # an LC_CODE_SIGNATURE (0x1d) load command
-    ncmds = struct.unpack("<I", sl[16:20])[0]; off = 32
-    for _ in range(ncmds):
-        cmd, size = struct.unpack("<II", sl[off:off + 8])
-        if cmd == 0x1d: return True
-        off += size
-    return False
-plist = plistlib.loads(z.read("I26.app/Contents/Info.plist"))
-exe = plist["CFBundleExecutable"]
-if "I26.app/Contents/MacOS/" + exe not in names: die("CFBundleExecutable %s is not in Contents/MacOS" % exe)
-if plist["CFBundleIdentifier"] != "io.github.vahokif.i26": die("bundle id " + plist["CFBundleIdentifier"])
-if "I26.app/Contents/_CodeSignature/CodeResources" not in names: die("no _CodeSignature")
-if not z.getinfo("I26.app/Contents/MacOS/" + exe).external_attr >> 16 & 0o111: die("the executable is not executable")
-main = slices(z.read("I26.app/Contents/MacOS/" + exe))
-if sorted(a for a, _ in main) != ["arm64", "x86_64"]: die("main binary is %s, not universal" % [a for a, _ in main])
-if not all(signed(sl) for _, sl in main): die("main binary has no embedded signature")
-n = 0
-for nm in sorted(names):
-    if not nm.endswith(".dylib") and not nm.endswith("createdump"): continue
-    want = "arm64" if "macos_arm64" in nm else "x86_64" if "macos_x86_64" in nm else None
-    b = z.read(nm)
-    if want is None: die("native library outside the per-architecture data folders: " + nm)
-    if [a for a, _ in slices(b)] != [want]: die("%s is %s, wanted %s" % (nm, [a for a, _ in slices(b)], want))
-    if b"/nix/store" in b: die(nm + " mentions /nix/store")
-    n += 1
-print("macOS: %s is arm64 + x86_64 and signed; %d native libs, each one architecture, none from nix; Info.plist -> %s" % (exe, n, exe))
-PY
-
 # a nix-store RUNPATH in the shipped runtime would mean the nix pack got in
 for d in linux linux-arm64; do
     if grep -rlaq '/nix/store' "$out"/$d/data_I76.Game_*/libcoreclr.so; then echo "the $d runtime is nix's, not the official pack" >&2; exit 1; fi
@@ -316,6 +271,17 @@ with zipfile.ZipFile(src) as z:
         with open(p, "wb") as f: f.write(z.read(i))
         os.chmod(p, mode & 0o777 or 0o644)
 PY
+# Godot 4.7.2's own signer (the one it uses off a Mac) writes the entitlements' DER blob with long-form lengths where DER
+# wants the short form (godotengine/godot#124317, fixed for 4.8), and macOS 26 kills the app at launch for it. rcodesign
+# signs the bundle again, ad hoc, keeping each binary's identifier, flags (hardened runtime) and entitlements from
+# Godot's signature, and writes the DER blob as Apple's codesign does.
+# The re-sign is needed only while Godot's signer has that bug: from Godot 4.8 on, drop it (the DER check on the shipped
+# zip below stays, and fails the release if the bug comes back).
+case $(basename "$(ls -d "$tpl"/* | head -1)") in
+    4.[0-7].*) ;;
+    *) echo "note: this Godot signs the entitlements correctly (godotengine/godot#124317 is fixed in 4.8): the rcodesign re-sign in release.sh can go" >&2 ;;
+esac
+run rcodesign sign "$stage/I26.app" >"$cache/rcodesign.log" 2>&1 || { tail -30 "$cache/rcodesign.log" >&2; echo "rcodesign failed" >&2; exit 1; }
 sed -e "s/@VERSION@/$ver/g" -e "s/@BUILD@/$stamp/g" tools/release/README.txt > "$stage/README.txt"
 cp tools/release/THIRD-PARTY-NOTICES.txt "$stage/"
 [ -f game/vfx/SOURCE.txt ] && { echo; cat game/vfx/SOURCE.txt; } >> "$stage/THIRD-PARTY-NOTICES.txt"
@@ -323,6 +289,96 @@ cp tools/release/THIRD-PARTY-NOTICES.txt "$stage/"
 dest=$here/dist/$name-macos.zip
 rm -f "$dest"
 zipdir "$out/stage-macos" "$name" "$dest"
+# the macOS zip as shipped: universal (both runtimes, one data folder each), ad-hoc signed (by Godot, then rcodesign); checked without a Mac
+python3 - "$dest" "$name/" <<'PY' || { rm -f "$dest"; exit 1; }
+import os, plistlib, struct, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1]); pre = sys.argv[2]
+names = {n[len(pre):] for n in z.namelist() if n.startswith(pre)}
+def read(n): return z.read(pre + n)
+def die(m): sys.exit("macOS bundle: " + m)
+def slices(b):   # [(arch, bytes_of_slice)] of a Mach-O, fat or thin
+    CPU = {0x01000007: "x86_64", 0x0100000c: "arm64"}
+    if b[:4] == b"\xca\xfe\xba\xbe":
+        n = struct.unpack(">I", b[4:8])[0]
+        out = []
+        for i in range(n):
+            ct, _, off, size, _ = struct.unpack(">IIIII", b[8 + 20 * i:28 + 20 * i])
+            out.append((CPU.get(ct, hex(ct)), b[off:off + size]))
+        return out
+    if b[:4] == b"\xcf\xfa\xed\xfe": return [(CPU.get(struct.unpack("<I", b[4:8])[0], "?"), b)]
+    die("not a Mach-O")
+def signature(sl):  # the blobs of the embedded signature (LC_CODE_SIGNATURE, 0x1d) by magic, None if unsigned
+    ncmds = struct.unpack("<I", sl[16:20])[0]; off = 32
+    for _ in range(ncmds):
+        cmd, size = struct.unpack("<II", sl[off:off + 8])
+        if cmd == 0x1d:
+            do, ds = struct.unpack("<II", sl[off + 8:off + 16]); sb = sl[do:do + ds]
+            n = struct.unpack(">I", sb[8:12])[0]
+            offs = [struct.unpack(">I", sb[16 + 8 * i:20 + 8 * i])[0] for i in range(n)]
+            return {struct.unpack(">I", sb[o:o + 4])[0]: sb[o + 8:o + struct.unpack(">I", sb[o + 4:o + 8])[0]] for o in offs}
+        off += size
+    return None
+def signed(sl): return signature(sl) is not None
+# The entitlements' DER blob (0xfade7172) is checked at launch: with a length not in the shortest form the app is killed
+# before it runs ("Launchd job spawn failed"). Wanted: Apple's form, as codesign and rcodesign write it, [APPLICATION 16]
+# { INTEGER 1, value }, a dict as [CONTEXT 16] { SEQUENCE { UTF8String key, value } ... }, the shortest lengths, true as ff,
+# saying what the XML blob (0xfade7171) says.
+def der(b, i):   # one element at i: (tag, contents, next)
+    t, n = b[i], b[i + 1]; i += 2
+    if n & 0x80:
+        k = n & 0x7f
+        if not 1 <= k <= 4 or b[i] == 0: die("entitlements DER: a length not in the shortest form")
+        n = int.from_bytes(b[i:i + k], "big"); i += k
+        if n < 0x80: die("entitlements DER: a length not in the shortest form")
+    if i + n > len(b): die("entitlements DER: truncated")
+    return t, b[i:i + n], i + n
+def items(c):
+    i, out = 0, []
+    while i < len(c): t, v, i = der(c, i); out.append((t, v))
+    return out
+def value(t, v):
+    if t == 0x01 and v in (b"\xff", b"\x00"): return v == b"\xff"
+    if t == 0x0c: return v.decode()
+    if t == 0x02: return int.from_bytes(v, "big", signed=True)
+    if t == 0x30: return [value(*e) for e in items(v)]
+    if t == 0xb0:
+        d = {}
+        for et, ev in items(v):
+            kv = items(ev)
+            if et != 0x30 or len(kv) != 2 or kv[0][0] != 0x0c: die("entitlements DER: a dict entry is not { key, value }")
+            d[kv[0][1].decode()] = value(*kv[1])
+        return d
+    die("entitlements DER: tag %#x (%d bytes) is not Apple's form" % (t, len(v)))
+def entitlements_ok(sl, arch):
+    sig = signature(sl)
+    xml, d = sig.get(0xfade7171), sig.get(0xfade7172)
+    if xml is None or d is None: die("%s: no entitlements (the .NET runtime needs allow-jit under the hardened runtime)" % arch)
+    t, c, end = der(d, 0)
+    if t != 0x70 or end != len(d): die("%s: entitlements DER starts %s, not Apple's 70 .. 02 01 01 (Godot's own signer's?)" % (arch, d[:8].hex(" ")))
+    e = items(c)
+    if len(e) != 2 or e[0] != (0x02, b"\x01"): die("%s: entitlements DER has no version 1" % arch)
+    if value(*e[1]) != plistlib.loads(xml): die("%s: the DER entitlements differ from the XML ones" % arch)
+plist = plistlib.loads(read("I26.app/Contents/Info.plist"))
+exe = plist["CFBundleExecutable"]
+if "I26.app/Contents/MacOS/" + exe not in names: die("CFBundleExecutable %s is not in Contents/MacOS" % exe)
+if plist["CFBundleIdentifier"] != "io.github.vahokif.i26": die("bundle id " + plist["CFBundleIdentifier"])
+if "I26.app/Contents/_CodeSignature/CodeResources" not in names: die("no _CodeSignature")
+if not z.getinfo(pre + "I26.app/Contents/MacOS/" + exe).external_attr >> 16 & 0o111: die("the executable is not executable")
+main = slices(read("I26.app/Contents/MacOS/" + exe))
+if sorted(a for a, _ in main) != ["arm64", "x86_64"]: die("main binary is %s, not universal" % [a for a, _ in main])
+if not all(signed(sl) for _, sl in main): die("main binary has no embedded signature")
+for arch, sl in main: entitlements_ok(sl, arch)
+n = 0
+for nm in sorted(names):
+    if not nm.endswith(".dylib") and not nm.endswith("createdump"): continue
+    want = "arm64" if "macos_arm64" in nm else "x86_64" if "macos_x86_64" in nm else None
+    b = read(nm)
+    if want is None: die("native library outside the per-architecture data folders: " + nm)
+    if [a for a, _ in slices(b)] != [want]: die("%s is %s, wanted %s" % (nm, [a for a, _ in slices(b)], want))
+    if b"/nix/store" in b: die(nm + " mentions /nix/store")
+    n += 1
+print("macOS: %s is arm64 + x86_64 and signed, its entitlements in Apple's DER form; %d native libs, each one architecture, none from nix; Info.plist -> %s" % (exe, n, exe))
+PY
 echo "wrote dist/$name-macos.zip ($(du -h "$dest" | cut -f1))"
 rm -f "$here/dist/$name.zip"
 

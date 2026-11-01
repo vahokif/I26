@@ -1,3 +1,4 @@
+using I76.Formats.Assembly;
 using System.Numerics;
 using I76.Editor;
 using I76.Editor.Objects;

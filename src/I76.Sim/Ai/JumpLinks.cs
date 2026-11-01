@@ -1,6 +1,6 @@
+using I76.Formats.Assembly;
 using System.Diagnostics;
 using System.Numerics;
-using I76.Editor;
 using I76.Sim.Collision;
 using I76.Sim.Math;
 using I76.Sim.Rng;

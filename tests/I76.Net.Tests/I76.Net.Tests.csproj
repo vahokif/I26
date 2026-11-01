@@ -12,6 +12,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/I76.Editor/I76.Editor.csproj" />
     <ProjectReference Include="../../src/I76.Net/I76.Net.csproj" />
     <ProjectReference Include="../../src/I76.Server/I76.Server.csproj" />
   </ItemGroup>

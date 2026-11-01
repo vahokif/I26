@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace I76.Editor;
+namespace I76.Formats.Assembly;
 
 /// <summary>
 /// Where a road meets a structure that carries it (a bridge's deck, a jump or a ramp, an overpass): the ends of the structure's

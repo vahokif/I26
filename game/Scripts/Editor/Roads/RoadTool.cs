@@ -1,3 +1,4 @@
+using I76.Formats.Assembly;
 using Godot;
 using I76.Editor;
 using I76.Editor.Intersections;

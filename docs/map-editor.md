@@ -291,7 +291,7 @@ docs/map-format-writing.md.
 - 15 degrees from the previous piece's heading (the world's z axis for the first), `V` toggles; a 10 m grid, `H` toggles (with both, the
   length rounds to the grid). Angle snap is for straight roads. Each snap can also be turned off in the panel.
 - Structure ends are read from the map's own placements (`MissionSetup.StructureCollider`, the sim's drive-on surfaces; the ends from
-  `I76.Editor.StructureAttach`), a few a frame after the tool opens.
+  `I76.Formats.Assembly.StructureAttach`), a few a frame after the tool opens.
 
 **Intersections** (`src/I76.Editor/Intersections`, `game/Scripts/Editor/Intersections`; the stock layout, the rules' numbers and the
 survey are in docs/map-format-writing.md, "Intersections"). The game's junctions are hand-laid: roads that stop at a gap, and one of the

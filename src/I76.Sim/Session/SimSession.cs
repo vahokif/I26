@@ -150,6 +150,29 @@ public sealed partial class SimSession
         if (Combat is not null) foreach (var r in Combat.Rounds) if (r.NetId == 0) r.NetId = Ids.Next(NetKind.Round);
     }
 
+    /// <summary>
+    /// The players' cars are placed a hand above the ground and sag onto their suspension over the first two seconds, in plain view at
+    /// the mission's start. Here the cars run that time on their own, alone in the world (no other car, no script, no
+    /// clock), before the first tick, so the mission opens on cars at rest. Only for a car that is still: a mission that placed one
+    /// in motion is left as it is.
+    /// </summary>
+    public void SettleCars(float seconds = 4f)
+    {
+        var cars = World.Humans.Concat(World.Player is { } pl ? [pl] : []).Distinct().Where(v => !v.IsHeli && !v.Wreck && !v.IsEmplacement && v.Speed == 0).ToList();
+        if (cars.Count == 0) return;
+        uint seed = World.Rand.Seed; // the settling draws nothing from the mission's random sequence
+        for (int i = 0, n = (int)(seconds / TickSeconds); i < n; i++)
+            foreach (var v in cars) World.FrameOne(v, Rate.FrameDelta(i), [v]);
+        foreach (var v in cars) { v.Vel = System.Numerics.Vector3.Zero; v.AngVel = System.Numerics.Vector3.Zero; v.Speed = 0; }
+        World.Step.Impacts.Clear();
+        World.Step.ObjectHits.Clear();
+        World.Step.DriveOns.Clear();
+        World.Step.Honks.Clear();
+        World.Step.CarHits.Clear();
+        World.Step.Landings.Clear();
+        World.Rand.Seed = seed;
+    }
+
     /// <summary>One tick; inputs[i] drives <see cref="Drivers"/>[i] (a missing one is no keys at all).</summary>
     public void Tick(IReadOnlyList<CarInput> inputs)
     {

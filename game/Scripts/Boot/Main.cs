@@ -433,7 +433,7 @@ public partial class Main : Node3D
         if (_sim is not null)
         {
             if (_resumed) { _sim.Resume(); _sim.Hold = System.Environment.GetEnvironmentVariable("I76_CHECKPOINT_HOLD") == "1"; }
-            else _sim.FirstTick();
+            else { if (_net is null) _sim.Session.SettleCars(); _sim.FirstTick(); }
             UpdateScriptCamera();
         }
         // the plants about the first view, behind the loading card
@@ -1482,12 +1482,16 @@ public partial class Main : Node3D
             ProcessMode = ProcessModeEnum.Always }; // the card's fade-out pauses the tree; the track plays on through it
         AddChild(player);
         player.Finished += OnMusicFinished;
+        // the track's file read and parsed now, behind the loading card, not in the first frame of play
+        if (I76.Game.Assets.CdMusic.Path(install, _musicTrack) is { } first)
+            _musicReady = (_musicTrack, new AudioStreamMP3 { Data = System.IO.File.ReadAllBytes(first), Loop = false });
         _status += _musicNote = $"\nmusic: track {_musicTrack}";
     }
 
     private I76.Formats.Audio.MissionMusic? _musicSeq;
     private GameInstall? _musicInstall;
     private int _musicTrack;
+    private (int Track, AudioStreamMP3 Stream)? _musicReady;
     private ulong _musicStartedMs;
 
     /// <summary>Starts the mission's track (once, with the mission under way) and drops the menu track still carried.</summary>
@@ -1509,7 +1513,8 @@ public partial class Main : Node3D
     {
         if (_musicInstall is null || I76.Game.Assets.CdMusic.Path(_musicInstall, track) is not { } file) return;
         _musicTrack = track;
-        p.Stream = new AudioStreamMP3 { Data = System.IO.File.ReadAllBytes(file), Loop = false };
+        if (_musicReady is { } ready && ready.Track == track) { p.Stream = ready.Stream; _musicReady = null; }
+        else p.Stream = new AudioStreamMP3 { Data = System.IO.File.ReadAllBytes(file), Loop = false };
         if (_musicStartedMs == 0) _musicStartedMs = Time.GetTicksMsec() - (ulong)(from * 1000);
         p.Play((float)from);
         GD.Print($"music: track {track}");

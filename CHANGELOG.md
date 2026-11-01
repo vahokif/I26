@@ -10,6 +10,8 @@
 - Co-op: a gun emplacement that has been shot down now keeps its burnt shape as a solid obstacle for the other players' cars too (and for players who join afterwards), so a client no longer collides with the intact gun and gets snapped back.
 - Co-op: a gate or roadblock the mission slides open (or shut) now moves for the other players' cars as well as for the picture, so a client no longer drives into an invisible gate at its old place and gets snapped back, a stutter when crossing it.
 - Police sirens wail as in the original: once a mission turns a police car's siren on, it keeps sounding until the mission turns it off or the car is wrecked, instead of playing once, and the trip's and the scenarios' own police cars sound the siren rather than a short car horn, as on the 1997 CD. A Sheriff that honks at a car in its way turns its siren on too.
+- Your car no longer hops at the start of a mission: it is already at rest on its suspension when the loading screen lifts, instead of dropping onto the ground in the first moments (#141).
+- The menu music no longer cuts out for a moment after the loading screen: it plays on through the last part of the loading, and the mission's own track starts without a hitch (#142).
 
 ## 0.11.0 (31 October 2026)
 

@@ -665,6 +665,7 @@ public partial class Shell : CanvasLayer
         var root = GetTree().Root;
         root.GetNodeOrNull(CarriedMusicName)?.Free();
         _music.Name = CarriedMusicName;
+        _music.ProcessMode = ProcessModeEnum.Always;   // the card's effects rehearsal and fade-out pause the tree: the track plays on through them
         _music.GetParent().RemoveChild(_music);
         root.AddChild(_music);
     }

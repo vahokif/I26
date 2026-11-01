@@ -37,9 +37,9 @@ public static class HorizonEdge
     /// <summary>The most a custom map's horizon sinks for: the eye counts as no higher than this over the map's lowest ground.</summary>
     public const float CustomCap = 70f;
 
-    /// <summary>The sinking rule of a mission: the original's for a stock map, <see cref="CustomCap"/> over its lowest ground for any other.</summary>
-    public static Level LevelOf(MissionWorld world) =>
-        MapFileSet.IsStockMission(world.Mission.Path) ? Level.Original : new Level((float)world.LowestGroundHeight(), CustomCap);
+    /// <summary>The sinking rule of a mission: the original's for a stock map, <see cref="CustomCap"/> over its lowest ground for any other (and for any map when <paramref name="capped"/>: the map editor's free camera, hundreds of metres up, would sink the original's rule's panels out of sight).</summary>
+    public static Level LevelOf(MissionWorld world, bool capped = false) =>
+        !capped && MapFileSet.IsStockMission(world.Mission.Path) ? Level.Original : new Level((float)world.LowestGroundHeight(), CustomCap);
 
     /// <summary>A panel foot's height relative to the eye, at the ring's radius (the sky's shader: the formula for ground the clip reaches).</summary>
     public static float Foot(Level level, float camY, float far = Clip) =>
@@ -48,10 +48,19 @@ public static class HorizonEdge
     /// <summary>A panel foot standing on the ground's end <paramref name="de"/> away at height <paramref name="endHeight"/>, relative to the eye (the shader's).</summary>
     public static float EndFoot(float camY, float endHeight, float de) => -(camY - endHeight) * (HorizonList.Radius + 0.2f * de) / de;
 
-    /// <summary>The game height of the modern ring's reference eye: over the map's centre at its average ground, three metres up, sunk by <see cref="Level"/>.</summary>
+    /// <summary>
+    /// The most the modern ring of a custom map sinks for: one fixed ring serves a whole hilly map, and the panels it stands in for
+    /// sink with each eye (a car in the valleys, where most of the driving is, sees them well above the hills; the average ground's
+    /// <see cref="CustomCap"/> would put the ring below the hills' own skyline there). Low enough that the ring's peaks stand over
+    /// the hills of a real-world map, a few metres of the cap's worth too high on the hilltops, where the panels would sink more.
+    /// </summary>
+    public const float RingCap = 30f;
+
+    /// <summary>The game height of the modern ring's reference eye: over the map's centre at its average ground, three metres up, sunk by <see cref="Level"/> (a custom map's: at most <see cref="RingCap"/> over its lowest ground).</summary>
     public static float RingEyeY(MissionWorld world)
     {
         var level = LevelOf(world);
+        if (level.Cap < float.MaxValue) level = level with { Cap = Math.Min(level.Cap, RingCap) };
         return level.Low + level.Eye((float)world.AverageGroundHeight() + 3f);
     }
 

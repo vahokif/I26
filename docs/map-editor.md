@@ -36,7 +36,7 @@ the modern look is the one it is built for.
 | `F` | bring the point under the cursor to the middle |
 | Tab | pan with the mouse at the window's edge, on or off (off at first) |
 | `B` | hide or show the brush circle |
-| `F2` | modern look or 1997 look (the 1997 look keeps its terrain, objects, light and sky but leaves out the horizon mountain panels, which the free camera stretches; a playtest, F5, has them as in the game) |
+| `F2` | modern look or 1997 look (the 1997 look draws the horizon mountain panels too; seen from the free camera they stand on a foot that sinks with its height only up to 70 m over the map's lowest ground, so they stay in view, where a playtest, F5, has the game's own) |
 | `F5` | playtest; `F5` or `Esc` comes back |
 | `F1` | the help overlay |
 | `M` `P` | the object tools: select, build (the palette). `J` `R` `Y` `Z` arm a spawn point, regen pad, CTF flag, race checkpoint (the rest of their keys are in "Building" below) |
@@ -506,8 +506,8 @@ in a fresh open and in both looks: the ground material and its fitted noise, the
 horizon ring and its profile, the sun or moon and the night, the vegetation (a custom or unlisted map grows by its ground family; the campaign's
 named maps keep theirs, so T01 on snow still has its desert plants) and the 1997 look's dome. The heights, roads, objects, undo history,
 camera and the open window carry across. Nothing is updated in place: the many places the look reaches (shader parameters, the horizon ring built off-thread,
-the ground fit, plants) are rebuilt together, not patched one by one. In the 1997 look the editor leaves the horizon panels out as ever
-(F5 shows them); the optional Software renderer takes its palette, sky and ground from the mission's `miss8` twin, which a custom map has not.
+the ground fit, plants) are rebuilt together, not patched one by one. In the 1997 look the editor draws the horizon panels, held at the 70 m cap (a playtest, F5, shows them as the game does)
+the optional Software renderer takes its palette, sky and ground from the mission's `miss8` twin, which a custom map has not.
 
 Saving writes the look through `MapDocument.Look`, only the fields that differ from the file (names compare without case), so a map saved
 without touching its style stays byte for byte, and a stock map saved under a new name carries the look. The hook is `style[:tab]`

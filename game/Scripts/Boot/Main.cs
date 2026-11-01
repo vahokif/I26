@@ -1544,7 +1544,7 @@ public partial class Main : Node3D
         mat.SetShaderParameter("origin_y", _origin.Y);
         if (_builder?.World is { } skyWorld)
         {
-            var level = I76.Formats.Assembly.HorizonEdge.LevelOf(skyWorld);   // a custom map's panels sink from its lowest ground, up to a cap
+            var level = I76.Formats.Assembly.HorizonEdge.LevelOf(skyWorld, I76.Game.Editor.EditorSession.Active && !I76.Game.Editor.EditorSession.Playtest);   // (the editor's free camera, high above the ground, counts as no higher than the cap); a custom map's panels sink from its lowest ground, up to a cap
             mat.SetShaderParameter("sink_low", level.Low);
             mat.SetShaderParameter("sink_cap", level.Cap);
         }
@@ -1583,8 +1583,6 @@ public partial class Main : Node3D
         AddSkyFog(modernSky);
         _env1997.BackgroundMode = Environment.BGMode.Sky;
         _env1997.Sky = sky;
-        // the map editor's free camera stretches the 1997 horizon mountain panels: left out there (docs/map-editor.md); a playtest keeps them
-        if (I76.Game.Editor.EditorSession.Active && !I76.Game.Editor.EditorSession.Playtest) mat.SetShaderParameter("has_horizon", false);
         // no ambient: the 1997 shaders carry the engine's own light, and light() adds only the sun's shadow
         _env1997.AmbientLightSource = Environment.AmbientSource.Disabled;
         _env1997.ReflectedLightSource = Environment.ReflectionSource.Disabled;

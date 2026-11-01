@@ -180,7 +180,33 @@ public class HorizonEverywhereTests(ITestOutputHelper log) : IDisposable
             if (minPresent < 0.9) problems.Add($"{label}: the panels stand over the horizon on only {minPresent:P0} of the azimuths");
             if (worstTeeth > 0.6) problems.Add($"{label}: neighbouring azimuths' feet differ by {worstTeeth:0.00} degrees (teeth)");
             if (worstStep > 0.6) problems.Add($"{label}: a 10 m drive moves a foot by {worstStep:0.00} degrees (popping)");
-            if (ringTop < 4) problems.Add($"{label}: the modern ring's peaks reach only {ringTop:0.0} degrees over the horizon");
+            if (ringTop < 6) problems.Add($"{label}: the modern ring's peaks reach only {ringTop:0.0} degrees over the horizon");
+        }
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// The map editor's view: its camera hangs hundreds of metres over the ground (up to 3.5 km), where the original's rule would sink
+    /// the 1997 look's panels 10 x that below the horizon (so the editor used to leave them out). With the cap they stand over the
+    /// horizon and stay put wherever the camera is, on a stock map (edited or not) and on a map the editor made.
+    /// </summary>
+    [InstallFact]
+    public void TheEditorsPanelsStandOverTheHorizonFromAnyHeight()
+    {
+        var problems = new List<string>();
+        foreach (var (label, w) in Maps())
+        {
+            var level = HorizonEdge.LevelOf(w, capped: true);
+            if (level.Cap != HorizonEdge.CustomCap || level.Low != (float)w.LowestGroundHeight()) problems.Add($"{label}: the editor's level is not the capped one from the lowest ground");
+            float low = level.Low;
+            float heldTop = HorizonEdge.Foot(level, low + HorizonEdge.CustomCap) + low + HorizonEdge.CustomCap;   // the foot's game height once the cap holds
+            foreach (float up in new[] { 5f, 30f, 70f, 150f, 420f, 1500f, 3500f })
+            {
+                float foot = HorizonEdge.Foot(level, low + up);
+                double top = Deg(Math.Atan((foot + HorizonList.PanelHeight) / HorizonList.Radius));
+                if (up >= HorizonEdge.CustomCap && Math.Abs(foot + low + up - heldTop) > 0.01f) problems.Add($"{label}: the panels' foot moves with the camera above the cap ({up} m up)");
+                if (up <= 150 && top < 1.0) problems.Add($"{label}: from {up} m over the lowest ground the panels top out only {top:0.0} degrees over the horizon");
+            }
         }
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }

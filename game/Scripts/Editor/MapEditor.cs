@@ -529,7 +529,7 @@ public partial class MapEditor : Node
         // I76_EDITOR_SCRIPT="frame:cmd:args;...": drives the editor in a capture. Commands:
         //   stroke:tool,x,z,radius,strength,seconds[,falloff[,height]]   one stroke of that tool at game x, z, held for that long
         //   cursor:x,z   hold the cursor on that ground point (no mouse in an off-screen window)
-        //   undo, redo, flat, tool:NAME, look, style[:tab] (the map style window), mapstyle:ground,NAME[,sky,NAME,horizon,NAME|none,palette,NAME,hour,H]
+        //   cam:x,z,yawDeg,pitchDeg,distance, undo, redo, flat, tool:NAME, look, style[:tab] (the map style window), mapstyle:ground,NAME[,sky,NAME,horizon,NAME|none,palette,NAME,hour,H]
         if (OS.GetEnvironment("I76_EDITOR_SCRIPT") is not { Length: > 0 } script) return;
         foreach (var item in script.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -542,6 +542,8 @@ public partial class MapEditor : Node
     // newmap:name,Listed name,tiles,metres: makes that flat map in the addon folder and opens it, as the form would
     private void OpenNewMapScripted(string[] a)
     {
+        // opening the map reloads the scene, which runs the script again from its first frame: a map that is already the one open is not made over and over
+        if (EditorSession.Mission.Equals(a[0], StringComparison.OrdinalIgnoreCase)) return;
         NewMap.CreateFlat(Install!.AddonDir!, a[0], a[1], int.Parse(a[2]), double.Parse(a[3], System.Globalization.CultureInfo.InvariantCulture), Install.IsNitro);
         OpenMap(a[0].ToLowerInvariant());
     }
@@ -602,6 +604,13 @@ public partial class MapEditor : Node
                         _scriptPos = (F(1), F(2)); _scriptVel = args.Length > 9 ? (F(8), F(9)) : (0f, 0f);
                         BeginStroke();
                         SyncUi();
+                        break;
+                    }
+                case "cam":   // cam:x,z,yawDegrees,pitchDegrees,distance: the camera there at once (the pivot on the ground at x, z), for a path of captures
+                    {
+                        var piv = new System.Numerics.Vector3(F(0), (float)GroundH(F(0), F(1)), F(1));
+                        Cam.Set(piv, Mathf.DegToRad(F(2)), Mathf.DegToRad(F(3)), F(4));
+                        Rebase(piv);
                         break;
                     }
                 case "undo": DoUndo(); break;

@@ -113,4 +113,18 @@ public class HorizonEdgeTests
         var ring = File.ReadAllText(Path.Combine(dir.FullName, "game", "Shaders", "horizon_terrain.gdshader"));
         Assert.Contains("sink_low + (ref_eye.y - sink_low)", ring);
     }
+
+    /// <summary>The map editor's view draws the 1997 horizon panels too (its camera, hundreds of metres up, counts as no higher than the cap), and a script that opens a map does not open it again on the reload.</summary>
+    [Fact]
+    public void TheEditorsViewDrawsThePanelsWithTheCap()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "I76.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var main = File.ReadAllText(Path.Combine(dir!.FullName, "game", "Scripts", "Boot", "Main.cs"));
+        Assert.DoesNotContain("SetShaderParameter(\"has_horizon\", false);\n        // no ambient", main.Replace("\r", ""));
+        Assert.Contains("HorizonEdge.LevelOf(skyWorld, I76.Game.Editor.EditorSession.Active && !I76.Game.Editor.EditorSession.Playtest)", main);
+        var editor = File.ReadAllText(Path.Combine(dir.FullName, "game", "Scripts", "Editor", "MapEditor.cs"));
+        Assert.Contains("EditorSession.Mission.Equals(a[0], StringComparison.OrdinalIgnoreCase)) return;", editor);
+    }
 }

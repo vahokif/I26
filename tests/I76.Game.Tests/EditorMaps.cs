@@ -32,7 +32,7 @@ public static class EditorMaps
     public static string RealWorldMap(string dir, string name, int cols, int rows, double baseMetres, double relief)
     {
         double lat = 45.83, lon = -108.34;
-        var g = GeoGrid.Plan(lat, lon, lat + cols * 640 / 111_200.0 - 5, lon + rows * 640 / 77_600.0 - 5);
+        var g = GeoGrid.Plan(lat, lon, lat + cols * 640 / 111_200.0, lon + rows * 640 / 77_600.0);
         var opt = new GeoMapOptions(lat, lon, lat + 1, lon + 1, name, name, Look: GeoMapOutput.GrasslandLook());
         var (proj, _) = GeoMapBuilder.Build(opt, g, new Hills(g, baseMetres, relief), []);
         return proj.SaveTo(dir).First(f => f.EndsWith(".lvl", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".cbt", StringComparison.OrdinalIgnoreCase));

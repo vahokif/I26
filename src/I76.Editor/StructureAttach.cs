@@ -41,10 +41,20 @@ public static class StructureAttach
         double sxx = 0, szz = 0, sxz = 0;
         foreach (var v in verts) { double dx = v.X - mx, dz = v.Z - mz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
         double ang = 0.5 * Math.Atan2(2 * sxz, sxx - szz);
+        // a ramp that is wider than it is long (the 2 m wood ramp: 20 across, 15 up) has its principal axis across the slope: the way it
+        // runs is the way it climbs, so a clearly tilted surface takes the horizontal gradient of its best-fit plane instead
+        double my = verts.Average(v => (double)v.Y), sxy = 0, szy = 0;
+        foreach (var v in verts) { double dx = v.X - mx, dz = v.Z - mz, dy = v.Y - my; sxy += dx * dy; szy += dz * dy; }
+        double det = sxx * szz - sxz * sxz;
+        if (Math.Abs(det) > 1e-9)
+        {
+            double gx = (sxy * szz - szy * sxz) / det, gz = (szy * sxx - sxy * sxz) / det;
+            if (Math.Sqrt(gx * gx + gz * gz) >= FlatSlope) ang = Math.Atan2(gz, gx);
+        }
         var axis = new Vector2((float)Math.Cos(ang), (float)Math.Sin(ang));
         // a structure that is square-ish has no principal axis; snap near-axis-aligned ones to the world axis they lie on
-        if (Math.Abs(axis.X) > 0.9999f) axis = new Vector2(Math.Sign(axis.X), 0);
-        else if (Math.Abs(axis.Y) > 0.9999f) axis = new Vector2(0, Math.Sign(axis.Y));
+        if (Math.Abs(axis.X) > 0.9995f) axis = new Vector2(Math.Sign(axis.X), 0);
+        else if (Math.Abs(axis.Y) > 0.9995f) axis = new Vector2(0, Math.Sign(axis.Y));
         var side = new Vector2(-axis.Y, axis.X);
         float T(Vector3 v) => v.X * axis.X + v.Z * axis.Y;
         float S(Vector3 v) => v.X * side.X + v.Z * side.Y;

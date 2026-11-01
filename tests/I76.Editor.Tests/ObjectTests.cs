@@ -206,6 +206,38 @@ public class ObjectTests
         Assert.Equal(230, lip.Y, 2);                                  // and the lip is 30 m on, past the end
     }
 
+    /// <summary>The 2 m wood ramp's drive-on face as the game's data has it: 20 m across, 15 m long, climbing 2 m along z.</summary>
+    private static CatalogueItem WoodRamp()
+    {
+        var r = new CatalogueItem { Name = "aaramp3", Category = ObjectCategory.Structures, Type = 0xb, MinX = 0, MaxX = 20, MinZ = 0, MaxZ = 15, MaxY = 2 };
+        r.Ends = StructureAttach.Ends([[new(20, 2, 15), new(0, 2, 15), new(0, 0, 0), new(20, 0, 0)]]);
+        return r;
+    }
+
+    [Fact]
+    public void AWideLowRampRunsTheWayItClimbsNotAcrossIt()
+    {
+        var ramp = WoodRamp();
+        Assert.Equal(2, ramp.Ends!.Count);
+        var foot = ramp.Ends.Single(e => e.Low); var lip = ramp.Ends.Single(e => !e.Low);
+        Assert.Equal(0, foot.Position.Z, 3); Assert.Equal(-1, foot.Direction.Y, 3); Assert.Equal(20, foot.Width, 3);
+        Assert.Equal(15, lip.Position.Z, 3); Assert.Equal(1, lip.Direction.Y, 3);
+        // on a road along +x its foot faces back down the road and the ramp climbs the way the road goes, not across it
+        var roads = RoadGeometry.Build([Road(new(0, 100), new(300, 100))]);
+        var r = Snapping.Place(ramp, new Vector2(150, 102), MathF.PI / 2, SnapMode.Roads, 5, roads);
+        Assert.True(r.OnRoad);
+        var (f, fOut) = Snapping.EndAt(foot, r.Origin, r.Yaw);
+        var (l, _) = Snapping.EndAt(lip, r.Origin, r.Yaw);
+        Assert.Equal(100, f.Y, 2); Assert.Equal(100, l.Y, 2);          // both ends on the road's line
+        Assert.Equal(15, MathF.Abs(l.X - f.X), 2);                     // 15 m apart along it
+        Assert.True(MathF.Abs(fOut.X) > 0.999f);
+        // and at a road's open end the foot is the end that meets it
+        var open = Snapping.Place(ramp, new Vector2(310, 100), 0, SnapMode.Roads, 5, roads);
+        Assert.True(open.OnRoadEnd);
+        var (f2, _) = Snapping.EndAt(foot, open.Origin, open.Yaw); var (l2, _) = Snapping.EndAt(lip, open.Origin, open.Yaw);
+        Assert.Equal(300, f2.X, 2); Assert.Equal(315, l2.X, 2);
+    }
+
     [Fact]
     public void ARampOnTheMiddleOfARoadFlipsWithTheTurnAndCutsBetweenItsEnds()
     {

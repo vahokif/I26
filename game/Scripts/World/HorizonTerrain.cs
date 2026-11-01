@@ -533,7 +533,7 @@ public partial class HorizonTerrain : Node3D
     /// chunks culled that were wholly in view, and the sky through the hole. The same arithmetic as the shader, over
     /// the chunk's vertices, for the box.
     /// </summary>
-    public void FitCullBounds(float eyeY, float footK)
+    public void FitCullBounds(float eyeY, float footK, float low = 0f)
     {
         foreach (var child in GetChildren())
         {
@@ -549,7 +549,7 @@ public partial class HorizonTerrain : Node3D
                 if (footK > 0)
                 {
                     float rho = MathF.Sqrt(v.X * v.X + v.Z * v.Z);
-                    float cone = eyeY * (1 - footK * rho);
+                    float cone = low + (eyeY - low) * (1 - footK * rho);
                     float baseY = v.Y - uvs[k].X;
                     float t = Math.Clamp(uvs[k].Y / 800f, 0, 1);
                     y += t * t * (3 - 2 * t) * MathF.Min(cone - baseY, 0);

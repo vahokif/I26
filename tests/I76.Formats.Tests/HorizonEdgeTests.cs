@@ -1,3 +1,4 @@
+using I76.Formats.Mission;
 using I76.Formats.Assembly;
 using I76.Formats.Vfs;
 using Xunit;
@@ -87,5 +88,29 @@ public class HorizonEdgeTests
         Assert.Contains("uniform sampler2D edge : filter_linear", src);
         Assert.Contains("for (int i = -EDGE_TAPS; i <= EDGE_TAPS; i++)", src);
         Assert.Contains("origin_xz", src);   // the distance is taken from the eye as it is now
+    }
+
+    /// <summary>The sinking rule: a stock map keeps the original's (the foot 10.2 x the eye's height below it), a custom map's is counted from its lowest ground and held to 70 m, so a map on high ground keeps its mountains.</summary>
+    [Fact]
+    public void ACustomMapsHorizonSinksFromItsLowestGroundAndStopsAtACap()
+    {
+        Assert.Equal(Lighting.HorizonFoot(121.15f), HorizonEdge.Foot(HorizonEdge.Level.Original, 121.15f), 3);
+        var custom = new HorizonEdge.Level(40f, HorizonEdge.CustomCap);
+        Assert.Equal(40f - 9.2f * 70f - 400f, HorizonEdge.Foot(custom, 400f), 2);          // far above: held at the cap
+        Assert.Equal(Lighting.HorizonFoot(13f) + 40f - 40f, HorizonEdge.Foot(custom with { Low = 0 }, 13f), 3);
+        Assert.True(HorizonEdge.Foot(custom, 400f) + HorizonList.PanelHeight > -400f);       // the panels' tops are not 15 degrees under the horizon
+    }
+
+    /// <summary>The sky's shader takes the same sinking rule (HorizonEdge.Foot), and the ring's does too.</summary>
+    [Fact]
+    public void TheShadersCountTheSinkingFromTheMapsLevel()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "I76.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var sky = File.ReadAllText(Path.Combine(dir!.FullName, "game", "Shaders", "sky_dome.gdshader"));
+        Assert.Contains("min(cam_y - sink_low, sink_cap)", sky);
+        var ring = File.ReadAllText(Path.Combine(dir.FullName, "game", "Shaders", "horizon_terrain.gdshader"));
+        Assert.Contains("sink_low + (ref_eye.y - sink_low)", ring);
     }
 }

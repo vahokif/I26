@@ -1542,6 +1542,12 @@ public partial class Main : Node3D
         mat.SetShaderParameter("clouds", tex);
         mat.SetShaderParameter("far_clip", Far1997);
         mat.SetShaderParameter("origin_y", _origin.Y);
+        if (_builder?.World is { } skyWorld)
+        {
+            var level = I76.Formats.Assembly.HorizonEdge.LevelOf(skyWorld);   // a custom map's panels sink from its lowest ground, up to a cap
+            mat.SetShaderParameter("sink_low", level.Low);
+            mat.SetShaderParameter("sink_cap", level.Cap);
+        }
         mat.SetShaderParameter("origin_xz", new Vector2(_origin.X, _origin.Z));
         mat.SetShaderParameter("scroll_per_second", I76.Game.Sim.SimClock.SkyScrollPerSecond);   // the 1997 sky scrolls a fixed amount a frame, the sim tick
         var light = _builder.Light;
@@ -1683,12 +1689,14 @@ public partial class Main : Node3D
     {
         if (_horizonEyeSet || _horizon?.Material is not { } m || _builder?.World is not { } world) return;
         _horizonEyeSet = true;
-        float eyeY = (float)world.AverageGroundHeight() + 3f;
+        float eyeY = I76.Formats.Assembly.HorizonEdge.RingEyeY(world);   // the map's average ground + 3, sunk by the map's level (a custom map's sinking is counted from its lowest ground and capped)
+        float low = I76.Formats.Assembly.HorizonEdge.LevelOf(world).Low;
         m.SetShaderParameter("ref_eye", new Vector3(0, eyeY, 0));
+        m.SetShaderParameter("sink_low", low);
         float footK = -I76.Formats.Mission.Lighting.HorizonFoot(1f) / I76.Formats.Mission.HorizonList.Radius;
         m.SetShaderParameter("foot_k", footK);
         if (System.Environment.GetEnvironmentVariable("I76_HORIZON_TINT") == "1") m.SetShaderParameter("debug_tint", 1f);
-        _horizon.FitCullBounds(eyeY, footK);   // the sunk ring's own bounds, or chunks are culled that are in view
+        _horizon.FitCullBounds(eyeY, footK, low);   // the sunk ring's own bounds, or chunks are culled that are in view
         if (System.Environment.GetEnvironmentVariable("I76_HORIZON_DEBUG") == "1") GD.Print($"horizon: ring sunk for an eye at game height {eyeY:0.0} (the map's average ground + 3)");
     }
 

@@ -41,6 +41,8 @@ uniform float far_clip = 600.0;
 // lies past the clip; 360 bins from game +X toward +Z, as seen from where they were measured
 uniform bool has_edge = false;
 uniform sampler2D edge : filter_linear, repeat_enable;
+uniform float sink_low = 0.0;      // HorizonEdge.Level: the ground height the sinking counts from (0 for a stock map)
+uniform float sink_cap = 1e9;      // and the most it counts (a custom map: HorizonEdge.CustomCap)
 uniform float origin_y = 0.0;   // the floating origin's game height: game y = Godot y + origin_y
 uniform vec2 origin_xz = vec2(0.0);   // and its game x and z
 uniform float exposure = 1.0;
@@ -109,7 +111,7 @@ void sky() {
 		if (horiz > 1e-4) {
 			float h = radius * g.y / horiz;                   // height on the ring, eye level 0
 			float cam_y = POSITION.y + origin_y;
-			float foot = -((radius - 0.8 * far_clip) / far_clip) * cam_y - cam_y;   // relative to the eye
+			float foot = sink_low - ((radius - 0.8 * far_clip) / far_clip) * min(cam_y - sink_low, sink_cap) - cam_y;   // relative to the eye (HorizonEdge.Foot)
 			if (has_edge) {
 				// the same formula for the end's distance (from the eye as it is now, so the foot moves with it rather than
 				// jumping when the ends are measured again) and height; the ends filtered between bins, and the lowest foot

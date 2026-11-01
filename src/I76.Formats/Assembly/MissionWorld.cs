@@ -125,6 +125,21 @@ public sealed class MissionWorld
         return n == 0 ? 0 : sum / n * HeightScale;
     }
 
+    /// <summary>The lowest ground sample of the map's occupied tiles, in metres (0 with no ground).</summary>
+    public double LowestGroundHeight()
+    {
+        var (r0, r1, c0, c1) = Terrain.Bounds();
+        int low = int.MaxValue;
+        for (int r = r0; r <= r1; r++)
+            for (int c = c0; c <= c1; c++)
+            {
+                byte t = Terrain.TileAt(r, c);
+                if (t == MissionFile.ZmapEmpty || t >= Terrain.TileCount) continue;
+                foreach (var s in Terrain.TileSamples(t)) low = Math.Min(low, s & MissionFile.HeightMask);
+            }
+        return low == int.MaxValue ? 0 : low * HeightScale;
+    }
+
     /// <summary>
     /// The bilinear terrain height. floor() of the sample
     /// coordinate, four raw samples (0 outside the terrain), lerp in x then z,

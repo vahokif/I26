@@ -184,14 +184,16 @@ public sealed partial class EscapeMenu : Control
             Action("Graphic Detail", 4, () => Switch(_graphics), "$8.98"),
             Action("Audio Control", 5, () => Switch(_audio), "$9.01"),
             Action("Control Configuration", 6, OpenControls, "$7.65"),
+            Action("Mouse Options", 7, OpenMouse, "$6.50"),
             CancelButton("Resume"),
         ] : [
             Action("Abort Mission", 1, () => Switch(_abort), "$6.78"),
             Action("Play Options", 3, () => Switch(_play), "$5.34"),
             Action("Graphic Detail", 4, () => Switch(_graphics), "$8.98"),
             Action("Audio Control", 5, () => Switch(_audio), "$9.01"),
-            // the port's own, on the free ruled line (row 6) under Audio Control: the Options Menu's Control Configuration, over the paused game
+            // the port's own, on the free ruled lines (rows 6 and 7) under Audio Control: Control Configuration and Mouse Options, over the paused game
             Action("Control Configuration", 6, OpenControls, "$7.65"),
+            Action("Mouse Options", 7, OpenMouse, "$6.50"),
             CancelButton("Exit"),
         ];
 
@@ -490,7 +492,10 @@ public sealed partial class EscapeMenu : Control
     /// on the pad's place over the paused game. The pad hides while it is up and takes no input; Done saves and applies the bindings
     /// (Controls.Save puts them in use), Cancel and Esc come back unchanged.
     /// </summary>
-    private void OpenControls()
+    private void OpenControls() => OpenHosted(new ControlsScreen());
+    private void OpenMouse() => OpenHosted(new MouseOptionsScreen());
+
+    private void OpenHosted(ShellScreen screen)
     {
         if (_host is not null || GetParent() is not { } parent) return;
         Visible = false;
@@ -498,7 +503,7 @@ public sealed partial class EscapeMenu : Control
         _host = new I76.Game.Shell.Shell
         {
             Install = new GameInstall(InstallDir), OnLaunch = _ => { }, Faithful = Faithful, Name = "ControlsHost",
-            Hosted = new ControlsScreen(),
+            Hosted = screen,
             HostDone = () => Callable.From(CloseControls).CallDeferred(),
         };
         parent.AddChild(_host);
@@ -508,6 +513,9 @@ public sealed partial class EscapeMenu : Control
     {
         _host?.QueueFree();
         _host = null;
+        Settings = ShellSettings.Load();
+        _snap = ShellSettings.Load();
+        Live?.Invoke(Settings);
         _padNav.Settle();
         Visible = true;
         QueueRedraw();

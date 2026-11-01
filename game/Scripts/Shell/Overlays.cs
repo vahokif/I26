@@ -127,6 +127,7 @@ public sealed class OptionsScreen : OverlayScreen
             Add(202, 142, "Graphic Detail", () => Shell.Overlay(new GraphicsScreen()));
             Add(202, 165, "Audio Control", () => Shell.Overlay(new AudioScreen()));
             Add(202, 211, "Control Configuration", () => Shell.Overlay(new ControlsScreen()));
+            Add(202, 234, "Mouse Options", () => Shell.Overlay(new MouseOptionsScreen()));
             Add(202, 280, "Credits", () => Shell.Overlay(new CreditsScreen { FromOptions = true }));
             if (fromMain && I76.Game.Boot.GameChooser.SwitchAvailable) Add(202, 303, "Switch Game", () => Shell.SwitchGame());
             Add(202, 326, "Exit Interstate '76", () => Shell.Overlay(new ExitScreen()));
@@ -137,6 +138,7 @@ public sealed class OptionsScreen : OverlayScreen
         Add(202, 142, "Graphic Detail", () => Shell.Overlay(new GraphicsScreen()));
         Add(202, 165, "Audio Control", () => Shell.Overlay(new AudioScreen()));
         Add(202, 211, "Control Configuration", () => Shell.Overlay(new ControlsScreen()));
+        Add(202, 234, "Mouse Options", () => Shell.Overlay(new MouseOptionsScreen()));
         Add(202, 280, "Load Bookmark", () => Shell.Overlay(new LoadBookmarkScreen()));
         if (inTrip) Add(202, 303, "Save Bookmark", () => Shell.Overlay(new SaveBookmarkScreen()));
         Add(202, 349, "Credits", () => Shell.Overlay(new CreditsScreen { FromOptions = true }));
@@ -508,8 +510,14 @@ public sealed class GraphicsScreen : OverlayScreen
         Row(5, "Vegetation", () => veg[Math.Clamp(st.Vegetation, 0, 2)], () => st.Vegetation = (st.Vegetation + 1) % 3);
         // how far the world is drawn, in either look
         Row(6, "Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
-        // the mouse orbiting the chase view: Off, Slow, Normal, Fast (Invert Y is shell.cfg's [port] mouse_invert_y)
-        Row(7, "Mouse Camera", () => I76.Sim.Views.MouseLook.Names[Math.Clamp(st.MouseCamera, 0, 3)], () => st.MouseCamera = (st.MouseCamera + 1) % I76.Sim.Views.MouseLook.Names.Length);
+        // the mouse orbiting the chase view: Off, Slow, Normal, Fast (fine-grained sensitivity is in Mouse Options)
+        Row(7, "Mouse Camera", () => I76.Sim.Views.MouseLook.Names[Math.Clamp(st.MouseCamera, 0, 3)], () =>
+        {
+            st.MouseCamera = (st.MouseCamera + 1) % I76.Sim.Views.MouseLook.Names.Length;
+            if (st.MouseCamera != I76.Sim.Views.MouseLook.Off)
+                st.MouseSensitivity = I76.Sim.Views.MouseLook.SensitivityFromLevel(st.MouseCamera);
+            I76.Game.MouseCamera.Apply(st);
+        });
         // the frame rate limiter and vsync: drawing only, the simulation keeps the Play Options rate; both live (the engine's, so the shell shows it too)
         Row(8, "Max FPS", () => I76.Sim.Views.FrameLimit.Names[Math.Clamp(st.MaxFps, 0, I76.Sim.Views.FrameLimit.Names.Length - 1)], () => { st.MaxFps = (st.MaxFps + 1) % I76.Sim.Views.FrameLimit.Names.Length; I76.Game.FrameLimiter.Apply(st); });
         Row(9, "VSync", () => st.VSync ? "On" : "Off", () => { st.VSync = !st.VSync; I76.Game.FrameLimiter.Apply(st); });

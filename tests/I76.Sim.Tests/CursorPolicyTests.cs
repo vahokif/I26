@@ -33,4 +33,11 @@ public class CursorPolicyTests
     [Fact]
     public void LostFocusFreesTheCursor() =>
         Assert.Equal(CursorMode.Visible, CursorPolicy.For(true, true, MouseLook.Normal, false, true));
+
+    [Fact]
+    public void CockpitViewWithMouseCockpitCapturesEvenWhenChaseMouseIsOff()
+    {
+        Assert.Equal(CursorMode.Captured, CursorPolicy.For(true, false, MouseLook.Off, true, false, cockpitView: true, mouseCockpit: true));
+        Assert.Equal(CursorMode.Hidden, CursorPolicy.For(true, false, MouseLook.Off, true, false, cockpitView: true, mouseCockpit: false));
+    }
 }

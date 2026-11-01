@@ -57,6 +57,7 @@ public partial class ChaseCamera : Camera3D
     // targets (pitch, yaw, zoom) and their eased values
     private float _pitchT = DefaultPitch, _yawT, _zoomT = DefaultZoom;
     private float _pitch = DefaultPitch, _yaw, _zoom = DefaultZoom;
+    private float _mousePitch, _mouseYaw;
     private float _heading = float.NaN;   // the slerped heading, as an angle: the rotations are all about up
 
     public ChaseCamera()
@@ -83,6 +84,8 @@ public partial class ChaseCamera : Camera3D
         if (s.Length < 9) return;
         (_pitchT, _yawT, _zoomT, _pitch, _yaw, _zoom, _heading, _orbitYaw) = (s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]);
         _orbiting = s[8] != 0;
+        _mouse.Reset();
+        _mousePitch = _mouseYaw = 0;
     }
 
     public override void _Process(double delta)
@@ -104,33 +107,39 @@ public partial class ChaseCamera : Camera3D
             if (Controls.Down("track_pitch_minus")) _pitchT -= Mathf.DegToRad(45) * dt;
             // the axis rows (the pad's right stick in the port's preset): turning in proportion to the row, up to twice the keys' rates
             var (ay, ap) = Controls.CameraAxes;
-            // the stick and the mouse (Mouse Camera) are an offset on the targets, so the clamp below and the easing apply; it eases back
+            // the stick and the mouse (Mouse Camera) are an offset on the targets; it eases back
             // behind the car a few seconds after either last moved (Camera Return)
             var (my, mp) = MouseCamera.Take();
             _mouse.Add(my + ay * Mathf.DegToRad(StickYawRate) * dt, mp + ap * Mathf.DegToRad(StickPitchRate) * dt);
+            float beforeStep = _mouse.Yaw;
             _mouse.Step(dt, MouseCamera.ReturnBehind);
+            float turnShift = MathF.Round((_mouse.Yaw - beforeStep) / MathF.Tau) * MathF.Tau;
+            if (turnShift != 0f) _mouseYaw += turnShift;
         }
-        else { MouseCamera.Take(); _mouse.Reset(); }
+        else { if (!MouseCamera.CockpitActive) MouseCamera.Take(); _mouse.Reset(); _mousePitch = _mouseYaw = 0; }
         if (mine && Controls.Down("track_distance_plus")) _zoomT += 2 * dt;
         if (mine && Controls.Down("track_distance_minus")) _zoomT -= 2 * dt;
-        if (mine && Controls.Down("zoom_factor_reset")) { _yawT = 0; _pitchT = DefaultPitch; _zoomT = DefaultZoom; MouseCamera.ResetZoom(ViewZoom.Kind.Chase); _mouse.Reset(); }
+        if (mine && Controls.Down("zoom_factor_reset")) { _yawT = 0; _pitchT = DefaultPitch; _zoomT = DefaultZoom; MouseCamera.ResetZoom(ViewZoom.Kind.Chase); _mouse.Reset(); _mousePitch = _mouseYaw = 0; }
         _pitchT = System.Math.Clamp(_pitchT, 0.017453292f, 1.5707963f);
-        float pitchWant = System.Math.Clamp(_pitchT + _mouse.Pitch, 0.017453292f, 1.5707963f);
-        float yawWant = _yawT + _mouse.Yaw;
         _zoomT = System.Math.Clamp(_zoomT, 1f, 10f);
 
         float f = dt + dt;
         static float Ease(float cur, float want, float f) =>
             f >= 0 && f <= 0.95f && MathF.Abs(want - cur) >= 0.005f ? f * (want - cur) + cur : want;
         _zoom = Ease(_zoom, _zoomT, f);
-        _pitch = Ease(_pitch, pitchWant, f);
-        // the short way round to the target, so a wrapped offset (the camera swung several turns) never spins back
-        _yaw = Ease(_yaw, _yaw + Mathf.Wrap(yawWant - _yaw, -Mathf.Pi, Mathf.Pi), f);
+        _pitch = Ease(_pitch, _pitchT, f);
+        _yaw = Ease(_yaw, _yawT, f);
+        // the mouse and stick offset tracks at the cockpit free-look rate (18·dt) without wrapping across ±π during motion
+        float mf = System.Math.Min(0.95f, 18f * dt);
+        _mousePitch = Ease(_mousePitch, _mouse.Pitch, mf);
+        _mouseYaw = Ease(_mouseYaw, _mouse.Yaw, mf);
         // the port's addition over the original's distance: the mouse wheel's zoom
-        if (_epoch != MouseCamera.ZoomEpoch) { _epoch = MouseCamera.ZoomEpoch; _wheel = MouseCamera.ZoomOf(ViewZoom.Kind.Chase); _mouse.Reset(); }   // a new start: no easing from the old
+        if (_epoch != MouseCamera.ZoomEpoch) { _epoch = MouseCamera.ZoomEpoch; _wheel = MouseCamera.ZoomOf(ViewZoom.Kind.Chase); _mouse.Reset(); _mousePitch = _mouseYaw = 0; }   // a new start: no easing from the old
         _wheel = ChaseZoom.Ease(_wheel, MouseCamera.ZoomOf(ViewZoom.Kind.Chase), dt);
         Fov = BaseFov;
-        if (Fixed is { } fx) (_pitch, _yaw) = (fx.Pitch, fx.Yaw);
+        float pitch = System.Math.Clamp(_pitch + _mousePitch, 0.017453292f, 1.5707963f);
+        float yaw = _yaw + _mouseYaw;
+        if (Fixed is { } fx) (_pitch, _yaw, pitch, yaw) = (fx.Pitch, fx.Yaw, fx.Pitch, fx.Yaw);
 
         // the car's heading from its flattened forward row, slerped at 2·dt
         var fwd = Game(-t.Basis.Z);
@@ -143,8 +152,8 @@ public partial class ChaseCamera : Camera3D
         if (float.IsNaN(_heading)) _heading = 0;
 
         // M = RotX(pitch) · RotY(yaw) · H(heading), rows, applied to row vectors; the camera is at (0,0,−d)·M from the centre
-        var (sp, cp) = MathF.SinCos(_pitch);
-        var (sy, cy) = MathF.SinCos(_yaw);
+        var (sp, cp) = MathF.SinCos(pitch);
+        var (sy, cy) = MathF.SinCos(yaw);
         var (sh, ch) = MathF.SinCos(_heading);
         Basis3 rx = new(new(1, 0, 0), new(0, cp, sp), new(0, -sp, cp));
         Basis3 ry = new(new(cy, 0, sy), new(0, 1, 0), new(-sy, 0, cy));

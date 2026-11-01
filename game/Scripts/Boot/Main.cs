@@ -2199,10 +2199,12 @@ public partial class Main : Node3D
         bool inMission = _sim is not null && !_inMenu && _menu is null && !_loading && _picture is null && !_installerOnly && _reconfig is null
             && _opt.Install is not null;
         bool chase = !CameraHeld && _chase is { Current: true, Fixed: null };
+        bool cockpit = !CameraHeld && _car?.CockpitCamera?.Current == true && _pit is { Binoculars: false } && I76.Formats.Input.DashToggle.FreeLookAllowed(_pit.Dash3D);
         bool focused = DisplayServer.WindowIsFocused() || System.Environment.GetEnvironmentVariable("I76_MOUSE") is not null;   // (a capture's off-screen window is never focused)
-        var mode = CursorPolicy.For(inMission, chase, MouseCamera.Level, focused, MouseCamera.Confine);
-        // the mouse orbits the chase view only while captured, unpaused and no orbit key is held
-        MouseCamera.Active = mode == CursorMode.Captured && !_gamePaused && _chase!.Orbit?.Invoke() != true;
+        var mode = CursorPolicy.For(inMission, chase, MouseCamera.Level, focused, MouseCamera.Confine, cockpit, MouseCamera.CockpitLook);
+        // the mouse orbits the chase view (or turns the head in the 3D cockpit) only while captured, unpaused and no orbit key is held
+        MouseCamera.CockpitActive = mode == CursorMode.Captured && !_gamePaused && cockpit;
+        MouseCamera.Active = mode == CursorMode.Captured && !_gamePaused && (cockpit || _chase!.Orbit?.Invoke() != true);
         // the wheel zooms the external view on screen, whether or not the mouse orbits it
         MouseCamera.WheelView = inMission && !CameraHeld && !_gamePaused && _chase!.Orbit?.Invoke() != true ? WheelViewNow() : null;
         TrackViewForZoom(inMission);
@@ -2259,6 +2261,7 @@ public partial class Main : Node3D
         if (Controls.Held == _held) Controls.Held = null;   // (a reloaded scene may have set its own already)
         if (I76.Game.ForceFeedback.Held?.Target == this) I76.Game.ForceFeedback.Held = null;   // it would keep this scene, and all it built, alive
         MouseCamera.Active = false;
+        MouseCamera.CockpitActive = false;
         MouseCamera.WheelView = null;
         ReleaseCursor();
     }

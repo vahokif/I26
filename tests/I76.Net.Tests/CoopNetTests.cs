@@ -300,6 +300,30 @@ public class CoopNetTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A gate the script slides: the client's colliders (the ones its car is predicted against) follow the snapshots, so the
+    /// predicted car meets the gate where the host's does, not at its old place.
+    /// </summary>
+    [Fact]
+    public void AGateTheScriptSlidesMovesTheClientsColliderToo()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        using var g = Start(install, "t07");
+        var hal = g.Join("Hal");
+        Assert.True(g.Wait(() => g.Server.Invoke(h => h.Setup.Script!.Host.Now) > 1));
+        var gate = g.Server.Invoke(h => h.Setup.Statics.Gated.First(o => o.Nodes.Any(n => n.Type == 7 && n.Gate is not null)));
+        var mirror = hal.Mirror!.Setup.Statics.Gated.First(o => o.NetId == gate.NetId);
+        g.Server.Invoke(h => { gate.TriggerGate(); return 0; });
+        Assert.True(g.Wait(() => g.Server.Invoke(h => gate.Nodes.Any(n => n.Gate is { X: > 0 }))));
+        Assert.True(g.Wait(() => g.Server.Invoke(h => gate.Nodes.All(n => n.Gate is not { Moving: true }))));
+        Assert.True(g.Wait(() => mirror.Nodes.Any(n => n.Gate is { X: > 0.9f }) || mirror.Nodes.Any(n => n.Gate is { X: 0 }) && false, 5000), "the gate did not reach the client");
+        g.Wait(() => false, 300);
+        var host = g.Server.Invoke(h => gate.Boxes.Select(b => b.Origin).Concat(gate.Polys.Select(p => p.V[0])).ToList());
+        var seen = mirror.Boxes.Select(b => b.Origin).Concat(mirror.Polys.Select(p => p.V[0])).ToList();
+        Assert.Equal(host.Count, seen.Count);
+        for (int i = 0; i < host.Count; i++) Assert.True(Vector3.Distance(host[i], seen[i]) < 0.05f, $"collider {i}: host {host[i]}, client {seen[i]}");
+    }
+
+    /// <summary>
     /// A movie the script plays mid-mission (T05's and T06's playMovie) stands the game still for everyone: the server stops
     /// ticking (no timer, nobody hurt), the clients draw on nothing. Another player's copy being over does not end it; the host's
     /// does, for everyone, and the game goes on. A player who joins during it has it too.

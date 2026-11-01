@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Co-op: a gate or roadblock the mission slides open (or shut) now moves for the other players' cars as well as for the picture, so a client no longer drives into an invisible gate at its old place and gets snapped back, a stutter when crossing it.
 - Police sirens wail as in the original: once a mission turns a police car's siren on, it keeps sounding until the mission turns it off or the car is wrecked, instead of playing once, and the trip's and the scenarios' own police cars sound the siren rather than a short car horn, as on the 1997 CD. A Sheriff that honks at a car in its way turns its siren on too.
 
 ## 0.11.0 (31 October 2026)

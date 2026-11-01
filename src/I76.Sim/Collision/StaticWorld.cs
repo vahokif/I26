@@ -245,6 +245,9 @@ public sealed partial class StaticObject
         return moved;
     }
 
+    /// <summary>Its gates were set from outside (a network mirror): the colliders follow.</summary>
+    public void GatesMoved() { _gates = true; Refresh(); }
+
     /// <summary>The destroyed state on the wire: bit 0 the root, bit n + 1 node n.</summary>
     /// <summary>Whether the node is a <see cref="StructureNode.Sign"/> (−1, the root, is not).</summary>
     public bool SignNode(int node) => node >= 0 && node < Nodes.Count && Nodes[node].Sign;

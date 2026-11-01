@@ -549,11 +549,18 @@ public sealed class ClientWorld
         else if (h.View.Active) { h.View.Mirror(false, h.View.Eye, h.View.LookAt, h.View.Eye, h.View.LookAt, h.View.Basis); h.View.Personal = false; }
         if (b.Gates.Count == 0 && !_gatesMoved) return;
         _gatesMoved = b.Gates.Count > 0;
+        // the colliders the car is predicted against follow the gates (the host's do), rebuilt only where one moved
+        var was = _gateX;
+        was.Clear();
         foreach (var o in Setup.Statics.Gated)
-            foreach (var n in o.Nodes) if (n.Gate is { } g) g.X = 0;
+            foreach (var n in o.Nodes) if (n.Gate is { } g) { was[g] = g.X; g.X = 0; }
         foreach (var gs in b.Gates)
             if (Structure(gs.Structure) is { } so && gs.Node < so.Nodes.Count && so.Nodes[gs.Node].Gate is { } g) g.X = gs.X;
+        foreach (var o in Setup.Statics.Gated)
+            if (o.Nodes.Any(n => n.Gate is { } gm && was.TryGetValue(gm, out float x) && x != gm.X)) o.GatesMoved();
     }
+
+    private readonly Dictionary<GateMotion, float> _gateX = [];
 
     private bool _gatesMoved;
     /// <summary>The script camera moving this far between two snapshots is a cut.</summary>

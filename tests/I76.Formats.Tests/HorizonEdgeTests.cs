@@ -7,25 +7,6 @@ namespace I76.Formats.Tests;
 
 public class HorizonEdgeTests
 {
-    /// <summary>
-    /// #46: T17's ground is a finite plate, and at the Far draw distance the 1997 look drew it past the original's 600 m clip, leaving a
-    /// strip of sky under the horizon panels. The panels' foot now follows the plate's end, bearing by bearing.
-    /// </summary>
-    [Fact]
-    public void T17sGroundEndsWithinTheRingOnSomeBearingsAndRunsOnOnOthers()
-    {
-        if (Environment.GetEnvironmentVariable("I76_INSTALL") is not { Length: > 0 } dir || !Directory.Exists(dir)) return;
-        var inst = new GameInstall(dir);
-        var vfs = new AssetVfs(inst);
-        var w = new MissionWorld(vfs, new ModelAssembler(vfs), inst.Resolve("miss16", "t17.msn")!);
-        var (dist, height) = HorizonEdge.Measure(w, 3037.5, 46142.5);
-        Assert.Equal(HorizonEdge.Bins, dist.Length);
-        Assert.All(dist, d => Assert.InRange(d, HorizonEdge.Clip, HorizonEdge.MaxDistance));
-        Assert.Contains(dist, d => d < HorizonEdge.MaxDistance);   // the plate ends
-        Assert.Contains(dist, d => d > 1000);                      // and runs well past the clip somewhere
-        Assert.All(height, h => Assert.InRange(h, -50f, 1000f));
-    }
-
     /// <summary>#87: the software sky band's foot stands on the lowest ground within the clip, which is no higher than the ground under the eye.</summary>
     [Fact]
     public void TheLowestGroundIsNoHigherThanUnderfoot()
@@ -42,135 +23,49 @@ public class HorizonEdgeTests
         Assert.True(HorizonEdge.Lowest(w, x, z, 100f) >= low);
     }
 
-    /// <summary>
-    /// The 1997 look's panels stand on the ends Measure finds, and Main measures again every 60 m the eye moves (the shader reads the
-    /// ends as points, so a measure from a new eye must put them where the last one did: the mountains jumped in blocks when the
-    /// table held distances from the old eye). From two eyes 60 m apart, most bins' end points agree to within the bin's own width
-    /// at that range plus the sampling step.
-    /// </summary>
+    /// <summary>The original's rule: the foot is 10.2 x the eye's height below the eye at the ring's radius (-(6000 - 480)/600 x camY - camY), nothing else enters.</summary>
     [Fact]
-    public void TheEndsAsPointsHoldStillWhenTheEyeMovesToTheNextMeasure()
+    public void TheOriginalsFootIsTenPointTwoTimesTheEyesHeightBelowTheEye()
     {
-        if (Environment.GetEnvironmentVariable("I76_INSTALL") is not { Length: > 0 } dir || !Directory.Exists(dir)) return;
-        var inst = new GameInstall(dir);
-        var vfs = new AssetVfs(inst);
-        var w = new MissionWorld(vfs, new ModelAssembler(vfs), inst.Resolve("miss16", "t17.msn")!);
-        double ax = 3037.5, az = 46142.5, bx = ax + 42.4, bz = az + 42.4;   // 60 m apart
-        var (da, ha) = HorizonEdge.Measure(w, ax, az);
-        var (db, hb) = HorizonEdge.Measure(w, bx, bz);
-        var off = new List<double>();
-        for (int i = 0; i < HorizonEdge.Bins; i++)
-        {
-            if (da[i] >= HorizonEdge.MaxDistance) continue;   // runs on past the ring: no end to move
-            double a = (i + 0.5) / HorizonEdge.Bins * 2 * Math.PI;
-            double ex = ax + Math.Cos(a) * da[i], ez = az + Math.Sin(a) * da[i];
-            // the same end from the new eye: the bin looking at it
-            double ang = Math.Atan2(ez - bz, ex - bx); if (ang < 0) ang += 2 * Math.PI;
-            int j = Math.Min(HorizonEdge.Bins - 1, (int)(ang / (2 * Math.PI) * HorizonEdge.Bins));
-            if (db[j] >= HorizonEdge.MaxDistance) { off.Add(double.MaxValue); continue; }
-            double fx = bx + Math.Cos((j + 0.5) / HorizonEdge.Bins * 2 * Math.PI) * db[j], fz = bz + Math.Sin((j + 0.5) / HorizonEdge.Bins * 2 * Math.PI) * db[j];
-            off.Add(Math.Sqrt((fx - ex) * (fx - ex) + (fz - ez) * (fz - ez)));
-        }
-        Assert.True(off.Count > 20, "the plate's end should be on some bearings");
-        off.Sort();
-        double p75 = off[off.Count * 3 / 4];
-        Assert.True(p75 < 200, $"75th percentile of how far an end moved between measures: {p75:F0} m");
+        foreach (float camY in new[] { -5f, 0f, 13f, 121.15f, 420f, 3500f })
+            Assert.Equal(-10.2f * camY, Lighting.HorizonFoot(camY), 2);
     }
 
-    /// <summary>A tripwire for #46's smooth foot: the shader reads the ends as filtered points and keeps the lowest within the taps, not a nearest-sampled table of distances.</summary>
-    [Fact]
-    public void TheSkyShaderFiltersBetweenTheEndsAndKeepsTheLowestFoot()
+    private static string Repo()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "I76.sln"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        var src = File.ReadAllText(Path.Combine(dir!.FullName, "game", "Shaders", "sky_dome.gdshader"));
-        Assert.Contains("uniform sampler2D edge : filter_linear", src);
-        Assert.Contains("for (int i = -EDGE_TAPS; i <= EDGE_TAPS; i++)", src);
-        Assert.Contains("origin_xz", src);   // the distance is taken from the eye as it is now
-        // a custom map's: a tent over fixed bins, never the lowest of taps (which sawed a notch's panels into a zigzag)
-        Assert.Contains("for (int k = 1 - EDGE_SMOOTH; k <= EDGE_SMOOTH; k++)", src);
-        Assert.Contains("const int EDGE_SMOOTH = 3;", src);
-        Assert.Equal(3, HorizonEdge.SmoothBins);
+        return dir!.FullName;
     }
 
     /// <summary>
-    /// A player's canyon whose rim leaves a corner open: from 1.4 km down the strip one bearing's ground ends 63 m lower than the rest,
-    /// its foot 290 m lower, and the panels over it were sawn into a zigzag. The notch is closed over (a shallower dip, the rim's own
-    /// crest, is kept), and the foot the sky's shader draws changes smoothly from one screen column to the next, never running up and down.
+    /// The 1997 look's sky stands its panels by the original's rule alone, in every look of the game: the foot is a function of the eye's height
+    /// (F the original's 600 m clip, whatever the draw distance) and of nothing else, so no bearing, map, draw distance or editor view moves it. The
+    /// shader takes no table of where the ground ends and no sinking from a map's level, and the game feeds it neither.
     /// </summary>
     [Fact]
-    public void ACustomMapsNotchIsClosedOverAndItsFootIsSmooth()
+    public void The1997SkyHasOnlyTheOriginalsFootRule()
     {
-        var level = new HorizonEdge.Level(6.9f, HorizonEdge.CustomCap);
-        const float camY = 24f;
-        var dist = Enumerable.Repeat(1380f, HorizonEdge.Bins).ToArray();
-        var height = Enumerable.Repeat(100f, HorizonEdge.Bins).ToArray();
-        height[7] = 36.8f;                               // the open corner (canyonl3 seen from 3100, 50360)
-        for (int i = 100; i < 104; i++) height[i] = 90f; // a crest's dip, 70 m on the ring
-        var (fd, fh) = HorizonEdge.Follow(level, camY, dist, height);
-        float Foot(float[] d, float[] h, int i) => HorizonEdge.CustomFoot(level, camY, h[i], d[i]);
-        Assert.True(Foot(dist, height, 6) - Foot(dist, height, 7) > 250);
-        Assert.Equal(Foot(dist, height, 6), Foot(fd, fh, 7), 1);
-        Assert.Equal(Foot(dist, height, 101), Foot(fd, fh, 101), 1);
-        var ends = new (float X, float Z, float H)[HorizonEdge.Bins];
-        for (int i = 0; i < ends.Length; i++)
-        {
-            double a = (i + 0.5) / ends.Length * 2 * Math.PI;
-            ends[i] = ((float)(Math.Cos(a) * fd[i]), (float)(Math.Sin(a) * fd[i]), fh[i]);
-        }
-        double prev = double.NaN, prevStep = 0;
-        int turns = 0;
-        for (double deg = -10; deg <= 30; deg += 0.05)
-        {
-            double e = Math.Atan(HorizonEdge.FollowFoot(ends, level, 0, 0, camY, deg * Math.PI / 180) / HorizonList.Radius) * 180 / Math.PI;
-            if (!double.IsNaN(prev))
-            {
-                double step = e - prev;
-                Assert.True(Math.Abs(step) < 0.01, $"the foot moves {step:0.000} degrees in a column at {deg:0.00} degrees");
-                if (step * prevStep < 0 && Math.Abs(step) > 1e-4) turns++;
-                if (Math.Abs(step) > 1e-4) prevStep = step;
-            }
-            prev = e;
-        }
-        Assert.True(turns == 0, $"the foot turns {turns} times round the closed notch");
+        var sky = File.ReadAllText(Path.Combine(Repo(), "game", "Shaders", "sky_dome.gdshader"));
+        Assert.Contains("float foot = -((radius - 0.8 * far_clip) / far_clip) * cam_y - cam_y;", sky);
+        foreach (var gone in new[] { "has_edge", "uniform sampler2D edge", "sink_low", "sink_cap", "origin_xz", "EDGE_" })
+            Assert.DoesNotContain(gone, sky);
+        var main = File.ReadAllText(Path.Combine(Repo(), "game", "Scripts", "Boot", "Main.cs"));
+        foreach (var gone in new[] { "UpdateSkyEdge", "\"sink_low\", level", "\"sink_cap\"", "\"has_edge\"", "LevelOf" })
+            Assert.DoesNotContain(gone, main);
+        Assert.Contains("mat.SetShaderParameter(\"far_clip\", Far1997);", main);
+        Assert.Equal(600f, I76.Formats.Imaging.DrawDistance.OriginalClip);
     }
 
-    /// <summary>The sinking rule: a stock map keeps the original's (the foot 10.2 x the eye's height below it), a custom map's is counted from its lowest ground and held to 70 m, so a map on high ground keeps its mountains.</summary>
+    /// <summary>The modern ring's sinking is set once from the map: the ring's shader reads one reference eye and the game sets it once (a per-frame follow of the eye is gone).</summary>
     [Fact]
-    public void ACustomMapsHorizonSinksFromItsLowestGroundAndStopsAtACap()
+    public void TheModernRingTakesOneReferenceEyeSetOnce()
     {
-        Assert.Equal(Lighting.HorizonFoot(121.15f), HorizonEdge.Foot(HorizonEdge.Level.Original, 121.15f), 3);
-        var custom = new HorizonEdge.Level(40f, HorizonEdge.CustomCap);
-        Assert.Equal(40f - 9.2f * 70f - 400f, HorizonEdge.Foot(custom, 400f), 2);          // far above: held at the cap
-        Assert.Equal(Lighting.HorizonFoot(13f) + 40f - 40f, HorizonEdge.Foot(custom with { Low = 0 }, 13f), 3);
-        Assert.True(HorizonEdge.Foot(custom, 400f) + HorizonList.PanelHeight > -400f);       // the panels' tops are not 15 degrees under the horizon
-    }
-
-    /// <summary>The sky's shader takes the same sinking rule (HorizonEdge.Foot), and the ring's does too.</summary>
-    [Fact]
-    public void TheShadersCountTheSinkingFromTheMapsLevel()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "I76.sln"))) dir = dir.Parent;
-        Assert.NotNull(dir);
-        var sky = File.ReadAllText(Path.Combine(dir!.FullName, "game", "Shaders", "sky_dome.gdshader"));
-        Assert.Contains("min(cam_y - sink_low, sink_cap)", sky);
-        var ring = File.ReadAllText(Path.Combine(dir.FullName, "game", "Shaders", "horizon_terrain.gdshader"));
+        var ring = File.ReadAllText(Path.Combine(Repo(), "game", "Shaders", "horizon_terrain.gdshader"));
         Assert.Contains("sink_low + (ref_eye.y - sink_low)", ring);
-    }
-
-    /// <summary>The map editor's view draws the 1997 horizon panels too (its camera, hundreds of metres up, counts as no higher than the cap), and a script that opens a map does not open it again on the reload.</summary>
-    [Fact]
-    public void TheEditorsViewDrawsThePanelsWithTheCap()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "I76.sln"))) dir = dir.Parent;
-        Assert.NotNull(dir);
-        var main = File.ReadAllText(Path.Combine(dir!.FullName, "game", "Scripts", "Boot", "Main.cs"));
-        Assert.DoesNotContain("SetShaderParameter(\"has_horizon\", false);\n        // no ambient", main.Replace("\r", ""));
-        Assert.Contains("HorizonEdge.LevelOf(skyWorld, I76.Game.Editor.EditorSession.Active && !I76.Game.Editor.EditorSession.Playtest)", main);
-        var editor = File.ReadAllText(Path.Combine(dir.FullName, "game", "Scripts", "Editor", "MapEditor.cs"));
-        Assert.Contains("EditorSession.Mission.Equals(a[0], StringComparison.OrdinalIgnoreCase)) return;", editor);
+        var main = File.ReadAllText(Path.Combine(Repo(), "game", "Scripts", "Boot", "Main.cs"));
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(main, "SetShaderParameter\\(\"ref_eye\"").Count);
+        Assert.Contains("HorizonEdge.Ring(world)", main);
     }
 }

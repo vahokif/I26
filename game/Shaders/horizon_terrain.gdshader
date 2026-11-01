@@ -38,7 +38,7 @@ uniform float haze_floor = 0.0;      // air this much hazier from the start (nig
 // horizontal distance rho from it, foot_k = 10.2/6000. The features, scaled with their radius, keep the panels' angular
 // size, so they rise and sink where the panels do. Fades in from the map's edge (800 m) so none shows between it and the ring.
 uniform float foot_k = 0.0;          // 0: no sinking
-uniform float sink_low = 0.0;        // the height the cone is counted from (HorizonEdge.Level.Low: 0 for a stock map)
+uniform float sink_low = 0.0;        // the height the cone is counted from (HorizonEdge.Ring: 0 for a stock map, the lowest ground for a custom one)
 uniform vec3 ref_eye = vec3(0.0);    // the reference eye, centre-relative game frame (y absolute)
 
 // R: the lowest playable ground near each 10 m texel of the map's bounds (1e9 off the tiles; HorizonTerrain.FloorGrid): over the

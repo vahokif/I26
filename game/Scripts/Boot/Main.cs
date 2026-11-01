@@ -1542,13 +1542,6 @@ public partial class Main : Node3D
         mat.SetShaderParameter("clouds", tex);
         mat.SetShaderParameter("far_clip", Far1997);
         mat.SetShaderParameter("origin_y", _origin.Y);
-        if (_builder?.World is { } skyWorld)
-        {
-            var level = I76.Formats.Assembly.HorizonEdge.LevelOf(skyWorld, I76.Game.Editor.EditorSession.Active && !I76.Game.Editor.EditorSession.Playtest);   // (the editor's free camera, high above the ground, counts as no higher than the cap); a custom map's panels sink from its lowest ground, up to a cap
-            mat.SetShaderParameter("sink_low", level.Low);
-            mat.SetShaderParameter("sink_cap", level.Cap);
-        }
-        mat.SetShaderParameter("origin_xz", new Vector2(_origin.X, _origin.Z));
         mat.SetShaderParameter("scroll_per_second", I76.Game.Sim.SimClock.SkyScrollPerSecond);   // the 1997 sky scrolls a fixed amount a frame, the sim tick
         var light = _builder.Light;
         var l = Coords.ToGodot(light.Direction).Normalized();
@@ -1687,8 +1680,7 @@ public partial class Main : Node3D
     {
         if (_horizonEyeSet || _horizon?.Material is not { } m || _builder?.World is not { } world) return;
         _horizonEyeSet = true;
-        float eyeY = I76.Formats.Assembly.HorizonEdge.RingEyeY(world);   // the map's average ground + 3, sunk by the map's level (a custom map's sinking is counted from its lowest ground and capped)
-        float low = I76.Formats.Assembly.HorizonEdge.LevelOf(world).Low;
+        var (low, eyeY) = I76.Formats.Assembly.HorizonEdge.Ring(world);   // one height for the map (HorizonEdge.Ring)
         m.SetShaderParameter("ref_eye", new Vector3(0, eyeY, 0));
         m.SetShaderParameter("sink_low", low);
         float footK = -I76.Formats.Mission.Lighting.HorizonFoot(1f) / I76.Formats.Mission.HorizonList.Radius;
@@ -1909,43 +1901,6 @@ public partial class Main : Node3D
         _origin = gameOrigin;
         _worldRoot.Position = -Coords.ToGodot(gameOrigin);
         _sky1997?.SetShaderParameter("origin_y", gameOrigin.Y);   // the horizon ring sinks with the eye's game height
-        _sky1997?.SetShaderParameter("origin_xz", new Vector2(gameOrigin.X, gameOrigin.Z));   // and its foot's distance from the eye (UpdateSkyEdge)
-    }
-
-    private System.Numerics.Vector2 _edgeAt = new(float.NaN, float.NaN);
-    private bool _edgeOn;
-    private ShaderMaterial? _edgeMat;
-
-    /// <summary>
-    /// The 1997 look at Far: the sky's horizon panels stand on the ground's real end (I76.Formats.Assembly.HorizonEdge), not the
-    /// original's 600 m clip, which at Far lies well inside the ground and left a strip of sky under them (#46). Measured again
-    /// whenever the eye has moved 60 m (15 m on a custom map); between times the shader measures the distance to each end from where the eye is now,
-    /// so the panels move with it (a table of distances held them where the last measure left them, then jumped them).
-    /// Original draws as the original did.
-    /// </summary>
-    private void UpdateSkyEdge()
-    {
-        bool on = _mode1997 && _sky1997 is not null && !I76.Formats.Imaging.DrawDistance.ModernFog(_drawDistance) && _builder?.World is not null;
-        if (on != _edgeOn || _edgeMat != _sky1997) { _edgeMat = _sky1997; _edgeOn = on; _sky1997?.SetShaderParameter("has_edge", on); _edgeAt = new(float.NaN, float.NaN); }
-        if (!on) return;
-        var g = CameraGame();
-        var here = new System.Numerics.Vector2(g.X, g.Z);
-        // a custom map's ends inside the clip count too (a canyon's near walls): its foot follows every end, whatever its distance, and they are measured more often
-        bool custom = I76.Formats.Assembly.HorizonEdge.LevelOf(_builder!.World!).Cap < float.MaxValue;
-        if (!float.IsNaN(_edgeAt.X) && System.Numerics.Vector2.Distance(here, _edgeAt) < (custom ? I76.Formats.Assembly.HorizonEdge.RemeasureCustom : I76.Formats.Assembly.HorizonEdge.Remeasure)) return;
-        _edgeAt = here;
-        var (dist, height) = I76.Formats.Assembly.HorizonEdge.Measure(_builder!.World!, g.X, g.Z, custom);
-        // a custom map's: its narrow, deep notches (a gap in a rim) closed over and the lowest end round each bin taken, which the shader smooths over the bearings
-        if (custom) (dist, height) = I76.Formats.Assembly.HorizonEdge.Follow(I76.Formats.Assembly.HorizonEdge.LevelOf(_builder!.World!), g.Y, dist, height);
-        // each end as a point (game x, z, the ground's height there), and whether it lies past the clip (where the
-        // shader's foot formula takes it; 2: at any distance); a bearing with no end keeps the farthest point measured
-        var img = Image.CreateEmpty(dist.Length, 1, false, Image.Format.Rgbaf);
-        for (int i = 0; i < dist.Length; i++)
-        {
-            double a = (i + 0.5) / dist.Length * 2 * Math.PI;
-            img.SetPixel(i, 0, new Color((float)(g.X + Math.Cos(a) * dist[i]), (float)(g.Z + Math.Sin(a) * dist[i]), height[i], custom ? 2 : dist[i] > I76.Formats.Assembly.HorizonEdge.Clip ? 1 : 0));
-        }
-        _sky1997!.SetShaderParameter("edge", ImageTexture.CreateFromImage(img));
     }
 
     /// <summary>The 1997 look's sky (sky_dome.gdshader).</summary>
@@ -2901,7 +2856,6 @@ public partial class Main : Node3D
         }
         // Draw Distance: Original clips where the original did (the world camera rebuild's 600), in either look
         ActiveCamera.Far = I76.Formats.Imaging.DrawDistance.CameraFar(_drawDistance);
-        UpdateSkyEdge();
         UpdateSoftwareBand();   // MainSoftware.cs
         if (_pit?.Binoculars == true && ActiveCamera == _car?.CockpitCamera) ActiveCamera.Far = System.Math.Min(ActiveCamera.Far * 8, 100000f);   // Far = zoom * far, zoom 8
         bool free = ActiveCamera == _cam;   // the fly camera (--cam): the origin follows it, not the car, or a far view loses depth precision

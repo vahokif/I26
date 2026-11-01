@@ -429,6 +429,8 @@ public sealed class ClientWorld
                 now.ApplyTo(m.Vehicle);
                 SurfaceUnder(m.Vehicle);
                 m.Applied = now;
+                // a gun the host has killed keeps its burnt shape as its collider; so does the one the mirror carries
+                if (m.Vehicle is { Emplacement.Collider: { } gun } dead && (dead.Flags & VehicleFlags.Dead) != 0) gun.Collapse();
                 // the own car's parts come exactly in its own block: the car's bytes of them must not stand
                 if (m.Info.Serial == OwnSerial && _lastOwn is { } lo && lo.Epoch == OwnEpoch) lo.ApplyTo(m.Vehicle, Setup.Combat, Car);
             }

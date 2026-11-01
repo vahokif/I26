@@ -253,6 +253,57 @@ public class HorizonEverywhereTests(ITestOutputHelper log) : IDisposable
     }
 
     /// <summary>
+    /// Down a canyon strip to its far end, both ways: where nothing nearer stands in front of the far end wall, the panels must stand on
+    /// it, not sunk behind it. A gap a bin wide in that wall (a player's canyon has them; the canyon test map's gaps include some) took
+    /// the foot down with it over the 3 degrees either side, the lowest of the ends round each bearing, and a low horizon (a treeline a
+    /// degree tall) then stood wholly behind the wall: no mountains at all down the strip. Where the far wall is the skyline, the foot
+    /// may lie under it by no more than the wall's own crests leave it (the lowest within the shader's smoothing, under three quarters of
+    /// a degree on this map; the gaps took it 1.7 degrees under).
+    /// </summary>
+    [InstallFact]
+    public void TheFarEndOfTheCanyonCarriesItsPanels()
+    {
+        var w = Load(EditorMaps.CanyonMap(_dir, "canyongp", 5, gaps: true));
+        var level = HorizonEdge.LevelOf(w);
+        var (r0, r1, c0, c1) = w.Terrain.Bounds();
+        double x0 = c0 * 640, x1 = (c1 + 1) * 640, z0 = r0 * 640, z1 = (r1 + 1) * 640;
+        bool Inside(double px, double pz) => w.Terrain.Sample(MissionWorld.ToSample(px), MissionWorld.ToSample(pz)) is not null;
+        double worst = 0; string at = ""; int seen = 0;
+        foreach (double fx in new[] { 0.06, 0.12, 0.25, 0.4, 0.6, 0.75, 0.88, 0.94 })
+            foreach (double fz in new[] { 0.2, 0.3, 0.7, 0.8 })
+                foreach (float up in new[] { 3f, 8f })
+                    {
+                        double axis = fx < 0.5 ? 0 : Math.PI;   // down the long way, eastward from the west half and back
+                        double x = x0 + fx * (x1 - x0), z = z0 + fz * (z1 - z0);
+                        float camY = (float)w.GroundHeight(x, z) + up;
+                        var ends = Ends(w, level, x, z);
+                        for (double d = -6; d <= 6; d += 0.25)
+                        {
+                            double a = axis + d * Math.PI / 180, dx = Math.Cos(a), dz = Math.Sin(a), sky = double.MinValue, end = double.NaN;
+                            for (double t = 5; t <= HorizonEdge.MaxDistance; t += 5)
+                            {
+                                if (!Inside(x + dx * t, z + dz * t))
+                                {
+                                    double lo = t - 5, hi = t;
+                                    while (hi - lo > 0.5) { double mid = (lo + hi) / 2; if (Inside(x + dx * mid, z + dz * mid)) lo = mid; else hi = mid; }
+                                    // the far end wall itself, not a long side grazed on the way
+                                    if (Math.Min(Math.Abs(x + dx * lo - x0), Math.Abs(x + dx * lo - x1)) < 20) end = Math.Atan((w.GroundHeight(x + dx * lo, z + dz * lo) - camY) / lo);
+                                    break;
+                                }
+                                sky = Math.Max(sky, Math.Atan((w.GroundHeight(x + dx * t, z + dz * t) - camY) / t));
+                            }
+                            if (double.IsNaN(end) || sky > end + 0.1 * Math.PI / 180) continue;   // something nearer stands in front of the far wall
+                            seen++;
+                            double foot = Math.Atan(HorizonEdge.FollowFoot(ends, level, x, z, camY, a) / HorizonList.Radius);
+                            if (Deg(end - foot) > worst) { worst = Deg(end - foot); at = $"({x:0}, {z:0}) {up} m up, {Deg(a):0.00} deg"; }
+                        }
+                    }
+        log.WriteLine($"far end seen on {seen} bearings; the foot lies at most {worst:0.00} deg under it, at {at}");
+        Assert.True(seen > 100, $"the far end was the skyline on only {seen} bearings");
+        Assert.True(worst <= 0.8, $"the panels' foot lies {worst:0.00} degrees under the far end wall at {at}");
+    }
+
+    /// <summary>
     /// The map editor's view: its camera hangs hundreds of metres over the ground (up to 3.5 km), where the original's rule would sink
     /// the 1997 look's panels 10 x that below the horizon (so the editor used to leave them out). With the cap they stand over the
     /// horizon and stay put wherever the camera is, on a stock map (edited or not) and on a map the editor made.

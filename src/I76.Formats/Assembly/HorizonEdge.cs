@@ -77,7 +77,10 @@ public static class HorizonEdge
     /// <summary>The widest notch in a custom map's foot that <see cref="Follow"/> closes over, in bins either side of its deepest: a gap a bin or few wide in a rim (a corner the rim leaves open, a cut a few metres wide).</summary>
     public const int NotchBins = 2;
 
-    /// <summary>How much lower than all round it (metres at the ring's radius, about two degrees) a notch's foot must be to be closed over: shallower dips, the rim's own crests, are followed (closing them would stand the panels above the ground's real skyline there).</summary>
+    /// <summary>How much lower than a bin or two on either side (metres at the ring's radius) a gap one or two bins wide must be to be closed over first: a gap in the far wall of a canyon seen from kilometres off, a degree wide and a degree or so deep, would otherwise take the foot down with it over the <see cref="SmoothBins"/> either side and stand a low horizon (a treeline a degree tall) wholly behind the wall. The rim's own crests change by less from bin to bin.</summary>
+    public const float GapDepth = 80f;
+
+    /// <summary>How much lower than all round it (metres at the ring's radius, about two degrees) a wider notch's foot must be to be closed over: shallower dips, the rim's own crests, are followed (closing them would stand the panels above the ground's real skyline there).</summary>
     public const float NotchDepth = 200f;
 
     /// <summary>How far round each bearing a custom map's foot is smoothed, in bins either side: the sky's shader weighs the bins within this many of a direction by a tent (<see cref="FollowFoot"/>).</summary>
@@ -88,7 +91,8 @@ public static class HorizonEdge
     /// bin and laid along the bin's own bearing. A map's ground can end a bin or few lower than all round it (a gap in a canyon's rim
     /// a few metres wide, a corner it leaves open): the foot there (<see cref="CustomFoot"/>) drops by hundreds of metres for a degree,
     /// and every column of the panels' texture, which the foot shifts, dropped with it; the old shader's lowest of taps half a degree
-    /// apart then ran up and down that dip, sawing the panels into a zigzag. Here a notch at most <see cref="NotchBins"/> bins either
+    /// apart then ran up and down that dip, sawing the panels into a zigzag. Here a gap one or two bins wide and deeper than <see cref="GapDepth"/>
+    /// takes the lower of the bins beside it, a notch at most <see cref="NotchBins"/> bins either
     /// side of its bottom and deeper than <see cref="NotchDepth"/> is closed over (the end of the highest of its sides is taken; the
     /// rim the gap is cut in, standing in front of it, hides what lies beyond), and then the lowest end within <see cref="SmoothBins"/>
     /// is taken, so that the shader's smoothing over that many bins never stands the panels above the ground's end.
@@ -98,32 +102,48 @@ public static class HorizonEdge
         int n = dist.Length;
         var foot = new float[n];
         for (int i = 0; i < n; i++) foot[i] = CustomFoot(level, camY, height[i], dist[i]);
-        // a closing over NotchBins (the lowest of the highest), kept only where it fills a notch deeper than NotchDepth;
-        // then the lowest within SmoothBins (each as the index of the end it takes)
-        var up = new int[n];
-        for (int i = 0; i < n; i++)
-        {
-            int best = i;
-            for (int k = -NotchBins; k <= NotchBins; k++) { int j = ((i + k) % n + n) % n; if (foot[j] > foot[best]) best = j; }
-            up[i] = best;
-        }
-        var fill = new int[n];
-        for (int i = 0; i < n; i++)
-        {
-            int best = up[i];
-            for (int k = -NotchBins; k <= NotchBins; k++) { int j = up[((i + k) % n + n) % n]; if (foot[j] < foot[best]) best = j; }
-            fill[i] = foot[best] - foot[i] > NotchDepth ? best : i;
-        }
+        var src = new int[n];
+        for (int i = 0; i < n; i++) src[i] = i;
+        // a gap one or two bins wide whose foot lies GapDepth under both bins beside it takes the lower of those
+        for (int wide = 1; wide <= 2; wide++)
+            for (int i = 0; i < n; i++)
+            {
+                int a = src[((i - 1) % n + n) % n], b = src[(i + wide) % n];
+                float side = MathF.Min(foot[a], foot[b]);
+                bool gap = true;
+                for (int k = 0; k < wide; k++) gap &= foot[src[(i + k) % n]] < side - GapDepth;
+                if (gap) for (int k = 0; k < wide; k++) src[(i + k) % n] = foot[a] < foot[b] ? a : b;
+            }
+        src = Close(src, NotchBins, NotchDepth);
         var d = new float[n];
         var h = new float[n];
         for (int i = 0; i < n; i++)
         {
-            int best = fill[i];
-            for (int k = -SmoothBins; k <= SmoothBins; k++) { int j = fill[((i + k) % n + n) % n]; if (foot[j] < foot[best]) best = j; }
+            int best = src[i];
+            for (int k = -SmoothBins; k <= SmoothBins; k++) { int j = src[((i + k) % n + n) % n]; if (foot[j] < foot[best]) best = j; }
             d[i] = dist[best];
             h[i] = height[best];
         }
         return (d, h);
+
+        int[] Close(int[] from, int r, float depth)
+        {
+            var up = new int[n];
+            for (int i = 0; i < n; i++)
+            {
+                int best = from[i];
+                for (int k = -r; k <= r; k++) { int j = from[((i + k) % n + n) % n]; if (foot[j] > foot[best]) best = j; }
+                up[i] = best;
+            }
+            var to = new int[n];
+            for (int i = 0; i < n; i++)
+            {
+                int best = up[i];
+                for (int k = -r; k <= r; k++) { int j = up[((i + k) % n + n) % n]; if (foot[j] < foot[best]) best = j; }
+                to[i] = foot[best] - foot[from[i]] > depth ? best : from[i];
+            }
+            return to;
+        }
     }
 
     /// <summary>

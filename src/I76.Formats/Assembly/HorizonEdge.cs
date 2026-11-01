@@ -46,7 +46,38 @@ public static class HorizonEdge
         level.Low - (HorizonList.Radius - 0.8f * far) / far * level.Eye(camY) - camY;
 
     /// <summary>A panel foot standing on the ground's end <paramref name="de"/> away at height <paramref name="endHeight"/>, relative to the eye (the shader's).</summary>
-    public static float EndFoot(float camY, float endHeight, float de) => -(camY - endHeight) * (HorizonList.Radius + 0.2f * de) / de;
+    public static float EndFoot(float camY, float endHeight, float de)
+    {
+        de = Math.Max(de, MinEnd);
+        return -(camY - endHeight) * (HorizonList.Radius + 0.2f * de) / de;
+    }
+
+    /// <summary>
+    /// The nearest end a custom map's foot stands on (<see cref="Measure"/> with <c>inClip</c>). A player's map can be a canyon or a
+    /// strip whose ground ends a few hundred metres off on one side and kilometres off along the other: the ends inside the original's
+    /// 600 m clip are real ends, and a foot that follows them (the higher of the end's and the sinking rule's, so an end just under the eye never sinks the
+    /// panels out of sight, and not an end a few metres off: <see cref="CustomFoot"/>) is what keeps the panels' foot from jumping between the two as the bearing, or the car, moves.
+    /// </summary>
+    public const float MinEnd = 10f;
+
+    /// <summary>How far a custom map's end at <paramref name="de"/> metres is followed: not at all inside 100 m, wholly past 250 m (smoothstep). A rim a few metres off swings a foot standing on it by degrees with the slightest slope, and the ground in front hides what stands below its edge.</summary>
+    public static float EndWeight(float de)
+    {
+        float t = Math.Clamp((de - 100f) / 150f, 0f, 1f);
+        return t * t * (3 - 2 * t);
+    }
+
+    /// <summary>A custom map's panel foot for an end <paramref name="de"/> away at <paramref name="endHeight"/>: the higher of the end's and the sinking rule's, blended in by <see cref="EndWeight"/> (the sky's shader).</summary>
+    public static float CustomFoot(Level level, float camY, float endHeight, float de)
+    {
+        float sink = Foot(level, camY);
+        return sink + (Math.Max(EndFoot(camY, endHeight, de), sink) - sink) * EndWeight(de);
+    }
+
+    /// <summary>How far the eye moves before the ends are measured again: the table is read by the azimuth from the eye as it is now, so the farther the eye has moved from where it measured, the more a near end's bearing is off (a stock map's ends lie beyond the clip, where 60 m is a fraction of a degree).</summary>
+    public const float Remeasure = 60f;
+    /// <summary>The same for a custom map, whose ends may lie a few hundred metres off (a canyon's walls): a measure takes a few milliseconds.</summary>
+    public const float RemeasureCustom = 15f;
 
     /// <summary>
     /// The most the modern ring of a custom map sinks for: one fixed ring serves a whole hilly map, and the panels it stands in for
@@ -67,9 +98,10 @@ public static class HorizonEdge
     /// <summary>
     /// For each bearing (bin i looks along azimuth (i + 0.5)/Bins · 360° from game +X toward +Z) from the eye (x, z): the
     /// distance to where the ground's data ends (at least <see cref="Clip"/>, at most <see cref="MaxDistance"/>) and the
-    /// ground's height there. A bearing that meets no end keeps the maximum.
+    /// ground's height there. A bearing that meets no end keeps the maximum. For a stock map an end inside the clip is held at the clip (the
+    /// original's rule takes it); with <paramref name="inClip"/> (a custom map) it is the end itself, at least <see cref="MinEnd"/> away.
     /// </summary>
-    public static (float[] Distance, float[] Height) Measure(MissionWorld world, double x, double z)
+    public static (float[] Distance, float[] Height) Measure(MissionWorld world, double x, double z, bool inClip = false)
     {
         var dist = new float[Bins];
         var height = new float[Bins];
@@ -99,7 +131,7 @@ public static class HorizonEdge
             }
             h = (float)lastH;
         found:
-            dist[i] = Math.Max(d, Clip);
+            dist[i] = Math.Max(d, inClip ? MinEnd : Clip);
             height[i] = h;
         }
         return (dist, height);

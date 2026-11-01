@@ -1919,7 +1919,7 @@ public partial class Main : Node3D
     /// <summary>
     /// The 1997 look at Far: the sky's horizon panels stand on the ground's real end (I76.Formats.Assembly.HorizonEdge), not the
     /// original's 600 m clip, which at Far lies well inside the ground and left a strip of sky under them (#46). Measured again
-    /// whenever the eye has moved 60 m; between times the shader measures the distance to each end from where the eye is now,
+    /// whenever the eye has moved 60 m (15 m on a custom map); between times the shader measures the distance to each end from where the eye is now,
     /// so the panels move with it (a table of distances held them where the last measure left them, then jumped them).
     /// Original draws as the original did.
     /// </summary>
@@ -1930,16 +1930,18 @@ public partial class Main : Node3D
         if (!on) return;
         var g = CameraGame();
         var here = new System.Numerics.Vector2(g.X, g.Z);
-        if (!float.IsNaN(_edgeAt.X) && System.Numerics.Vector2.Distance(here, _edgeAt) < 60f) return;
+        // a custom map's ends inside the clip count too (a canyon's near walls): its foot follows every end, whatever its distance, and they are measured more often
+        bool custom = I76.Formats.Assembly.HorizonEdge.LevelOf(_builder!.World!).Cap < float.MaxValue;
+        if (!float.IsNaN(_edgeAt.X) && System.Numerics.Vector2.Distance(here, _edgeAt) < (custom ? I76.Formats.Assembly.HorizonEdge.RemeasureCustom : I76.Formats.Assembly.HorizonEdge.Remeasure)) return;
         _edgeAt = here;
-        var (dist, height) = I76.Formats.Assembly.HorizonEdge.Measure(_builder!.World!, g.X, g.Z);
+        var (dist, height) = I76.Formats.Assembly.HorizonEdge.Measure(_builder!.World!, g.X, g.Z, custom);
         // each end as a point (game x, z, the ground's height there), and whether it lies past the clip (where the
-        // shader's foot formula takes it); a bearing with no end keeps the farthest point measured
+        // shader's foot formula takes it; 2: at any distance); a bearing with no end keeps the farthest point measured
         var img = Image.CreateEmpty(dist.Length, 1, false, Image.Format.Rgbaf);
         for (int i = 0; i < dist.Length; i++)
         {
             double a = (i + 0.5) / dist.Length * 2 * Math.PI;
-            img.SetPixel(i, 0, new Color((float)(g.X + Math.Cos(a) * dist[i]), (float)(g.Z + Math.Sin(a) * dist[i]), height[i], dist[i] > I76.Formats.Assembly.HorizonEdge.Clip ? 1 : 0));
+            img.SetPixel(i, 0, new Color((float)(g.X + Math.Cos(a) * dist[i]), (float)(g.Z + Math.Sin(a) * dist[i]), height[i], custom ? 2 : dist[i] > I76.Formats.Assembly.HorizonEdge.Clip ? 1 : 0));
         }
         _sky1997!.SetShaderParameter("edge", ImageTexture.CreateFromImage(img));
     }

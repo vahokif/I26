@@ -22,6 +22,32 @@ public static class EditorMaps
         }
     }
 
+    /// <summary>
+    /// A strip of <paramref name="tiles"/> x 1 tiles shaped like a player's canyon map: a rim 100 m and more high, uneven, round the map's edge, a basin of
+    /// 10 to 60 m inside it with a ridge across the middle, so that from most places the ground ends a few hundred metres off on two sides
+    /// (inside the original's 600 m clip) and kilometres off along the strip, at a height that is well above the eye.
+    /// </summary>
+    public static string CanyonMap(string dir, string name, int tiles)
+    {
+        int w = tiles * 128, h = 128;
+        var project = MapProject.CreateBlank(name, name, ".lvl", tiles, 1, 400);
+        var (r0, _, c0, _) = project.Terrain.Bounds();
+        for (int sz = 0; sz < h; sz++)
+            for (int sx = 0; sx < w; sx++)
+            {
+                double edge = Math.Min(Math.Min(sx, w - 1 - sx), Math.Min(sz, h - 1 - sz));   // samples in from the rim
+                double rim = Math.Clamp((edge - 2) / 14.0, 0, 1);                              // 0 on the rim, 1 in the basin
+                double basin = 100 + 500 * (0.5 + 0.5 * Math.Sin(sx / 23.0) * Math.Cos(sz / 17.0)) * (0.6 + 0.4 * Math.Sin(sx / 61.0 + 1));
+                double bump = 450 * Math.Exp(-Math.Pow((sz - 64) / 12.0, 2)) * (0.5 + 0.5 * Math.Cos(sx / 28.0));   // a ridge across the strip, with gaps
+                double rimTop = 1100 + 140 * Math.Sin(sx / 9.0 + sz / 5.0) * Math.Cos(sx / 31.0);   // a rim that is not level: 96 to 124 m
+                double v = rimTop * (1 - rim * rim * (3 - 2 * rim)) + (basin + bump) * (rim * rim * (3 - 2 * rim));
+                project.Terrain.SetHeight(c0 * 128 + sx, r0 * 128 + sz, (int)Math.Clamp(v, 0, 4095));
+            }
+        var b = project.WorldBounds();
+        project.Mission.Objects.Add(MapObject.Spawn(new System.Numerics.Vector3((b.X + b.Z) / 2, 30, (b.Y + b.W) / 2)));
+        return project.SaveTo(dir).First(f => f.EndsWith(".lvl", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static string FlatMap(string dir, string name, int tiles, double metres)
     {
         var (_, files) = NewMap.CreateFlat(dir, name, name, tiles, metres, nitro: false);

@@ -38,7 +38,7 @@ uniform float horizon_height = 1170.6;
 uniform float far_clip = 600.0;
 // Far draw distance (the 1997 look): the ground runs on past the clip to where the map's data ends, so the ring's foot
 // meets that end, bearing by bearing: RG = the end's game x and z, B = the ground's game height there, A = 1 where it
-// lies past the clip; 360 bins from game +X toward +Z, as seen from where they were measured
+// lies past the clip (2: a custom map's, at any distance); 360 bins from game +X toward +Z, as seen from where they were measured
 uniform bool has_edge = false;
 uniform sampler2D edge : filter_linear, repeat_enable;
 uniform float sink_low = 0.0;      // HorizonEdge.Level: the ground height the sinking counts from (0 for a stock map)
@@ -121,8 +121,13 @@ void sky() {
 				float lowest = 1e9;
 				for (int i = -EDGE_TAPS; i <= EDGE_TAPS; i++) {
 					vec4 e = texture(edge, vec2(u0 + float(i) * EDGE_STEP, 0.5));
-					float de = length(e.rg - eye);
-					lowest = min(lowest, e.a > 0.5 && de > far_clip ? -(cam_y - e.b) * (radius + 0.2 * de) / de : foot);
+					float de = max(length(e.rg - eye), 10.0);   // HorizonEdge.MinEnd
+					float end_foot = -(cam_y - e.b) * (radius + 0.2 * de) / de;
+					// a custom map's end counts at any distance but never takes the panels below the sinking rule's foot (an end just under
+					// the eye, a plateau's edge, would sink them out of sight), and not at all from an end a few metres off, where the
+					// slightest slope of the ground's edge swings the foot by degrees (HorizonEdge.EndWeight): so the foot follows the
+					// ends smoothly, the higher of the two
+					lowest = min(lowest, e.a > 1.5 ? mix(foot, max(end_foot, foot), smoothstep(100.0, 250.0, de)) : e.a > 0.5 && de > far_clip ? end_foot : foot);
 				}
 				foot = lowest;
 			}

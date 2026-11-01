@@ -17,6 +17,7 @@ public partial class MapEditor
     private float _s = 1;
     private Label _status = null!, _title = null!, _toast = null!, _undoLabel = null!, _radiusLabel = null!, _strengthLabel = null!;
     private Button _lookButton = null!;
+    private Button _musicButton = null!;
     private readonly Dictionary<BrushKind, Button> _toolButtons = [];
     private readonly Dictionary<Falloff, Button> _falloffButtons = [];
     private HSlider _radius = null!, _strength = null!;
@@ -69,8 +70,11 @@ public partial class MapEditor
         var menu = EditorStyle.Button("MAP", ToggleMenu, s, 20);
         bar.AddChild(menu);
         bar.AddChild(EditorStyle.Button("PLAYTEST  F5", Playtest, s, 20));
-        _lookButton = EditorStyle.Button("LOOK  F2", () => { ToggleLook(); }, s, 20);
+        _lookButton = EditorStyle.Button("LOOK  F12", () => { ToggleLook(); }, s, 20);
         bar.AddChild(_lookButton);
+        _musicButton = EditorStyle.Button("MUSIC", ToggleMusic, s, 20);
+        _musicButton.TooltipText = "The game's soundtrack while you edit (the Music level is Audio Control's)";
+        bar.AddChild(_musicButton);
         bar.AddChild(EditorStyle.Button("STYLE", ToggleStyle, s, 20));
         bar.AddChild(EditorStyle.Button("HELP  F1", ToggleHelp, s, 20));
         bar.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
@@ -317,7 +321,8 @@ public partial class MapEditor
         }
         _title.Text = $"{TitleLabel()}{(Doc.Modified ? " *" : "")}";
         _undoLabel.Text = Undo.CanUndo ? $"{Undo.Count} edits   next undo: {Undo.NextUndo}" : "nothing to undo";
-        _lookButton.Text = Is1997() ? "LOOK: 1997   F2" : "LOOK: MODERN   F2";
+        _lookButton.Text = Is1997() ? "LOOK: 1997   F12" : "LOOK: MODERN   F12";
+        _musicButton.Text = _musicOn ? "MUSIC: ON" : "MUSIC: OFF";
     }
 
     /// <summary>"   surface DIRT" for the sample under the cursor.</summary>
@@ -459,7 +464,7 @@ public partial class MapEditor
         ("F", "Bring the point under the cursor to the middle"),
         ("Tab", "Pan by moving the mouse to the window's edge, on or off"),
         ("B", "Hide or show the brush circle"),
-        ("F2", "Modern look or 1997 look"),
+        ("F12, F2", "Modern look or 1997 look"),
         ("F5", "Playtest: drop a car where the camera looks. F5 or Esc comes back"),
         ("Esc", "Map menu"),
         ("F1", "This help"),

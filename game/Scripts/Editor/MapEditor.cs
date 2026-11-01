@@ -52,6 +52,9 @@ public partial class MapEditor : Node
     private int _frame;
     private double _hold;
     private bool _dirtyLook;
+    /// <summary>The editor's soundtrack (EditorMusic), null without an install; <see cref="_musicOn"/> is the MUSIC button's setting.</summary>
+    private EditorMusic? _music;
+    private bool _musicOn = true, _leavingForPlaytest;
 
     private static readonly bool Hook = OS.GetEnvironment("I76_EDITOR_SHOT") is { Length: > 0 };
 
@@ -80,6 +83,8 @@ public partial class MapEditor : Node
         AddChild(RoadsTool);
         Objects = new ObjectEditor { Name = "Objects", Ed = this, Builder = Builder, Cam = Cam, Doc = Doc, Undo = Undo, Layer = Doc.Layer!, Origin = Origin, PickGround = PickGround };
         AddChild(Objects);
+        _musicOn = I76.Game.Shell.ShellSettings.Load().EditorMusic;
+        if (Install is not null) { _music = new EditorMusic { Name = "EditorMusic", Install = Install }; AddChild(_music); }
         BuildUi();
         SyncUi();
         GetViewport().SizeChanged += OnResize;
@@ -400,13 +405,39 @@ public partial class MapEditor : Node
     /// <summary>F5: the car is dropped where the camera looks and the map runs; F5 or Esc comes back here.</summary>
     public void Playtest()
     {
+        if (_leavingForPlaytest) return;
         EndStroke();
         EditorSession.Capture();
         EditorSession.Pose = [Cam.Pivot.X, Cam.Pivot.Y, Cam.Pivot.Z, Cam.Yaw, Cam.Pitch, Cam.Distance];
         EditorSession.Playtest = true;
         EditorSession.SwitchedAtMs = Time.GetTicksMsec();
         EditorSession.PlaytestAt = [Cam.Pivot.X, Cam.Pivot.Z, Cam.HeadingDegrees];
-        Reload();
+        // the music fades out first (the mission has its own); the editor starts it again on the way back
+        const double fade = 0.4;
+        if (_music?.FadeOut(fade) == true)
+        {
+            _leavingForPlaytest = true;
+            GetTree().CreateTimer(fade, processAlways: true).Timeout += Reload;
+        }
+        else Reload();
+    }
+
+    /// <summary>The MUSIC button: the editor's soundtrack on or off, kept with the settings (a new key; nothing else in them changes).</summary>
+    public void ToggleMusic()
+    {
+        var st = I76.Game.Shell.ShellSettings.Load();
+        st.EditorMusic = _musicOn = !st.EditorMusic;
+        st.Save();
+        _music?.Apply();
+        Toast(!_musicOn ? "Music off" : st.Audio[0] < 2 ? "Music on (the Music level in Audio Control is off)" : _music is { Available: false } ? "Music on (no tracks in this install)" : "Music on");
+    }
+
+    /// <summary>F12 (as in a mission) and F2 switch the look. True when the key was one of them.</summary>
+    private bool LookKey(InputEventKey key)
+    {
+        if (key.Keycode is not (Key.F12 or Key.F2) || key.CtrlPressed || key.AltPressed) return false;
+        if (!key.Echo) { ToggleLook(); _dirtyLook = true; GD.Print($"editor: look {(Is1997() ? "1997" : "modern")} ({key.Keycode})"); }
+        return true;
     }
 
     public void OpenMap(string mission)
@@ -454,6 +485,8 @@ public partial class MapEditor : Node
             return;
         }
         if (e is not InputEventKey { Pressed: true } key) return;
+        // the look's keys work with a text field focused and a window open: neither uses them
+        if (LookKey(key)) { GetViewport().SetInputAsHandled(); return; }
         if (GetViewport().GuiGetFocusOwner() is LineEdit)
         {
             if (key.Keycode == Key.Escape) { GetViewport().GuiReleaseFocus(); GetViewport().SetInputAsHandled(); }
@@ -475,7 +508,6 @@ public partial class MapEditor : Node
             case Key.Y when key.CtrlPressed: DoRedo(); break;
             case Key.S when key.CtrlPressed: Save(); break;
             case Key.F1: ToggleHelp(); break;
-            case Key.F2: ToggleLook(); _dirtyLook = true; break;
             case Key.F5 when !key.CtrlPressed && !key.Echo: Playtest(); break;
             case Key.Escape when !key.Echo: ToggleMenu(); break;
             case Key.Bracketleft when key.ShiftPressed: Brush.AddStrength(-0.05f); SyncUi(); break;
@@ -633,6 +665,10 @@ public partial class MapEditor : Node
                 case "surface": Brush.SurfaceId = Math.Clamp((int)F(0), 0, 7); if (args.Length > 1) _overlayOn = F(1) != 0; SyncUi(); break;   // surface:id[,overlay 0|1]
                 case "tool": if (Enum.TryParse<BrushKind>(args[0], true, out var tk)) SetTool(tk); break;
                 case "look": ToggleLook(); break;
+                case "music": ToggleMusic(); break;
+                case "key":   // key:F12: that key pressed through the window's input path, as a keyboard sends it
+                    if (Enum.TryParse<Key>(args[0], true, out var pk)) Input.ParseInputEvent(new InputEventKey { Keycode = pk, PhysicalKeycode = pk, Pressed = true });
+                    break;
                 case "playtest": Playtest(); break;
                 case "help": ToggleHelp(); break;
                 case "style": OpenStyle(args.Length > 0 && int.TryParse(args[0], out int tab) ? tab : 0); break;

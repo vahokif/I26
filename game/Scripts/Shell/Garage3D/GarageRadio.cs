@@ -68,9 +68,7 @@ public sealed partial class GarageRadio : Node3D
     private void Next()
     {
         if (_tracks.Count == 0 || !IsInsideTree()) return;
-        int k;
-        do k = _rand.Next(_tracks.Count); while (_tracks.Count > 1 && k == _last);
-        _last = k;
+        int k = _last = I76.Formats.Audio.TrackShuffle.Next(_tracks.Count, _last, _rand);
         var (path, track, game) = _tracks[k];
         try
         {

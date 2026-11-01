@@ -36,9 +36,11 @@ the modern look is the one it is built for.
 | `F` | bring the point under the cursor to the middle |
 | Tab | pan with the mouse at the window's edge, on or off (off at first) |
 | `B` | hide or show the brush circle |
-| `F2` | modern look or 1997 look (the 1997 look draws the horizon mountain panels by the original's rule, as a playtest, F5, does: their foot sinks 10.2 times the camera's height, so from the free camera, tens of metres up and more, they sink out of sight, as they do in the game on high ground) |
+| `F12` or `F2` | modern look or 1997 look, as F12 does in a mission; it works with a text field focused too, and in a playtest F12 is the mission's own (the 1997 look draws the horizon mountain panels by the original's rule, as a playtest, F5, does: their foot sinks 10.2 times the camera's height, so from the free camera, tens of metres up and more, they sink out of sight, as they do in the game on high ground) |
 | `F5` | playtest; `F5` or `Esc` comes back |
 | `F1` | the help overlay |
+
+**Music.** The game's soundtrack plays while you edit: the CD tracks of the install the editor was opened from (Interstate '76's or the Nitro Pack's, whichever the map belongs to), a random one after another and never the one just played, at the Music level of Audio Control (nothing plays at level 0 or 1, or with no tracks in the install). The top bar's **MUSIC** button switches it off and on; the choice is kept with the player's settings (`editor_music` in the `[port]` section, written only when off). A playtest (F5) fades the music out for the mission's own and the editor starts a track again on the way back; leaving the editor ends it for the menu's music. `I76_EDITOR_MUSIC_SEEK=SECONDS` starts each track that far in (capture scripts: `music` presses the button, `key:F12` sends a key).
 | `M` `P` | the object tools: select, build (the palette). `J` `R` `Y` `Z` arm a spawn point, regen pad, CTF flag, race checkpoint (the rest of their keys are in "Building" below) |
 
 The status bar shows the tool, radius, strength, falloff, the ground's height and position under the cursor, and the frame rate.

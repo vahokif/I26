@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### New
+- Map editor: F12 switches between the modern and the 1997 look, as in a mission (F2 still works too).
+- Map editor: the game's soundtrack plays while you edit, a random track after another at the Music level of Audio Control; a MUSIC button in the top bar turns it off and on, and a playtest hands over to the mission's own music.
 - Bots use ramps: a bot whose car can reach the speed a ramp needs takes it as a shortcut across a gap, a canyon or a river when that is a clearly shorter way to its target, lining up on the ramp, holding its speed and keeping the wheel straight; a weak or damaged engine, or a ramp it cannot line up on, and it drives round as before.
 - I26 tells you when a newer release is out: at start-up it quietly checks GitHub and shows "version X available" under the version in the corner of the game chooser and the main menu (click it to open the release page). Play Options (second page) has a Check for Updates row to turn it off (#138).
 

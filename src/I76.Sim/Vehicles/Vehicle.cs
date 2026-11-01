@@ -254,6 +254,11 @@ public sealed class Vehicle
     public int EngineNumber;
     /// <summary>The engsnd.dat ignition row of <see cref="EngineNumber"/> (static: not hashed).</summary>
     public IgnitionRow? Ignition;
+    /// <summary>
+    /// The horn file of <see cref="EngineNumber"/> loops by its own header: the police car's siren. Started outside the horn key
+    /// (an AI's honk, setSiren) it sounds until it is stopped, so the AI's honk turns the car's siren on.
+    /// </summary>
+    public bool HornLoops;
     public Wheel FrontRight = new(), FrontLeft = new(), RearRight = new(), RearLeft = new();
     public IEnumerable<Wheel> Wheels => [FrontRight, FrontLeft, RearRight, RearLeft];
     /// <summary>

@@ -743,7 +743,7 @@ from the server.
   stop: each client played the movie over the running game with its car held, a player could be killed under it, the clocks ran,
   every player's Esc skipped their own copy, a late joiner never saw it, and the script's teleport after the `playMovie` had
   already moved the cars.
-- **Sirens** (`SirenEvent`; the script's `setSiren`, the entity's, not in the car state). Lights are the cars' flags, in
+- **Sirens** (`SirenEvent`; the script's `setSiren` or a police car's honk, the entity's, not in the car state). Lights are the cars' flags, in
   the snapshots already.
 - **The end** (`MissionEndEvent`): won or failed and the failure's line; each client's game ends as single player's (the
   outro on a win; the end menu with the line, Leave Game and Exit Game, on a failure). The game over follows 5 s later;

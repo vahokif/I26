@@ -727,7 +727,7 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
     /// <summary>Cars that touched a ramp or bridge (types 11-13) from above this tick: no response, but the original plays vvbo1.wav (drive-on).</summary>
     public List<Vehicle> DriveOns { get; } = [];
 
-    /// <summary>AI cars that honked this tick (1 in 4 when blocked by a vehicle): a positional one-shot of their horn.</summary>
+    /// <summary>AI cars that honked this tick (1 in 4 when blocked by a vehicle): a positional one-shot of their horn. A police car's honk turns its siren on instead (Entity.Siren).</summary>
     public List<Vehicle> Honks { get; } = [];
 
     /// <summary>

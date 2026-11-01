@@ -36,6 +36,21 @@ public static class SoundFiles
     /// </summary>
     public static (int Priority, int MaxVoices) Limits(AssetVfs vfs, string name)
     {
+        if (Header(vfs, name) is not { } d) return (50, 1);
+        int pri = BitConverter.ToInt32(d, 4), max = BitConverter.ToInt32(d, 8);
+        return (pri < 0 ? 50 : pri, max < 0 ? 1 : max);
+    }
+
+    /// <summary>
+    /// Whether a sound started with no voice settings of its own loops: its GAS0 header's mode (-1: 0) is 1 or 2; mode 0 plays
+    /// once. Of the cars' horn files only the police car's siren, aps2.wav, is mode 1: started by setSiren or by an AI's honk,
+    /// it sounds until something stops it.
+    /// </summary>
+    public static bool Loops(AssetVfs vfs, string name) => Header(vfs, name) is { } d && BitConverter.ToInt32(d, 12) > 0;
+
+    /// <summary>The sound file's bytes when they begin with a GAS0 header, else null.</summary>
+    private static byte[]? Header(AssetVfs vfs, string name)
+    {
         var d = vfs.TryRead(name);
         if (d is null)
         {
@@ -43,10 +58,8 @@ public static class SoundFiles
             var stem = dot < 0 ? name : name[..dot];
             d = vfs.TryRead(stem + ".gpw") ?? vfs.TryRead(stem + ".wav");
         }
-        if (d is null && CompanionSounds.For(vfs, name) is { } other) return Limits(other, name);
-        if (d is null || d.Length < 28 || d[0] != 'G' || d[1] != 'A' || d[2] != 'S' || d[3] != '0') return (50, 1);
-        int pri = BitConverter.ToInt32(d, 4), max = BitConverter.ToInt32(d, 8);
-        return (pri < 0 ? 50 : pri, max < 0 ? 1 : max);
+        if (d is null && CompanionSounds.For(vfs, name) is { } other) return Header(other, name);
+        return d is null || d.Length < 28 || d[0] != 'G' || d[1] != 'A' || d[2] != 'S' || d[3] != '0' ? null : d;
     }
 
     public static Pcm? Read(AssetVfs vfs, string name) => ReadRiff(vfs, name) is { } r ? Parse(r) : null;

@@ -7,7 +7,7 @@ namespace I76.Game.Sim;
 /// <summary>
 /// The car-borne sounds the original's per-frame code asks for, beside the tyre sounds: the player's horn (from
 /// the key loop), the other cars' horns (the network bit 0x200000 and the AI's honk), the sirens of
-/// setSiren, the wind and the ramp thump. All are engsnd.dat's horn file or a fixed
+/// setSiren and of a police car's honk, the wind and the ramp thump. All are engsnd.dat's horn file or a fixed
 /// name, started through the voice rules of <see cref="Voice3D"/>. Called once a tick (and a frame, for a client).
 /// </summary>
 public sealed class CarVoices(SimDriver d)
@@ -85,20 +85,36 @@ public sealed class CarVoices(SimDriver d)
     }
 
     /// <summary>
-    /// setSiren: on, the car's horn file at the car (with no voice block, so the file's own
-    /// GAS0 header: mode 0, a one-shot of 0.5-1.8 s, not a loop); off, the car's voice of that file is stopped. Seen as the edges of Entity.Siren.
+    /// The sirens, the edges of Entity.Siren (setSiren, and the honk of a police car whose horn is the siren): on, the siren
+    /// (<see cref="VehicleFactory.SirenSound"/>) at the car with no voice settings, so the file's own GAS0 header decides: mode 1,
+    /// priority 60, two voices of it at once, so it loops until it is stopped. Off, the car's siren is stopped; so is it when the
+    /// car's death timer ends in a wreck (it wails through the 10 s the car burns).
     /// </summary>
     private void Sirens()
     {
-        if (d.Script?.Host.Entities is not { } entities) return;
+        if (d.Script?.Host.Entities is not { } entities || d.Audio is null) return;
+        const string file = VehicleFactory.SirenSound;
+        _sirenLoops ??= I76.Formats.Audio.SoundFiles.Loops(d.Audio.Vfs, file);
         foreach (var e in entities)
         {
             if (e.Vehicle is not { } v) continue;
-            bool was = _sirenWas.GetValueOrDefault(e);
-            if (e.Siren == was) continue;
-            _sirenWas[e] = e.Siren;
-            if (e.Siren) Once(_sirens, v, HornName(v), "Siren");
-            else if (_sirens.Remove(v, out var s) && Live(s)) { s.Stop(); s.QueueFree(); Voice3D.Trace($"stop Siren on {e.Name}"); }
+            bool on = e.Siren && !v.Wreck, was = _sirenWas.GetValueOrDefault(e);
+            if (on == was) continue;
+            _sirenWas[e] = on;
+            if (!on) { if (_sirens.Remove(v, out var s) && Live(s)) { s.Stop(); s.QueueFree(); Voice3D.Trace($"stop Siren on {e.Name}"); } }
+            else if (_sirenLoops != true) Once(_sirens, v, file, "Siren");
+            else if (d.Audio.Get(file, loop: true) is { } loop && d.Cars.FirstOrDefault(c => c.Sim == v) is { } car)
+            {
+                if (_sirens.Remove(v, out var old) && Live(old)) { old.Stop(); old.QueueFree(); }
+                var p = Voice3D.OneShot(loop, file, d.Audio.Limits(file));
+                p.Name = "Siren";
+                car.AddChild(p);
+                Voice3D.Trace($"start Siren ({file}, loop) on {e.Name}");
+                p.Start();
+                _sirens[v] = p;
+            }
         }
     }
+
+    private bool? _sirenLoops;
 }

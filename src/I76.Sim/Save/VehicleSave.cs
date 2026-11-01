@@ -23,7 +23,7 @@ public static class VehicleSave
                 nameof(Vehicle.HeightAboveGround), nameof(Vehicle.GroundHeight), nameof(Vehicle.Rec), nameof(Vehicle.Armory), nameof(Vehicle.Health),
                 nameof(Vehicle.Timer), nameof(Vehicle.Wreck), nameof(Vehicle.Arms), nameof(Vehicle.NetId), nameof(Vehicle.NetGeneration),
                 nameof(Vehicle.Heli), nameof(Vehicle.Emplacement), nameof(Vehicle.Paint))
-            .Structural(files, nameof(Vehicle.EngineNumber), nameof(Vehicle.Ignition), nameof(Vehicle.BoxX), nameof(Vehicle.BoxY), nameof(Vehicle.BoxZ),
+            .Structural(files, nameof(Vehicle.EngineNumber), nameof(Vehicle.Ignition), nameof(Vehicle.HornLoops), nameof(Vehicle.BoxX), nameof(Vehicle.BoxY), nameof(Vehicle.BoxZ),
                 nameof(Vehicle.Build), nameof(Vehicle.Loadout), nameof(Vehicle.ObjectClass), nameof(Vehicle.Definition));
         a.For<VehicleParams>().Saved(nameof(VehicleParams.Mass), nameof(VehicleParams.DriveScale), nameof(VehicleParams.SteerGain), nameof(VehicleParams.PivotForward),
             nameof(VehicleParams.Drag), nameof(VehicleParams.EngineScale), nameof(VehicleParams.YawRateLimit), nameof(VehicleParams.RideOffset),

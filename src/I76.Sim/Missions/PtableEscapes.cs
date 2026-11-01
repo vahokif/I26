@@ -136,8 +136,17 @@ public sealed partial class Ptable
         return hit;
     }
 
-    /// <summary>The car's engsnd.dat horn file as a positional one-shot (mode 0 in its GAS0 header); the view plays it from <see cref="VehicleStep.Honks"/>.</summary>
-    private void Horn(Entity e) { if (e.Vehicle is { } v) World.Step.Honks.Add(v); }
+    /// <summary>
+    /// The honk: the car's engsnd.dat horn file at the car with no voice settings, so its own GAS0 mode. A horn of mode 0 is a
+    /// positional one-shot, which the view plays from <see cref="VehicleStep.Honks"/>. The police car's aps2.wav is mode 1: it
+    /// loops, and only setSiren 0 or the car's wreck stops it, so the honk is the siren turned on (<see cref="Entity.Siren"/>).
+    /// </summary>
+    internal void Horn(Entity e)
+    {
+        if (e.Vehicle is not { } v) return;
+        if (v.HornLoops) e.Siren = true;
+        else World.Step.Honks.Add(v);
+    }
 
     /// <summary>Avoid clsn → back_away: sliding backward, or blocked in the gear direction.</summary>
     private bool AvoidToBackAway(Entity e, Entity? t) => !e.IsHeli && (SlidingBackward(e, t) || BlockedInGear(e));

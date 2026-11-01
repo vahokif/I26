@@ -54,7 +54,7 @@ public static class VehicleFactory
         int engNum = Bin.I32(d, p + 0x2a), suspId = Bin.I32(d, p + 0x2e), brakeId = Bin.I32(d, p + 0x32);
 
         int soundNum = bodySound && engNum is >= 0 and <= 3 && BodySoundRow(vfs, vdfName) is { } bodyRow ? bodyRow : engNum;
-        var v = new Vehicle { Definition = vcfName, EngineNumber = soundNum, Ignition = IgnitionFor(vfs, soundNum) };
+        var v = new Vehicle { Definition = vcfName, EngineNumber = soundNum, Ignition = IgnitionFor(vfs, soundNum), HornLoops = HornLoops(vfs, soundNum) };
         var vdf = new Bwd2File(vfs.Read(vdfName));
         var vdfc = vdf.First("VDFC")!.Value;
         v.ObjectClass = Bin.U32(vdf.Data, vdfc.PayloadOffset + 0x14);   // the VDFC chunk reader
@@ -243,6 +243,16 @@ public static class VehicleFactory
         }
         return null;
     }
+
+    /// <summary>
+    /// setSiren's sound, on whatever car the script names: the police siren, which loops (its GAS0 mode 1) until setSiren 0.
+    /// The 1997 CD build plays it; the 1998 build plays the car's own horn file instead, the siren only for engsnd.dat row 10,
+    /// so the trip's and the scenarios' own police variants, saved with a plain engine row, lost theirs (docs/deviations.md).
+    /// </summary>
+    public const string SirenSound = "aps2.wav";
+
+    /// <summary>Whether the horn file of an ENG NUM loops when started with no voice settings (its GAS0 mode): the police car's aps2.wav does.</summary>
+    public static bool HornLoops(AssetVfs vfs, int engNum) => HornSound(vfs, engNum) is { } horn && I76.Formats.Audio.SoundFiles.Loops(vfs, horn);
 
     /// <summary>engsnd.dat: "ENG NUM, ENG COMP ID, ..." per line.</summary>
     public static int EngineCompId(AssetVfs vfs, int engNum)

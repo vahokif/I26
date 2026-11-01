@@ -6,7 +6,7 @@ namespace I76.Game.Sim;
 /// <summary>
 /// The modern look's police light bar (the Sheriff's CP*1SIRN part; its faces are the animated CP11LBF1.TMT, three frames at
 /// 4 a second: red bright, blue bright, both dim, drawn unlit and always running, whatever setSiren says, which only plays
-/// the horn file). While the car is in view the bar's lamps take emissive red and blue that follow those frames, a flare
+/// the siren sound). While the car is in view the bar's lamps take emissive red and blue that follow those frames, a flare
 /// stands at each lamp, and at night the bar throws a red and a blue light on the ground and the car round it. Only the
 /// nearest few bars get real lights (<see cref="MaxLit"/>, no shadows); the rest keep the glow and the flares.
 /// Presentation only: nothing here reads or writes the sim. The 1997 look draws the bar's own texture, as the original does.

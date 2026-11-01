@@ -88,6 +88,52 @@ public class HorizonEdgeTests
         Assert.Contains("uniform sampler2D edge : filter_linear", src);
         Assert.Contains("for (int i = -EDGE_TAPS; i <= EDGE_TAPS; i++)", src);
         Assert.Contains("origin_xz", src);   // the distance is taken from the eye as it is now
+        // a custom map's: a tent over fixed bins, never the lowest of taps (which sawed a notch's panels into a zigzag)
+        Assert.Contains("for (int k = 1 - EDGE_SMOOTH; k <= EDGE_SMOOTH; k++)", src);
+        Assert.Contains("const int EDGE_SMOOTH = 3;", src);
+        Assert.Equal(3, HorizonEdge.SmoothBins);
+    }
+
+    /// <summary>
+    /// A player's canyon whose rim leaves a corner open: from 1.4 km down the strip one bearing's ground ends 63 m lower than the rest,
+    /// its foot 290 m lower, and the panels over it were sawn into a zigzag. The notch is closed over (a shallower dip, the rim's own
+    /// crest, is kept), and the foot the sky's shader draws changes smoothly from one screen column to the next, never running up and down.
+    /// </summary>
+    [Fact]
+    public void ACustomMapsNotchIsClosedOverAndItsFootIsSmooth()
+    {
+        var level = new HorizonEdge.Level(6.9f, HorizonEdge.CustomCap);
+        const float camY = 24f;
+        var dist = Enumerable.Repeat(1380f, HorizonEdge.Bins).ToArray();
+        var height = Enumerable.Repeat(100f, HorizonEdge.Bins).ToArray();
+        height[7] = 36.8f;                               // the open corner (canyonl3 seen from 3100, 50360)
+        for (int i = 100; i < 104; i++) height[i] = 90f; // a crest's dip, 70 m on the ring
+        var (fd, fh) = HorizonEdge.Follow(level, camY, dist, height);
+        float Foot(float[] d, float[] h, int i) => HorizonEdge.CustomFoot(level, camY, h[i], d[i]);
+        Assert.True(Foot(dist, height, 6) - Foot(dist, height, 7) > 250);
+        Assert.Equal(Foot(dist, height, 6), Foot(fd, fh, 7), 1);
+        Assert.Equal(Foot(dist, height, 101), Foot(fd, fh, 101), 1);
+        var ends = new (float X, float Z, float H)[HorizonEdge.Bins];
+        for (int i = 0; i < ends.Length; i++)
+        {
+            double a = (i + 0.5) / ends.Length * 2 * Math.PI;
+            ends[i] = ((float)(Math.Cos(a) * fd[i]), (float)(Math.Sin(a) * fd[i]), fh[i]);
+        }
+        double prev = double.NaN, prevStep = 0;
+        int turns = 0;
+        for (double deg = -10; deg <= 30; deg += 0.05)
+        {
+            double e = Math.Atan(HorizonEdge.FollowFoot(ends, level, 0, 0, camY, deg * Math.PI / 180) / HorizonList.Radius) * 180 / Math.PI;
+            if (!double.IsNaN(prev))
+            {
+                double step = e - prev;
+                Assert.True(Math.Abs(step) < 0.01, $"the foot moves {step:0.000} degrees in a column at {deg:0.00} degrees");
+                if (step * prevStep < 0 && Math.Abs(step) > 1e-4) turns++;
+                if (Math.Abs(step) > 1e-4) prevStep = step;
+            }
+            prev = e;
+        }
+        Assert.True(turns == 0, $"the foot turns {turns} times round the closed notch");
     }
 
     /// <summary>The sinking rule: a stock map keeps the original's (the foot 10.2 x the eye's height below it), a custom map's is counted from its lowest ground and held to 70 m, so a map on high ground keeps its mountains.</summary>

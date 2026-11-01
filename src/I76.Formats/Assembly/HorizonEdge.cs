@@ -74,6 +74,83 @@ public static class HorizonEdge
         return sink + (Math.Max(EndFoot(camY, endHeight, de), sink) - sink) * EndWeight(de);
     }
 
+    /// <summary>The widest notch in a custom map's foot that <see cref="Follow"/> closes over, in bins either side of its deepest: a gap a bin or few wide in a rim (a corner the rim leaves open, a cut a few metres wide).</summary>
+    public const int NotchBins = 2;
+
+    /// <summary>How much lower than all round it (metres at the ring's radius, about two degrees) a notch's foot must be to be closed over: shallower dips, the rim's own crests, are followed (closing them would stand the panels above the ground's real skyline there).</summary>
+    public const float NotchDepth = 200f;
+
+    /// <summary>How far round each bearing a custom map's foot is smoothed, in bins either side: the sky's shader weighs the bins within this many of a direction by a tent (<see cref="FollowFoot"/>).</summary>
+    public const int SmoothBins = 3;
+
+    /// <summary>
+    /// The ends a custom map's panels stand on, from the ends <see cref="Measure"/> found from an eye at <paramref name="camY"/>, bin by
+    /// bin and laid along the bin's own bearing. A map's ground can end a bin or few lower than all round it (a gap in a canyon's rim
+    /// a few metres wide, a corner it leaves open): the foot there (<see cref="CustomFoot"/>) drops by hundreds of metres for a degree,
+    /// and every column of the panels' texture, which the foot shifts, dropped with it; the old shader's lowest of taps half a degree
+    /// apart then ran up and down that dip, sawing the panels into a zigzag. Here a notch at most <see cref="NotchBins"/> bins either
+    /// side of its bottom and deeper than <see cref="NotchDepth"/> is closed over (the end of the highest of its sides is taken; the
+    /// rim the gap is cut in, standing in front of it, hides what lies beyond), and then the lowest end within <see cref="SmoothBins"/>
+    /// is taken, so that the shader's smoothing over that many bins never stands the panels above the ground's end.
+    /// </summary>
+    public static (float[] Distance, float[] Height) Follow(Level level, float camY, float[] dist, float[] height)
+    {
+        int n = dist.Length;
+        var foot = new float[n];
+        for (int i = 0; i < n; i++) foot[i] = CustomFoot(level, camY, height[i], dist[i]);
+        // a closing over NotchBins (the lowest of the highest), kept only where it fills a notch deeper than NotchDepth;
+        // then the lowest within SmoothBins (each as the index of the end it takes)
+        var up = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            int best = i;
+            for (int k = -NotchBins; k <= NotchBins; k++) { int j = ((i + k) % n + n) % n; if (foot[j] > foot[best]) best = j; }
+            up[i] = best;
+        }
+        var fill = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            int best = up[i];
+            for (int k = -NotchBins; k <= NotchBins; k++) { int j = up[((i + k) % n + n) % n]; if (foot[j] < foot[best]) best = j; }
+            fill[i] = foot[best] - foot[i] > NotchDepth ? best : i;
+        }
+        var d = new float[n];
+        var h = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            int best = fill[i];
+            for (int k = -SmoothBins; k <= SmoothBins; k++) { int j = fill[((i + k) % n + n) % n]; if (foot[j] < foot[best]) best = j; }
+            d[i] = dist[best];
+            h[i] = height[best];
+        }
+        return (d, h);
+    }
+
+    /// <summary>
+    /// A custom map's panel foot along <paramref name="azimuth"/> (radians from game +X toward +Z) for an eye at (<paramref name="x"/>,
+    /// <paramref name="camY"/>, <paramref name="z"/>), from the ends <see cref="Follow"/> made as points (game x, z and height; bin i
+    /// along (i + 0.5)/Bins · 360°): the bins' feet from the eye as it is now, weighed by a tent <see cref="SmoothBins"/> bins either
+    /// side of the azimuth (the sky's shader). The weights move smoothly with the azimuth over fixed bins, so the foot is a smooth
+    /// function of the bearing: the panels' texture, mapped from it, keeps its columns together.
+    /// </summary>
+    public static float FollowFoot(ReadOnlySpan<(float X, float Z, float H)> ends, Level level, double x, double z, float camY, double azimuth)
+    {
+        int n = ends.Length;
+        double f = azimuth / (2 * Math.PI) * n - 0.5;
+        int j0 = (int)Math.Floor(f);
+        float t = (float)(f - j0), sum = 0, weights = 0;
+        for (int k = 1 - SmoothBins; k <= SmoothBins; k++)
+        {
+            float w = SmoothBins - Math.Abs(k - t);
+            if (w <= 0) continue;
+            var e = ends[((j0 + k) % n + n) % n];
+            float de = MathF.Sqrt((float)((e.X - x) * (e.X - x) + (e.Z - z) * (e.Z - z)));
+            sum += w * CustomFoot(level, camY, e.H, de);
+            weights += w;
+        }
+        return sum / weights;
+    }
+
     /// <summary>How far the eye moves before the ends are measured again: the table is read by the azimuth from the eye as it is now, so the farther the eye has moved from where it measured, the more a near end's bearing is off (a stock map's ends lie beyond the clip, where 60 m is a fraction of a degree).</summary>
     public const float Remeasure = 60f;
     /// <summary>The same for a custom map, whose ends may lie a few hundred metres off (a canyon's walls): a measure takes a few milliseconds.</summary>

@@ -57,39 +57,34 @@ public class HorizonEverywhereTests(ITestOutputHelper log) : IDisposable
     private const int Az = 720;   // azimuths looked along, half a degree apart
 
     /// <summary>
-    /// The 1997 look's panel foot for an eye at (x, z), as the sky shader finds it for each azimuth (HorizonEdge's formulas: the end of
-    /// the ground a bearing meets, filtered between bearings, the lowest foot within three degrees; the sinking rule when the end lies inside
-    /// the clip): its height relative to the eye at the ring's radius. <paramref name="ends"/> are measured from where the eye was when
-    /// the game last measured (every HorizonEdge.RemeasureCustom metres of driving), the eye's own place at each frame.
+    /// The ends the game hands the 1997 look's sky for an eye at (x, z), as points (game x, z, height): measured from there, a custom
+    /// map's every end at any distance, its narrow notches closed over (HorizonEdge.Follow, at the eye's height there).
     /// </summary>
-    private static float[] Feet(MissionWorld w, HorizonEdge.Level level, (float[] Dist, float[] Height) ends, double mx, double mz, double x, double z, float camY)
+    private static (float X, float Z, float H)[] Ends(MissionWorld w, HorizonEdge.Level level, double x, double z)
     {
-        int n = HorizonEdge.Bins;
-        var pts = new (float X, float Z, float H, float A)[n];
+        float camY = (float)w.GroundHeight(x, z) + 3f;
+        var (dist, height) = HorizonEdge.Measure(w, x, z, inClip: true);
+        (dist, height) = HorizonEdge.Follow(level, camY, dist, height);
+        int n = dist.Length;
+        var pts = new (float X, float Z, float H)[n];
         for (int i = 0; i < n; i++)
         {
             double a = (i + 0.5) / n * Math.PI * 2;
-            pts[i] = ((float)(mx + Math.Cos(a) * ends.Dist[i]), (float)(mz + Math.Sin(a) * ends.Dist[i]), ends.Height[i], 2f);   // a custom map's ends count at any distance
+            pts[i] = ((float)(x + Math.Cos(a) * dist[i]), (float)(z + Math.Sin(a) * dist[i]), height[i]);
         }
-        float Foot(double azimuth, int tap)
-        {
-            double u = azimuth / (Math.PI * 2) + tap * 0.5 / 360.0;
-            u -= Math.Floor(u);
-            double f = u * n - 0.5; int i0 = (int)Math.Floor(f); double t = f - i0;
-            var p = pts[(i0 % n + n) % n]; var q = pts[((i0 + 1) % n + n) % n];
-            float px = (float)(p.X + (q.X - p.X) * t), pz = (float)(p.Z + (q.Z - p.Z) * t), ph = (float)(p.H + (q.H - p.H) * t), pa = (float)(p.A + (q.A - p.A) * t);
-            float de = MathF.Sqrt((float)((px - x) * (px - x) + (pz - z) * (pz - z)));
-            return pa > 1.5f ? HorizonEdge.CustomFoot(level, camY, ph, de)
-                : pa > 0.5f && de > HorizonEdge.Clip ? HorizonEdge.EndFoot(camY, ph, de) : HorizonEdge.Foot(level, camY);
-        }
-        var feet = new float[Az];
-        for (int k = 0; k < Az; k++)
-        {
-            double a = (k + 0.5) / Az * Math.PI * 2;
-            float low = float.MaxValue;
-            for (int tap = -6; tap <= 6; tap++) low = MathF.Min(low, Foot(a, tap));
-            feet[k] = low;
-        }
+        return pts;
+    }
+
+    /// <summary>
+    /// The 1997 look's panel foot for an eye at (x, z), as the sky shader finds it for each azimuth (HorizonEdge.FollowFoot: each bin's
+    /// foot from the eye as it is now, smoothed over the bearings round it): its height relative to the eye at the ring's radius.
+    /// <paramref name="ends"/> are the points the game made where the eye was when it last measured (every HorizonEdge.RemeasureCustom
+    /// metres of driving).
+    /// </summary>
+    private static float[] Feet(HorizonEdge.Level level, (float X, float Z, float H)[] ends, double x, double z, float camY, int az = Az, double from = 0, double span = Math.PI * 2)
+    {
+        var feet = new float[az];
+        for (int k = 0; k < az; k++) feet[k] = HorizonEdge.FollowFoot(ends, level, x, z, camY, from + (k + 0.5) / az * span);
         return feet;
     }
 
@@ -155,8 +150,8 @@ public class HorizonEverywhereTests(ITestOutputHelper log) : IDisposable
             {
                 eyeNo++;
                 float camY = (float)w.GroundHeight(x, z) + 3f;
-                var ends = HorizonEdge.Measure(w, x, z, inClip: true);
-                var feet = Feet(w, level, ends, x, z, x, z, camY);
+                var ends = Ends(w, level, x, z);
+                var feet = Feet(level, ends, x, z, camY);
                 // present: the panels' tops stand over the horizon (more than a degree) on nearly every azimuth
                 int up = 0;
                 for (int k = 0; k < Az; k++) if (Deg(Math.Atan((feet[k] + HorizonList.PanelHeight) / HorizonList.Radius)) > 1.0) up++;
@@ -179,9 +174,9 @@ public class HorizonEverywhereTests(ITestOutputHelper log) : IDisposable
                     {
                         double ex = x + ax * 10 * step, ez = z + az * 10 * step;
                         if (w.Terrain.Sample(MissionWorld.ToSample(ex), MissionWorld.ToSample(ez)) is null) break;
-                        if (Math.Sqrt((ex - mx) * (ex - mx) + (ez - mz) * (ez - mz)) >= HorizonEdge.RemeasureCustom) { held = HorizonEdge.Measure(w, ex, ez, inClip: true); mx = ex; mz = ez; }
+                        if (Math.Sqrt((ex - mx) * (ex - mx) + (ez - mz) * (ez - mz)) >= HorizonEdge.RemeasureCustom) { held = Ends(w, level, ex, ez); mx = ex; mz = ez; }
                         float cy = (float)w.GroundHeight(ex, ez) + 3f;
-                        var now = Feet(w, level, held, mx, mz, ex, ez, cy);
+                        var now = Feet(level, held, ex, ez, cy);
                         var nowSil = Skyline(w, ex, ez, cy);
                         for (int k = 0; k < Az; k++)
                         {
@@ -203,6 +198,56 @@ public class HorizonEverywhereTests(ITestOutputHelper log) : IDisposable
             if (worstTeeth > 0.6) problems.Add($"{label}: neighbouring azimuths' feet differ by {worstTeeth:0.00} degrees (teeth)");
             if (worstStep > 0.3) problems.Add($"{label}: a 10 m drive moves a foot by {worstStep:0.00} degrees (popping)");
             if (ringTop < 6) problems.Add($"{label}: the modern ring's peaks reach only {ringTop:0.0} degrees over the horizon");
+        }
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// A player's canyon map looked at down its length, as from the car: the 1997 look's panels over the far end were drawn sawn
+    /// into a zigzag a few degrees wide, the panel's texture shifted up and down column by column. Their foot followed a table of where
+    /// the ground ends, bin by bin, and a bin or two where it ends lower (a gap in the rim, an open corner) dropped it by hundreds of
+    /// metres, the rim's crests by tens; the lowest of taps half a degree apart then ran up and down each dip every half degree. From eyes along the strip, looking along it over the chase view's width, the foot must change by no
+    /// more than a few hundredths of a degree from one screen column (0.05 degrees of bearing) to the next, and never run up and down
+    /// within a degree.
+    /// </summary>
+    [InstallFact]
+    public void TheCanyonsPanelsKeepTheirColumnsTogetherDownItsLength()
+    {
+        const int Cols = 2000;                  // 100 degrees of bearing, about a 1440-pixel-wide chase view's
+        const double Span = 100, Window = 1;    // degrees
+        var problems = new List<string>();
+        foreach (var gaps in new[] { false, true })
+        {
+            var w = Load(EditorMaps.CanyonMap(_dir, gaps ? "canyongp" : "canyon", 5, gaps));
+            string label = gaps ? "canyon strip, gaps in its rim" : "canyon strip";
+            var level = HorizonEdge.LevelOf(w);
+            var (r0, r1, c0, c1) = w.Terrain.Bounds();
+            double x0 = c0 * 640, x1 = (c1 + 1) * 640, z0 = r0 * 640, z1 = (r1 + 1) * 640;
+            double worstStep = 0, worstZig = 0; string at = "";
+            foreach (double fx in new[] { 0.06, 0.12, 0.25, 0.5, 0.75, 0.88, 0.94 })
+                foreach (double fz in new[] { 0.25, 0.5, 0.75 })
+                {
+                    double x = x0 + fx * (x1 - x0), z = z0 + fz * (z1 - z0);
+                    float camY = (float)w.GroundHeight(x, z) + 3f;
+                    double axis = fx <= 0.5 ? 0 : Math.PI;   // down the longer way
+                    var feet = Feet(level, Ends(w, level, x, z), x, z, camY, Cols, axis - Span / 2 * Math.PI / 180, Span * Math.PI / 180);
+                    var e = feet.Select(f => Deg(Math.Atan(f / HorizonList.Radius))).ToArray();
+                    for (int k = 0; k + 1 < Cols; k++)
+                        if (Math.Abs(e[k + 1] - e[k]) > worstStep) { worstStep = Math.Abs(e[k + 1] - e[k]); at = $"({x:0}, {z:0}) {Deg(axis) - Span / 2 + (k + 1) * Span / Cols:0.00} deg"; }
+                    // up and down within a window: the way travelled less the way gone
+                    int win = (int)(Window / Span * Cols);
+                    for (int k = 0; k + win < Cols; k++)
+                    {
+                        double tv = 0;
+                        for (int j = k; j < k + win; j++) tv += Math.Abs(e[j + 1] - e[j]);
+                        worstZig = Math.Max(worstZig, tv - Math.Abs(e[k + win] - e[k]));
+                    }
+                }
+            log.WriteLine($"{label,-32} worst column step {worstStep:0.000} deg at {at}, worst run up and down within {Window} deg {worstZig:0.000} deg");
+            // (a wall close by sends the foot up steeply but smoothly: a column's step stays under 0.06 there; the zigzag's were up to 1.2 degrees,
+            // and it ran up and down by 17 degrees within a degree beside a gap in the rim, half a degree to a degree without one)
+            if (worstStep > 0.08) problems.Add($"{label}: the foot moves {worstStep:0.000} degrees from one column to the next at {at}");
+            if (worstZig > 0.2) problems.Add($"{label}: the foot runs up and down {worstZig:0.000} degrees within a degree of bearing");
         }
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }

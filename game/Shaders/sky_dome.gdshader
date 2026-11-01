@@ -38,7 +38,7 @@ uniform float horizon_height = 1170.6;
 uniform float far_clip = 600.0;
 // Far draw distance (the 1997 look): the ground runs on past the clip to where the map's data ends, so the ring's foot
 // meets that end, bearing by bearing: RG = the end's game x and z, B = the ground's game height there, A = 1 where it
-// lies past the clip (2: a custom map's, at any distance); 360 bins from game +X toward +Z, as seen from where they were measured
+// lies past the clip (2 in every bin: a custom map's, at any distance); 360 bins from game +X toward +Z, as seen from where they were measured
 uniform bool has_edge = false;
 uniform sampler2D edge : filter_linear, repeat_enable;
 uniform float sink_low = 0.0;      // HorizonEdge.Level: the ground height the sinking counts from (0 for a stock map)
@@ -57,6 +57,8 @@ uniform float band_top = 130.0;
 // the edge's smoothing: the bearings within EDGE_TAPS * EDGE_STEP of the view's (3 degrees)
 const int EDGE_TAPS = 6;
 const float EDGE_STEP = 0.5 / 360.0;
+// a custom map's: a tent over the bins within EDGE_SMOOTH of the view's bearing (HorizonEdge.SmoothBins, FollowFoot)
+const int EDGE_SMOOTH = 3;
 vec4 point_fetch(sampler2D s, vec2 uv) {
 	ivec2 sz = textureSize(s, 0);
 	ivec2 p = ivec2(floor(uv * vec2(sz)));
@@ -114,22 +116,42 @@ void sky() {
 			float foot = sink_low - ((radius - 0.8 * far_clip) / far_clip) * min(cam_y - sink_low, sink_cap) - cam_y;   // relative to the eye (HorizonEdge.Foot)
 			if (has_edge) {
 				// the same formula for the end's distance (from the eye as it is now, so the foot moves with it rather than
-				// jumping when the ends are measured again) and height; the ends filtered between bins, and the lowest foot
-				// of the bearings round this one, so the panels run smoothly along the ground's end and never stand above it
+				// jumping when the ends are measured again) and height; a stock map's ends filtered between bins, and the lowest
+				// foot of the bearings round this one, so the panels run smoothly along the ground's end and never stand above it.
+				// The foot only shifts the panel: its texture keeps its height (horizon_height) whatever the foot
 				vec2 eye = vec2(POSITION.x, -POSITION.z) + origin_xz;
 				float u0 = atan(g.z, g.x) / 6.2831853;
-				float lowest = 1e9;
-				for (int i = -EDGE_TAPS; i <= EDGE_TAPS; i++) {
-					vec4 e = texture(edge, vec2(u0 + float(i) * EDGE_STEP, 0.5));
-					float de = max(length(e.rg - eye), 10.0);   // HorizonEdge.MinEnd
-					float end_foot = -(cam_y - e.b) * (radius + 0.2 * de) / de;
-					// a custom map's end counts at any distance but never takes the panels below the sinking rule's foot (an end just under
-					// the eye, a plateau's edge, would sink them out of sight), and not at all from an end a few metres off, where the
-					// slightest slope of the ground's edge swings the foot by degrees (HorizonEdge.EndWeight): so the foot follows the
-					// ends smoothly, the higher of the two
-					lowest = min(lowest, e.a > 1.5 ? mix(foot, max(end_foot, foot), smoothstep(100.0, 250.0, de)) : e.a > 0.5 && de > far_clip ? end_foot : foot);
+				ivec2 bins = textureSize(edge, 0);
+				if (texelFetch(edge, ivec2(0), 0).a > 1.5) {
+					// a custom map's ends (HorizonEdge.Follow: its narrow dips closed over, the lowest round each bin), each bin's foot
+					// weighed by a tent round this bearing (HorizonEdge.FollowFoot): the weights move smoothly over fixed bins, so the foot
+					// does too, and the panel's columns, shifted by it, keep together. An end counts at any distance but never takes the
+					// panels below the sinking rule's foot (an end just under the eye, a plateau's edge, would sink them out of sight), and
+					// not at all from an end a few metres off, where the slightest slope of the ground's edge swings the foot by degrees
+					// (HorizonEdge.CustomFoot, EndWeight)
+					float f = fract(u0) * float(bins.x) - 0.5;   // bin i is centred on (i + 0.5) / bins
+					float j0 = floor(f), t = f - j0, sum = 0.0, weights = 0.0;
+					for (int k = 1 - EDGE_SMOOTH; k <= EDGE_SMOOTH; k++) {
+						float w = float(EDGE_SMOOTH) - abs(float(k) - t);
+						if (w <= 0.0) continue;
+						int j = (int(j0) + k + bins.x) % bins.x;   // j0 lies in -1 .. bins - 1
+						vec4 e = texelFetch(edge, ivec2(j, 0), 0);
+						float de = max(length(e.rg - eye), 10.0);   // HorizonEdge.MinEnd
+						float end_foot = -(cam_y - e.b) * (radius + 0.2 * de) / de;
+						sum += w * mix(foot, max(end_foot, foot), smoothstep(100.0, 250.0, de));
+						weights += w;
+					}
+					foot = sum / weights;
+				} else {
+					float lowest = 1e9;
+					for (int i = -EDGE_TAPS; i <= EDGE_TAPS; i++) {
+						vec4 e = texture(edge, vec2(u0 + float(i) * EDGE_STEP, 0.5));
+						float de = max(length(e.rg - eye), 10.0);   // HorizonEdge.MinEnd
+						float end_foot = -(cam_y - e.b) * (radius + 0.2 * de) / de;
+						lowest = min(lowest, e.a > 0.5 && de > far_clip ? end_foot : foot);
+					}
+					foot = lowest;
 				}
-				foot = lowest;
 			}
 			float v = (h - foot) / horizon_height;
 			if (v >= 0.0 && v <= 1.0) {

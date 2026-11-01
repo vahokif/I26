@@ -25,9 +25,11 @@ public static class EditorMaps
     /// <summary>
     /// A strip of <paramref name="tiles"/> x 1 tiles shaped like a player's canyon map: a rim 100 m and more high, uneven, round the map's edge, a basin of
     /// 10 to 60 m inside it with a ridge across the middle, so that from most places the ground ends a few hundred metres off on two sides
-    /// (inside the original's 600 m clip) and kilometres off along the strip, at a height that is well above the eye.
+    /// (inside the original's 600 m clip) and kilometres off along the strip, at a height that is well above the eye. With
+    /// <paramref name="gaps"/> the rim's outer edge has gaps, as a player's canyon can: a corner left open and notches a sample or two
+    /// wide along the long sides, where the ground ends at the basin's height a bearing or two from where it ends on the rim.
     /// </summary>
-    public static string CanyonMap(string dir, string name, int tiles)
+    public static string CanyonMap(string dir, string name, int tiles, bool gaps = false)
     {
         int w = tiles * 128, h = 128;
         var project = MapProject.CreateBlank(name, name, ".lvl", tiles, 1, 400);
@@ -41,6 +43,8 @@ public static class EditorMaps
                 double bump = 450 * Math.Exp(-Math.Pow((sz - 64) / 12.0, 2)) * (0.5 + 0.5 * Math.Cos(sx / 28.0));   // a ridge across the strip, with gaps
                 double rimTop = 1100 + 140 * Math.Sin(sx / 9.0 + sz / 5.0) * Math.Cos(sx / 31.0);   // a rim that is not level: 96 to 124 m
                 double v = rimTop * (1 - rim * rim * (3 - 2 * rim)) + (basin + bump) * (rim * rim * (3 - 2 * rim));
+                bool notch = edge <= 2 && ((sx >= w - 4 && sz >= h - 4) || ((sz <= 2 || sz >= h - 3) && sx % 71 is 30 or 31));
+                if (gaps && notch) v = basin;
                 project.Terrain.SetHeight(c0 * 128 + sx, r0 * 128 + sz, (int)Math.Clamp(v, 0, 4095));
             }
         var b = project.WorldBounds();

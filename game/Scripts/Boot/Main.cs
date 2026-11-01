@@ -1935,6 +1935,8 @@ public partial class Main : Node3D
         if (!float.IsNaN(_edgeAt.X) && System.Numerics.Vector2.Distance(here, _edgeAt) < (custom ? I76.Formats.Assembly.HorizonEdge.RemeasureCustom : I76.Formats.Assembly.HorizonEdge.Remeasure)) return;
         _edgeAt = here;
         var (dist, height) = I76.Formats.Assembly.HorizonEdge.Measure(_builder!.World!, g.X, g.Z, custom);
+        // a custom map's: its narrow, deep notches (a gap in a rim) closed over and the lowest end round each bin taken, which the shader smooths over the bearings
+        if (custom) (dist, height) = I76.Formats.Assembly.HorizonEdge.Follow(I76.Formats.Assembly.HorizonEdge.LevelOf(_builder!.World!), g.Y, dist, height);
         // each end as a point (game x, z, the ground's height there), and whether it lies past the clip (where the
         // shader's foot formula takes it; 2: at any distance); a bearing with no end keeps the farthest point measured
         var img = Image.CreateEmpty(dist.Length, 1, false, Image.Format.Rgbaf);

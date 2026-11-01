@@ -147,6 +147,7 @@ public partial class Shell : CanvasLayer
     public ShellDatabase Db { get; private set; } = null!;
     public ShellFrame Frame { get; } = new();
     private Label? _build;
+    private Control? _updateLink;
     public TripState Trip { get; private set; } = null!;
     public ShellSettings Settings { get; private set; } = null!;
     private I76.Formats.Vfs.AssetVfs? _vfs;
@@ -319,6 +320,8 @@ public partial class Shell : CanvasLayer
         _build.GrowHorizontal = Control.GrowDirection.Begin;
         _build.OffsetLeft = -300; _build.OffsetRight = -6; _build.OffsetTop = -20; _build.OffsetBottom = -4;
         AddChild(_build);
+        AddChild(_updateLink = I76.Game.Boot.UpdateNotice.Link());
+        I76.Game.Boot.UpdateNotice.Start(this);
         AddChild(_sfx = new AudioStreamPlayer { Name = "Click" });
         AddChild(_voice = new AudioStreamPlayer { Name = "Voice" });
         AddChild(_music = new AudioStreamPlayer { Name = "Music", VolumeDb = -8 });
@@ -834,6 +837,7 @@ public partial class Shell : CanvasLayer
         // the labels only over the screen that owns them: a pop-up or an overlay shows the sprites beneath
         if (Impact is not null) Impact.Visible = _modal is null && _overlay is null;
         if (_build is not null) _build.Visible = _screen is MainMenuScreen && _modal is null && _overlay is null;
+        if (_updateLink is not null) _updateLink.Visible = _build?.Visible == true && I76.Game.Boot.UpdateNotice.Line is not null;
         // a screen over a 3D view of its own (the garage): the frame is see-through where it is still the background, and opaque where the screen says
         bool seeThrough = _screen is { TransparentFrame: true };
         Frame.Transparent = Upscaled || seeThrough;
@@ -1163,6 +1167,8 @@ public sealed class ShellSettings
     public bool HiddenContent { get; set; }
     /// <summary>The port's own: Unlim. Turrets (Play Options, second page; off, as the original): any number of turrets on a car, each on a roof mount (docs/deviations.md).</summary>
     public bool UnlimTurrets { get; set; }
+    /// <summary>The port's own: Check for Updates (Play Options, second page; shell.cfg [port] update_check, written only when off). On: each start asks GitHub, once, whether a newer release exists and says so under the version in the corner.</summary>
+    public bool UpdateCheck { get; set; } = true;
     /// <summary>The port's own: Graphic Detail's Log File (user://logs/godot.log; off). Godot reads it at start, so a change shows from the next start (<see cref="I76.Game.Boot.LogFile"/>).</summary>
     public bool LogFile { get; set; }
     /// <summary>The port's own: Graphic Detail's Renderer (Auto, Vulkan, D3D12, OpenGL; shell.cfg [port] renderer, written only when not Auto). Godot reads it at start, so a change shows from the next start (<see cref="I76.Game.Boot.StartupSettings"/>).</summary>
@@ -1245,6 +1251,7 @@ public sealed class ShellSettings
         // no version step: absent, it is off, the stock game
         s.HiddenContent = (bool)c.GetValue("port", "hidden_content", false);
         s.UnlimTurrets = (bool)c.GetValue("port", "unlim_turrets", false) || System.Environment.GetEnvironmentVariable("I76_UNLIM_TURRETS") == "1";
+        s.UpdateCheck = (bool)c.GetValue("port", "update_check", true);
         s.CoopOwnCar = (bool)c.GetValue("port", "coop_own_car", true);
         // no version step: absent, the 3D garage is on
         s.Garage3D = (bool)c.GetValue("port", "garage_3d", true);
@@ -1304,6 +1311,7 @@ public sealed class ShellSettings
         if (CbMic.Length > 0) c.SetValue("port", "cb_mic", CbMic);
         if (HiddenContent) c.SetValue("port", "hidden_content", true);
         if (UnlimTurrets) c.SetValue("port", "unlim_turrets", true);
+        if (!UpdateCheck) c.SetValue("port", "update_check", false);
         if (!CoopOwnCar) c.SetValue("port", "coop_own_car", false);
         if (!Garage3D) c.SetValue("port", "garage_3d", false);
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);

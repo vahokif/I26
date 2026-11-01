@@ -187,6 +187,8 @@ public partial class GameChooser : CanvasLayer
         build.GrowHorizontal = Control.GrowDirection.Begin;
         build.OffsetLeft = -300; build.OffsetRight = -6; build.OffsetTop = -20; build.OffsetBottom = -4;
         _root.AddChild(build);
+        _root.AddChild(UpdateNotice.Link());
+        UpdateNotice.Start(_root);
         pick?.CallDeferred(Control.MethodName.GrabFocus);
     }
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### New
+- I26 tells you when a newer release is out: at start-up it quietly checks GitHub and shows "version X available" under the version in the corner of the game chooser and the main menu (click it to open the release page). Play Options (second page) has a Check for Updates row to turn it off (#138).
+
 ### Fixed
 - Map editor: the 2 m wood ramp is placed the right way round on a road, climbing along the road instead of lying across it.
 - Co-op: a gun emplacement that has been shot down now keeps its burnt shape as a solid obstacle for the other players' cars too (and for players who join afterwards), so a client no longer collides with the intact gun and gets snapped back.

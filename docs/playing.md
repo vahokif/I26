@@ -53,6 +53,8 @@ location between runs; an old `[install]` entry in `settings.cfg` is ignored.
 `%APPDATA%\I26\` on Windows. Delete it to start from scratch. The first run copies
 the settings and saves of the older "Interstate '76 (Godot)" folder if there is one.
 
+**Update check.** At every start I26 asks GitHub (one request, nothing about you or your machine is sent) whether a newer release exists and, if so, shows "version X available" under the version in the corner of the chooser and the main menu; click it to open the release page. Options > Play Options (second page) > Check for Updates turns it off, and then nothing is requested. A build run from source never asks.
+
 **Log file.** Off by default, so it cannot grow. For a bug report, start the game once with `--log` (or the environment
 variable `I76_LOG=1`) and attach `logs/godot.log` from the user folder (the last three runs' logs are kept as
 `logs/godot<date>.log`); Graphic Detail's Log (restart) switch keeps it on for every start. Logs from older versions

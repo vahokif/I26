@@ -19,7 +19,10 @@ public sealed partial class MeleeGame
             .Structural("the arena's points, from the mission file", nameof(Spawns), nameof(Regens), nameof(TeamSpawns), nameof(Checkpoints))
             .Structural("the mission build's world, host, rand stream and car factory, and the session's roster and rules",
                 nameof(World), nameof(Host), nameof(Rand), nameof(Build), nameof(Roster), nameof(PlayerCar), nameof(Rules), nameof(Explode))
-            .Transient("the host's hooks", nameof(Message), nameof(LapCounted), nameof(Spawned), nameof(Removed), nameof(PlayerRenewed));
+            .Transient("the host's hooks", nameof(Message), nameof(LapCounted), nameof(Spawned), nameof(Removed), nameof(PlayerRenewed), nameof(Landed))
+            .Derived("the map's ramps and what they do to the bots' cars, flown again from the map and the cars (a pure function of them)", nameof(_jumps), nameof(_jumpDt))
+            .Structural("the host's switch for bots on ramps", nameof(BotsJump))
+            .Transient("the ramp search's counters, for logs and tests, and its once-a-frame limit", nameof(Plans), nameof(PlanMilliseconds), nameof(JumpsCommitted), nameof(JumpsGivenUp), nameof(_plansThisFrame));
         a.For<MeleePlayer>()
             .Saved(nameof(MeleePlayer.Brain))
             .Saved(nameof(MeleePlayer.Car), nameof(MeleePlayer.Entity), nameof(MeleePlayer.CarFile), nameof(MeleePlayer.Name), nameof(MeleePlayer.Score),

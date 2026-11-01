@@ -5,5 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../I76.Formats/I76.Formats.csproj" />
+    <ProjectReference Include="../I76.Editor/I76.Editor.csproj" />
   </ItemGroup>
 </Project>

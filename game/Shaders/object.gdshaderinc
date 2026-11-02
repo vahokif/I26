@@ -39,10 +39,7 @@ uniform bool has_maps = false;
 uniform bool has_normal = false;
 uniform bool car_paint = false;    // a car without maps: clear-coated paint all over
 uniform bool wheel_face = false;   // with car_paint: a wheel's face, where the tyre's rubber is matte and only the hubcap keeps the shine
-uniform bool has_table = false;   // with car_paint: the car material table lists this texture: orm_tex holds its per-texel finish (roughness, metallic, clear coat, specular) from the presets
 uniform bool normals_debug = false;   // I76_CAR_NORMALS_VIEW=1: the car's world-space shading normal as colour, unlit
-uniform bool table_debug = false;  // the review view (I76_CAR_MATERIAL_IDS): each texel in its preset's false colour
-uniform sampler2D table_ids : source_color, filter_nearest;
 uniform bool tread = false;        // the modern look's round wheel's tread band: rubber with a tread pattern (UV: u = blocks round the tyre, v = 0..1 across it; v > 1.5 plain rubber)
 // a face without maps (a flat colour, the cockpit's): one material over it
 uniform float base_roughness = 0.9;
@@ -89,7 +86,7 @@ varying flat vec4 v_cab_a;
 varying flat vec4 v_cab_b;
 varying flat vec4 v_eye;   // the F1 view's eye in the mesh's frame (w 1), CUSTOM2: where the driver sits
 varying vec3 v_cam_l;
-global uniform bool i76_car_materials;   // Ctrl+F8 (a debug key): off, every car back to the all-over clear coat, no glass (to compare)
+global uniform bool i76_car_materials;   // Ctrl+F8 (a debug key): off, every car without its glass (to compare)
 global uniform bool i76_car_interiors;   // Graphic Detail's Car Interiors: the proxy cabin and driver behind the glass (off: the glass alone)
 uniform bool has_glass = false;    // with car_paint: glass_tex marks the window texels (CarMaterialTable's glass, MaterialLibrary.GlassOf)
 uniform sampler2D glass_tex : source_color, hint_default_black, filter_linear_mipmap;   // rgb the glass's own colour (blurred), a the soft mask
@@ -554,23 +551,8 @@ void fragment() {
 		ROUGHNESS = mix(ROUGHNESS, 0.9, pf_matte);
 		SPECULAR = mix(SPECULAR, 0.2, pf_matte);
 		CLEARCOAT = mix(CLEARCOAT, 0.0, pf_matte);
-		if (has_table && i76_car_materials) {
-			// the table's finish per texel; the faces turned to the ground lose their coat and gloss as above (by the coat each texel has)
-			vec4 tm = texture(orm_tex, UV);
-			float tu = under * tm.b;
-			ROUGHNESS = mix(tm.r, max(tm.r, 0.85), tu);
-			SPECULAR = mix(tm.a, min(tm.a, 0.2), tu);
-			CLEARCOAT = tm.b * (1.0 - under);
-			METALLIC = max(tm.g, pf_metal * 0.75);
-			// a respray's finish, where the table says paint (the mask is zero elsewhere)
-			ROUGHNESS = mix(ROUGHNESS, 0.3, pf_metal);
-			ROUGHNESS = mix(ROUGHNESS, 0.9, pf_matte);
-			SPECULAR = mix(SPECULAR, 0.2, pf_matte);
-			CLEARCOAT = mix(CLEARCOAT, 0.0, pf_matte);
-			if (table_debug) { ALBEDO = texture(table_ids, UV).rgb * (0.55 + 0.45 * dot(c.rgb, vec3(0.333))); EMISSION = ALBEDO * 0.4; CLEARCOAT = 0.0; }
-		}
 		if (normals_debug) { ALBEDO = vec3(0.0); EMISSION = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz * 0.5 + 0.5; ROUGHNESS = 1.0; SPECULAR = 0.0; CLEARCOAT = 0.0; }
-		if (has_glass && i76_car_materials && !table_debug && v_cab_a.w > 0.5) {
+		if (has_glass && i76_car_materials && v_cab_a.w > 0.5) {
 			vec4 gt = texture(glass_tex, UV);
 			float gm = gt.a;
 			float g = clamp((gm - 0.5) / max(fwidth(gm), 1e-3) + 0.5, 0.0, 1.0);   // the windows' polygons (GlassShape) cut at their edge, antialiased over a pixel
@@ -610,7 +592,7 @@ void fragment() {
 				CLEARCOAT_ROUGHNESS = 0.03;
 			}
 		}
-		if (wheel_face && !has_table) {
+		if (wheel_face) {
 			// the tyre's rubber (the dark, grey texels) is matte; the hubcap's bright metal keeps a satin sheen
 			float metal = smoothstep(0.07, 0.22, dot(c.rgb, vec3(0.299, 0.587, 0.114)));
 			ROUGHNESS = mix(0.95, 0.38, metal);

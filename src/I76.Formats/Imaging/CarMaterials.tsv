@@ -1,65 +1,27 @@
-# The modern look's car materials, by hand: which finish each part of each car texture has.
+# The modern look's car windows, by hand: the fixes to where the segmentation (CarMasks.bin) put a car texture's windows.
 #
 # One row per line, tab-separated:   TEXTURE   PRESET   [RECT]   [COLOURS]
 #   TEXTURE  a texture's name without folder or extension (CM11MDL1), ? for one character, * for any run. Cars' paint schemes
-#            number their textures (AL11MDL1..4) with the same layout, so one row with a ? serves them all. Shared textures
-#            (the weapon gizmos, GMLP*) are named once.
-#   PRESET   one of the names below.
+#            number their textures (AL11MDL1..4) with the same layout, so one row with a ? serves them all.
+#   PRESET   glass: the texels are window; any other preset (write gloss-paint): they are body, whatever the segmentation took them for.
 #   RECT     x,y,w,h in the texture's texels (the .m16 as the PPM sheets show it, origin top left), or * for the whole texture.
 #   COLOURS  colour classes joined with |, a leading ! negates one; a texel must be in one of them. * for any.
 #            any black dark grey light white glass red orange yellow green blue colour (see CarMaterialTable.InClass).
-# Rows apply in file order, a later row over an earlier one, to the texels its rectangle and colours pick: first a texture's base
-# row (no rectangle, no colours), then its regions. A texture no row names is not in the table and keeps the all-over clear coat.
-# A respray recolours only the texels whose preset is a paint (gloss-paint, metallic-paint, satin-paint, matte-paint).
-# '#' starts a comment. Review with: i76 car-table sheet OUT_DIR (the textures beside their preset colours), and the game's
-# I76_CAR_MATERIAL_IDS=1 (the cars drawn in their presets' colours).
+# Rows apply in file order, a later row over an earlier one, to the texels its rectangle and colours pick.
+# The game keeps only glass and body from all this (CarMaterialTable.Ids); a respray recolours the body's paint (the scheme's own colours).
+# '#' starts a comment. Review with: i76 car-table sheet OUT_DIR.
 #
-# Presets (roughness, metallic, clear coat; colours on the review sheets in CarMaterialTable.Presets):
-#   gloss-paint      clear-coated paint (what every car texture has until listed)
-#   metallic-paint   paint with flake under the coat
-#   satin-paint      semi-matt paint, a faded or utility finish
-#   matte-paint      flat paint, no coat: military, primer
-#   chrome           polished plating: bumpers, trim, hubcaps
-#   steel            bare or brushed metal: engine, exhaust, guns, grille bars
-#   chassis-steel    dull painted or oily steel: underside, axles, frame
-#   rust             weathered, rusted metal
-#   rubber           tyres, mats, boots
-#   liner            a pickup bed's ribbed spray-on liner
-#   glass            windows painted into panels
-#   lens             head, tail and signal lamp lenses
-#   plastic          moulded plastic and trim
-#   vinyl            vinyl and leather: seats, door cards
-#   canvas           canvas and cloth: tilts, tarps, carpets
-#   wood             varnished wood
-
-# For now only these are listed (2026-10-27): the hand-drawn regions were not accurate enough, so every other car keeps the
-# all-over clear coat until the parts can be picked out reliably (e.g. segmenting rendered views and projecting back onto the textures).
-
-# ---- Hacienda -----------------------------------------------------------------------------------------------------------------
-# the Hacienda's bed (a clear coat over the ribbed black mirrored the sky in streaks, #123)
-CH11BED1	liner
-
-# ---- Goon (GO11): the army jeep, camouflaged -- flat paint, no coat, all over ------------------------------------------------
-GO11BKB?	matte-paint
-GO11BKL?	matte-paint
-GO11BKR?	matte-paint
-GO11BKT?	matte-paint
-GO11FTF?	matte-paint
-GO11FTL?	matte-paint
-GO11FTR?	matte-paint
-GO11FTT?	matte-paint
-GO11MDL?	matte-paint
-GO11MDR?	matte-paint
-GO11TP_?	matte-paint
+# Presets, their review colours in CarMaterialTable.Presets; the segmentation pipeline (i76 car-project) labels with all of them:
+#   gloss-paint metallic-paint satin-paint matte-paint chrome steel chassis-steel rust rubber liner glass lens plastic vinyl canvas wood
 
 # the Leopard XLC's convertible top (the segmentation takes the whole canopy for glass): the cloth, the blue panels stay windows
-LE11TP_?	canvas	*	orange|yellow
+LE11TP_?	gloss-paint	*	orange|yellow
 
 # the hearse's curtained windows (the segmentation takes them for glass): all cloth, the folds' dark gaps too, and the black frame round
 # them its paint (it was glass, so the curtained window read as one long window with the door's)
-XH11MDL?	canvas	60,32,68,29	!black
+XH11MDL?	gloss-paint	60,32,68,29	!black
 XH11MDL?	gloss-paint	58,28,70,36	black|dark|glass
-XH11BKB?	canvas	17,35,96,27	!black
+XH11BKB?	gloss-paint	17,35,96,27	!black
 
 # the Limo's rear window (the segmentation misses it): the blue pane above the trunk
 JD11BKT?	glass	14,9,100,16	glass
@@ -80,7 +42,7 @@ MX11TPL?	glass	0,2,37,50	glass|blue|dark
 # the school bus (Winston High): the segmentation takes its black bands, the dark round the grille and the lettering for glass;
 # only the windshield (front) and the emergency door's two panes (back) are windows
 XB11FTF1	gloss-paint	0,0,128,15	*
-XB11FTF1	steel	43,15,41,34	*
+XB11FTF1	gloss-paint	43,15,41,34	*
 XB11FTF1	gloss-paint	0,48,128,9	*
 XB11FTF1	gloss-paint	0,107,128,21	!red
 XB11BKB1	gloss-paint	0,0,128,32	*

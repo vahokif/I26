@@ -3,10 +3,9 @@ using System.Globalization;
 namespace I76.Formats.Imaging;
 
 /// <summary>
-/// The modern look's hand-authored car materials: for each car texture (CarMaterials.tsv, documented at its top) a preset, and within
-/// the texture regions (a rectangle in its texels and/or a colour class) of other presets. A texture the table lists is drawn from a
-/// per-texel map made here once (the preset of every texel, then roughness / metallic / clear coat / specular from the presets);
-/// one it does not list keeps the all-over clear coat.
+/// The modern look's car windows: for each car texture the segmentation maps (CarMasks.bin) found windows in, and the hand fixes
+/// (CarMaterials.tsv, documented at its top: regions of a texture, by rectangle and/or colour class, that are glass or are not), which
+/// texels are glass. The game's per-texel map (<see cref="Ids"/>) holds glass and body only; a respray takes the body.
 /// </summary>
 public sealed class CarMaterialTable
 {
@@ -119,7 +118,9 @@ public sealed class CarMaterialTable
         return Rows.Where(r => Matches(r.Texture, stem)).ToList();
     }
 
-    private const byte ChromeId = 5;
+    /// <summary>The preset id the game's map keeps: windows. Every other texel of a listed texture is the body (<see cref="BodyId"/>).</summary>
+    public const byte GlassId = 11;
+    public const byte BodyId = 1;
 
     public bool Lists(string member) => Rows.Any(r => Matches(r.Texture, StemOf(member)));
 
@@ -165,9 +166,6 @@ public sealed class CarMaterialTable
         var basis = CarMaskMap.Enabled ? CarMaskMap.Default.Ids(member, w, h) : null;
         if (rows.Count == 0 && basis is null) return null;
         var ids = basis is null ? new byte[w * h] : (byte[])basis.Clone();
-        // the segmentation's chrome is left out for now (trim and seals labelled in ragged specks, black and white stippling): those texels
-        // keep the clear coat; a hand row can still make a part chrome
-        for (int i = 0; i < ids.Length; i++) if (ids[i] == ChromeId) ids[i] = 1;
         foreach (var row in rows)
         {
             var (x0, y0, x1, y1) = row.Rect is { } r ? (Math.Max(0, r.X), Math.Max(0, r.Y), Math.Min(w, r.X + r.W), Math.Min(h, r.Y + r.H)) : (0, 0, w, h);
@@ -182,30 +180,17 @@ public sealed class CarMaterialTable
                     ids[i] = row.Preset.Id;
                 }
         }
-        // a table with regions but no base row leaves texels unset: they take the all-over clear coat
-        for (int i = 0; i < ids.Length; i++) if (ids[i] == 0) ids[i] = 1;
+        // the game's map holds the windows and nothing else: the finish of every other texel (chrome, rubber, lamps, steel...) is the
+        // body's, one rule for it all, so a part the segmentation mislabelled cannot draw wrongly; a row of another preset still lifts the
+        // glass off the texels it covers
+        for (int i = 0; i < ids.Length; i++) ids[i] = ids[i] == GlassId ? GlassId : BodyId;
         return ids;
-    }
-
-    /// <summary>The shader's map for a texture's ids: roughness, metallic, clear coat, specular (RGBA8).</summary>
-    public static byte[] Orm(byte[] ids)
-    {
-        var o = new byte[ids.Length * 4];
-        for (int i = 0; i < ids.Length; i++)
-        {
-            var p = Presets[Math.Clamp(ids[i], (byte)1, (byte)Presets.Count) - 1];
-            o[i * 4] = (byte)MathF.Round(p.Roughness * 255);
-            o[i * 4 + 1] = (byte)MathF.Round(p.Metallic * 255);
-            o[i * 4 + 2] = (byte)MathF.Round(p.Coat * 255);
-            o[i * 4 + 3] = (byte)MathF.Round(p.Specular * 255);
-        }
-        return o;
     }
 
     /// <summary>Where a texture is paint (a respray applies there), 0 or 1 per texel.</summary>
     public static byte[] PaintWeight(byte[] ids) => ids.Select(i => (byte)(Presets[Math.Clamp(i, (byte)1, (byte)Presets.Count) - 1].Paint ? 1 : 0)).ToArray();
 
-    /// <summary>The false colour of every texel's preset, RGB8 (the review sheets and the game's I76_CAR_MATERIAL_IDS view).</summary>
+    /// <summary>The false colour of every texel's preset, RGB8 (the review sheets).</summary>
     public static byte[] FalseColour(byte[] ids)
     {
         var o = new byte[ids.Length * 3];

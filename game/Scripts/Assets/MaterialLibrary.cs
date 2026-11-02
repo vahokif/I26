@@ -183,9 +183,8 @@ public sealed class MaterialLibrary(TextureFactory textures)
             {
                 mat.SetShaderParameter("car_paint", true);
                 if (System.Environment.GetEnvironmentVariable("I76_CAR_NORMALS_VIEW") == "1") mat.SetShaderParameter("normals_debug", true);
-                // a texture the car material table lists: its per-texel finish (CarMaterials.tsv); the rest keep the all-over clear coat
-                if (TableOf(member, t) is { } tab) SetTable(mat, tab);
-                // the windows: where the data labels glass (the table's glass preset), the glass shader and its proxy cabin
+                // the windows: where the data labels glass (the table's glass preset), the glass shader and its proxy cabin; the rest of
+                // the car is clear-coated paint, one rule all over
                 if (GlassOf(member, t) is { } glass) { mat.SetShaderParameter("glass_tex", glass.Tex); mat.SetShaderParameter("glass_frame", glass.Frame); mat.SetShaderParameter("glass_body", glass.Body); mat.SetShaderParameter("has_glass", true); }
             }
             if (scheme is not null) RegisterPaint(scheme, mat, member);
@@ -349,32 +348,9 @@ public sealed class MaterialLibrary(TextureFactory textures)
         mat.SetShaderParameter("has_normal", false);
     }
 
-    // ---- the car material table (CarMaterials.tsv): the finish of each texel of a car's texture ----
-
-    /// <summary>The table, and the review view (I76_CAR_MATERIAL_IDS=1): the table's textures drawn in their presets' false colours.</summary>
+    /// <summary>The car windows' data (CarMaterials.tsv over the segmentation maps): which texels of a car texture are glass.</summary>
     public static readonly I76.Formats.Imaging.CarMaterialTable CarTable = I76.Formats.Imaging.CarMaterialTable.Default;
-    private static readonly bool TableDebug = System.Environment.GetEnvironmentVariable("I76_CAR_MATERIAL_IDS") == "1";
     private static readonly bool TableOff = System.Environment.GetEnvironmentVariable("I76_CAR_TABLE") == "0";
-
-    private readonly Dictionary<string, (ImageTexture Orm, ImageTexture? Ids)?> _tables = new(StringComparer.OrdinalIgnoreCase);
-
-    private (ImageTexture Orm, ImageTexture? Ids)? TableOf(string member, TextureFactory.Entry t)
-    {
-        if (_tables.TryGetValue(member, out var made)) return made;
-        if (TableOff || CarTable.Ids(member, t.Rgba, t.Width, t.Height) is not { } ids) return _tables[member] = null;
-        var orm = Image.CreateFromData(t.Width, t.Height, false, Image.Format.Rgba8, I76.Formats.Imaging.CarMaterialTable.Orm(ids));
-        orm.GenerateMipmaps();
-        ImageTexture? dbg = null;
-        if (TableDebug) dbg = ImageTexture.CreateFromImage(Image.CreateFromData(t.Width, t.Height, false, Image.Format.Rgb8, I76.Formats.Imaging.CarMaterialTable.FalseColour(ids)));
-        return _tables[member] = (ImageTexture.CreateFromImage(orm), dbg);
-    }
-
-    private static void SetTable(ShaderMaterial mat, (ImageTexture Orm, ImageTexture? Ids) tab)
-    {
-        mat.SetShaderParameter("orm_tex", tab.Orm);
-        mat.SetShaderParameter("has_table", true);
-        if (tab.Ids is not null) { mat.SetShaderParameter("table_ids", tab.Ids); mat.SetShaderParameter("table_debug", true); }
-    }
 
     // ---- car windows: the glass shading and the proxy cabin behind it (object.gdshaderinc, MeshBuilder.CabinOf) ----
 

@@ -37,7 +37,7 @@ public class CarMaskTests
         foreach (var e in CarMaskMap.Default.Entries)
         {
             Assert.Equal(e.W * e.H, e.Ids.Length);
-            Assert.All(e.Ids, id => Assert.InRange(id, (byte)0, (byte)CarMaterialTable.Presets.Count));
+            Assert.All(e.Ids, id => Assert.True(id == 0 || id == CarMaterialTable.GlassId, $"{e.Key}: {id}"));   // the shipped maps hold windows only
         }
     }
 

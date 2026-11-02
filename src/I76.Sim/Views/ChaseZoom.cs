@@ -58,4 +58,76 @@ public sealed class MouseOrbitOffset
     }
 
     public void Reset() { Yaw = Pitch = 0; _idle = 0; }
+
+    /// <summary>Motion elsewhere (the other of mouse and stick, <see cref="ChaseOrbit"/>): the return waits as if this had moved.</summary>
+    public void Touch() => _idle = 0;
+}
+
+/// <summary>
+/// The chase view's (F2) turn off its track keys' targets. The pad's right stick (and any axis bound to the camera) is an offset
+/// on those targets eased with them at 2·dt, the short way round, as the track keys always were. The mouse (Mouse Camera) is an
+/// offset of its own on top, eased at <see cref="MouseEase"/>·dt so the view follows the hand closely. Both go back behind the car
+/// a few seconds after the last of them moved (Camera Return). Without mouse motion the view is the stick's and keys' alone.
+/// </summary>
+public sealed class ChaseOrbit
+{
+    public const float MinPitch = 0.017453292f, MaxPitch = 1.5707963f, MouseEase = 18f;
+    private readonly MouseOrbitOffset _stick = new(), _mouse = new();
+
+    /// <summary>The eased pitch and yaw of the keys' targets with the stick's offset.</summary>
+    public float Pitch { get; set; }
+    public float Yaw { get; set; }
+    /// <summary>The mouse's eased offset on top of them.</summary>
+    public float MousePitch { get; private set; }
+    public float MouseYaw { get; private set; }
+
+    /// <summary>The view's pitch (clamped as the original clamps its target) and yaw.</summary>
+    public (float Pitch, float Yaw) View => (System.Math.Clamp(Pitch + MousePitch, MinPitch, MaxPitch), Yaw + MouseYaw);
+
+    /// <summary>A frame's motion: the stick's turn and the mouse's (radians), and the return behind the car (Camera Return).</summary>
+    public void Move(float stickYaw, float stickPitch, float mouseYaw, float mousePitch, float dt, bool returnBehind)
+    {
+        _stick.Add(stickYaw, stickPitch);
+        _mouse.Add(mouseYaw, mousePitch);
+        if (mouseYaw != 0 || mousePitch != 0) _stick.Touch();
+        if (stickYaw != 0 || stickPitch != 0) _mouse.Touch();
+        _stick.Step(dt, returnBehind);
+        float before = _mouse.Yaw;
+        _mouse.Step(dt, returnBehind);
+        // the return takes whole turns off the mouse's offset (the short way round): the eased value drops them too, so it does not spin back
+        MouseYaw += MathF.Round((_mouse.Yaw - before) / MathF.Tau) * MathF.Tau;
+    }
+
+    /// <summary>Both offsets back to nothing at once (a new start, the reset key, another view).</summary>
+    public void Reset()
+    {
+        _stick.Reset();
+        _mouse.Reset();
+        MousePitch = MouseYaw = 0;
+    }
+
+    /// <summary>A frame's easing toward the keys' targets (<paramref name="pitchT"/> already clamped).</summary>
+    public void Ease(float pitchT, float yawT, float dt)
+    {
+        float f = dt + dt;
+        float pitchWant = System.Math.Clamp(pitchT + _stick.Pitch, MinPitch, MaxPitch);
+        float yawWant = yawT + _stick.Yaw;
+        Pitch = EaseTo(Pitch, pitchWant, f);
+        // the short way round to the target, so a wrapped offset (the camera swung several turns) never spins back
+        Yaw = EaseTo(Yaw, Yaw + Wrap(yawWant - Yaw), f);
+        float mf = MathF.Min(0.95f, MouseEase * dt);
+        MousePitch = EaseTo(MousePitch, _mouse.Pitch, mf);
+        MouseYaw = EaseTo(MouseYaw, _mouse.Yaw, mf);
+    }
+
+    /// <summary>The original's easing: a fraction <paramref name="f"/> of the way, or there when close or when f is out of 0..0.95.</summary>
+    public static float EaseTo(float cur, float want, float f) =>
+        f >= 0 && f <= 0.95f && MathF.Abs(want - cur) >= 0.005f ? f * (want - cur) + cur : want;
+
+    /// <summary>An angle into −π..π, as the engine's wrap does it (what the chase view always used).</summary>
+    public static float Wrap(float a)
+    {
+        const float min = -MathF.PI, range = MathF.PI - min;
+        return min + ((a - min) % range + range) % range;
+    }
 }

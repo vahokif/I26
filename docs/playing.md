@@ -80,7 +80,7 @@ are for another game and are not listed.
 ### Controls
 
 Controls follow the original's keys, as set in Options > Control Configuration (which edits keys, the mouse, including side buttons `Mouse4Btn` and `Mouse5Btn`,
-and a pad). **Options > Mouse Options** (also in Control Configuration and the in-mission Esc menu) configures Mouse Camera (chase view), Mouse Sensitivity (10%–200%), Invert Y Axis, Cockpit Mouse Look (3D cockpit free look), Camera Return, View Zoom Reset, and Mouse In Window.
+and a pad). **Options > Mouse Options** (also in Control Configuration and the in-mission Esc menu) configures Mouse Camera (chase view), Mouse Sensitivity (10%–200%), Invert Y Axis, Cockpit Mouse Look (3D cockpit free look), Camera Return, View Zoom Reset, Mouse In Window, Chase Crosshair (F2 view), mouse button bindings, and Wheel Up / Down (View Zoom or Cycle Weapon).
 
 | Action | Default |
 |---|---|

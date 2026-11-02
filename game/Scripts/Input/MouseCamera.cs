@@ -18,6 +18,8 @@ public static class MouseCamera
     public static bool CockpitLook;
     /// <summary>3D-projected weapon crosshair in the F2 chase view (shell.cfg [port] chase_crosshair).</summary>
     public static bool ChaseCrosshair;
+    /// <summary>The mouse wheel cycles weapons instead of zooming the external views (shell.cfg [port] wheel_cycle_weapon).</summary>
+    public static bool WheelCycleWeapon;
     /// <summary>The camera eases back behind the car (or forward in the cockpit) after the mouse or stick rests (Camera Return); off, it stays where it was left.</summary>
     public static bool ReturnBehind = true;
     /// <summary>Keep the mouse in the window: in a mission the hidden cursor is confined to it (shell.cfg [port] keep_mouse_in_window).</summary>
@@ -34,11 +36,11 @@ public static class MouseCamera
     public static void ResetAllZooms() { System.Array.Fill(Zooms, ViewZoom.Default); ZoomEpoch++; }
     /// <summary>The view the wheel zooms now: an external view in a mission with no menu, pause or cut-scene up (null: the cockpit and the rest keep the wheel).</summary>
     public static ViewZoom.Kind? WheelView { get; set; }
-    public static bool WheelActive => WheelView is not null;
+    public static bool WheelActive => !WheelCycleWeapon && WheelView is not null;
 
     public static void Wheel(float notches)
     {
-        if (WheelView is not { } v) return;
+        if (WheelCycleWeapon || WheelView is not { } v) return;
         Zooms[(int)v] = ViewZoom.Notch(v, Zooms[(int)v], notches);
     }
 
@@ -55,6 +57,7 @@ public static class MouseCamera
         InvertY = s.MouseInvertY;
         CockpitLook = s.MouseCockpit;
         ChaseCrosshair = s.ChaseCrosshair;
+        WheelCycleWeapon = s.WheelCycleWeapon;
         Confine = s.KeepMouseInWindow;
         ReturnBehind = s.CameraReturn;
         KeepZoom = !s.ZoomReset;

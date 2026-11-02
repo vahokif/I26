@@ -42,4 +42,25 @@ public class ViewZoomResetTests
         Assert.Equal(("Mouse", "Mouse5Btn"), Controls.InputOf("Mouse5Btn"));
         Assert.Equal(("joystick1", "Button4"), Controls.InputOf("Button4"));
     }
+
+    [Fact] public void WheelCycleWeaponDisablesWheelZoomWhenEnabled()
+    {
+        MouseCamera.ResetAllZooms();
+        MouseCamera.WheelView = ViewZoom.Kind.Chase;
+        MouseCamera.WheelCycleWeapon = true;
+        try
+        {
+            Assert.False(MouseCamera.WheelActive);
+            MouseCamera.Wheel(2);
+            Assert.Equal(1f, MouseCamera.ZoomOf(ViewZoom.Kind.Chase));
+        }
+        finally
+        {
+            MouseCamera.WheelCycleWeapon = false;
+            MouseCamera.WheelView = null;
+        }
+        MouseCamera.WheelView = ViewZoom.Kind.Chase;
+        Assert.True(MouseCamera.WheelActive);
+        MouseCamera.WheelView = null;
+    }
 }

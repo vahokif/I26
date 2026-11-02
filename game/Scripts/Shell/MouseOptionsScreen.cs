@@ -35,12 +35,13 @@ public sealed class MouseOptionsScreen : OverlayScreen
 
     private int _savedMouse;
     private float _savedSens;
-    private bool _savedInvert, _savedCockpit, _savedCrosshair, _savedReturn, _savedZoomReset, _savedConfine;
+    private bool _savedInvert, _savedCockpit, _savedCrosshair, _savedWheelCycle, _savedReturn, _savedZoomReset, _savedConfine;
 
     internal const string Title = "MOUSE OPTIONS";
     internal const int LeftCount = 8;
     internal const int ButtonCount = 5;
-    internal const int TotalRows = LeftCount + ButtonCount;
+    internal const int WheelRow = LeftCount + ButtonCount;
+    internal const int TotalRows = LeftCount + ButtonCount + 1;
     private const int RowH = ControllerScreen.RowH;
     private const int NameW = ControlsScreen.NameW, LeftValW = ControlsScreen.LeftBindW, RightValW = ControlsScreen.RightBindW;
     internal static readonly string[] SlotText = ["", "RESTORE DEFAULTS", "DONE", "CANCEL"];
@@ -67,6 +68,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
         _savedInvert = st.MouseInvertY;
         _savedCockpit = st.MouseCockpit;
         _savedCrosshair = st.ChaseCrosshair;
+        _savedWheelCycle = st.WheelCycleWeapon;
         _savedReturn = st.CameraReturn;
         _savedZoomReset = st.ZoomReset;
         _savedConfine = st.KeepMouseInWindow;
@@ -102,6 +104,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
             int k = i;
             Add(330, ControllerScreen.RowY(k) + 1, () => "", () => { _sel = LeftCount + k; OpenButton(k, false); }, _f, w: 282, h: 16);
         }
+        Add(330, ControllerScreen.RowY(ButtonCount) + 1, () => "", () => { _sel = WheelRow; ToggleWheel(); }, _f, w: 282, h: 16);
         var slots = ControllerScreen.Slots;
         Add(slots[1].Position.X, slots[1].Position.Y, () => "", RestoreDefaults, w: slots[1].Size.X, h: slots[1].Size.Y);
         Add(slots[2].Position.X, slots[2].Position.Y, () => "", Done, w: slots[2].Size.X, h: slots[2].Size.Y);
@@ -117,6 +120,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
         st.MouseInvertY = false;
         st.MouseCockpit = false;
         st.ChaseCrosshair = false;
+        st.WheelCycleWeapon = false;
         st.CameraReturn = true;
         st.ZoomReset = true;
         st.KeepMouseInWindow = false;
@@ -170,6 +174,15 @@ public sealed class MouseOptionsScreen : OverlayScreen
                 break;
         }
         MouseCamera.Apply(st);
+    }
+
+    private void ToggleWheel()
+    {
+        Shell.Sound(82);
+        var st = Shell.Settings;
+        st.WheelCycleWeapon = !st.WheelCycleWeapon;
+        MouseCamera.Apply(st);
+        Redraw();
     }
 
     private string ActionOfButton(string channel)
@@ -264,6 +277,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
         st.MouseInvertY = _savedInvert;
         st.MouseCockpit = _savedCockpit;
         st.ChaseCrosshair = _savedCrosshair;
+        st.WheelCycleWeapon = _savedWheelCycle;
         st.CameraReturn = _savedReturn;
         st.ZoomReset = _savedZoomReset;
         st.KeepMouseInWindow = _savedConfine;
@@ -332,7 +346,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
         }
         int wheelY = ControllerScreen.RowY(ButtonCount) + 3;
         Frame.Text(_f, 338, wheelY, Fit("Wheel Up / Down", NameW), ShellFrame.OverlayInk);
-        Frame.Text(_f, 486, wheelY, Fit("View Zoom", RightValW), ShellFrame.OverlayInk);
+        Frame.Text(_f, 486, wheelY, Fit(st.WheelCycleWeapon ? "Cycle Weapon" : "View Zoom", RightValW), ShellFrame.OverlayInk);
     }
 
     private void StepRow(int d)
@@ -355,11 +369,20 @@ public sealed class MouseOptionsScreen : OverlayScreen
         var act = _menu.Update(pads.Count > 0 && Controls.Focused() ? pads[0] : default);
         if ((act & PadMenu.Act.Up) != 0) StepRow(-1);
         if ((act & PadMenu.Act.Down) != 0) StepRow(1);
-        if ((act & PadMenu.Act.Left) != 0 && _sel < LeftCount) { Nudge(_sel, -1); Redraw(); }
-        if ((act & PadMenu.Act.Right) != 0 && _sel < LeftCount) { Nudge(_sel, 1); Redraw(); }
+        if ((act & PadMenu.Act.Left) != 0)
+        {
+            if (_sel < LeftCount) { Nudge(_sel, -1); Redraw(); }
+            else if (_sel == WheelRow) ToggleWheel();
+        }
+        if ((act & PadMenu.Act.Right) != 0)
+        {
+            if (_sel < LeftCount) { Nudge(_sel, 1); Redraw(); }
+            else if (_sel == WheelRow) ToggleWheel();
+        }
         if ((act & PadMenu.Act.Open) != 0)
         {
             if (_sel < LeftCount) { Nudge(_sel, 1, true); Redraw(); }
+            else if (_sel == WheelRow) ToggleWheel();
             else { Shell.Sound(82); OpenButton(_sel - LeftCount, true); return; }
         }
         if ((act & PadMenu.Act.Back) != 0) { Back(); return; }
@@ -368,14 +391,23 @@ public sealed class MouseOptionsScreen : OverlayScreen
         {
             if (k is Key.Up) StepRow(-1);
             else if (k is Key.Down) StepRow(1);
-            else if (k is Key.Left && _sel < LeftCount) { Nudge(_sel, -1); Redraw(); }
-            else if (k is Key.Right && _sel < LeftCount) { Nudge(_sel, 1); Redraw(); }
+            else if (k is Key.Left)
+            {
+                if (_sel < LeftCount) { Nudge(_sel, -1); Redraw(); }
+                else if (_sel == WheelRow) ToggleWheel();
+            }
+            else if (k is Key.Right)
+            {
+                if (_sel < LeftCount) { Nudge(_sel, 1); Redraw(); }
+                else if (_sel == WheelRow) ToggleWheel();
+            }
             else if (k is Key.Enter or Key.Space or Key.KpEnter)
             {
                 if (_sel < LeftCount) { Nudge(_sel, 1, true); Redraw(); }
+                else if (_sel == WheelRow) ToggleWheel();
                 else { Shell.Sound(82); OpenButton(_sel - LeftCount, false); return; }
             }
-            else if ((k is Key.Delete or Key.Backspace) && _sel >= LeftCount)
+            else if ((k is Key.Delete or Key.Backspace) && _sel >= LeftCount && _sel < WheelRow)
             {
                 Shell.Sound(82);
                 ClearMouseChannel(MouseButtons[_sel - LeftCount].Channel);
@@ -395,6 +427,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
                     Redraw();
                     return;
                 }
+            if (Items[WheelRow].Hit(Shell.Mouse)) { _sel = WheelRow; ToggleWheel(); return; }
         }
         base.Tick();
     }

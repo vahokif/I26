@@ -31,6 +31,9 @@ public sealed class NetHudFrame
     public string? Debug;
     /// <summary>The standings while their key is held: the players' page, grouped under their teams' totals in team play.</summary>
     public ScoreView? Board;
+    /// <summary>The standings are locked up (a tap of their key): the pointer picks rows; the cursor's slot, or -1.</summary>
+    public bool BoardLocked;
+    public int BoardCursor = -1;
     /// <summary>The key that holds the standings, as the player's bindings name it (a keycap's label), and whether to remind of it now (until it has been used).</summary>
     public string ScoresKey = "Tab";
     public bool ScoresHint;

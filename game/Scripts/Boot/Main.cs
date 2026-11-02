@@ -2580,7 +2580,8 @@ public partial class Main : Node3D
         bool chase = !CameraHeld && _chase is { Current: true, Fixed: null };
         bool cockpit = !CameraHeld && _car?.CockpitCamera?.Current == true && _pit is { Binoculars: false } && I76.Formats.Input.DashToggle.FreeLookAllowed(_pit.Dash3D);
         bool focused = DisplayServer.WindowIsFocused() || System.Environment.GetEnvironmentVariable("I76_MOUSE") is not null;   // (a capture's off-screen window is never focused)
-        var mode = CursorPolicy.For(inMission, chase, MouseCamera.Level, focused, MouseCamera.Confine, cockpit, MouseCamera.CockpitLook);
+        // the network game's standings locked up show the pointer, as a menu does (the view's zoom is left as it is)
+        var mode = CursorPolicy.For(inMission && _netHud?.Pointer != true, chase, MouseCamera.Level, focused, MouseCamera.Confine, cockpit, MouseCamera.CockpitLook);
         // the mouse orbits the chase view (or turns the head in the 3D cockpit) only while captured, unpaused and no orbit key is held
         MouseCamera.CockpitActive = mode == CursorMode.Captured && !_gamePaused && cockpit;
         MouseCamera.Active = mode == CursorMode.Captured && !_gamePaused && (cockpit || _chase!.Orbit?.Invoke() != true);

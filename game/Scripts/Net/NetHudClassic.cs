@@ -18,6 +18,10 @@ public partial class NetHudClassic : Control
     private Label _info = null!, _feed = null!, _banner = null!, _prompt = null!, _entry = null!;
     private readonly List<Label> _cols = [];
     private Control _board = null!;
+    private ColorRect _cursor = null!;
+    private readonly List<(HudRect Rect, int Slot)> _rows = [];
+    /// <summary>The score window's player rows as last shown (window pixels, with their slots), for the locked window's pointer.</summary>
+    public IReadOnlyList<(HudRect Rect, int Slot)> BoardRows => _rows;
     private static readonly Color Red = new(1, 0, 0);
 
     public override void _Ready()
@@ -31,6 +35,8 @@ public partial class NetHudClassic : Control
         _info.GrowHorizontal = GrowDirection.Begin;
         _board = new Control { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
         AddChild(_board);
+        // the locked window's cursor, a bar under its row's text
+        _board.AddChild(_cursor = new ColorRect { MouseFilter = MouseFilterEnum.Ignore, Color = new Color(1, 0, 0, 0.22f), Visible = false });
         // mark, name, the counts and the ping right-aligned at the original's tab stops, then whether the player is down
         foreach (var align in new[] { HorizontalAlignment.Left, HorizontalAlignment.Left, HorizontalAlignment.Right, HorizontalAlignment.Right, HorizontalAlignment.Right, HorizontalAlignment.Right, HorizontalAlignment.Left })
         {
@@ -139,6 +145,19 @@ public partial class NetHudClassic : Control
         Place(v, rows?.Count ?? 0);
         if (rows is not null)
             for (int c = 0; c < _cols.Count; c++) _cols[c].Text = string.Join('\n', rows.Select(r => r[c]));
+        _rows.Clear();
+        _cursor.Visible = false;
+        if (f.Board is { } bv)
+            for (int i = 0; i < bv.Lines.Count; i++)
+            {
+                if (bv.Lines[i].Kind != ScoreLineKind.Player) continue;
+                var r = HudLayout.ClassicRow(v.X, v.Y, i + 1);     // line 0 is the heads
+                _rows.Add((r, bv.Lines[i].Slot));
+                if (!f.BoardLocked || bv.Lines[i].Slot != f.BoardCursor) continue;
+                _cursor.Visible = true;
+                _cursor.Position = new Vector2(0, r.Y - _board.Position.Y);
+                _cursor.Size = new Vector2(r.W, r.H);
+            }
         // while the window is up the console's lines give way to it, and the banner too; the standings take the
         // console's place as well
         _feed.Visible = !_board.Visible && f.Final is null;
@@ -224,7 +243,8 @@ public partial class NetHudClassic : Control
             // a team's totals head its players (the original's teams window, merged in)
             rows.Add(p.Kind == ScoreLineKind.Team ? ["", Fit($"{p.Name} ({p.Members})", 20), .. Cols(p.Score, p.Kills, p.Deaths), "", ""]
                 : [p.Mark, Fit(p.Name, 20), .. Cols(p.Score, p.Kills, p.Deaths), $"{p.Ping}", p.Alive ? "" : "dead"]);
-        if (b.Pages > 1) rows.Add(["", $"{b.First}-{b.Last} of {b.Total}  (Ctrl+PgUp/PgDn)", "", "", "", "", ""]);
+        if (b.Pages > 1) rows.Add(["", $"{b.First}-{b.Last} of {b.Total}  ({(f.BoardLocked ? "wheel" : "Ctrl+PgUp/PgDn")})", "", "", "", "", ""]);
+        if (f.BoardLocked) rows.Add(["", $"({f.ScoresKey}: close{(f.Host && b.Numbered.Count > 0 ? "; click a player to boot" : "")})", "", "", "", "", ""]);
         return rows;
     }
 

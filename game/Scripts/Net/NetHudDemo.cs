@@ -8,8 +8,8 @@ namespace I76.Game.Net;
 /// I76_NET_HUD_DEMO=players[,what...]: the network HUD filled with made-up players and lines, for captures of each
 /// state without staging it in a real game (docs/dev-hooks.md). What: board (the players' window held), teams (the
 /// teams' window held), teamplay, ctf, race, chat (a conversation), typing (the entry open), dead, ready (dead, the
-/// respawn open), end-win, end-lose, timeup, final, invite, boot, host (this machine hosts), page2, pad, me:NAME (your own
-/// row's name).
+/// respawn open), end-win, end-lose, timeup, final, invite, boot, host (this machine hosts), page2, pad, locked (the
+/// standings locked up, a cursor on a row), me:NAME (your own row's name).
 /// </summary>
 public sealed class NetHudDemo
 {
@@ -101,6 +101,12 @@ public sealed class NetHudDemo
         var ctx = new ScoreContext(kind, teamPlay, f.MySlot, host, Classic && !teamPlay ? ScoreOrder.Slot : ScoreOrder.Ranked, Classic ? ScoreTable.ClassicRows : ScoreTable.ModernRows)
             { HostSlot = host ? f.MySlot : 0 };
         if (Has("board") || Has("teams")) f.Board = ScoreTable.Players(rows, ctx, Has("page2") ? 1 : 0, f.TeamName);
+        // locked: the standings locked up by a tap, the cursor on the page's fourth player row
+        if (Has("locked") && f.Board is { } lb)
+        {
+            f.BoardLocked = true;
+            f.BoardCursor = lb.Lines.Where(l => l.Kind == ScoreLineKind.Player).Skip(3).Select(l => l.Slot).DefaultIfEmpty(-1).First();
+        }
         // the feed: a burst of kills and joins, some about this player
         var feed = new HudFeed();
         double at = t - 6;

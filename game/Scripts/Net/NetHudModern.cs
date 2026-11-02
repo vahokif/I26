@@ -18,6 +18,9 @@ public partial class NetHudModern : Control
     private float _s = 1;
     private Vector2 _view;
     private readonly StyleBoxFlat _box = new() { AntiAliasing = true };
+    private readonly List<(HudRect Rect, int Slot)> _rows = [];
+    /// <summary>The standings' player rows as last drawn (window pixels, with their slots), for the locked standings' pointer.</summary>
+    public IReadOnlyList<(HudRect Rect, int Slot)> BoardRows => _rows;
 
     public override void _Ready()
     {
@@ -226,6 +229,7 @@ public partial class NetHudModern : Control
 
     public override void _Draw()
     {
+        _rows.Clear();
         if (_f is not { } f) return;
         var v = GetViewportRect().Size;
         _view = v;
@@ -661,7 +665,7 @@ public partial class NetHudModern : Control
         float colW = Math.Min(U(720), (sr.Size.X - U(48) - (counts.Length - 1) * gap) / counts.Length);     // two columns on a narrow window shrink to fit
         float w = counts.Length * colW + (counts.Length - 1) * gap + U(48);
         int maxRows = counts.Max();
-        bool footer = b.Pages > 1 || (f.Host && b.Numbered.Count > 0);
+        bool footer = b.Pages > 1 || (f.Host && b.Numbered.Count > 0) || f.BoardLocked;
         // the game's keys a player may not know, here rather than over the game
         var gameKeys = new List<(string[] Keys, string Action)>();
         if (f.ChatHint) gameKeys.Add((f.ChatKey.Split('+'), "CHAT"));
@@ -695,6 +699,7 @@ public partial class NetHudModern : Control
             {
                 if (lines[idx].Pinned) { DrawRect(new Rect2(cx, cy + U(1), colW, U(1)), new Color(HudStyle.ParchmentDim, 0.4f)); }
                 BoardRow(f, lines[idx], cx, cy, colW, rowH);
+                if (lines[idx].Kind == ScoreLineKind.Player) _rows.Add((new HudRect(cx, cy, colW, rowH), lines[idx].Slot));
                 cy += rowH;
             }
         }
@@ -711,10 +716,27 @@ public partial class NetHudModern : Control
         // the footer: the page and its keys, the host's boot keys
         if (!footer) return;
         float fy = r.End.Y - U(48), hh = U(28);
-        string pg = b.Pages > 1 ? $"Page {b.Page + 1} of {b.Pages}  ·  {b.First}–{b.Last} of {b.Total}" : $"{b.Total} {(f.Host ? "other " : "")}driver{(b.Total == 1 ? "" : "s")}";
+        string pg = f.BoardLocked ? "Locked  ·  " : "";
+        pg += b.Pages > 1 ? $"Page {b.Page + 1} of {b.Pages}  ·  {b.First}–{b.Last} of {b.Total}" : $"{b.Total} {(f.Host ? "other " : "")}driver{(b.Total == 1 ? "" : "s")}";
         Text(HudStyle.Bold, pg, new Vector2(x0, fy + U(4)), Px(17), HudStyle.ParchmentDim);
         float hx = r.End.X - U(24);
         float pgEnd = x0 + Measure(HudStyle.Bold, pg, Px(17)).X + U(28);
+        if (f.BoardLocked)
+        {
+            // locked: the key (or Esc) shuts it, a click on a driver asks to boot them (a second click boots), the wheel pages
+            var locked = new List<(string[] Keys, string Action)> { ([f.ScoresKey], "CLOSE") };
+            if (f.Host && b.Numbered.Count > 0) locked.Add((["Click"], "BOOT"));
+            if (b.Pages > 1) locked.Add((["Wheel"], "PAGE"));
+            foreach (var (k, action) in locked)
+            {
+                float hw = HintWidth(hh, k, null, action);
+                if (hx - hw < pgEnd) break;
+                hx -= hw;
+                Hint(new Vector2(hx, fy), hh, k, null, action, HudStyle.Parchment);
+                hx -= U(28);
+            }
+            return;
+        }
         if (b.Pages > 1)
         {
             float hw = HintWidth(hh, ["Ctrl", "PgUp", "PgDn"], null, "PAGE");
@@ -858,6 +880,9 @@ public partial class NetHudModern : Control
             Box(new Rect2(x, y + U(2), w, rowH - U(4)), HudStyle.MeRow, 5);
             DrawRect(new Rect2(x, y + U(6), U(3), rowH - U(12)), HudStyle.Amber);
         }
+        // the locked standings' cursor: an outline, orange on a row the host can boot
+        if (f.BoardLocked && l.Slot == f.BoardCursor)
+            Box(new Rect2(x, y + U(2), w, rowH - U(4)), new Color(HudStyle.Parchment, 0.08f), 5, f.Host && !l.Me ? HudStyle.Orange : HudStyle.Parchment, 2);
         // the mark: the host's boot number in an orange box, else the rank
         if (f.Host && l.Mark is { Length: > 0 } m && m != "H")
         {

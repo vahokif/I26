@@ -36,6 +36,13 @@ public static class HudLayout
     /// <summary>The original's score window: the console's place, nine lines; the port's pages run longer.</summary>
     public static HudRect ClassicBoard(float w, float h, int lines) => ClassicConsole(w, h, lines);
 
+    /// <summary>The score window's line <paramref name="i"/> (0 the heads), the width of the window: the locked window's pointer picks by it.</summary>
+    public static HudRect ClassicRow(float w, float h, int i)
+    {
+        var b = ClassicBoard(w, h, 1);
+        return new HudRect(b.X, b.Y + i * b.H, b.W, b.H);
+    }
+
     /// <summary>The score window's tab stops in 640x480 pixels (16, 270, 350, 430), and the port's ping and status after them.</summary>
     public static readonly float[] ClassicTabs = [0, 16, 270, 350, 430, 500, 560];
 

@@ -267,6 +267,12 @@ by itself in 43 s; Space 3 s after a death was refused, 6.5 s after it brought a
   machine) is never held; a name not in the game is banned by name only; bots are booted, not banned. The list lives
   in the server for this game: the dedicated server keeps it across rounds, a host migration's new host starts
   without one.
+- **Locked score window** (I26, #107; `BoardLock`, `BoardCursor`): a tap of the key (let go within 0.3 s) locks the window
+  up until the next press or Esc; a longer hold still shuts it on release. While locked the pointer is shown (the
+  driving keys still drive): it lights the row under it, the wheel turns the page, a pad's d-pad Up/Down moves the cursor
+  (Right picks, Left shuts the window; the d-pad's game commands wait meanwhile). On the listen host's machine a click on
+  another player's row asks "Boot %s from the game?" as BOOT_n does, and a second click on that row (or Ctrl+Y) boots
+  through the same `NetMeleeServer.Kick`. Presentation only: no message is added.
 - **Invite only** (cfg bit 2; INVITE_ACCEPT / DECLINE / SKIP, Ctrl+Y / N /
   H): every join request queues; the host sees "Let %s join the game? (CTRL-Y / CTRL-N) " for the oldest; Ctrl+H puts it
   at the back keeping its time; one unanswered 30 s after it asked is turned away. The joiner is told "The host has

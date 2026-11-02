@@ -53,6 +53,13 @@ public partial class NetHud : CanvasLayer
     private readonly HashSet<int> _gone = [];
     private double _t;
     private int _boardPage;
+    /// <summary>The score window's key: held, or tapped to lock the window up with a pointer (#107).</summary>
+    private readonly BoardLock _lock = new();
+    private bool _boardUp;
+    /// <summary>The locked window's cursor: the slot of the player row it is on, or -1.</summary>
+    private int _cursor = -1;
+    /// <summary>The score window is locked up: the pointer is shown and picks its rows.</summary>
+    public bool Pointer => _boardUp && _lock.Locked;
     private double? _deadAt;
     private (string? Name, int Team, bool Self)? _killer;
     private IReadOnlyList<(byte Slot, int Score)>? _final;
@@ -108,6 +115,7 @@ public partial class NetHud : CanvasLayer
     /// </summary>
     public override void _Input(InputEvent e)
     {
+        if (!_chat.Active && Pointer && BoardInput(e)) { GetViewport().SetInputAsHandled(); return; }
         if (e is not InputEventKey { Pressed: true } k) return;
         if (!_chat.Active)
         {
@@ -158,6 +166,75 @@ public partial class NetHud : CanvasLayer
         }
         if (Server.Ban(arg) is { } why) Say(why, FeedKind.Own);     // the server tells everyone when it is done
         return true;
+    }
+
+    /// <summary>The player rows as the look in use last drew them, for the pointer.</summary>
+    private IReadOnlyList<(HudRect Rect, int Slot)> BoardRows => IsModern ? _modern.BoardRows : _classic.BoardRows;
+
+    /// <summary>
+    /// The locked score window's input: the mouse points at a row and a click picks it, the wheel turns the page, a pad's d-pad
+    /// moves the cursor (Right picks, Left shuts the window), Esc shuts it. The listen host's pick asks to boot that player (the
+    /// boot prompt, Ctrl+Y / Ctrl+N as before) and a second pick of the same row boots. Returns whether the event was the window's.
+    /// </summary>
+    private bool BoardInput(InputEvent e)
+    {
+        switch (e)
+        {
+            case InputEventMouseMotion:
+            {
+                var m = GetViewport().GetMousePosition();
+                _cursor = BoardCursor.RowAt(BoardRows, m.X, m.Y);
+                return false;
+            }
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } w:
+                _boardPage = Math.Max(0, _boardPage + (w.ButtonIndex == MouseButton.WheelDown ? 1 : -1));
+                return true;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }:
+            {
+                var m = GetViewport().GetMousePosition();
+                Pick(BoardCursor.RowAt(BoardRows, m.X, m.Y));
+                return true;
+            }
+            case InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape }:
+                _lock.Close();
+                return true;
+            case InputEventJoypadButton { Pressed: true } jb when GodotPads.IsStandard(jb.Device):
+                switch (jb.ButtonIndex)
+                {
+                    case JoyButton.DpadUp: Move(-1); return true;
+                    case JoyButton.DpadDown: Move(1); return true;
+                    case JoyButton.DpadRight: Pick(_cursor); return true;
+                    case JoyButton.DpadLeft: _lock.Close(); return true;
+                }
+                return false;
+        }
+        return false;
+    }
+
+    /// <summary>The cursor <paramref name="delta"/> player rows on, onto the next or previous page past the page's end.</summary>
+    private void Move(int delta)
+    {
+        if (PlayersPage() is not { } v) return;
+        var (slot, page) = BoardCursor.Step(v.Lines, _cursor, delta);
+        if (page == 0) { if (slot >= 0) _cursor = slot; return; }
+        int was = v.Page;
+        _boardPage = Math.Max(0, was + page);
+        if (PlayersPage() is { } next && next.Page != was) _cursor = BoardCursor.End(next.Lines, last: page < 0);
+    }
+
+    /// <summary>A row picked: the cursor goes to it; on the listen host's machine another player's row asks to boot them, and the same row again boots.</summary>
+    private void Pick(int slot)
+    {
+        if (slot < 0) return;
+        _cursor = slot;
+        if (Server is null || PlayersPage()?.Lines.FirstOrDefault(l => l.Kind == ScoreLineKind.Player && l.Slot == slot) is not { } l
+            || !BoardCursor.CanBoot(true, l)) return;
+        if (_boot?.Slot == slot)
+        {
+            _boot = null;
+            if (Server.Kick(slot) is { } why) Say(why);
+        }
+        else _boot = ((byte)slot, l.Name);
     }
 
     /// <summary>The CTF teams' colours (Red Dawn, Gang Green, Purple Reign, Black Plague; the last drawn light so it shows).</summary>
@@ -434,10 +511,18 @@ public partial class NetHud : CanvasLayer
             foreach (var fl in World.Flags)
                 f.Flags.Add((fl.Team, fl.State, fl.State == 4 && fl.Carrier != 0 ? CarName(fl.Carrier) : null,
                     sc?.Players.Where(p => p.Team == fl.Team).Select(p => p.Kills).DefaultIfEmpty(0).Max() ?? 0));
-        // the window only while its key is held: Tab, or a pad's Back; one view, the teams' totals heading
-        // their players in team play (docs/deviations.md, Standings)
-        bool players = ScoresHeld() || PadBackHeld();
-        if (players) { f.Board = PlayersPage(); _boardSeen = true; }
+        // the window while its key is held (show_player_scores, else Tab), or a pad's Back; one view, the teams' totals heading
+        // their players in team play (docs/deviations.md, Standings); a tap locks it up, with a pointer (#107)
+        bool players = _lock.Update(ScoresHeld() || PadBackHeld(), _t);
+        _boardUp = players;
+        if (!_lock.Locked) _cursor = -1;
+        if (players)
+        {
+            f.Board = PlayersPage();
+            _boardSeen = true;
+            f.BoardLocked = _lock.Locked;
+            f.BoardCursor = _cursor;
+        }
         f.ScoresKey = ScoresKeyLabel();
         f.ScoresHint = !_boardSeen && _t < 90;
         // the other keys are listed in the standings, not over the game (players found the HUD too busy)

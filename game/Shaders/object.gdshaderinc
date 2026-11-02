@@ -260,7 +260,7 @@ void vertex() {
 // Primitives and blends after Inigo Quilez (iquilezles.org/articles/distfunctions): ellipsoid, capsule, round cone, round box, torus, the
 // polynomial smooth minimum, the tetrahedral normal and the five-tap occlusion.
 float gl_dot2(vec3 v) { return dot(v, v); }
-float gl_ellipsoid(vec3 p, vec3 r) { float k0 = length(p / r), k1 = length(p / (r * r)); return k0 * (k0 - 1.0) / k1; }
+float gl_ellipsoid(vec3 p, vec3 r) { float k0 = length(p / r), k1 = max(length(p / (r * r)), 1e-6); return k0 * (k0 - 1.0) / k1; }   // k1 is 0 at the centre
 float gl_capsule(vec3 p, vec3 a, vec3 b, float r) {
 	vec3 pa = p - a, ba = b - a;
 	return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)) - r;
@@ -428,7 +428,7 @@ vec3 gl_cabin(vec3 ro, vec3 rd, float px, float detail, float dist, float who, v
 	vec3 shl = vec3(-0.17, -0.26, 0.06);
 	// the elbow: two limbs of 0.275 between shoulder and hand, bent down and out
 	vec3 sh_h = whand - shl;
-	float dl = length(sh_h);
+	float dl = max(length(sh_h), 1e-4);
 	vec3 axis = sh_h / dl, pole = vec3(-0.5, -1.0, 0.2);
 	pole = normalize(pole - axis * dot(pole, axis));
 	vec3 elbow = shl + 0.5 * sh_h + pole * sqrt(max(0.275 * 0.275 - 0.25 * dl * dl, 0.0));
@@ -538,7 +538,7 @@ void fragment() {
 		// the faces turned to the ground (the chassis under the car, the wheel arches' tops seen from below) are not
 		// paint: matte, no clear coat. Mirror-coated, in the shade, they showed nothing but the brown lower half of
 		// the sky's radiance, streaked as the horizon is, and read as the ground seen through the car (a car in the air).
-		float under = 1.0 - smoothstep(-0.6, -0.15, normalize(v_nlocal).y);
+		float under = 1.0 - smoothstep(-0.6, -0.15, v_nlocal.y / max(length(v_nlocal), 1e-6));
 		ALBEDO = c.rgb;
 		ROUGHNESS = mix(0.4, 0.85, under);
 		METALLIC = 0.0;
@@ -564,6 +564,7 @@ void fragment() {
 			ALBEDO = mix(ALBEDO, paint_respray(gf.rgb, gpw.ba), gf.a * (1.0 - g));
 			float out_d = (0.5 - gm) * 12.0;   // texels outside the edge (GlassShape.FieldReach = 6)
 			float aa = max(fwidth(out_d), 1e-3);
+			float px = max(length(fwidth(v_local)), 0.003);   // the pixel's footprint on the car, taken here: derivatives are only defined where every pixel of a 2x2 quad runs (not inside the glass branch)
 			// past the trim line, the body's colour up to five texels out, fading back to the painting by five and a half: the painting's
 			// stepped edge between trim and body, and the chrome line down a narrow pillar between two panes, are drawn over straight
 			float bodyw = clamp((out_d - 1.25) / aa + 0.5, 0.0, 1.0) * (1.0 - smoothstep(4.5, 5.5, out_d)) * (1.0 - g);
@@ -574,7 +575,6 @@ void fragment() {
 				float dist = length(VERTEX);
 				float ndv = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
 				float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
-				float px = max(length(fwidth(v_local)), 0.003);
 				float detail = 1.0 - smoothstep(14.0, 45.0, dist);
 				float drv = 1.0 - clamp(wreck.x * 4.0, 0.0, 1.0);
 				vec3 rd = normalize(v_local - v_cam_l);

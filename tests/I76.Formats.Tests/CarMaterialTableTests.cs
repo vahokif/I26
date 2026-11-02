@@ -154,4 +154,18 @@ public class CarMaterialTableTests
         Assert.InRange(a, 1, b);
         Assert.DoesNotContain("orm_tex", shader[a..b]);
     }
+
+    [Fact]
+    public void TheWindowShaderTakesDerivativesOutsideItsBranchesAndGuardsItsDivisions()
+    {
+        string shader = RepoFile("game", "Shaders", "object.gdshaderinc");
+        Assert.Contains("k1 = max(length(p / (r * r)), 1e-6)", shader);
+        // the glass block's pixel-footprint derivative is taken before the per-pixel `if (g > 0.0)` branch, not in it
+        int branch = shader.IndexOf("if (g > 0.0) {", StringComparison.Ordinal);
+        int fw = shader.IndexOf("float px = max(length(fwidth(v_local))", StringComparison.Ordinal);
+        Assert.InRange(fw, 1, branch);
+        int end = shader.IndexOf("if (wheel_face)", branch, StringComparison.Ordinal);
+        Assert.DoesNotContain("fwidth", shader[branch..end]);
+        Assert.DoesNotContain("normalize(v_nlocal)", shader[shader.IndexOf("} else if (car_paint) {", StringComparison.Ordinal)..branch]);
+    }
 }

@@ -408,6 +408,8 @@ public sealed class MaterialLibrary(TextureFactory textures)
                     int s = (Math.Clamp(y + j, 0, h - 1) * w + x) * 4, d = (y * w + x) * 4;
                     for (int c = 0; c < 4; c++) num[d + c] += k[j + r] * tmp[s + c];
                 }
+        // no glass to take a colour from (a ring that never forms): the texture's own mean, not black
+        if (mn == 0) { for (int i = 0; i < w * h; i++) { mr += rgba[i * 4]; mg += rgba[i * 4 + 1]; mb += rgba[i * 4 + 2]; } mn = w * h; }
         var o = new byte[w * h * 3];
         for (int i = 0; i < w * h; i++)
         {

@@ -184,8 +184,10 @@ public partial class SimDriver : Node
         if (e is not (InputEventKey { Pressed: true, Echo: false } or InputEventMouseButton { Pressed: true } or InputEventJoypadButton { Pressed: true }) || Player?.Sim is null) return;
         if (FlyCameraActive?.Invoke() != true) LatchPress(e);
         if (FlyCameraActive?.Invoke() == true) return;   // WASDQE fly the debug camera; they are also the radar camera, targets...
-        bool wheelCycle = MouseCamera.WheelCycleWeapon && e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown };
-        if (wheelCycle || Controls.Pressed(e, "weapon_cycle")) _commands.Push(CarCommands.WeaponCycle);   // cammo.wav is the sim's, when the selection changes
+        if (MouseCamera.WheelCycleWeapon && e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp })
+            _commands.Push(CarCommands.WeaponCyclePrev);
+        else if ((MouseCamera.WheelCycleWeapon && e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }) || Controls.Pressed(e, "weapon_cycle"))
+            _commands.Push(CarCommands.WeaponCycle);   // cammo.wav is the sim's, when the selection changes
         else if (Controls.Pressed(e, "weapon_link")) _commands.Push(CarCommands.WeaponLink);
         else if (Controls.Pressed(e, "toggle_lights")) _commands.Push(CarCommands.Lights);
         else if (Controls.Pressed(e, "POETRY") && Remote is null) _commands.Push(CarCommands.Poem);

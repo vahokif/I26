@@ -84,6 +84,8 @@ public enum CarCommands : uint
     /// (<see cref="Vehicles.UprightReset"/>). The server's alone in a network game; a host may turn it off.
     /// </summary>
     ResetUpright = 1 << 27,
+    /// <summary>Mouse wheel up with Wheel Up / Down set to Cycle Weapon: steps the weapon selection upward (reverse of <see cref="WeaponCycle"/>).</summary>
+    WeaponCyclePrev = 1 << 28,
 }
 
 /// <summary>

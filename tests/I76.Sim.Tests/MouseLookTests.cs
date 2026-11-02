@@ -87,4 +87,45 @@ public class MouseLookTests
         head.Step(0.016f, autoReturn: true, keyHeld: true, 0, 0);
         Assert.False(head.HasOffset);
     }
+
+    [Fact]
+    public void ArmoryCyclePrevStepsUpTheWeaponRackAndRespectsLinks()
+    {
+        var arm = new I76.Sim.Weapons.Armory();
+        for (uint id = 0; id < 4; id++)
+        {
+            var def = I76.Sim.Weapons.Armory.HandgunDef(1) with { Class = id < 2 ? 2u : id + 1u };
+            var hp = new I76.Formats.Bwd2.Hardpoint("w", id, 1, 2, new([1, 0, 0, 0, 1, 0, 0, 0, 1], [0, 0, 0]));
+            arm.Weapons.Add(new I76.Sim.Weapons.Weapon
+            {
+                Def = def, Hardpoint = hp, Style = 2, MountKind = 1, MuzzlePos = default, BaseRot = default,
+                Hp = 100, MaxHp = 100, Damage = 10, Ammo = 100,
+            });
+        }
+        arm.Selected = 0;
+
+        // unlinked: CyclePrev steps 0 -> 3 -> 2 -> 1 -> 0
+        arm.Select(false, false, out bool changed, cyclePrevKey: true);
+        Assert.True(changed);
+        Assert.Equal(3, arm.Selected);
+        arm.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(2, arm.Selected);
+        arm.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(1, arm.Selected);
+        arm.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(0, arm.Selected);
+
+        // linked (weapons 0 and 1 share class 2): CyclePrev from 0+1 goes to 3, then 2, then back to 0+1
+        arm.Select(false, true, out _);
+        Assert.Equal(0, arm.Selected);
+        Assert.Equal([1], arm.Group);
+
+        arm.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(3, arm.Selected);
+        arm.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(2, arm.Selected);
+        arm.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(0, arm.Selected);
+        Assert.Equal([1], arm.Group);
+    }
 }

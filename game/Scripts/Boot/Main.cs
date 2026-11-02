@@ -2244,6 +2244,7 @@ public partial class Main : Node3D
 
     private static void ToggleFullscreen() =>
         DisplayServer.WindowSetMode(DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
+        if (I76.Game.ForceFeedback.Held?.Target == this) I76.Game.ForceFeedback.Held = null;   // it would keep this scene, and all it built, alive
 
     /// <summary>The script holds the camera (pushCam ... popCam): no view can be selected (the camera view selection at mode 5).</summary>
     private bool CameraHeld => _scriptCam?.Current == true;

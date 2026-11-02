@@ -59,6 +59,9 @@ public partial class SmokeLayer : Node3D
         }
     }
 
+    /// <summary>A smoke that leaves the tree: its slot is dropped (it holds the smoke, and what the smoke holds, as long as it is in the table).</summary>
+    public static void Release(object owner) { lock (Lock) Slots.Remove(owner); }
+
     private const float SoftDistance = 1.5f;
 
     // ---- main thread: the compositor on the camera, the composite quad, the layer textures, the globals ----

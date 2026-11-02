@@ -226,5 +226,5 @@ public partial class ChemClouds : Node3D
         _mmNew.VisibleInstanceCount = _order.Count;
     }
 
-    public override void _ExitTree() => SmokeLayer.Submit(this, _buf, 0, System.Numerics.Vector3.One);
+    public override void _ExitTree() => SmokeLayer.Release(this);
 }

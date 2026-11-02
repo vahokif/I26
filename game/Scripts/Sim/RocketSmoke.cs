@@ -160,5 +160,5 @@ public partial class RocketSmoke : Node3D
         _mm.VisibleInstanceCount = cnt;
     }
 
-    public override void _ExitTree() => SmokeLayer.Submit(this, _buf, 0, Tint);
+    public override void _ExitTree() => SmokeLayer.Release(this);
 }

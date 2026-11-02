@@ -434,7 +434,7 @@ public partial class DamageSmoke : Node3D
 
     public override void _ExitTree()
     {
-        SmokeLayer.Submit(this, _layerBuf, 0, System.Numerics.Vector3.One);
+        SmokeLayer.Release(this);
         if (Current == this) Current = null;
     }
 

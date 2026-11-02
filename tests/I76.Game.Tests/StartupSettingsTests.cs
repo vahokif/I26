@@ -39,4 +39,12 @@ public class StartupSettingsTests
         Assert.Contains("[debug]", t);
         Assert.Contains("[rendering]", t);
     }
+
+    [Fact]
+    public void AChosenMicrophoneTurnsTheAudioInputOnAtTheNextStart()
+    {
+        Assert.Equal("", StartupSettings.Text(false, RendererChoice.Auto, true, micInput: false));
+        Assert.Equal("[audio]\n\ndriver/enable_input=true\n", StartupSettings.Text(false, RendererChoice.Auto, true, micInput: true));
+        Assert.Contains("[audio]", StartupSettings.Text(true, RendererChoice.OpenGL, false, micInput: true));
+    }
 }

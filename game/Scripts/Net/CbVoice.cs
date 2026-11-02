@@ -247,6 +247,7 @@ public partial class CbVoice : Node
     {
         if (_mic is not null || !I76.Game.Shell.MicNames.OpensInput(_micDevice)) return;        // none: the input is never touched
         InputOpened = true;
+        // Linux and Windows open the input when it is first asked for; macOS only if the setting was on at start (the next start has it: StartupSettings)
         try { ProjectSettings.SetSetting("audio/driver/enable_input", true); } catch { }
         GD.Print($"[cb] opening the audio input: {_micDevice}");
         int bus = AudioServer.GetBusIndex(MicBus);

@@ -1328,6 +1328,6 @@ public sealed class ShellSettings
         if (LogFile) c.SetValue("port", "log_file", true);
         if (Renderer != I76.Game.Boot.RendererChoice.Auto) c.SetValue("port", "renderer", Renderer.ToString());
         c.Save(Path);
-        I76.Game.Boot.StartupSettings.Write(LogFile, Renderer);
+        I76.Game.Boot.StartupSettings.Write(LogFile, Renderer, MicNames.OpensInput(CbMic));
     }
 }

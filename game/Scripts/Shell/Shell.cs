@@ -576,6 +576,8 @@ public partial class Shell : CanvasLayer
     /// <summary>A modal popup over everything, or none: it is ticked instead of the overlay and the screen.</summary>
     /// <summary>A pop-up is up over the screen (which must not repaint under it).</summary>
     public bool ModalOpen => _modal is not null;
+    /// <summary>An overlay (the notepad screens) is up over the screen: a screen's own layers over the frame hide under it.</summary>
+    public bool OverlayOpen => _overlay is not null;
 
     public void Modal(ShellScreen? popup)
     {

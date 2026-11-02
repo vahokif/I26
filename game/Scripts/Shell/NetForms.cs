@@ -21,8 +21,9 @@ namespace I76.Game.Shell;
 /// server at that address lists, and a game at the address itself, asked
 /// every second.</item>
 /// </list>
-/// The host form (record 19) adds GAME NAME, NO. DRIVERS, TEAM PLAY, INVITE
-/// ONLY and MAX SCORE to the area list; its BROADCAST GAME launches a listen
+/// The host form (record 19; the base game's drawn by the port, HostForm.cs)
+/// adds GAME NAME, NO. DRIVERS, TEAM PLAY, INVITE ONLY and MAX SCORE to the
+/// area list; its BROADCAST GAME launches a listen
 /// server and joins it. The roster (record 18) lists the games found as
 /// "name (n/max)" with an arrow to the game's popup; JOIN GAME joins the
 /// highlighted one. With team play either first asks CHOOSE A TEAM.
@@ -71,7 +72,7 @@ public sealed partial class MeleeScreen
     /// apart from Play Options' own, which a player's single-player games use (the first time it is that one).
     /// </summary>
     private int _rate = I76.Sim.Session.SimRate.Default.Label;
-    /// <summary>The host form's UNLIM. TURRETS (the port's): cars in this game may carry several roof turrets.</summary>
+    /// <summary>The host form's Unlimited Turrets (the port's; UNLIM. TURRETS in the Nitro form's game options): cars in this game may carry several roof turrets.</summary>
     private bool _turrets;
     private static int StepRate(int hz, int by)
     {
@@ -84,7 +85,7 @@ public sealed partial class MeleeScreen
     /// <summary>
     /// The host form is a co-op form: its list is the install's story missions by their titles (<see cref="I76.Formats.Mission.MissionTitles.Coop"/>), its seats 1-8, no
     /// team play, limit or Bots. The Nitro Pack's GAME TYPE has Co-op beside Combat, Race and CTF; the base game's form switches on its
-    /// AREA OF PLAY bar's right end (<see cref="_coopBase"/>).
+    /// Game Type row (<see cref="_coopBase"/>).
     /// </summary>
     private bool Coop => Hosting && (Nitro ? Types[_kind].Coop : _coopBase);
     private bool _coopBase;
@@ -104,7 +105,7 @@ public sealed partial class MeleeScreen
     private bool StoryCar => StoryContext && Shell.Settings.CoopOwnCar;
     private int CoopIndex() => Math.Max(0, CoopList.FindIndex(m => m.Msn.Equals(_setup.CoopArena, StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>The base game's form to or from co-op (its Bots line's end): the list, the seats, the game's name follow.</summary>
+    /// <summary>The base game's form to or from co-op (its Game Type row): the list, the seats, the game's name follow.</summary>
     private void SetCoopBase(bool on)
     {
         if (_coopBase == on) return;
@@ -287,70 +288,6 @@ public sealed partial class MeleeScreen
         Frame.Fill(x + 1, y + 1, 1, 3, ink);
         Frame.Fill(x + 5, y + 1, 1, 3, ink);
         Frame.Fill(x, y + 4, 7, 6, ink);            // the body
-    }
-
-    /// <summary>The game name, NO. DRIVERS, the boxes' X marks and MAX SCORE.</summary>
-    private void DrawHost()
-    {
-        Frame.Text(_font, 11, 305, AddressBookPopup.Fit(_font, _gameName + (_naming ? "_" : ""), 160));
-        Frame.Text(_font, 172, 338, $"{_drivers:00}");
-        if (_inviteOnly) Frame.Text(_font, 185, 380, "X");
-        // the bar's right end switches the game type (the Nitro form's GAME TYPE row is its own)
-        DrawModeButton();
-        // (y 356: the line's feet stay off the options box's top rule, y 368)
-        if (_coopBase)
-        {
-            // the options box's team play and score limit mean nothing in a story mission
-            Frame.Text(_font, 15, 356, "Co-op missions");
-        }
-        else
-        {
-            if (_teamPlay) Frame.Text(_font, 84, 380, "X");
-            if (_scoreOn) Frame.Text(_font, 84, 402, "X");
-            Frame.Text(_font, 126, 400, _maxScore.ToString());
-            Frame.Text(_font, 15, 356, "Bots");
-            Frame.Text(_font, 56, 356, "-");
-            Frame.Text(_font, 68, 356, $"{Math.Min(_bots, MaxBots):00}");
-            Frame.Text(_font, 92, 356, "+");
-            Frame.Text(_font, 106, 356, _botSkill.ToString());
-            // (the A.I. CARS button, at the line's right end)
-            Frame.Text(_font, 215 - _font.Measure("Cars"), 356, "Cars");
-            Frame.Text(_font, 15, 435, $"Share maps: {(Shell.Settings.ShareMaps ? "On" : "Off")}");
-        }
-        Frame.Text(_font, _coopBase ? 15 : 152, 435, $"Pass: {(_password.Length > 0 ? "*" : "-")}");
-        // ("Hidden: On", the box's name shortened to leave the line's end for the rate)
-        // (the four lines are full, so Unlim. Turrets and the Chase Crosshair share the first by short names, as Hidden, Pass and Rate do)
-        Frame.Text(_font, 15, 421, $"Turrets: {(_turrets ? "On" : "Off")}");
-        Frame.Text(_font, 128, 421, $"X-hair: {(Shell.Settings.HostCrosshair ? "On" : "Off")}");
-        Frame.Text(_font, 15, 449, $"Hidden: {(Shell.Settings.HiddenContent ? "On" : "Off")}");
-        // (and the Car Reset's, the reset-upright key, on a line of its own under them)
-        Frame.Text(_font, 15, 463, $"Car reset: {(Shell.Settings.CarReset ? "On" : "Off")}");
-        Frame.Text(_font, 152, 463, $"CB: {(Shell.Settings.CbRadio ? "On" : "Off")}");
-        Frame.Text(_font, 122, 449, $"Rate {_rate}Hz");
-    }
-
-    /// <summary>
-    /// The game type button at the AREA OF PLAY bar's right end (the port's): LOCAL DRIVER's RENAME button, its edges and a plain column of
-    /// it stretched, with the type it hosts in the shell's label font. A click or A switches it: Melee, Co-op.
-    /// </summary>
-    private bool _modeBtnBaked;
-    private void DrawModeButton()
-    {
-        const int sx = 173, sy = 46, sw = 41, h = 12, edge = 3;
-        var (x0, x1, y0, _) = (ModeBtn.X0, ModeBtn.X1, ModeBtn.Y0, 0);
-        int w = x1 - x0 + 1;
-        if (!_modeBtnBaked)
-        {
-            _modeBtnBaked = true;
-            for (int tx = 0; tx < w; tx++)
-                Frame.CopyBackground(sx + (tx < edge ? tx : tx >= w - edge ? sw - (w - tx) : edge - 1), sy, 1, h, x0 + tx, y0);
-        }
-        var f = Shell.Db.Font(0x47);
-        string t = _coopBase ? "CO-OP" : "MELEE";
-        var ink = ShellFrame.DefaultInk;
-        int tx0 = x0 + (w - f.Measure(t)) / 2, ty0 = y0 + (h - f.Height) / 2 + 1;
-        Frame.Text(f, tx0, ty0, t, ink);
-        Frame.Text(f, tx0 + 1, ty0, t, ink);
     }
 
     /// <summary>The host form's CB Radio (the port's): whether the game's players may talk to each other on the CB (push-to-talk voice chat).</summary>
@@ -567,7 +504,7 @@ public sealed partial class MeleeScreen
     }
 
     /// <summary>
-    /// A.I. CARS (<see cref="BotCarsPopup"/>) from the Bots line (the base form's, the Nitro form's GAME OPTIONS): a row for each bot seat. DONE keeps the
+    /// A.I. CARS (<see cref="BotCarsPopup"/>) from the A.I. Cars row (the base form's, the Nitro form's GAME OPTIONS): a row for each bot seat. DONE keeps the
     /// choices (melee.cfg); <paramref name="then"/> is what the form does after (the Nitro options popup comes back).
     /// </summary>
     private void BotCarsOpen(Action? then)
@@ -659,7 +596,7 @@ public sealed partial class MeleeScreen
             case 31 when Hosting: _botSkill = (I76.Sim.Missions.BotSkill)(((int)_botSkill + 1) % 3); return true;
             case 11 when Hosting:
             {
-                int row = _scroll + (p.Y - 151) / Row;
+                int row = _scroll + (DrawnHost ? HostFormLayout.ListRowAt(p.Y) : (p.Y - 151) / Row);
                 if (row < 0 || row >= Arenas.Count || row - _scroll >= Rows) return true;
                 Area = row;
                 if (!_gameRenamed) _gameName = Arenas[row].Name;

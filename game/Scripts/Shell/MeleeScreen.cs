@@ -8,8 +8,9 @@ namespace I76.Game.Shell;
 /// The melee forms:
 /// mode 0 INSTANT MELEE (record 24: an arena and up to seven A.I. drivers),
 /// mode 1 SCENARIO (record 25), and the network melees (NetForms.cs): 3 and
-/// 4 the NET MELEE HOST EVENT FORM (record 19, the LAN and an address), 7
-/// and 8 its ENTRY ROSTER (record 18). The buttons are painted in the art;
+/// 4 the NET MELEE HOST EVENT FORM (record 19, the LAN and an address; the
+/// base game's drawn by the port, HostForm.cs), 7 and 8 its ENTRY ROSTER
+/// (record 18). The buttons are painted in the art;
 /// clicks go through the hotspot table (strict), every handled click plays
 /// record 82, all text is font 0x45, lists show six 17-px rows. The car's
 /// blueprint front and side views come from bank 0x3c.
@@ -32,49 +33,26 @@ public sealed partial class MeleeScreen : ShellScreen
         [0] = (31, 216, 150, 270), [1] = (9, 27, 128, 144), [2] = (9, 27, 250, 268), [3] = (610, 621, 400, 415), [4] = (437, 449, 419, 434),
         [5] = (456, 616, 422, 435), [6] = (229, 369, 453, 471), [7] = (12, 165, 44, 58), [8] = (150, 166, 288, 303), [9] = (198, 213, 288, 303),
         [10] = (9, 215, 335, 454), [11] = (31, 216, 150, 270), [12] = (9, 27, 128, 144), [13] = (9, 27, 250, 268), [14] = (173, 213, 46, 57),
-        [15] = (489, 630, 453, 471), [16] = (84, 97, 380, 392), [17] = (185, 199, 380, 392), [18] = (84, 98, 402, 414),
-        [20] = (104, 117, 399, 412), [21] = (192, 206, 399, 412), [22] = (173, 213, 306, 317),
-        // the port's: the base host form's SHARE MAPS line, on the parchment under the options box (docs/multiplayer.md "Custom maps")
-        [26] = (10, 148, 434, 448),
-        // the password line beside it (protocol 12)
-        [27] = (149, 215, 434, 448),
-        // the base host form's HIDDEN WPNS & CARS line under them
-        [28] = (10, 116, 449, 462),
-        // the port's: UNLIM. TURRETS ("Turrets") on the free line above SHARE MAPS (docs/multiplayer.md)
-        [35] = (10, 125, 419, 433),
-        // and the Chase Crosshair's ("X-hair", the aiming aid), at that line's right end
-        [38] = (126, 215, 419, 433),
-        // the port's: the base host form's BOTS line, between NO. DRIVERS and the options: fewer, more, and the skill (docs/multiplayer.md "Bots")
-        [29] = (53, 67, 356, 370), [30] = (90, 104, 356, 370), [31] = (105, 165, 356, 370),
-        // and its A.I. CARS (BotCarsPopup), at the line's right end
-        [34] = (167, 215, 356, 370),
-        // the port's: the host's simulation rate, a click steps it, at the Hidden Wpns line's right end
-        [33] = (120, 215, 449, 462),
-        // and the Car Reset's (the reset-upright key's), on the line under them
-        [36] = (10, 148, 463, 477),
-        // and the CB Radio's (the voice chat), beside it
-        [37] = (149, 215, 463, 477),
-        // the port's: the base host form's game type, the button on the AREA OF PLAY bar's right end (RENAME's look): Melee or Co-op (a co-op game's story missions, docs/multiplayer.md "Co-op over the network")
-        [32] = (173, 213, 78, 89),
+        [15] = (489, 630, 453, 471),
+        // (the base game's host form is the port's own sheet, its hotspots HostFormLayout's: 8, 9 and 16..38 there)
         // the Nitro host form's WEAPON RESTRICTIONS (its own rectangle is NitroHost's)
         [24] = (31, 193, 310, 326),
     };
-    // The ids each mode keeps (the host forms' NO. DRIVERS ⊟ ⊞ moved down to y 338..353)
+    // The ids each mode keeps
     private int[] Live => Mode switch
     {
         0 => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         1 => [0, 1, 2, 3, 4, 5, 6, 7, 14, 15],
         3 or 4 when Nitro => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 22, 23, 24, 25, 27],
-        // a co-op game has no team play, score limit, Bots or custom map to share: the box's rows that are left are INVITE ONLY and the password
-        3 or 4 when _coopBase => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 17, 22, 27, 28, 32, 33, 35, 36, 37, 38],
-        3 or 4 => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 16, 17, 18, 20, 21, 22, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38],
+        // the base game's: the drawn form's rows (a co-op game has no team play, score limit, Bots or custom map to share)
+        3 or 4 => [.. HostHot.Keys.Order()],
         _ => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15],
     };
-    private (int X0, int X1, int Y0, int Y1) ModeBtn => Hot[32];
     private (int X0, int X1, int Y0, int Y1) Rect(int id) =>
+        DrawnHost ? HostHot[id] :
         // Nitro's instant melee table is the base one's but for the driver box, 11..170: the MAKE / MODEL and VARIANT arrows are only the arrows
         Nitro && !Hosting && id == 7 ? Hot[7] with { X0 = 11, X1 = 170 } :
-        Nitro && Hosting && NitroHost.TryGetValue(id, out var r) ? r : Hosting && id is 8 or 9 ? Hot[id] with { Y0 = 338, Y1 = 353 } : Hot[id];
+        Nitro && Hosting && NitroHost.TryGetValue(id, out var r) ? r : Hot[id];
 
     private const int Row = 17, Rows = 6;
     /// <summary>The drivers' box shows seven rows (the original's whole list: the player and seven opponents fill it); I26 allows <see cref="MaxOpponents"/> opponents and scrolls the box.</summary>
@@ -192,8 +170,8 @@ public sealed partial class MeleeScreen : ShellScreen
 
     public override void Repaint()
     {
-        _modeBtnBaked = false;
-        if (Nitro && Mode == 0) Frame.LoadBackground(Shell.Db.BackgroundNative(20), 24, 20);   // base 24's art, byte for byte
+        if (DrawnHost) RepaintDrawnHost();
+        else if (Nitro && Mode == 0) Frame.LoadBackground(Shell.Db.BackgroundNative(20), 24, 20);   // base 24's art, byte for byte
         else Frame.LoadBackground(Shell.Db, Mode switch { 0 => 24, 1 => 25, 3 or 4 => 19, _ => 18 });
         Draw();
     }
@@ -202,6 +180,7 @@ public sealed partial class MeleeScreen : ShellScreen
     private void Draw()
     {
         Frame.RestoreAll();
+        if (DrawnHost) { DrawDrawnHost(); return; }
         var (name, model, variant) = _slots[_shown];
         int x0 = Mode == 1 ? 40 : 34;
         Frame.Text(_font, 12, 45, _slots[0].Name + (_renaming ? "_" : ""));
@@ -214,7 +193,6 @@ public sealed partial class MeleeScreen : ShellScreen
             for (int k = 0; k < Rows && _scroll + k < ListCount; k++) DrawListRow(_scroll + k, x0, ListRowY(k));
         }
         if (Nitro && Hosting) DrawNitroHost();
-        else if (Hosting) DrawHost();
         if (Mode == 1 && Victory.Lightest(MeleeData.Scenarios[Area].Msn) is { } best && best.Model >= 0 && best.Model < _data.Models.Count)
             Frame.Text(_font, 16, 308, _data.Models[best.Model].MakeModel);     // after the art's "Lightest car to win:"
         if (Mode == 0)
@@ -277,7 +255,8 @@ public sealed partial class MeleeScreen : ShellScreen
             var l = new List<PadRegion>();
             foreach (int id in Live)
             {
-                if (id is 0 or 11)
+                if (id == 11 && DrawnHost) HostListRegions(l);
+                else if (id is 0 or 11)
                 {
                     bool games = Mode is 7 or 8;
                     int rows = games ? ListRows : Rows, y0 = id == 11 ? (games ? (Nitro ? 173 : 151) : 151) : Hot[0].Y0 + 1;
@@ -448,7 +427,7 @@ public sealed partial class MeleeScreen : ShellScreen
     }
 
     /// <summary>Off the screen (to the chassis form, or for good): the session search stops; it starts again on the way back.</summary>
-    public override void Leave() => StopGames();
+    public override void Leave() { StopGames(); LeaveDrawnHost(); }
 }
 
 /// <summary>

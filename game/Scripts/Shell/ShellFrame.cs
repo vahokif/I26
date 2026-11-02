@@ -72,6 +72,9 @@ public sealed class ShellFrame
         Restore(dx, dy, w, h);
     }
 
+    /// <summary>The frame's pixels as they stand (a screen's own layer over the frame compares them with what the screen drew, to keep off a pop-up).</summary>
+    public ReadOnlySpan<byte> Pixels => _work;
+
     /// <summary>The whole work buffer back to the background.</summary>
     public void RestoreAll() { Array.Copy(_clean, _work, _clean.Length); Unplace(0, 0, W, H); ForgetText(); _dirty = true; }
 

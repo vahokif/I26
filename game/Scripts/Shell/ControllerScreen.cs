@@ -605,7 +605,8 @@ public sealed class ControllerScreen : OverlayScreen
 /// </summary>
 public static class PaperSheet
 {
-    public static Pcx Make(Pcx art, bool rules, int firstButton = 1, bool table = false)
+    /// <param name="lines">The 1997 look's rules when they are not Control Configuration's (the host form's own sheet), as rectangles.</param>
+    public static Pcx Make(Pcx art, bool rules, int firstButton = 1, bool table = false, IEnumerable<(int X, int Y, int W, int H)>? lines = null)
     {
         const int W = 640, H = 480;
         var pal = art.Palette;
@@ -653,12 +654,12 @@ public static class PaperSheet
                     && (y - ControllerScreen.RowTop) % ControllerScreen.RowH == ControllerScreen.RowH - 1) t -= 0.13f;
                 px[y * W + x] = shade[Math.Clamp((int)MathF.Round(t * (Shades - 1)), 0, Shades - 1)];
             }
-        if (rules) Rule(px, Near, firstButton, table);
+        if (rules) Rule(px, Near, firstButton, table, lines);
         return Pcx.Create(W, H, px, pal);
     }
 
     /// <summary>The frame's double rule, the columns' rules and rows, and the button bars, in the palette (the 1997 look; the modern look draws them as vectors).</summary>
-    private static void Rule(byte[] px, Func<float, float, float, byte> near, int firstButton, bool table)
+    private static void Rule(byte[] px, Func<float, float, float, byte> near, int firstButton, bool table, IEnumerable<(int X, int Y, int W, int H)>? lines)
     {
         var rng = new Random(16);
         byte rule = near(177, 141, 74), ruleDark = near(160, 124, 62), ruleLight = near(196, 156, 82);
@@ -670,7 +671,8 @@ public static class PaperSheet
         }
         // a printed rule, unevenly inked
         byte Ink() => rng.Next(10) switch { 0 => ruleLight, 1 or 2 => ruleDark, _ => rule };
-        foreach (var r in table ? ControllerScreen.TableRules() : ControllerScreen.FrameRules()) Fill(r.Position.X, r.Position.Y, r.Size.X, r.Size.Y, Ink);
+        if (lines is not null) foreach (var (x, y, w, h) in lines) Fill(x, y, w, h, Ink);
+        else foreach (var r in table ? ControllerScreen.TableRules() : ControllerScreen.FrameRules()) Fill(r.Position.X, r.Position.Y, r.Size.X, r.Size.Y, Ink);
         byte bar = near(239, 165, 82), barDark = near(231, 156, 74), edge = near(73, 65, 41);
         for (int i = firstButton; i < ControllerScreen.Slots.Length; i++)
         {

@@ -97,6 +97,14 @@ public partial class Cockpit : Node
         if (!pit)
         {
             _wantArm[0] = _wantArm[1] = false;
+            if (_mouseHead.HasOffset || _freeLooking)
+            {
+                _mouseHead.Reset();
+                _freeLooking = false;
+                _yaw = 0;
+                _pitch = -13 * Mathf.Pi / 180;
+                _roll = 0;
+            }
             if (_mirrorView is not null) _mirrorView.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled;
         }
         if (shown && !_wasShown) ResetPanels();
@@ -195,8 +203,9 @@ public partial class Cockpit : Node
     /// <summary>Whether the head is turned (the 2D panels and the gun are off while it is).</summary>
     public bool LookingAway => _state != 2 || _freeLooking;
 
-    // the port's free look on the pad's look stick (FreeLook): the head in proportion, a hard push the glance keys' poses
+    // the port's free look on the pad's look stick (FreeLook) and mouse (MouseCockpitOffset)
     private readonly FreeLook _look = new();
+    private readonly I76.Sim.Views.MouseCockpitOffset _mouseHead = new();
     private FreeLook.Pose _pose;
     private bool _freeLooking;
 
@@ -210,6 +219,9 @@ public partial class Cockpit : Node
 
     private Texture2D? _reticle;
 
+    /// <summary>The 32x32 gunsight reticle texture (<c>zretc_1</c>) from the game's archive.</summary>
+    public Texture2D? ReticleTexture => _reticle ??= Image("zretc_1") is { } img ? ImageTexture.CreateFromImage(img) : null;
+
     /// <summary>
     /// The reticle zretc_1 (32x32) the 2D dash draws, with its top-left on the 640x480 frame: the side reticle at (300, 240) when
     /// an arm is raised or busy and the head has turned to its window (yaw beyond 88° right or -83° left), else the forward gunsight at
@@ -218,11 +230,10 @@ public partial class Cockpit : Node
     public (Texture2D Tex, int X, int Y)? Reticle()
     {
         if (Binoculars) return null;
-        _reticle ??= Image("zretc_1") is { } img ? ImageTexture.CreateFromImage(img) : null;
-        if (_reticle is null) return null;
+        if (ReticleTexture is not { } tex) return null;
         bool Up(int ch) => Car.Arms[ch].Busy || Car.Arms.Ready(ch);
-        if ((Up(1) && _yaw > 1.5359f) || (Up(2) && _yaw < -1.4486f)) return (_reticle, 300, 240);
-        if (Car.Arms.Idle(1) && Car.Arms.Idle(2) && MathF.Abs(_yaw) < 0.0698f) return (_reticle, 306, 300);
+        if ((Up(1) && _yaw > 1.5359f) || (Up(2) && _yaw < -1.4486f)) return (tex, 300, 240);
+        if (Car.Arms.Idle(1) && Car.Arms.Idle(2) && MathF.Abs(_yaw) < 0.0698f) return (tex, 306, 300);
         return null;
     }
 
@@ -259,13 +270,32 @@ public partial class Cockpit : Node
         if (int.TryParse(System.Environment.GetEnvironmentVariable("I76_HEAD_STATE"), out int hs) && hs is >= 0 and <= 7) _state = hs;
         var (ty, tp, tr) = HeadStates[_state];
         float yawT = ty * Mathf.Pi / 180, pitchT = tp * Mathf.Pi / 180, rollT = tr * Mathf.Pi / 180;
-        // the free look: facing forward with no glance key held, the stick's own aim (a little roll into the turn, as the glances lean)
-        if (_state == 2 && col == 2 && I76.Formats.Input.DashToggle.FreeLookAllowed(Node3D.Dash3D) && FreeLook.Head(sx, sy) is { } fh)
+        // the free look: facing forward with no glance key held, the stick's or mouse's own aim (a little roll into the turn, as the glances lean)
+        bool freeAllowed = _state == 2 && col == 2 && I76.Formats.Input.DashToggle.FreeLookAllowed(Node3D.Dash3D);
+        var fh = freeAllowed ? FreeLook.Head(sx, sy) : null;
+        if (MouseCamera.CockpitActive && freeAllowed)
         {
-            yawT = fh.Yaw * Mathf.Pi / 180;
-            pitchT = fh.Pitch * Mathf.Pi / 180;
-            rollT = System.Math.Clamp(fh.Yaw / 90f, -1f, 1f) * 2 * Mathf.Pi / 180;
-            _freeLooking = MathF.Abs(fh.Yaw) > 15 || MathF.Abs(fh.Pitch - FreeLook.Rest) > 10;
+            var (my, mp) = MouseCamera.Take();
+            _mouseHead.Step(dt, MouseCamera.ReturnBehind, fh is not null || Controls.Down("pilot_glance_target"), my, mp);
+        }
+        else
+        {
+            if (MouseCamera.CockpitActive) MouseCamera.Take();
+            _mouseHead.Reset();
+        }
+        if (fh is { } stickHead)
+        {
+            yawT = stickHead.Yaw * Mathf.Pi / 180;
+            pitchT = stickHead.Pitch * Mathf.Pi / 180;
+            rollT = System.Math.Clamp(stickHead.Yaw / 90f, -1f, 1f) * 2 * Mathf.Pi / 180;
+            _freeLooking = MathF.Abs(stickHead.Yaw) > 15 || MathF.Abs(stickHead.Pitch - FreeLook.Rest) > 10;
+        }
+        else if (_mouseHead.HasOffset)
+        {
+            yawT += _mouseHead.Yaw;
+            pitchT += _mouseHead.Pitch;
+            rollT = System.Math.Clamp(yawT / (Mathf.Pi / 2f), -1f, 1f) * 2 * Mathf.Pi / 180;
+            _freeLooking = MathF.Abs(_mouseHead.Yaw) > 15 * Mathf.Pi / 180 || MathF.Abs(_mouseHead.Pitch) > 10 * Mathf.Pi / 180;
         }
         // capture hook: I76_HEAD=yaw,pitch in the game's degrees
         if (System.Environment.GetEnvironmentVariable("I76_HEAD") is { } hv && hv.Split(',') is [var hy, var hp]
@@ -291,9 +321,9 @@ public partial class Cockpit : Node
             float e = Mathf.Atan2(d.Y, new Vector2(d.X, d.Z).Length());
             pitchT = -Mathf.Clamp(e, -16 * Mathf.Pi / 180, 16 * Mathf.Pi / 180);   // game pitch is positive downwards
         }
-        float k = 4 * dt;
+        float k = (_mouseHead.HasOffset ? 18 : 4) * dt;
         float dy = Mathf.Wrap(yawT - _yaw, -Mathf.Pi, Mathf.Pi);
-        if (MathF.Abs(dy) >= 0.005f) _yaw += k * dy;
+        if (MathF.Abs(dy) >= 0.005f) _yaw += MathF.Min(1f, k) * dy;
         _pitch = k <= 0.95f && MathF.Abs(pitchT - _pitch) >= 0.005f ? _pitch + k * (pitchT - _pitch) : pitchT;
         _roll = k <= 0.95f && MathF.Abs(rollT - _roll) >= 0.005f ? _roll + k * (rollT - _roll) : rollT;
         if (Node3D.CockpitCamera is { } cam)
@@ -303,8 +333,8 @@ public partial class Cockpit : Node
             cam.Fov = 73.74f;
         }
         // arms rise past ±58° / 53° to the side windows (the handguns): the sim moves them with the next tick
-        _wantArm[0] = _state == 4 && _yaw > 1.0123f;
-        _wantArm[1] = _state == 0 && _yaw < -0.9250f;
+        _wantArm[0] = (_state == 4 || _mouseHead.HasOffset) && _yaw > 1.0123f;
+        _wantArm[1] = (_state == 0 || _mouseHead.HasOffset) && _yaw < -0.9250f;
     }
 
     // ---- head sway: the eye tilts with the car's acceleration; view only ----

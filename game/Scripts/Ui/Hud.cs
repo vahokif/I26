@@ -48,15 +48,18 @@ public partial class Hud : CanvasLayer
 
     public override void _Ready()
     {
-        // the panels first: the target brackets are drawn over them (drawn after the panels), the handset over both
+        // the crosshair under the 2D instrument panels, the target brackets over them, the handset over all
+        if (Combat is not null && Origin is not null)
+            AddChild(new ChaseCrosshair { Player = () => Car?.Invoke(), Combat = Combat, Origin = Origin, CarOf = CarOf, Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Faithful = () => Faithful?.Invoke() == true, Name = "Crosshair" });
         if (Pit is not null) AddChild(_instruments = new ExtInstruments { Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Name = "ExtInstruments", Visible = false });
         _cb = Label(18);
         _cb.HorizontalAlignment = HorizontalAlignment.Left;
         _cb.AnchorTop = _cb.AnchorBottom = 1;
         _cb.OffsetLeft = 244; _cb.OffsetTop = -60;
         AddChild(_cb);
-        if (Combat is not null && Origin is not null) AddChild(new TargetIndicator { Player = () => Car?.Invoke(), Combat = Combat, Origin = Origin, CarOf = CarOf, Name = "Target",
-            Look1997 = new TargetIndicator1997 { On = () => Faithful?.Invoke() == true, Combat = Combat, Origin = Origin, CarOf = CarOf, Texture = n => Texture?.Invoke(n), Palette = Palette } });
+        if (Combat is not null && Origin is not null)
+            AddChild(new TargetIndicator { Player = () => Car?.Invoke(), Combat = Combat, Origin = Origin, CarOf = CarOf, Name = "Target",
+                Look1997 = new TargetIndicator1997 { On = () => Faithful?.Invoke() == true, Combat = Combat, Origin = Origin, CarOf = CarOf, Texture = n => Texture?.Invoke(n), Palette = Palette } });
         // the binoculars' frame: over the view, the brackets and the handset, under the text (drawn after the
         // frame and before the text panes)
         if (BinocularMaskMaterial() is { } bm)
@@ -166,6 +169,7 @@ public partial class Hud : CanvasLayer
             _instruments.Visible = Car?.Invoke() is not null && !cut && (inCar ? pit is { Dash3D: false, Binoculars: false } : ExtInstruments?.Invoke() == true);
         }
         if (GetNodeOrNull<CanvasItem>("Target") is { } target) target.Visible = !cut;
+        if (GetNodeOrNull<CanvasItem>("Crosshair") is { } ch) ch.Visible = !cut && MouseCamera.ChaseCrosshair;
         if (_binoMask is not null)
         {
             _binoMask.Visible = !cut && InCockpit?.Invoke() == true && Pit?.Invoke() is { Binoculars: true };
@@ -218,5 +222,140 @@ public partial class Hud : CanvasLayer
                 o[y * w + x] = (byte)System.Math.Round(255 * s / n);
             }
         return o;
+    }
+}
+
+/// <summary>
+/// A 3D-projected aiming crosshair for the F2 chase view (Mouse Options -> Chase Crosshair): projects the active forward or turret
+/// weapon's muzzle ray into the world (at the target's distance when a target is ahead, else the terrain intersection or 90 m) so the
+/// player sees where rounds will land regardless of the chase camera's height or mouse orbit angle.
+/// </summary>
+public partial class ChaseCrosshair : Control
+{
+    public required Func<Vehicle?> Player { get; init; }
+    public required I76.Sim.Weapons.Combat Combat { get; init; }
+    public required Func<System.Numerics.Vector3> Origin { get; init; }
+    public Func<Vehicle, Node3D?>? CarOf { get; init; }
+    public Func<I76.Game.Sim.Cockpit?>? Pit { get; init; }
+    public Func<bool>? InCockpit { get; init; }
+    public Func<bool>? Faithful { get; init; }
+
+    public override void _Ready()
+    {
+        AnchorRight = 1;
+        AnchorBottom = 1;
+        MouseFilter = MouseFilterEnum.Ignore;
+        TextureFilter = TextureFilterEnum.Nearest;
+    }
+
+    public override void _Process(double delta) => QueueRedraw();
+
+    public override void _Draw()
+    {
+        if (!MouseCamera.ChaseCrosshair || InCockpit?.Invoke() == true || Player() is not { } p || I76.Sim.Weapons.Combat.IsDead(p)) return;
+        var cam = GetViewport().GetCamera3D();
+        if (cam is not I76.Game.Camera.ChaseCamera { Fixed: null }) return;
+
+        I76.Sim.Weapons.Weapon? w = null;
+        var a = p.Armory;
+        if (a is not null)
+        {
+            if (a.Selected >= 0 && a.Selected < a.Weapons.Count && (a.Weapons[a.Selected].MountKind is 1 or 4 || a.Weapons[a.Selected].Style == 3))
+                w = a.Weapons[a.Selected];
+            w ??= a.Weapons.FirstOrDefault(x => x.MountKind is 1 or 4 || x.Style == 3);
+        }
+
+        System.Numerics.Vector3 muzzleLocal, dirLocal;
+        if (w is not null)
+        {
+            muzzleLocal = w.MuzzlePos;
+            if (a!.Link && w.Style != 3 && a.Group.Count > 1)
+            {
+                var sum = System.Numerics.Vector3.Zero;
+                int count = 0;
+                foreach (int idx in a.Group)
+                    if (idx >= 0 && idx < a.Weapons.Count && a.Weapons[idx].MountKind == w.MountKind)
+                    {
+                        sum += a.Weapons[idx].MuzzlePos;
+                        count++;
+                    }
+                if (count > 0) muzzleLocal = sum / count;
+            }
+            dirLocal = w.MuzzleRot.Forward;
+        }
+        else
+        {
+            muzzleLocal = new System.Numerics.Vector3((p.BoxX[0] + p.BoxX[3]) * 0.5f, (p.BoxY[1] + p.BoxY[3]) * 0.5f, p.BoxZ[3]);
+            dirLocal = System.Numerics.Vector3.UnitZ;
+        }
+
+        var origin = Origin();
+        var node = CarOf?.Invoke(p) is { } n && IsInstanceValid(n) ? n : null;
+        Vector3 muzzleG = node is not null ? node.GlobalTransform * I76.Game.Sim.Coords.ToGodot(muzzleLocal)
+            : I76.Game.Sim.Coords.ToGodot(p.Pos.ToVector3() + p.Rot.ToWorld(muzzleLocal) - origin);
+        Vector3 dirG = node is not null ? (node.GlobalTransform.Basis * I76.Game.Sim.Coords.ToGodot(dirLocal)).Normalized()
+            : I76.Game.Sim.Coords.ToGodot(p.Rot.ToWorld(dirLocal)).Normalized();
+        if (dirG.LengthSquared() < 1e-4f) return;
+
+        float dist = 16f;
+        bool onTarget = w is { Style: 3, OnTarget: true };
+        foreach (var v in Combat.World.Vehicles)
+        {
+            if (v == p || I76.Sim.Weapons.Combat.IsDead(v)) continue;
+            var vNode = CarOf?.Invoke(v) is { } vn && IsInstanceValid(vn) ? vn : null;
+            var vLocal = new System.Numerics.Vector3((v.BoxX[0] + v.BoxX[3]) * 0.5f, (v.BoxY[1] + v.BoxY[3]) * 0.5f, (v.BoxZ[0] + v.BoxZ[3]) * 0.5f);
+            Vector3 targetG = vNode is not null ? vNode.GlobalTransform * I76.Game.Sim.Coords.ToGodot(vLocal)
+                : I76.Game.Sim.Coords.ToGodot(v.Pos.ToVector3() + v.Rot.ToWorld(vLocal) - origin);
+            Vector3 rel = targetG - muzzleG;
+            float along = rel.Dot(dirG);
+            if (along <= 2f || along >= 250f) continue;
+            float hitR = System.MathF.Max(1.8f, (v.BoxX[3] - v.BoxX[0]) * 0.65f);
+            if ((rel - dirG * along).Length() <= hitR)
+            {
+                onTarget = true;
+                if (along < dist) dist = along;
+            }
+        }
+        var muzzleW = origin + new System.Numerics.Vector3(muzzleG.X, muzzleG.Y, -muzzleG.Z);
+        var dirW = new System.Numerics.Vector3(dirG.X, dirG.Y, -dirG.Z);
+        float prevD = 5f, prevH = muzzleW.Y + dirW.Y * prevD - Combat.World.Ground.BareHeight(muzzleW.X + dirW.X * prevD, muzzleW.Z + dirW.Z * prevD);
+        for (float d = 8f; d <= dist; d += 2f)
+        {
+            var pt = muzzleW + dirW * d;
+            float h = pt.Y - Combat.World.Ground.BareHeight(pt.X, pt.Z);
+            if (h <= 0f)
+            {
+                float frac = prevH > h ? prevH / (prevH - h) : 0f;
+                dist = System.Math.Clamp(prevD + (d - prevD) * frac, 6f, dist);
+                break;
+            }
+            prevD = d;
+            prevH = h;
+        }
+
+        Vector3 aimG = muzzleG + dirG * dist;
+        if (cam.IsPositionBehind(aimG)) return;
+        var size = GetViewportRect().Size;
+        var pos = cam.UnprojectPosition(aimG);
+        if (pos.X < 0 || pos.Y < 0 || pos.X > size.X || pos.Y > size.Y) return;
+        pos = pos.Round();
+
+        float u = Mathf.Max(1f, size.Y / 480f);
+        float gap = Mathf.Round(3.5f * u), len = Mathf.Round(4f * u), hw = Mathf.Max(1f, Mathf.Round(0.85f * u));
+        var col = onTarget ? new Color(1f, 0.25f, 0.2f, 0.72f) : new Color(0.95f, 0.95f, 0.95f, 0.48f);
+        var border = new Color(0f, 0f, 0f, onTarget ? 0.35f : 0.22f);
+
+        ReadOnlySpan<Rect2> bars =
+        [
+            new(pos.X - gap - len, pos.Y - hw, len, hw * 2f),
+            new(pos.X + gap, pos.Y - hw, len, hw * 2f),
+            new(pos.X - hw, pos.Y - gap - len, hw * 2f, len),
+            new(pos.X - hw, pos.Y + gap, hw * 2f, len),
+        ];
+        foreach (var b in bars)
+        {
+            DrawRect(b.Grow(1f), border);
+            DrawRect(b, col);
+        }
     }
 }

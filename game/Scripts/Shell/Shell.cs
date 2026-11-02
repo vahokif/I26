@@ -791,6 +791,7 @@ public partial class Shell : CanvasLayer
             }
             // capture hook: "overlay:controls@frame" opens the Control Configuration over the screen
             if (kind == "overlay" && arg == "controls") Overlay(new ControlsScreen());
+            if (kind == "overlay" && arg == "mouse") Overlay(new MouseOptionsScreen());
             if (kind == "overlay" && arg == "graphics") Overlay(new GraphicsScreen());
             if (kind == "overlay" && arg == "audio") Overlay(new AudioScreen());
             if (kind == "type") _typed.Append(arg);
@@ -1131,15 +1132,23 @@ public sealed class ShellSettings
     public bool PaletteGrade { get; set; }
     /// <summary>The port's own: Graphic Detail's Crash Blur, the software renderer's double image on a big cockpit hit (<see cref="I76.Sim.Views.CrashBlurMode"/>: On by default; the original's blit in the 1997 look, a smooth one in the modern look).</summary>
     public int CrashBlur { get; set; }
-    /// <summary>The port's own: the mouse orbits the chase view (Graphic Detail's Mouse Camera; <see cref="I76.Sim.Views.MouseLook"/>: 0 Off, 1 Slow, 2 Normal, 3 Fast). Normal unless the player chose; a file without the key gets it.</summary>
+    /// <summary>The port's own: the mouse orbits the chase view (Mouse Options' Mouse Camera; <see cref="I76.Sim.Views.MouseLook"/>: 0 Off, 1 Slow, 2 Normal, 3 Fast). Normal unless the player chose; a file without the key gets it.</summary>
     public int MouseCamera { get; set; } = I76.Sim.Views.MouseLook.Normal;
+    /// <summary>The port's own: fine-grained mouse sensitivity scale (10% to 200% in 10% steps; shell.cfg [port] mouse_sensitivity; 1.0 unless chosen, migrated from mouse_camera when absent).</summary>
+    public float MouseSensitivity { get; set; } = I76.Sim.Views.MouseLook.DefaultSensitivity;
     /// <summary>The port's own: Mouse Camera's vertical flipped (shell.cfg [port] mouse_invert_y; off).</summary>
     public bool MouseInvertY { get; set; }
+    /// <summary>The port's own: mouse free look in the F1 3D cockpit (shell.cfg [port] mouse_cockpit; off).</summary>
+    public bool MouseCockpit { get; set; }
+    /// <summary>The port's own: a 3D-projected aiming crosshair in the F2 chase view (shell.cfg [port] chase_crosshair; off).</summary>
+    public bool ChaseCrosshair { get; set; }
+    /// <summary>The port's own: the mouse wheel cycles weapons instead of zooming the external views (shell.cfg [port] wheel_cycle_weapon; off).</summary>
+    public bool WheelCycleWeapon { get; set; }
     /// <summary>The port's own: Graphic Detail's Max FPS, a choice of <see cref="I76.Sim.Views.FrameLimit"/> (shell.cfg [port] max_fps in frames a second, 0 none). Unlimited unless the player chose.</summary>
     public int MaxFps { get; set; } = I76.Sim.Views.FrameLimit.Unlimited;
     /// <summary>The port's own: Graphic Detail's VSync (shell.cfg [port] vsync). On, as the window has always run, unless the player chose.</summary>
     public bool VSync { get; set; } = true;
-    /// <summary>The port's own: in a mission the hidden mouse cursor cannot leave the window (Graphic Detail's Keep Mouse In Window; shell.cfg [port] keep_mouse_in_window; off).</summary>
+    /// <summary>The port's own: in a mission the hidden mouse cursor cannot leave the window (Mouse Options' Mouse In Window; shell.cfg [port] keep_mouse_in_window; off).</summary>
     public bool KeepMouseInWindow { get; set; }
     /// <summary>The port's own: the modern look's procedural plants (Graphic Detail; 0 Off, 1 Low, 2 High; docs/modern-vegetation.md). Low unless the player chose.</summary>
     public int Vegetation { get; set; } = 1;
@@ -1181,9 +1190,9 @@ public sealed class ShellSettings
     public bool Garage3D { get; set; } = true;
     /// <summary>The port's own: the modern look's cars show a cabin and driver behind their glass (Graphic Detail's Car Interiors; shell.cfg [port] car_interiors, written only when off). Off: the windows are plain reflective glass.</summary>
     public bool CarInteriors { get; set; } = true;
-    /// <summary>The port's own: the chase view eases back behind the car a few seconds after the mouse or stick last moved (Graphic Detail's Camera Return); off, it stays where it was left.</summary>
+    /// <summary>The port's own: the chase view eases back behind the car a few seconds after the mouse or stick last moved (Mouse Options' Camera Return); off, it stays where it was left.</summary>
     public bool CameraReturn { get; set; } = true;
-    /// <summary>The port's own: a switch of view, a cut-scene's hand-back and a respawn put the external views' wheel zoom back to the original's framing (Graphic Detail's View Zoom Reset; shell.cfg [port] zoom_reset, written only when off). Off: each view keeps its zoom until the mission ends.</summary>
+    /// <summary>The port's own: a switch of view, a cut-scene's hand-back and a respawn put the external views' wheel zoom back to the original's framing (Mouse Options' View Zoom Reset; shell.cfg [port] zoom_reset, written only when off). Off: each view keeps its zoom until the mission ends.</summary>
     public bool ZoomReset { get; set; } = true;
     /// <summary>The port's own: Ctrl+T "show all names" in a network or co-op game starts on, as the player left it (shell.cfg [port] net_names, written only when off). The original's table started off.</summary>
     public bool NetNames { get; set; } = true;
@@ -1237,9 +1246,15 @@ public sealed class ShellSettings
         s.SoftwareRenderer = (bool)c.GetValue("port", "software_renderer", false);
         s.PaletteGrade = (bool)c.GetValue("port", "palette_grade", false);
         s.CrashBlur = I76.Sim.Views.CrashBlurMode.Parse((string)c.GetValue("port", "crash_blur", "on"));
-        // no version step: absent, the mouse camera is on at Normal
+        // no version step: absent, the mouse camera is on at Normal, and mouse_sensitivity migrates from mouse_camera
         s.MouseCamera = Math.Clamp((int)c.GetValue("port", "mouse_camera", I76.Sim.Views.MouseLook.Normal), 0, I76.Sim.Views.MouseLook.Names.Length - 1);
+        s.MouseSensitivity = c.HasSectionKey("port", "mouse_sensitivity")
+            ? I76.Sim.Views.MouseLook.ClampSensitivity((float)c.GetValue("port", "mouse_sensitivity", I76.Sim.Views.MouseLook.DefaultSensitivity))
+            : I76.Sim.Views.MouseLook.SensitivityFromLevel(s.MouseCamera);
         s.MouseInvertY = (bool)c.GetValue("port", "mouse_invert_y", false);
+        s.MouseCockpit = (bool)c.GetValue("port", "mouse_cockpit", false);
+        s.ChaseCrosshair = (bool)c.GetValue("port", "chase_crosshair", false);
+        s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
         // no version step: absent, no cap and vsync on, as before the keys
         s.MaxFps = I76.Sim.Views.FrameLimit.Parse(c.HasSectionKey("port", "max_fps") ? (int)c.GetValue("port", "max_fps") : null);
         s.VSync = (bool)c.GetValue("port", "vsync", true);
@@ -1289,7 +1304,11 @@ public sealed class ShellSettings
         if (PaletteGrade) c.SetValue("port", "palette_grade", true);
         if (CrashBlur != I76.Sim.Views.CrashBlurMode.On) c.SetValue("port", "crash_blur", I76.Sim.Views.CrashBlurMode.Word(CrashBlur));
         c.SetValue("port", "mouse_camera", MouseCamera);
+        c.SetValue("port", "mouse_sensitivity", I76.Sim.Views.MouseLook.ClampSensitivity(MouseSensitivity));
         if (MouseInvertY) c.SetValue("port", "mouse_invert_y", true);
+        if (MouseCockpit) c.SetValue("port", "mouse_cockpit", true);
+        if (ChaseCrosshair) c.SetValue("port", "chase_crosshair", true);
+        if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
         c.SetValue("port", "max_fps", I76.Sim.Views.FrameLimit.Fps(MaxFps));
         c.SetValue("port", "vsync", VSync);
         if (KeepMouseInWindow) c.SetValue("port", "keep_mouse_in_window", true);

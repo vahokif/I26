@@ -9,18 +9,18 @@ public enum CursorMode
     Hidden,
     /// <summary>Hidden and kept inside the window (a mission with Keep the mouse in the window on).</summary>
     ConfinedHidden,
-    /// <summary>Hidden and taken, relative motion only (the Mouse Camera in the chase view).</summary>
+    /// <summary>Hidden and taken, relative motion only (the Mouse Camera in the chase view or Cockpit Mouse Look in the 3D cockpit).</summary>
     Captured,
 }
 
 /// <summary>The one place that says what the pointer does. Main calls it every frame from "which screen is up", so no transition (a mission's end, a failed game, an abort, focus lost) can leave it wrong.</summary>
 public static class CursorPolicy
 {
-    /// <summary>The cursor for a screen. <paramref name="inMission"/>: a mission is running with no menu, map, notepad, loading screen or question over it (paused or not). <paramref name="chaseView"/>: the view is the free chase camera.</summary>
-    public static CursorMode For(bool inMission, bool chaseView, int mouseCamera, bool focused, bool confine)
+    /// <summary>The cursor for a screen. <paramref name="inMission"/>: a mission is running with no menu, map, notepad, loading screen or question over it (paused or not). <paramref name="chaseView"/>: the view is the free chase camera. <paramref name="cockpitView"/>: the view is the 3D cockpit (outside binoculars).</summary>
+    public static CursorMode For(bool inMission, bool chaseView, int mouseCamera, bool focused, bool confine, bool cockpitView = false, bool mouseCockpit = false)
     {
         if (!inMission || !focused) return CursorMode.Visible;
-        if (chaseView && mouseCamera != MouseLook.Off) return CursorMode.Captured;
+        if (chaseView && mouseCamera != MouseLook.Off || cockpitView && mouseCockpit) return CursorMode.Captured;
         return confine ? CursorMode.ConfinedHidden : CursorMode.Hidden;
     }
 }

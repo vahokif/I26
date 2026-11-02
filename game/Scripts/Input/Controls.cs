@@ -128,13 +128,16 @@ public static class Controls
     ];
 
     private static readonly (string Name, MouseButton Button)[] MouseTable =
-        [("LeftBtn", MouseButton.Left), ("RightBtn", MouseButton.Right), ("MiddleBtn", MouseButton.Middle)];
+        [("LeftBtn", MouseButton.Left), ("RightBtn", MouseButton.Right), ("MiddleBtn", MouseButton.Middle), ("Mouse4Btn", MouseButton.Xbutton1), ("Mouse5Btn", MouseButton.Xbutton2)];
 
     /// <summary>The names the input list offers, as the original's device lists: the keyboard, then the mouse.</summary>
     public static IEnumerable<string> KeyboardNames => KeyTable.Select(k => k.Name);
     public static IEnumerable<string> MouseNames => MouseTable.Select(m => m.Name);
 
-    public static bool IsMouse(string name) => MouseTable.Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    public static bool IsMouse(string name) =>
+        MouseTable.Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+        || name.Equals("Button4", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Button5", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The key a name of the keyboard list is ("GreyDelete", "Backspace"), or null: for the game keys, which Control Configuration binds by the key itself.</summary>
     public static Key? KeyNamed(string name) => KeyOf(name);
@@ -152,6 +155,8 @@ public static class Controls
     private static MouseButton? ButtonOf(string name)
     {
         foreach (var (n, b) in MouseTable) if (n.Equals(name, StringComparison.OrdinalIgnoreCase)) return b;
+        if (name.Equals("Button4", StringComparison.OrdinalIgnoreCase)) return MouseButton.Xbutton1;
+        if (name.Equals("Button5", StringComparison.OrdinalIgnoreCase)) return MouseButton.Xbutton2;
         return null;
     }
 
@@ -182,6 +187,7 @@ public static class Controls
     public static (string Device, string Channel) InputOf(string name)
     {
         if (name.StartsWith("joystick", StringComparison.OrdinalIgnoreCase) && name.IndexOf(' ') is > 0 and var sp) return (name[..sp], name[(sp + 1)..]);
+        if (MouseTable.Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) return ("Mouse", name);
         if (VirtualStick.DiscreteId(name) >= 0) return ("joystick1", name);
         return (IsMouse(name) ? "Mouse" : "keyboard", name);
     }

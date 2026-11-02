@@ -226,7 +226,7 @@ public sealed partial class SimSession
         // a client's prediction runs what drives the car (engine key, lights, gears, reverse, the specials, the weapon
         // selection); the targets, the radar, the poem, self-destruct and the cheats are the server's alone
         if (predict) c &= CarCommands.StartEngine | CarCommands.Lights | CarCommands.ShiftUp | CarCommands.ShiftDown | CarCommands.Reverse
-            | CarCommands.Special1 | CarCommands.Special2 | CarCommands.Special3 | CarCommands.WeaponCycle | CarCommands.WeaponLink;
+            | CarCommands.Special1 | CarCommands.Special2 | CarCommands.Special3 | CarCommands.WeaponCycle | CarCommands.WeaponCyclePrev | CarCommands.WeaponLink;
         p.StartEngineKey = (c & CarCommands.StartEngine) != 0 ? 1 : 0;   // rewrites it every frame
         if (c == 0) return;
         // the weapon cycle and link keys are read after the triggers, in Select
@@ -369,7 +369,7 @@ public sealed partial class SimSession
     {
         if (d.Car.Armory is not { } arm) return;
         var c = d.Input.Commands;
-        int sounds = arm.Select((c & CarCommands.WeaponCycle) != 0, (c & CarCommands.WeaponLink) != 0, out bool changed);
+        int sounds = arm.Select((c & CarCommands.WeaponCycle) != 0, (c & CarCommands.WeaponLink) != 0, out bool changed, (c & CarCommands.WeaponCyclePrev) != 0);
         if (changed) Combat?.RadarCamera.Remove(d.Car);
         if (sounds > 0 && !predict) Combat?.Events.Add(new WeaponClick(d.Car, "cammo.wav"));
     }

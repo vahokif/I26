@@ -72,6 +72,8 @@ public class ControlsScreen : OverlayScreen
     protected override void Build()
     {
         _f = Shell.Db.Font(0x44);
+        int mouseY = 47 + (LeftRows.Length + 2 + GameKeyMap.Rebindable.Length - RightGameKeys) * RowH;
+        Add(35, mouseY, () => "", () => { _carried = _keys; Shell.Overlay(new MouseOptionsScreen(_map) { ReturnToControls = true }); }, w: 277, h: 16);
         // the buttons are in the art, y 450..469
         Add(9, 450, () => "", () => { _carried = _keys; Shell.Overlay(Controls.PrimaryIsGeneric ? new JoystickScreen(_map) : new ControllerScreen(_map)); }, w: 138, h: 19);       // Calibrate: the port's controller screen
         Add(168, 450, () => "", () => { _map.ResetSide(Controls.KeyboardDefaults(), false); _keys = GameKeys.Stock(); Redraw(); }, w: 140, h: 19);    // Restore: the keys and mouse only
@@ -123,6 +125,9 @@ public class ControlsScreen : OverlayScreen
             Frame.Text(_f, 40, y, Fit(GameKeyMap.Rebindable[k].Label, NameW), ShellFrame.OverlayInk);
             Frame.Text(_f, 190, y, Fit(Key(GameKeyMap.Rebindable[k].Id), LeftBindW), ShellFrame.OverlayInk);
         }
+        int mouseY = 47 + (LeftRows.Length + 2 + GameKeyMap.Rebindable.Length - RightGameKeys) * RowH;
+        Frame.Text(_f, 40, mouseY, Fit("Mouse Options", NameW), ShellFrame.OverlayInk);
+        Frame.Text(_f, 190, mouseY, Fit("Configure", LeftBindW), ShellFrame.OverlayInk);
         if (Shell.Upscaled)
             foreach (var (text, x, y, w, h) in Names) Frame.Caption(new Rect2I(x, y, w, h), text, 213);
         for (int k = 0; k < LeftRows.Length; k++) Frame.Text(_f, 190, 47 + k * RowH, Fit(Binding(LeftRows[k]), LeftBindW), ShellFrame.OverlayInk);

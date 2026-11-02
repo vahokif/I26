@@ -184,14 +184,16 @@ public sealed partial class EscapeMenu : Control
             Action("Graphic Detail", 4, () => Switch(_graphics), "$8.98"),
             Action("Audio Control", 5, () => Switch(_audio), "$9.01"),
             Action("Control Configuration", 6, OpenControls, "$7.65"),
+            Action("Mouse Options", 7, OpenMouse, "$6.50"),
             CancelButton("Resume"),
         ] : [
             Action("Abort Mission", 1, () => Switch(_abort), "$6.78"),
             Action("Play Options", 3, () => Switch(_play), "$5.34"),
             Action("Graphic Detail", 4, () => Switch(_graphics), "$8.98"),
             Action("Audio Control", 5, () => Switch(_audio), "$9.01"),
-            // the port's own, on the free ruled line (row 6) under Audio Control: the Options Menu's Control Configuration, over the paused game
+            // the port's own, on the free ruled lines (rows 6 and 7) under Audio Control: Control Configuration and Mouse Options, over the paused game
             Action("Control Configuration", 6, OpenControls, "$7.65"),
+            Action("Mouse Options", 7, OpenMouse, "$6.50"),
             CancelButton("Exit"),
         ];
 
@@ -305,13 +307,9 @@ public sealed partial class EscapeMenu : Control
             Scrolling(10, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
             Scrolling(11, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
-            // and the mouse orbiting the chase view, live
-            Scrolling(12, Cycle, "Mouse Camera", I76.Sim.Views.MouseLook.Names.Length, I76.Sim.Views.MouseLook.Names, s => s.MouseCamera, (s, v) => s.MouseCamera = v, apply: () => Live?.Invoke(Settings)),
-            // and the hidden mouse kept inside the window, live
-            Scrolling(13, Cycle, "Keep Mouse In Window", 2, offOn, s => s.KeepMouseInWindow ? 1 : 0, (s, v) => s.KeepMouseInWindow = v != 0, apply: () => Live?.Invoke(Settings)),
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(14, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(15, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(12, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(13, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -382,8 +380,6 @@ public sealed partial class EscapeMenu : Control
         Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On;
         Settings.Vegetation = 1;
         Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
-        Settings.MouseCamera = I76.Sim.Views.MouseLook.Normal;
-        Settings.KeepMouseInWindow = false;
         Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;
         Settings.VSync = true;
         Live?.Invoke(Settings);
@@ -489,15 +485,19 @@ public sealed partial class EscapeMenu : Control
     /// on the pad's place over the paused game. The pad hides while it is up and takes no input; Done saves and applies the bindings
     /// (Controls.Save puts them in use), Cancel and Esc come back unchanged.
     /// </summary>
-    private void OpenControls()
+    private void OpenControls() => OpenHosted(new ControlsScreen());
+    private void OpenMouse() => OpenHosted(new MouseOptionsScreen());
+
+    private void OpenHosted(ShellScreen screen)
     {
         if (_host is not null || GetParent() is not { } parent) return;
+        Settings.Save();
         Visible = false;
         _pressed = null;
         _host = new I76.Game.Shell.Shell
         {
             Install = new GameInstall(InstallDir), OnLaunch = _ => { }, Faithful = Faithful, Name = "ControlsHost",
-            Hosted = new ControlsScreen(),
+            Hosted = screen,
             HostDone = () => Callable.From(CloseControls).CallDeferred(),
         };
         parent.AddChild(_host);
@@ -507,6 +507,9 @@ public sealed partial class EscapeMenu : Control
     {
         _host?.QueueFree();
         _host = null;
+        Settings = ShellSettings.Load();
+        _snap = ShellSettings.Load();
+        Live?.Invoke(Settings);
         _padNav.Settle();
         Visible = true;
         QueueRedraw();

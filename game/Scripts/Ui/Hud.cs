@@ -226,9 +226,10 @@ public partial class Hud : CanvasLayer
 }
 
 /// <summary>
-/// A 3D-projected aiming crosshair for the F2 chase view (Mouse Options -> Chase Crosshair): projects the active forward or turret
-/// weapon's muzzle ray into the world (at the target's distance when a target is ahead, else the terrain intersection or 90 m) so the
-/// player sees where rounds will land regardless of the chase camera's height or mouse orbit angle.
+/// A 3D-projected aiming crosshair for the F2 chase view (Mouse Options -> Chase Crosshair): where a round of the selected weapon
+/// fired now would land, as the simulation's own hit test finds it (<see cref="I76.Sim.Weapons.Combat.LineOfFire"/>: the first
+/// car, structure or ground along the muzzle's line, out to the weapon's reach), drawn on the car as it is shown. Red when that
+/// round (or, with the weapons linked, one of the linked ones') would hit a car. View only: it asks and changes nothing.
 /// </summary>
 public partial class ChaseCrosshair : Control
 {
@@ -250,88 +251,41 @@ public partial class ChaseCrosshair : Control
 
     public override void _Process(double delta) => QueueRedraw();
 
+    /// <summary>The weapons that fire with the trigger now: the selected one, and with the link on the ones linked to it.</summary>
+    private static IEnumerable<I76.Sim.Weapons.Weapon> Firing(I76.Sim.Weapons.Armory a)
+    {
+        if (a.Selected < 0 || a.Selected >= a.Weapons.Count) yield break;
+        yield return a.Weapons[a.Selected];
+        if (!a.Link) yield break;
+        foreach (int i in a.Group)
+            if (i != a.Selected && i >= 0 && i < a.Weapons.Count) yield return a.Weapons[i];
+    }
+
     public override void _Draw()
     {
-        if (!MouseCamera.ChaseCrosshair || InCockpit?.Invoke() == true || Player() is not { } p || I76.Sim.Weapons.Combat.IsDead(p)) return;
+        if (!MouseCamera.ChaseCrosshair || InCockpit?.Invoke() == true || Player() is not { } p || I76.Sim.Weapons.Combat.IsDead(p) || p.Armory is not { } a) return;
         var cam = GetViewport().GetCamera3D();
         if (cam is not I76.Game.Camera.ChaseCamera { Fixed: null }) return;
 
+        // the selected weapon's line, unless a linked one's would hit a car where it would not (the nearest such)
         I76.Sim.Weapons.Weapon? w = null;
-        var a = p.Armory;
-        if (a is not null)
+        I76.Sim.Weapons.FireLine line = default;
+        foreach (var f in Firing(a))
         {
-            if (a.Selected >= 0 && a.Selected < a.Weapons.Count && (a.Weapons[a.Selected].MountKind is 1 or 4 || a.Weapons[a.Selected].Style == 3))
-                w = a.Weapons[a.Selected];
-            w ??= a.Weapons.FirstOrDefault(x => x.MountKind is 1 or 4 || x.Style == 3);
+            if (f.HpRatio <= 0 || Combat.LineOfFire(p, f) is not { } l) continue;
+            if (w is null || (l.Car && (!line.Car || l.Distance < line.Distance))) (w, line) = (f, l);
         }
+        if (w is null) return;
 
-        System.Numerics.Vector3 muzzleLocal, dirLocal;
-        if (w is not null)
-        {
-            muzzleLocal = w.MuzzlePos;
-            if (a!.Link && w.Style != 3 && a.Group.Count > 1)
-            {
-                var sum = System.Numerics.Vector3.Zero;
-                int count = 0;
-                foreach (int idx in a.Group)
-                    if (idx >= 0 && idx < a.Weapons.Count && a.Weapons[idx].MountKind == w.MountKind)
-                    {
-                        sum += a.Weapons[idx].MuzzlePos;
-                        count++;
-                    }
-                if (count > 0) muzzleLocal = sum / count;
-            }
-            dirLocal = w.MuzzleRot.Forward;
-        }
-        else
-        {
-            muzzleLocal = new System.Numerics.Vector3((p.BoxX[0] + p.BoxX[3]) * 0.5f, (p.BoxY[1] + p.BoxY[3]) * 0.5f, p.BoxZ[3]);
-            dirLocal = System.Numerics.Vector3.UnitZ;
-        }
-
-        var origin = Origin();
+        // the line as the car is drawn (the view's pose of it, which the simulation's lags by up to a tick), at the distance found
         var node = CarOf?.Invoke(p) is { } n && IsInstanceValid(n) ? n : null;
-        Vector3 muzzleG = node is not null ? node.GlobalTransform * I76.Game.Sim.Coords.ToGodot(muzzleLocal)
-            : I76.Game.Sim.Coords.ToGodot(p.Pos.ToVector3() + p.Rot.ToWorld(muzzleLocal) - origin);
-        Vector3 dirG = node is not null ? (node.GlobalTransform.Basis * I76.Game.Sim.Coords.ToGodot(dirLocal)).Normalized()
-            : I76.Game.Sim.Coords.ToGodot(p.Rot.ToWorld(dirLocal)).Normalized();
+        Vector3 muzzleG = node is not null ? node.GlobalTransform * I76.Game.Sim.Coords.ToGodot(w.MuzzlePos)
+            : I76.Game.Sim.Coords.ToGodot(p.Pos.ToVector3() + p.Rot.ToWorld(w.MuzzlePos) - Origin());
+        Vector3 dirG = node is not null ? (node.GlobalTransform.Basis * I76.Game.Sim.Coords.ToGodot(w.MuzzleRot.Forward)).Normalized()
+            : I76.Game.Sim.Coords.ToGodot(p.Rot.ToWorld(w.MuzzleRot.Forward)).Normalized();
         if (dirG.LengthSquared() < 1e-4f) return;
-
-        float dist = 16f;
-        bool onTarget = w is { Style: 3, OnTarget: true };
-        foreach (var v in Combat.World.Vehicles)
-        {
-            if (v == p || I76.Sim.Weapons.Combat.IsDead(v)) continue;
-            var vNode = CarOf?.Invoke(v) is { } vn && IsInstanceValid(vn) ? vn : null;
-            var vLocal = new System.Numerics.Vector3((v.BoxX[0] + v.BoxX[3]) * 0.5f, (v.BoxY[1] + v.BoxY[3]) * 0.5f, (v.BoxZ[0] + v.BoxZ[3]) * 0.5f);
-            Vector3 targetG = vNode is not null ? vNode.GlobalTransform * I76.Game.Sim.Coords.ToGodot(vLocal)
-                : I76.Game.Sim.Coords.ToGodot(v.Pos.ToVector3() + v.Rot.ToWorld(vLocal) - origin);
-            Vector3 rel = targetG - muzzleG;
-            float along = rel.Dot(dirG);
-            if (along <= 2f || along >= 250f) continue;
-            float hitR = System.MathF.Max(1.8f, (v.BoxX[3] - v.BoxX[0]) * 0.65f);
-            if ((rel - dirG * along).Length() <= hitR)
-            {
-                onTarget = true;
-                if (along < dist) dist = along;
-            }
-        }
-        var muzzleW = origin + new System.Numerics.Vector3(muzzleG.X, muzzleG.Y, -muzzleG.Z);
-        var dirW = new System.Numerics.Vector3(dirG.X, dirG.Y, -dirG.Z);
-        float prevD = 5f, prevH = muzzleW.Y + dirW.Y * prevD - Combat.World.Ground.BareHeight(muzzleW.X + dirW.X * prevD, muzzleW.Z + dirW.Z * prevD);
-        for (float d = 8f; d <= dist; d += 2f)
-        {
-            var pt = muzzleW + dirW * d;
-            float h = pt.Y - Combat.World.Ground.BareHeight(pt.X, pt.Z);
-            if (h <= 0f)
-            {
-                float frac = prevH > h ? prevH / (prevH - h) : 0f;
-                dist = System.Math.Clamp(prevD + (d - prevD) * frac, 6f, dist);
-                break;
-            }
-            prevD = d;
-            prevH = h;
-        }
+        float dist = line.Distance;
+        bool onTarget = line.Car;
 
         Vector3 aimG = muzzleG + dirG * dist;
         if (cam.IsPositionBehind(aimG)) return;

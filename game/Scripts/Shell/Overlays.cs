@@ -252,11 +252,16 @@ public sealed class PlayOptionsScreen : OverlayScreen
         Add(402, 438, "Cancel", Cancel, Small);
     }
 
-    /// <summary>The sound system's input devices after the current one (the default, then each in the list, then the default again).</summary>
+    /// <summary>The CB Microphone choices: none (the empty string), the system's default, then each input device.</summary>
+    internal static List<string> MicChoices()
+    {
+        try { return MicNames.Choices(Godot.AudioServer.GetInputDeviceList()); } catch { return MicNames.Choices([]); }
+    }
+
+    /// <summary>The choice after the current one (none, the default, each device, then none again).</summary>
     internal static string NextMic(string now)
     {
-        var all = new List<string> { "" };
-        try { all.AddRange(Godot.AudioServer.GetInputDeviceList().Where(d => d != "Default")); } catch { }
+        var all = MicChoices();
         int i = all.IndexOf(now);
         return all[(i + 1) % all.Count];
     }

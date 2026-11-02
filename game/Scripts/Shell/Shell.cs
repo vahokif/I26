@@ -1159,6 +1159,7 @@ public sealed class ShellSettings
     /// <summary>The port's own: CB Voice (Play Options, second page; shell.cfg [port] cb_voice, written only when off): push-to-talk voice in network games. Off neither sends nor plays it.</summary>
     public bool CbVoice { get; set; } = true;
     /// <summary>The port's own: the microphone CB Voice uses (shell.cfg [port] cb_mic; Play Options steps through the sound system's list). Empty is the system default.</summary>
+    /// <summary>The CB voice chat's input device: empty is none, the default for anyone who has not chosen (the audio input is never opened); "Default" is the system's.</summary>
     public string CbMic { get; set; } = "";
     public static readonly string[] MapDownloadNames = ["Ask", "Always", "Never"];
     /// <summary>
@@ -1250,6 +1251,7 @@ public sealed class ShellSettings
         s.CarReset = (bool)c.GetValue("port", "car_reset", true);
         s.CbRadio = (bool)c.GetValue("port", "cb_radio", true);
         s.CbVoice = (bool)c.GetValue("port", "cb_voice", true);
+        // no version step: absent (never chosen, or the old implicit default) is none; a saved device stays
         s.CbMic = (string)c.GetValue("port", "cb_mic", "");
         // no version step: absent, it is off, the stock game
         s.HiddenContent = (bool)c.GetValue("port", "hidden_content", false);

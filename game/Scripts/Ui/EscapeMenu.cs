@@ -331,8 +331,7 @@ public sealed partial class EscapeMenu : Control
         if (Net)
         {
             // the port's own, on the row under the levels: the CB voice chat's microphone (the same setting as the shell's Audio Control), live
-            var mics = new List<string> { "" };
-            try { mics.AddRange(Godot.AudioServer.GetInputDeviceList().Where(d => d != "Default")); } catch { }
+            var mics = PlayOptionsScreen.MicChoices();
             if (!mics.Contains(Settings.CbMic)) mics.Add(Settings.CbMic);
             var names = mics.Select(PlayOptionsScreen.MicLabel).ToArray();
             _audio.Items.Insert(3, Setting(Cycle, "CB Microphone", 32, mics.Count, names, s => Math.Max(0, mics.IndexOf(s.CbMic)), (s, v) => s.CbMic = mics[v],

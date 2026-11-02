@@ -11,9 +11,15 @@ public static class MicNames
 {
     private static Dictionary<string, string>? _descriptions;
 
+    /// <summary>The CB Microphone choices: none (the empty string, the default), the system's default, then each input device.</summary>
+    public static List<string> Choices(IEnumerable<string> devices) => ["", "Default", .. devices.Where(d => d != "Default" && d.Length > 0)];
+
+    /// <summary>Whether the audio input may be opened for this choice: only a chosen device (none never touches it).</summary>
+    public static bool OpensInput(string device) => device.Length > 0;
+
     public static string Of(string device)
     {
-        if (device.Length == 0) return "Default";
+        if (device.Length == 0) return "None";
         if (Descriptions().TryGetValue(device, out var d) && d.Length > 0) return d;
         return Tidy(device);
     }

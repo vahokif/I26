@@ -511,9 +511,12 @@ may hear you does.
   microphone's grit), a steady hiss at about −36 dBFS under the voice, and the band again over it all; a squelch burst of static when a
   talk opens and a click with a fading tail when it closes. The game has no CB click or static of its own (its CB lines are plain speech), so the
   squelch is synthesised. The sender hears the same click at its own key, not its own voice.
-- **Capture.** `AudioStreamMicrophone` on a muted `CbMic` bus with an `AudioEffectCapture` (`audio/driver/enable_input` is on in the project, but
-  Godot opens the device only when the stream plays): nothing is opened until the key is first pressed, the device is closed again after 30 s of
-  silence, and the device is the system default or the one chosen in Audio Control (`CB Microphone` under the three levels, a click steps through the input devices; shell.cfg `[port] cb_mic`). Without any input
+- **Capture.** `AudioStreamMicrophone` on a muted `CbMic` bus with an `AudioEffectCapture`. `CB Microphone` (Audio Control, under the three levels, in the
+  front end and live in a network game; a click steps none, the system's default, each input device; shell.cfg `[port] cb_mic`) starts on **None**:
+  a file with no choice is None, a saved device stays. With None the game never opens the audio input: `audio/driver/enable_input` is off in the
+  project (macOS asks for microphone access when it is on at start-up) and is switched on at run time only when a device is first opened; the key does
+  nothing but say once a session to choose a microphone, and receiving other players' voice is unaffected. With a device chosen nothing is opened
+  until the key is first pressed, the device is closed again after 30 s of silence, and switching back to None closes it at once. Without any input
   device the first press says so in the console. The sound card's rate is brought to 8 kHz by `VoiceResampler`. The macOS export asks for the
   microphone with a usage description and the hardened runtime's audio-input entitlement.
 - **Settings and commands.** Play Options' second page: `CB Voice` (shell.cfg `[port] cb_voice`, on by default; off neither sends nor plays); Audio Control has `CB Microphone` (the incoming voice's level is the Voice Level there). In the chat line: `/mute NAME`, `/unmute NAME` (a name, or a unique start or part of one; kept for the session, not by slot),

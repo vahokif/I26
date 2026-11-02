@@ -111,6 +111,11 @@ Shift or Ctrl held cancels a command, as in the original. Port keys: C poetry (i
 Modern Physics, Ctrl+F5 debug fly camera (right mouse looks, WASD/QE fly, Shift for speed), Ctrl+F9 wins the trip
 mission on the spot (debug).
 
+**CB voice.** In network games the CB radio sends your voice while you hold the poetry key (C). Sending needs a
+microphone, and the game does not open the audio input (so no system asks for microphone access) until you pick one:
+CB Microphone, in Audio Control (front end or in a network game), starts on None; choose Default or a device and talk.
+With None the key only says, once a session, to choose a microphone. Hearing the other players needs nothing.
+
 **Cheats.** The original's words, typed while holding Ctrl+Shift (single player): `getdown` stops the mission script
 and sets everyone on you; get killed (or Ctrl+Del) and the mission counts as won 5 s later, the original's level
 skip. `flflat`, `frflat`, `blflat` and `brflat` blow one of your tyres. `wiggleburger` turns a double-vision wobble

@@ -18,8 +18,9 @@ boot_splash/use_filter=true
 
 [audio]
 
-; the CB voice chat's microphone: the input is only opened when the CB Transmit key is first pressed
-driver/enable_input=true
+; the CB voice chat's microphone: the audio input is off (so no system asks for microphone access at start-up) until the player
+; chooses a CB Microphone; the game then switches it on at run time (CbVoice)
+driver/enable_input=false
 
 [debug]
 

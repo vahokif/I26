@@ -62,6 +62,8 @@ public partial class CbVoice : Node
     private int _filePos;
     private double _fileStart = -1, _fileAcc;
     private readonly double _fileDelay = double.TryParse(System.Environment.GetEnvironmentVariable("I76_CB_AT"), System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 4;
+    /// <summary>I76_CB_PRESS=1: the key is held for 12 s starting I76_CB_AT seconds in (to check what a press opens without a person at the keyboard).</summary>
+    private readonly bool _pressHook = System.Environment.GetEnvironmentVariable("I76_CB_PRESS") == "1";
     private readonly bool _quitWhenDone = System.Environment.GetEnvironmentVariable("I76_CB_QUIT") == "1";
     private double _quitAt = -1;
     private readonly List<float> _record = [];
@@ -76,6 +78,10 @@ public partial class CbVoice : Node
     private double _txStart, _lastTx = double.NegativeInfinity, _releaseAt = -1;
     private bool _capped;
     private bool _noMicSaid;
+    /// <summary>The "choose a CB Microphone" notice is said once a session (the flag outlives one game).</summary>
+    private static bool _noMicChosenSaid;
+    /// <summary>The audio input has been opened by this game (a log line and the tests).</summary>
+    public static bool InputOpened { get; private set; }
 
     // ---- receiving ----
     private readonly VoiceReceiver _rx = new();
@@ -101,6 +107,7 @@ public partial class CbVoice : Node
     public override void _Ready()
     {
         Active = this;
+        GD.Print(I76.Game.Shell.MicNames.OpensInput(_micDevice) ? $"[cb] microphone: {_micDevice} (the audio input opens at the first talk)" : "[cb] microphone: none (the audio input is not opened)");
         _mixRate = AudioServer.GetMixRate();
         ProcessMode = ProcessModeEnum.Always;
         if (_inputFile is not null)
@@ -151,18 +158,20 @@ public partial class CbVoice : Node
         bool fileOn = _fileSamples is not null && joined && (Client.Scores?.Players.Count ?? 0) >= 2;
         if (fileOn && _fileStart < 0) _fileStart = _t;
         bool fileTalking = fileOn && _t - _fileStart >= _fileDelay && _filePos < _fileSamples!.Length;
-        _held = Controls.Down("POETRY");      // the Poem key: nothing else uses it in a network game
+        _held = Controls.Down("POETRY") || (_pressHook && joined && _t >= _fileDelay && _t < _fileDelay + 12);      // the Poem key: nothing else uses it in a network game
         bool pressed = (_held || _padHeld) && CanTalk?.Invoke() != false;
         if (!pressed) _capped = false;
         // the host's switches: CB off for the game, or this player muted for everyone: the key does nothing, and says why once a press
         bool allowed = !Off && !Client.CbMuted;
         if (!pressed && !fileTalking) _deniedSaid = false;
         else if (!allowed && Enabled && joined && !_deniedSaid) { _deniedSaid = true; Say(Off ? "CB is off in this game" : "CB: you are muted by the host"); }
-        bool want = Enabled && allowed && joined && !_capped && (pressed || fileTalking);
+        bool micChosen = _micDevice.Length > 0 || fileOn;
+        if (pressed && !micChosen && Enabled && allowed && joined && !_noMicChosenSaid) { _noMicChosenSaid = true; Say("CB: choose a CB Microphone in Audio Control to talk"); GD.Print("[cb] key pressed with CB Microphone on None: notice shown, nothing opened"); }
+        bool want = Enabled && allowed && joined && !_capped && micChosen && (pressed || fileTalking);
         if (want) _releaseAt = _t + ReleaseTail;
-        else if (Transmitting && _t < _releaseAt && Enabled && allowed && joined) want = true;      // the key's tail, so the last word is not clipped
-        if (pressed && allowed) Used = true;
-        if (pressed && Enabled && allowed && joined && !fileOn && !_noMicSaid && !HasMic()) { _noMicSaid = true; Say("CB: no microphone found (check the system's input device, or CB Microphone in Audio Control)"); }
+        else if (Transmitting && _t < _releaseAt && Enabled && allowed && joined && micChosen) want = true;      // the key's tail, so the last word is not clipped
+        if (pressed && allowed && micChosen) Used = true;
+        if (pressed && micChosen && Enabled && allowed && joined && !fileOn && !_noMicSaid && !HasMic()) { _noMicSaid = true; Say("CB: no microphone found (check the system's input device, or CB Microphone in Audio Control)"); }
         if (want && !Transmitting) StartTalk(fileTalking);
         else if (!want && Transmitting) StopTalk();
         if (Transmitting)
@@ -236,7 +245,10 @@ public partial class CbVoice : Node
 
     private void OpenMic()
     {
-        if (_mic is not null) return;
+        if (_mic is not null || !I76.Game.Shell.MicNames.OpensInput(_micDevice)) return;        // none: the input is never touched
+        InputOpened = true;
+        try { ProjectSettings.SetSetting("audio/driver/enable_input", true); } catch { }
+        GD.Print($"[cb] opening the audio input: {_micDevice}");
         int bus = AudioServer.GetBusIndex(MicBus);
         if (bus < 0)
         {
@@ -247,7 +259,7 @@ public partial class CbVoice : Node
             AudioServer.AddBusEffect(bus, new AudioEffectCapture { BufferLength = 0.5f });
         }
         _capture = AudioServer.GetBusEffect(bus, 0) as AudioEffectCapture;
-        if (_micDevice.Length > 0) AudioServer.InputDevice = _micDevice;
+        AudioServer.InputDevice = _micDevice;
         _mic = new AudioStreamPlayer { Name = "CbMic", Stream = new AudioStreamMicrophone(), Bus = MicBus, ProcessMode = ProcessModeEnum.Always };
         AddChild(_mic);
         _mic.Play();
@@ -261,7 +273,8 @@ public partial class CbVoice : Node
     {
         if (device == _micDevice) return;
         _micDevice = device;
-        try { AudioServer.InputDevice = device.Length > 0 ? device : "Default"; } catch { }
+        if (device.Length == 0) { StopMic(); GD.Print("[cb] audio input closed (CB Microphone: None)"); return; }
+        try { AudioServer.InputDevice = device; } catch { }
         if (_mic is null) return;
         _mic.Stop();            // the stream is opened again on the new device; what the old one had buffered is dropped
         _capture?.ClearBuffer();

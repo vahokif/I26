@@ -26,6 +26,9 @@ public partial class Hud : CanvasLayer
     public Func<bool>? Cutscene { get; set; }
     /// <summary>The player is talking on the CB in a network game (the push-to-talk key is held): the handset is raised, as for the player's own line in a mission.</summary>
     public Func<bool>? Transmitting { get; set; }
+    /// <summary>A network game (melee or co-op), and whether its host allows the chase crosshair (<see cref="I76.Sim.Views.CrosshairPolicy"/>).</summary>
+    public Func<bool>? Network { get; set; }
+    public Func<bool>? HostAllowsCrosshair { get; set; }
     /// <summary>A texture member by its stem (the CB handset's frames), or null.</summary>
     public Func<string, Texture2D?>? Texture { get; set; }
     /// <summary>The driver variant (1-5): picks the handset art ZCBH6{v}01.</summary>
@@ -169,7 +172,8 @@ public partial class Hud : CanvasLayer
             _instruments.Visible = Car?.Invoke() is not null && !cut && (inCar ? pit is { Dash3D: false, Binoculars: false } : ExtInstruments?.Invoke() == true);
         }
         if (GetNodeOrNull<CanvasItem>("Target") is { } target) target.Visible = !cut;
-        if (GetNodeOrNull<CanvasItem>("Crosshair") is { } ch) ch.Visible = !cut && MouseCamera.ChaseCrosshair;
+        if (GetNodeOrNull<CanvasItem>("Crosshair") is { } ch)
+            ch.Visible = !cut && I76.Sim.Views.CrosshairPolicy.Shown(MouseCamera.ChaseCrosshair, Network?.Invoke() == true, HostAllowsCrosshair?.Invoke() == true);
         if (_binoMask is not null)
         {
             _binoMask.Visible = !cut && InCockpit?.Invoke() == true && Pit?.Invoke() is { Binoculars: true };

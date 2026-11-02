@@ -591,6 +591,8 @@ public sealed partial class MeleeClient : IDisposable
     public bool CbMuted { get; private set; }
     /// <summary>The game has the CB radio on (the host's CB Radio option; a game that does not say has it).</summary>
     public bool CbAllowed => Accept?.Cb != false;
+    /// <summary>The game allows the chase crosshair (the host's Chase Crosshair option; a game that does not say does not).</summary>
+    public bool CrosshairAllowed => Accept?.Crosshair == true;
 
     /// <summary>Tells the server whom this client does not want to hear on the CB, so it stops relaying them (everyone with <paramref name="all"/>).</summary>
     public void SendVoiceIgnore(bool all, IEnumerable<int> slots)

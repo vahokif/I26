@@ -243,6 +243,30 @@ public class NetRulesTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.True(ac.Rot.Up.Y < 0.5f || ac.Pos.Y > host.Setup.World.Ground.BareHeight(ac.Pos.X, ac.Pos.Z) + 3);
     }
 
+    /// <summary>
+    /// The host's Chase Crosshair reaches the players in the join accept (and the game's listing): allowed, a player's own
+    /// setting shows the crosshair; not allowed (the default), it is hidden whatever the player chose. Single player is the setting alone.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheHostsCrosshairRuleReachesTheClients(bool allowed)
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        using var server = new NetMeleeServer(new ServerOptions { Install = install, Arena = "m01", Port = 0, AllowCrosshair = allowed });
+        server.Start();
+        using var a = Connect(server, "Alice");
+        Pump(() => a.State == ClientState.Joined, a);
+        Assert.Equal(ClientState.Joined, a.State);
+        Assert.Equal(allowed, a.Accept!.Crosshair);
+        Assert.Equal(allowed, a.CrosshairAllowed);
+        Assert.Equal(allowed, server.Host.Info().Crosshair);
+        Assert.Equal(allowed, I76.Sim.Views.CrosshairPolicy.Shown(true, network: true, a.CrosshairAllowed));
+        Assert.False(I76.Sim.Views.CrosshairPolicy.Shown(false, network: true, a.CrosshairAllowed));
+        Assert.True(I76.Sim.Views.CrosshairPolicy.Shown(true, network: false, hostAllows: false));
+        Assert.False(new ServerOptions { Install = install }.AllowCrosshair);
+    }
+
     private static MeleeClient Connect(NetMeleeServer server, string name)
     {
         var c = new MeleeClient();

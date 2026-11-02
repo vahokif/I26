@@ -90,9 +90,9 @@ public class PasswordTests
         Assert.False(w.Span.IndexOf("hunter2"u8) >= 0);
 
         // an answer from before the flag (it ends at the map hash's byte) reads as open; the flag is followed by the
-        // restrictions' flags and pair count (none here), the co-op byte, the rate's, the lobby's, the car reset's and the CB's, seven bytes more
+        // restrictions' flags and pair count (none here), the co-op byte, the rate's, the lobby's, the car reset's, the CB's and the crosshair's, eight bytes more
         var bytes = w.ToArray();
-        Assert.False(SessionInfo.TryRead(bytes.AsSpan(0, bytes.Length - 8))!.Locked);
+        Assert.False(SessionInfo.TryRead(bytes.AsSpan(0, bytes.Length - 9))!.Locked);
 
         using var browser = new SessionBrowser();
         SessionBrowser.Found? f = null;

@@ -146,6 +146,11 @@ public sealed record ServerOptions
     /// voice and the clients do not open a microphone. On by default; listed in <see cref="SessionInfo.Cb"/> and carried in <see cref="JoinAccept.Cb"/>.
     /// </summary>
     public bool AllowCb { get; init; } = true;
+    /// <summary>
+    /// The chase crosshair, an aiming aid of the port's (the host form's Chase Crosshair, i26-server's --crosshair): allowed, each
+    /// player's own setting shows it; off by default. Listed in <see cref="SessionInfo.Crosshair"/> and carried in <see cref="JoinAccept.Crosshair"/>; the server itself does nothing with it.
+    /// </summary>
+    public bool AllowCrosshair { get; init; }
     /// <summary>Snapshots as deltas against the one each client acknowledged (protocol 13); off sends each in full (A/B, debugging).</summary>
     public bool DeltaSnapshots { get; init; } = true;
     /// <summary>Far cars sent less often (<see cref="Interest"/>; needs <see cref="DeltaSnapshots"/>); off sends every car every tick.</summary>
@@ -558,7 +563,7 @@ public sealed partial class MeleeHost : IModeHost
         [.. _seats.Select(s => new SessionDriver(s.Name, s.Actor.CarFile, (byte)s.Actor.Team)), .. Mode.Bots.Select(b => new SessionDriver(b.Name, b.Player.CarFile, (byte)b.Player.Team))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams,
         MapOffer?.Hash, MapOffer?.Shared ?? false, (uint)(MapOffer?.TotalSize ?? 0), Options.Password.Length > 0,
-        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb);
+        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair);
 
     /// <summary>
     /// A player joins: the car they asked for, built from the server's own
@@ -668,7 +673,7 @@ public sealed partial class MeleeHost : IModeHost
         [.. Setup.World.Vehicles.Select(Info)],
         [.. _structureSerial.Where(kv => kv.Key.Destroyed || kv.Key.Nodes.Any(n => n.Destroyed)).Select(kv => new StructureState(kv.Value, kv.Key.DestroyedMask()))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams, (byte)Session.Rate.Label,
-        Map?.MissionSize ?? 0, Map?.MissionCrc ?? 0, Map?.TerrainSize ?? 0, Map?.TerrainCrc ?? 0, MapSet?.Hash) { Coop = Mode.JoinState(s), Cb = Options.AllowCb };
+        Map?.MissionSize ?? 0, Map?.MissionCrc ?? 0, Map?.TerrainSize ?? 0, Map?.TerrainCrc ?? 0, MapSet?.Hash) { Coop = Mode.JoinState(s), Cb = Options.AllowCb, Crosshair = Options.AllowCrosshair };
 
     private CarInfo Info(Vehicle v)
     {

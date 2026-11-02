@@ -25,7 +25,10 @@ public sealed class GameOptionsPopup : ShellScreen
     public Action? Link { get; init; }
     public override bool EscapeOpensOptions => false;
 
-    public const int W = 267, X = 316, Y = 96, Pitch = 22, MaxRows = 8;
+    public const int W = 267, X = 316, Pitch = 22, MaxRows = 8;
+    /// <summary>The panel's top: 96, or higher where a long list would run off the 480-line frame (with its 6 px shadow).</summary>
+    private const int TopY = 96, FrameH = 480;
+    private int Y = TopY;
     private IReadOnlyList<OptionRow> _rows = [];
     private int _h;
     private readonly HoldRepeat _hold = new();
@@ -74,6 +77,7 @@ public sealed class GameOptionsPopup : ShellScreen
         _rows = Rows();
         _label ??= Shell.Db.Font(0x47);
         _h = BtnTop + BtnH + 7 + 2;
+        Y = System.Math.Min(TopY, FrameH - 6 - _h);
         Draw();
     }
 

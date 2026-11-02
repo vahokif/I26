@@ -212,6 +212,12 @@ by itself in 43 s; Space 3 s after a death was refused, 6.5 s after it brought a
   go to `user://gamekeys.cfg` (game key id → key text) and `GameKeyMap.Load(text, mine)` lays them over it (a game key's own keys
   go, the key leaves any other game key); Restore goes back to gamekey.map's. The other game keys (views, Pause, Ctrl+Q ...)
   stay gamekey.map's.
+- **Chase crosshair** (protocol 22): the port's aiming aid in the F2 chase view (Mouse Options' Chase Crosshair, `CrosshairPolicy`) shows in a
+  network game, melee or co-op, only where the host allows it: the host form's CHASE CROSSHAIR (the base form's `X-hair: Off` beside `Turrets` (Unlim. Turrets, shortened to make room), CHASE CROSSHAIR in the Nitro and co-op forms' game options; shell.cfg `[port] host_crosshair`, written only when
+  on; `--crosshair` / `--no-crosshair` for a listen host and `i26-server --crosshair`; `ServerOptions.AllowCrosshair`, off by default, also in
+  the migration's options). `JoinAccept.Crosshair` (last byte) tells the clients, and each player's own setting then decides; the listing
+  carries it (`SessionInfo.Crosshair`, the discovery answer's last byte, a missing byte reading as not allowed) and the session popup says
+  `Chase crosshair allowed`. The server does nothing with it and nothing in the simulation reads it.
 - **Console lines**, `NetLines`:
   "*** %s has joined the game" / "*** %s has left the game" (Nitro "*** Player %s ...", "*** A %s team member has joined
   the game!"), "*** %s has been killed" (no killer), "*** %1:s was killed by %2:s", chat "From %s: ", the entry "Say: ".

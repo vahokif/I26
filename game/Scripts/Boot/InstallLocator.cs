@@ -123,6 +123,8 @@ public sealed class LaunchOptions
     public bool? CarReset { get; set; }
     /// <summary>--cb / --no-cb: whether a listen server has the CB radio on (null: the setting).</summary>
     public bool? Cb { get; set; }
+    /// <summary>--crosshair / --no-crosshair: whether a listen server allows the chase crosshair (null: the setting).</summary>
+    public bool? Crosshair { get; set; }
     /// <summary>--map-downloads ask|always|never: a host's custom map this install lacks (null: the setting).</summary>
     public int? MapDownloads { get; set; }
     /// <summary>--seed N: every mission's rand stream starts at N (spawn points, AI choices, damage rolls, debris), to reproduce a run.</summary>
@@ -295,6 +297,8 @@ public sealed class LaunchOptions
                 case "--no-car-reset": o.CarReset = false; break;
                 case "--cb": o.Cb = true; break;
                 case "--no-cb": o.Cb = false; break;
+                case "--crosshair": o.Crosshair = true; break;
+                case "--no-crosshair": o.Crosshair = false; break;
                 case "--map-downloads":
                 {
                     var v = Next();

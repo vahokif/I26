@@ -319,7 +319,9 @@ public sealed partial class MeleeScreen
         }
         Frame.Text(_font, _coopBase ? 15 : 152, 435, $"Pass: {(_password.Length > 0 ? "*" : "-")}");
         // ("Hidden: On", the box's name shortened to leave the line's end for the rate)
-        Frame.Text(_font, 15, 421, $"Unlim. turrets: {(_turrets ? "On" : "Off")}");
+        // (the four lines are full, so Unlim. Turrets and the Chase Crosshair share the first by short names, as Hidden, Pass and Rate do)
+        Frame.Text(_font, 15, 421, $"Turrets: {(_turrets ? "On" : "Off")}");
+        Frame.Text(_font, 128, 421, $"X-hair: {(Shell.Settings.HostCrosshair ? "On" : "Off")}");
         Frame.Text(_font, 15, 449, $"Hidden: {(Shell.Settings.HiddenContent ? "On" : "Off")}");
         // (and the Car Reset's, the reset-upright key, on a line of its own under them)
         Frame.Text(_font, 15, 463, $"Car reset: {(Shell.Settings.CarReset ? "On" : "Off")}");
@@ -355,6 +357,13 @@ public sealed partial class MeleeScreen
     private void ToggleCb()
     {
         Shell.Settings.CbRadio = !Shell.Settings.CbRadio;
+        Shell.Settings.Save();
+    }
+
+    /// <summary>The host form's Chase Crosshair (the port's): whether the game's players who have the chase crosshair on see it (an aiming aid the original does not have; off).</summary>
+    private void ToggleCrosshair()
+    {
+        Shell.Settings.HostCrosshair = !Shell.Settings.HostCrosshair;
         Shell.Settings.Save();
     }
 
@@ -523,7 +532,7 @@ public sealed partial class MeleeScreen
     private void OptionsPopup()
     {
         _turretsWas = _turrets;
-        var was = (_teamPlay, _limit, _limitAt, _inviteOnly, _bots, _botSkill, Shell.Settings.ShareMaps, Shell.Settings.HiddenContent, Shell.Settings.CarReset, Shell.Settings.CbRadio);
+        var was = (_teamPlay, _limit, _limitAt, _inviteOnly, _bots, _botSkill, Shell.Settings.ShareMaps, Shell.Settings.HiddenContent, Shell.Settings.CarReset, Shell.Settings.CbRadio, Shell.Settings.HostCrosshair);
         int wasRate = _rate;
         var wasCars = new List<string>(_botCars);
         OptionsPopupWith(was, wasRate, wasCars);
@@ -531,7 +540,7 @@ public sealed partial class MeleeScreen
 
     private bool _turretsWas;
 
-    private void OptionsPopupWith((bool, int, int, bool, int, I76.Sim.Missions.BotSkill, bool, bool, bool, bool) was, int wasRate, List<string> wasCars)
+    private void OptionsPopupWith((bool, int, int, bool, int, I76.Sim.Missions.BotSkill, bool, bool, bool, bool, bool) was, int wasRate, List<string> wasCars)
     {
         Shell.Modal(new GameOptionsPopup
         {
@@ -550,6 +559,7 @@ public sealed partial class MeleeScreen
                     if (Shell.Settings.HiddenContent != was.Item8) ToggleHidden();
                     if (Shell.Settings.CarReset != was.Item9) ToggleCarReset();
                     if (Shell.Settings.CbRadio != was.Item10) ToggleCb();
+                    if (Shell.Settings.HostCrosshair != was.Item11) ToggleCrosshair();
                 }
                 Draw();
             },
@@ -591,6 +601,7 @@ public sealed partial class MeleeScreen
                 new("UNLIM. TURRETS", false, _turrets, "", _ => SetTurrets(!_turrets)),
                 new("CAR RESET", false, Shell.Settings.CarReset, "", _ => ToggleCarReset()),
                 new("CB RADIO", false, Shell.Settings.CbRadio, "", _ => ToggleCb()),
+                new("CHASE CROSSHAIR", false, Shell.Settings.HostCrosshair, "", _ => ToggleCrosshair()),
                 new("SIM RATE:", true, false, $"{_rate} Hz", d => _rate = StepRate(_rate, d)),
                 PhysicsRow,
             ];
@@ -619,6 +630,8 @@ public sealed partial class MeleeScreen
         rows.Add(new("CAR RESET", false, Shell.Settings.CarReset, "", _ => ToggleCarReset()));
         // the port's: the CB radio, push-to-talk voice chat, the host's decision (on by default)
         rows.Add(new("CB RADIO", false, Shell.Settings.CbRadio, "", _ => ToggleCb()));
+        // the port's: the chase crosshair, an aiming aid the original does not have, the host's decision (off by default)
+        rows.Add(new("CHASE CROSSHAIR", false, Shell.Settings.HostCrosshair, "", _ => ToggleCrosshair()));
         // the port's: players the server drives (docs/multiplayer.md "Bots"), up to the free seats, and how well
         rows.Add(new("BOTS:", true, false, $"{Math.Min(_bots, MaxBots):00}", d => _bots = Math.Clamp(Math.Min(_bots, MaxBots) + d, 0, MaxBots)));
         rows.Add(new("BOT SKILL:", true, false, _botSkill.ToString(), d => _botSkill = (I76.Sim.Missions.BotSkill)(((int)_botSkill + d + 3) % 3)));
@@ -678,6 +691,7 @@ public sealed partial class MeleeScreen
             case 28 when Hosting: ToggleHidden(); return true;
             case 36 when Hosting: ToggleCarReset(); return true;
             case 37 when Hosting: ToggleCb(); return true;
+            case 38 when Hosting: ToggleCrosshair(); return true;
             case 35 when Hosting: SetTurrets(!_turrets); return true;
             case 27 when Hosting: AskPassword(null, _password, pw => _password = pw ?? _password); return true;
             case 24 when Hosting && Nitro: OpenRestrictions(); return true;
@@ -720,7 +734,7 @@ public sealed partial class MeleeScreen
                     TeamPlay = !Coop && (_teamPlay || (Nitro && Types[_kind].Kind == I76.Sim.Missions.MeleeKind.Ctf)), InviteOnly = _inviteOnly,
                     MaxScore = _scoreOn && !Nitro && !Coop ? _maxScore : 0, Team = team, ShareMaps = Shell.Settings.ShareMaps, Password = _password,
                     Kind = Nitro && !Coop ? Types[_kind].Kind : null, Goal = NitroGoal.Goal, GoalValue = NitroGoal.Value, Minutes = NitroGoal.Minutes, CtfTeams = Types[_kind].Teams,
-                    Restrictions = Nitro ? _restrictions : WeaponRestrictions.None, Hidden = Shell.Settings.HiddenContent, Turrets = _turrets, CarReset = Shell.Settings.CarReset, Cb = Shell.Settings.CbRadio,
+                    Restrictions = Nitro ? _restrictions : WeaponRestrictions.None, Hidden = Shell.Settings.HiddenContent, Turrets = _turrets, CarReset = Shell.Settings.CarReset, Cb = Shell.Settings.CbRadio, Crosshair = Shell.Settings.HostCrosshair,
                     Bots = Math.Min(_bots, MaxBots), BotSkill = _botSkill, BotCars = [.. _botCars.Take(Math.Min(_bots, MaxBots))], Rate = _rate,
                     Coop = Coop, StoryCar = Coop && Shell.Settings.CoopOwnCar,
                 },
@@ -739,6 +753,7 @@ public sealed partial class MeleeScreen
         if (g.Turrets) parts.Add("Unlimited turrets");
         if (!g.CarReset) parts.Add("No car reset");
         if (!g.Cb) parts.Add("CB radio off");
+        if (g.Crosshair) parts.Add("Chase crosshair allowed");
         return parts.Count > 0 ? string.Join(". ", parts) : null;
     }
 
@@ -757,6 +772,7 @@ public sealed partial class MeleeScreen
         if (g.Turrets) rows.Add("Unlim. turrets allowed");
         if (!g.CarReset) rows.Add("No car reset");
         if (!g.Cb) rows.Add("CB radio off");
+        if (g.Crosshair) rows.Add("Crosshair allowed");
         return rows;
     }
 

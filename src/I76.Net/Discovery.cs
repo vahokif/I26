@@ -19,7 +19,7 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
     bool TeamPlay, bool InviteOnly, int MaxScore, float TimeLimit, bool Over, IReadOnlyList<SessionDriver> Drivers,
     I76.Sim.Missions.MeleeKind Kind = I76.Sim.Missions.MeleeKind.Combat, I76.Sim.Missions.MeleeGoal Goal = I76.Sim.Missions.MeleeGoal.None, int GoalValue = 0, byte Teams = 2,
     byte[]? MapHash = null, bool MapShared = false, uint MapSize = 0, bool Locked = false,
-    I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true)
+    I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true, bool Crosshair = false)
 {
     /// <summary>
     /// Whether a joiner's own check lets hidden cars and weapons through: the game allows them, or it does not say
@@ -73,6 +73,8 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         t.Bool(CarReset);
         // the CB radio is on in this game (protocol 20), appended the same way; an older host says nothing: on
         t.Bool(Cb);
+        // the host allows the chase crosshair, an aiming aid of the port's (protocol 22), appended the same way; an older host says nothing: not allowed
+        t.Bool(Crosshair);
         var shown = Shown(AnswerBytes - w.Length - 1 - t.Length);
         w.U8((byte)shown.Count);
         foreach (var d in shown) { w.Str(Clip(d.Name, Protocol.MaxName)); w.Str(Clip(d.Car, 32)); w.U8(d.Team); }
@@ -124,8 +126,9 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
             bool lobby = r.Remaining >= 1 && r.Bool();
             bool carReset = r.Remaining >= 1 && r.Bool();
             bool cb = r.Remaining < 1 || r.Bool();
+            bool crosshair = r.Remaining >= 1 && r.Bool();
             return new SessionInfo(id, version, name, arena, players, max, team, invite, score, limit, over, drivers, kind, goal, value, teams, hash, shared, size, locked,
-                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb);
+                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair);
         }
         catch (WireException) { return null; }
         catch (IndexOutOfRangeException) { return null; }

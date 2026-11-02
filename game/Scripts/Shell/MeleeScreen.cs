@@ -40,8 +40,10 @@ public sealed partial class MeleeScreen : ShellScreen
         [27] = (149, 215, 434, 448),
         // the base host form's HIDDEN WPNS & CARS line under them
         [28] = (10, 116, 449, 462),
-        // the port's: UNLIM. TURRETS on the free line above SHARE MAPS (docs/multiplayer.md)
-        [35] = (10, 215, 419, 433),
+        // the port's: UNLIM. TURRETS ("Turrets") on the free line above SHARE MAPS (docs/multiplayer.md)
+        [35] = (10, 125, 419, 433),
+        // and the Chase Crosshair's ("X-hair", the aiming aid), at that line's right end
+        [38] = (126, 215, 419, 433),
         // the port's: the base host form's BOTS line, between NO. DRIVERS and the options: fewer, more, and the skill (docs/multiplayer.md "Bots")
         [29] = (53, 67, 356, 370), [30] = (90, 104, 356, 370), [31] = (105, 165, 356, 370),
         // and its A.I. CARS (BotCarsPopup), at the line's right end
@@ -64,8 +66,8 @@ public sealed partial class MeleeScreen : ShellScreen
         1 => [0, 1, 2, 3, 4, 5, 6, 7, 14, 15],
         3 or 4 when Nitro => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 22, 23, 24, 25, 27],
         // a co-op game has no team play, score limit, Bots or custom map to share: the box's rows that are left are INVITE ONLY and the password
-        3 or 4 when _coopBase => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 17, 22, 27, 28, 32, 33, 35, 36, 37],
-        3 or 4 => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 16, 17, 18, 20, 21, 22, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37],
+        3 or 4 when _coopBase => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 17, 22, 27, 28, 32, 33, 35, 36, 37, 38],
+        3 or 4 => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 16, 17, 18, 20, 21, 22, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38],
         _ => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15],
     };
     private (int X0, int X1, int Y0, int Y1) ModeBtn => Hot[32];

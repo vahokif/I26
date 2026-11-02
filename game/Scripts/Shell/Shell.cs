@@ -71,6 +71,8 @@ public sealed record NetLaunch(int Mode)
     public bool CarReset { get; init; } = true;
     /// <summary>Hosting: the CB radio (voice chat) is on in the game (the form's CB Radio; on).</summary>
     public bool Cb { get; init; } = true;
+    /// <summary>Hosting: the chase crosshair may show for the players who have it on (the form's Chase Crosshair; off).</summary>
+    public bool Crosshair { get; init; }
     /// <summary>Hosting: the form's Bots, players the server drives (up to the free seats), and how well.</summary>
     public int Bots { get; init; }
     public I76.Sim.Missions.BotSkill BotSkill { get; init; } = I76.Sim.Missions.BotSkill.Normal;
@@ -1165,6 +1167,8 @@ public sealed class ShellSettings
     public bool CarReset { get; set; } = true;
     /// <summary>The port's own: a hosted game has the CB radio on (the host form's CB Radio; shell.cfg [port] cb_radio, written only when off).</summary>
     public bool CbRadio { get; set; } = true;
+    /// <summary>The port's own: a hosted game allows the chase crosshair (the host form's Chase Crosshair; shell.cfg [port] host_crosshair, written only when on).</summary>
+    public bool HostCrosshair { get; set; }
     /// <summary>The port's own: CB Voice (Play Options, second page; shell.cfg [port] cb_voice, written only when off): push-to-talk voice in network games. Off neither sends nor plays it.</summary>
     public bool CbVoice { get; set; } = true;
     /// <summary>The port's own: the microphone CB Voice uses (shell.cfg [port] cb_mic; Play Options steps through the sound system's list). Empty is the system default.</summary>
@@ -1265,6 +1269,7 @@ public sealed class ShellSettings
         s.ShareMaps = (bool)c.GetValue("port", "share_maps", true);
         s.CarReset = (bool)c.GetValue("port", "car_reset", true);
         s.CbRadio = (bool)c.GetValue("port", "cb_radio", true);
+        s.HostCrosshair = (bool)c.GetValue("port", "host_crosshair", false);
         s.CbVoice = (bool)c.GetValue("port", "cb_voice", true);
         // no version step: absent (never chosen, or the old implicit default) is none; a saved device stays
         s.CbMic = (string)c.GetValue("port", "cb_mic", "");
@@ -1332,6 +1337,7 @@ public sealed class ShellSettings
         if (!ShareMaps) c.SetValue("port", "share_maps", false);
         if (!CarReset) c.SetValue("port", "car_reset", false);
         if (!CbRadio) c.SetValue("port", "cb_radio", false);
+        if (HostCrosshair) c.SetValue("port", "host_crosshair", true);
         if (!CbVoice) c.SetValue("port", "cb_voice", false);
         if (CbMic.Length > 0) c.SetValue("port", "cb_mic", CbMic);
         if (HiddenContent) c.SetValue("port", "hidden_content", true);

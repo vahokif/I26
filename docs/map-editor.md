@@ -37,7 +37,7 @@ the modern look is the one it is built for.
 | Tab | pan with the mouse at the window's edge, on or off (off at first) |
 | `B` | hide or show the brush circle |
 | `F12` or `F2` | modern look or 1997 look, as F12 does in a mission; it works with a text field focused too, and in a playtest F12 is the mission's own (the 1997 look draws the horizon mountain panels by the original's rule, as a playtest, F5, does: their foot sinks 10.2 times the camera's height, so from the free camera, tens of metres up and more, they sink out of sight, as they do in the game on high ground) |
-| `F5` | playtest; `F5` or `Esc` comes back |
+| `F5` | playtest, with the car under the cursor; `F5` or `Esc` comes back |
 | `F1` | the help overlay |
 
 **Music.** The game's soundtrack plays while you edit: the CD tracks of the install the editor was opened from (Interstate '76's or the Nitro Pack's, whichever the map belongs to), a random one after another and never the one just played, at the Music level of Audio Control (nothing plays at level 0 or 1, or with no tracks in the install). The top bar's **MUSIC** button switches it off and on; the choice is kept with the player's settings (`editor_music` in the `[port]` section, written only when off). A playtest (F5) fades the music out for the mission's own and the editor starts a track again on the way back; leaving the editor ends it for the menu's music. `I76_EDITOR_MUSIC_SEEK=SECONDS` starts each track that far in (capture scripts: `music` presses the button, `key:F12` sends a key).
@@ -394,7 +394,7 @@ saved map without sinking through the deck or a jump at a joint; a tunnel with i
 (`MissionFile.RoadOverride`), so a playtest (F5), the AI's road routes and the 1997 look have them. Not redone: the plants and ground
 decals near a new road, the reachability the terrain surface computes at load.
 
-**Playtest and the AI.** F5 drops the car where the camera looks; point the camera at the new road to drive it. The sim reads the new road
+**Playtest and the AI.** F5 drops the car under the cursor; point the camera at the new road to drive it. The sim reads the new road
 as it does a stock one: `EditorRoadTests` makes a road with the tool, saves it, and sends an AI car along it (start and goal within 10.5 of
 the road): the route has one waypoint per road point, 2.45 inside the edge, and the car drives it to the end staying within 3 of the centre
 line (all 458 ticks on the road).
@@ -516,8 +516,16 @@ without touching its style stays byte for byte, and a stock map saved under a ne
 
 ## Playtest
 
-**F5** drops the player's car where the camera looks (the pivot, facing the camera's heading) and runs the map as a melee with no
-opponents (`--melee`); **F5** or **Esc** returns to the editor with the camera where it was. The edited heights and the undo history
+**F5** drops the player's car under the mouse cursor, upright and facing the camera's heading, and runs the map as a melee with no
+opponents (`--melee`); **F5** or **Esc** returns to the editor with the camera where it was. The spot is where the camera's ray through
+the cursor first meets the ground, a road or a drive-on structure (a bridge's deck, so the car stands on the deck, not under it):
+`PlaytestSpawn.FromRay` (src/I76.Sim/Terrain), run by the playtest's scene on the world it has built, with the sim's own ground and
+colliders. The PLAYTEST button and the menu's Playtest item use where the cursor last was over the 3D view, as the cursor is on the bar
+when they are clicked. The car settles on its suspension before the first tick, as a mission's does. Where a car cannot stand (the cursor
+is on the sky, off the map or at its edge, on ground the map marks impassable: water or a cliff, on or inside a building or other
+collider) or the cursor was not over the 3D view (a key press with it on a window, the bar or outside the window), the car goes where it
+used to, at the camera's pivot, and a line at the bottom of the playtest's view says why for a few seconds. The editor's camera is kept
+for the return. The edited heights and the undo history
 travel in `EditorSession`: the game reloads its scene for a mission, once to go and once to come back, so each way takes a mission
 load (3.7 s there and 2.9 s back on T01, with the road layers made anew; the baked cache is skipped while the ground is edited so a playtest's every
 variant does not fill the user's cache folder). The sim's ground, its colliders, the plants and the drawn ground are all built from the
@@ -540,6 +548,7 @@ a spawn in the middle.
   the fit), `Junctions` (detect, cut, settle after edits), `PieceStore`, `JunctionCommand`; `StructureAttach` (the ends of a deck or ramp, shared with the object tool); `Objects/`: `ObjectCatalogue`, `ObjectLayer` and `ObjectCommands`, `Footprint` and `PlaceRules`, `Snapping`, `RoadGeometry`, `RoadSplit`, `MapChecks`. Tests: `tests/I76.Editor.Tests` (brush maths, strokes, undo, saving through the real writers in a scratch folder,
   and that a refreshed `TerrainSurface` draws where a fresh one does; `RoadTests.cs`: curve sampling, snapping, grade limiting, the RSEG
   conventions against the stock roads, extension and loops, edits, conforming, undo, saving). `tests/I76.Sim.Tests/EditorRoadTests.cs`: the AI on a made road, the stock bridges and ramps against the structure ends.
+- `src/I76.Sim/Terrain/PlaytestSpawn.cs`: the cursor ray to the playtest's spawn point and its refusals (tests: `PlaytestSpawnTests.cs`).
 - `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `EditorSession`, `MapLookPanel` (the map style window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.
 - The object surveys behind the catalogue and the snapping rules are in `tools/I76.Cli/ObjectSurvey.cs`: `i76 objects OUT.tsv` (every name, type
   and flag the stock maps place, with counts, kinds of map and model sizes), `i76 facing` (which side of a building the stock maps put

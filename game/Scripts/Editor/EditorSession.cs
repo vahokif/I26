@@ -19,6 +19,10 @@ public static class EditorSession
     public static bool Playtest { get; set; }
     /// <summary>Where the playtest's car stands: game x, z and the heading in degrees from +Z toward +X.</summary>
     public static float[]? PlaytestAt { get; set; }
+    /// <summary>The ray through the editor's cursor when the playtest was asked for (game frame): the car goes where it meets the ground, if a car can stand there.</summary>
+    public static (System.Numerics.Vector3 Origin, System.Numerics.Vector3 Dir)? PlaytestRay { get; set; }
+    /// <summary>Why there is no <see cref="PlaytestRay"/> (the cursor was not over the 3D view): the playtest says so when the car stands at <see cref="PlaytestAt"/>.</summary>
+    public static string? PlaytestNoRay { get; set; }
 
     /// <summary>The map being edited: its mission name (a stem, or a file name).</summary>
     public static string Mission { get; private set; } = "";
@@ -63,7 +67,7 @@ public static class EditorSession
     public static void End()
     {
         Active = Playtest = Modified = false;
-        PlaytestAt = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Layer = null; Look = null; StyleTab = -1;
+        PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Layer = null; Look = null; StyleTab = -1;
         I76.Game.Editor.Intersections.IntersectionSession.End();
     }
 

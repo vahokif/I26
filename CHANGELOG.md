@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### New
+- Map editor: a playtest (F5, the PLAYTEST button) drops your car under the mouse cursor, on the ground, a road or a bridge's deck, facing the way the camera looks; with the cursor on the sky, off the map, on water, on a cliff or in a building, or off the 3D view, it goes where it used to, at the camera's pivot, and says why.
 - Map editor: F12 switches between the modern and the 1997 look, as in a mission (F2 still works too).
 - Map editor: the game's soundtrack plays while you edit, a random track after another at the Music level of Audio Control; a MUSIC button in the top bar turns it off and on, and a playtest hands over to the mission's own music.
 - Bots use ramps: a bot whose car can reach the speed a ramp needs takes it as a shortcut across a gap, a canyon or a river when that is a clearly shorter way to its target, lining up on the ramp, holding its speed and keeping the wheel straight; a weak or damaged engine, or a ramp it cannot line up on, and it drives round as before.

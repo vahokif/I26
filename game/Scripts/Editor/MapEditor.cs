@@ -50,6 +50,7 @@ public partial class MapEditor : Node
     private bool _overlayOn = true;                 // the Surface tool's map over the ground (;)
     private SurfaceOverlay _overlay = null!;
     private int _frame;
+    private bool _switchSettled;
     private double _hold;
     private bool _dirtyLook;
     /// <summary>The editor's soundtrack (EditorMusic), null without an install; <see cref="_musicOn"/> is the MUSIC button's setting.</summary>
@@ -89,6 +90,7 @@ public partial class MapEditor : Node
         SyncUi();
         GetViewport().SizeChanged += OnResize;
         HookStart();
+        SwitchTimer.Mark("editor ready");
     }
 
     public override void _ExitTree()
@@ -151,9 +153,12 @@ public partial class MapEditor : Node
     {
         if (!IsInsideTree()) return;
         _frame++;
+        if (_frame == 1) SwitchTimer.Mark("editor first frame");
+        else if (!_switchSettled && Terrain.StaleChunks == 0) { _switchSettled = true; SwitchTimer.Mark("editor terrain drawn", true); }
         HookFrame();
         if (!IsInsideTree()) return;   // a hook left the scene (the playtest)
         _overUi = GetViewport().GuiGetHoveredControl() is not null;
+        if (!_overUi && !_modal && DisplayServerHasMouse()) _lastViewMouse = GetViewport().GetMousePosition();
         if (!_hookCursor) _hit = _modal || _overUi || !DisplayServerHasMouse() ? null : PickGround(GetViewport().GetMousePosition());
         // an eyedropper or a stamp holds while the mouse is over the window only
         Objects.Frame(delta, _hit, _modal || _overUi);
@@ -402,11 +407,43 @@ public partial class MapEditor : Node
         else Go();
     }
 
-    /// <summary>F5: the car is dropped where the camera looks and the map runs; F5 or Esc comes back here.</summary>
-    public void Playtest()
+    /// <summary>The camera's ray through a screen point, in the game frame.</summary>
+    public (System.Numerics.Vector3 Origin, System.Numerics.Vector3 Dir) GameRay(Vector2 screen)
+    {
+        var o = Cam.ProjectRayOrigin(screen);
+        var d = Cam.ProjectRayNormal(screen);
+        var og = Origin();
+        return (new System.Numerics.Vector3(o.X + og.X, o.Y + og.Y, -o.Z + og.Z), new System.Numerics.Vector3(d.X, d.Y, -d.Z));
+    }
+
+    /// <summary>The 3D view's last mouse position (while it was over the view, not a window or the bar): a click on PLAYTEST drops the car there.</summary>
+    private Vector2? _lastViewMouse;
+
+    /// <summary>
+    /// The playtest's cursor ray: through the mouse when it is over the 3D view (F5), through where it last was over the view (the button, the menu),
+    /// through the held scripted cursor in a capture. Null with the reason in <see cref="EditorSession.PlaytestNoRay"/>.
+    /// </summary>
+    private (System.Numerics.Vector3, System.Numerics.Vector3)? PlaytestRay(bool fromBar)
+    {
+        Vector2? at;
+        if (_hookCursor && _hit is { } h)
+        {
+            var og = Origin();
+            var g = new Vector3(h.X - og.X, h.Y - og.Y, -(h.Z - og.Z));
+            at = Cam.IsPositionBehind(g) ? null : Cam.UnprojectPosition(g);
+        }
+        else if (fromBar) at = _lastViewMouse;
+        else at = !_modal && !_overUi && DisplayServerHasMouse() ? GetViewport().GetMousePosition() : null;
+        if (at is not { } p || !GetViewport().GetVisibleRect().HasPoint(p)) { EditorSession.PlaytestNoRay = fromBar ? "the cursor was not over the view" : "the cursor is not over the 3D view"; return null; }
+        return GameRay(p);
+    }
+
+    /// <summary>F5: the car is dropped under the cursor (or, with the cursor elsewhere, at the camera's pivot) and the map runs; F5 or Esc comes back here.</summary>
+    public void Playtest(bool fromBar = false)
     {
         if (_leavingForPlaytest) return;
         EndStroke();
+        EditorSession.PlaytestRay = PlaytestRay(fromBar);
         EditorSession.Capture();
         EditorSession.Pose = [Cam.Pivot.X, Cam.Pivot.Y, Cam.Pivot.Z, Cam.Yaw, Cam.Pitch, Cam.Distance];
         EditorSession.Playtest = true;
@@ -669,7 +706,7 @@ public partial class MapEditor : Node
                 case "key":   // key:F12: that key pressed through the window's input path, as a keyboard sends it
                     if (Enum.TryParse<Key>(args[0], true, out var pk)) Input.ParseInputEvent(new InputEventKey { Keycode = pk, PhysicalKeycode = pk, Pressed = true });
                     break;
-                case "playtest": Playtest(); break;
+                case "playtest": Playtest(args.Length > 0 && args[0] == "bar"); break;   // playtest[:bar]: as the PLAYTEST button (the cursor as it last was over the view)
                 case "help": ToggleHelp(); break;
                 case "style": OpenStyle(args.Length > 0 && int.TryParse(args[0], out int tab) ? tab : 0); break;
                 case "mapstyle": MapStyleScripted(args); break;

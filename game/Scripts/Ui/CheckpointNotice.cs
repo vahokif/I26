@@ -11,7 +11,8 @@ public partial class CheckpointNotice : CanvasLayer
     public required string InstallDir { get; init; }
     public bool Faithful { get; init; }
     public string Text { get; init; } = "Checkpoint";
-    private const double Hold = 1.6, Fade = 0.9;
+    public double Hold { get; init; } = 1.6;
+    private const double Fade = 0.9;
     private Label _label = null!;
     private double _t;
 

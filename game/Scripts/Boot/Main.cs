@@ -199,6 +199,7 @@ public partial class Main : Node3D
 
     public override async void _Ready()
     {
+        I76.Game.Editor.SwitchTimer.Mark("scene ready");
         LogFile.InstallForced();
         VramWatch.Install(GetTree());   // --log / I76_LOG=1: the log file even where the setting is off
         // the log's first line from us: the build, so a bug report's godot.log says which one it came from
@@ -367,6 +368,7 @@ public partial class Main : Node3D
                 AddChild(loading = new LoadingScreen { Install = new GameInstall(_opt.Install), Mission = _opt.Mission, Faithful = _opt.Mode1997, Name = "Loading" });
                 await loading.FadeIn();
             }
+            MissionBuilder.Trace("loading card up");
             BootSplash.Dismiss(now: true);
             await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
             if (!IsInsideTree()) return;
@@ -414,6 +416,7 @@ public partial class Main : Node3D
         }
         MissionBuilder.Trace("mission loaded");
         AddDropShadows();
+        MissionBuilder.Trace("drop shadows");
         var loaded = I76.Game.Shell.ShellSettings.Load();
         _drawDistance = DrawDistanceHook(loaded.DrawDistance);
         _vegetation = loaded.Vegetation;   // SpawnCar applies all the settings; a mission without a car has only this
@@ -451,11 +454,14 @@ public partial class Main : Node3D
         {
             // back out to black with the mission held still, then the briefing or the mission itself
             GetTree().Paused = true;
+            MissionBuilder.Trace("loading card: fade out");
             await loading.FadeOut();
             GetTree().Paused = false;
             loading.QueueFree();
+            MissionBuilder.Trace("loading card gone");
         }
         _loading = false;
+        if (_playtestNote is { } note && _opt.Install is not null) { AddChild(new CheckpointNotice { InstallDir = _opt.Install, Faithful = _mode1997, Text = note, Hold = 4.0, Name = "PlaytestNote" }); _playtestNote = null; }
         // a checkpoint's retry goes on from where it was: the music there, no briefing
         if (_resumed) { ResumeMusic(); return; }
         if (_editorMode) return;
@@ -719,6 +725,7 @@ public partial class Main : Node3D
     {
         // the placed trees (Seminole's pines) are the map's, not the setting's: tinted for the ground once the modern look shows
         if (!_mode1997 && _builder is { ModernReady: true } tb) tb.Scenery?.Trees.Show(tb);
+        MissionBuilder.Trace("trees shown");
         int level = VegetationNode.LevelFor(_vegetation);
         if (_mode1997 || level == 0)
         {
@@ -897,6 +904,7 @@ public partial class Main : Node3D
         var carNodes = _carNodes = new System.Collections.Generic.Dictionary<I76.Sim.Vehicles.Vehicle, CarNode>();
         _audio = audio;
         AddCombatView(setup.Combat);
+        MissionBuilder.Trace("spawn: combat view");
         System.Numerics.Vector3 pos = default;
         string def = "";
         CarNode MakeNode(I76.Sim.Vehicles.Vehicle vehicle, string carDef) => MakeCarNode(vehicle, carDef, ground);
@@ -907,12 +915,16 @@ public partial class Main : Node3D
             pos = vehicle.Pos.ToVector3(); def = carDef;
             SetupPlayerCar(node, vehicle, carDef, setup.Combat, handguns: true);
         }
+        MissionBuilder.Trace("spawn: cars made");
         if (_car is null) { _status += "\nno drivable car"; return; }
         var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = carNodes, PlacementOf = setup.PlacementOf, Audio = audio, Ground = setup.Ground, Name = "Damage" };
         AddChild(damageView);
         _damageView = damageView;
+        MissionBuilder.Trace("spawn: damage view");
         if (_car is { } warm) damageView.Prewarm(warm);
+        MissionBuilder.Trace("spawn: car prewarmed");
         damageView.PrewarmWrecks(setup.Cars.Where(c => !c.Item3.IsHeli).Select(c => c.Item2), _car?.Modern ?? true);   // and the other cars' wrecks, built once
+        MissionBuilder.Trace("spawn: wrecks prewarmed");
         // the gates the script slides (type-7 nodes): their meshes follow the sim's colliders
         if (_builder.Scenery is { } gateScenery)
         {
@@ -928,6 +940,7 @@ public partial class Main : Node3D
             melee.Removed += v => { if (carNodes.Remove(v, out var n)) { _sim.Cars.Remove(n); n.QueueFree(); } };
             melee.PlayerRenewed += v => { if (carNodes.GetValueOrDefault(v) is { } n) damageView.Restore(n); };
             melee.Start();
+            MissionBuilder.Trace("spawn: melee started");
             damageView.PrewarmWrecks(melee.Roster.Concat(carNodes.Values.Select(n => n.Definition)), _car?.Modern ?? true);   // every kind of car that will fall, built once
         }
         // I76_SPAWN_AT=x,z,yaw[;x,z,yaw@s...] (game units, degrees from +Z toward +X): put the player's car there, for captures
@@ -943,15 +956,26 @@ public partial class Main : Node3D
                 else PlacePlayer(pv, setup.Ground, a);
             }
         }
-        // a playtest from the map editor: the car where the editor's camera looked (after a melee's own spawn)
+        // a playtest from the map editor: the car under the editor's cursor if a car can stand there, else where the camera's pivot was (after a melee's own spawn)
         if (I76.Game.Editor.EditorSession.Playtest && I76.Game.Editor.EditorSession.PlaytestAt is { } ptAt && world.Player is { } ptv)
         {
+            float? ptY = null;
+            string? why = I76.Game.Editor.EditorSession.PlaytestNoRay;
+            if (I76.Game.Editor.EditorSession.PlaytestRay is { } ray)
+            {
+                var doc = I76.Game.Editor.EditorSession.Doc;
+                var plan = I76.Sim.Terrain.PlaytestSpawn.FromRay(setup.Ground, setup.Statics, (x, z) => doc is null || doc.Has((int)System.Math.Floor(x * I76.Formats.Assembly.MissionWorld.SampleScale), (int)System.Math.Floor(z * I76.Formats.Assembly.MissionWorld.SampleScale)), ray.Origin, ray.Dir);
+                if (plan.Ok) { ptAt = [plan.At.X, plan.At.Z, ptAt[2]]; ptY = plan.At.Y; why = null; }
+                else why = plan.Why;
+            }
             PlacePlayer(ptv, setup.Ground, ptAt);
+            if (ptY is { } hy) ptv.Pos = new I76.Sim.Math.Double3(ptAt[0], hy, ptAt[1]);   // on a bridge's deck, the deck
             // I76_PLAYTEST_DECK=1: onto the highest drive-on surface there (a bridge's deck) instead of the bare ground, for a capture of a bridge
             if (session.Options.DebugHooks && System.Environment.GetEnvironmentVariable("I76_PLAYTEST_DECK") is { Length: > 0 })
                 ptv.Pos = new I76.Sim.Math.Double3(ptAt[0], setup.Ground.Query(ptAt[0], 1e4, ptAt[1]).Height, ptAt[1]);
             pos = ptv.Pos.ToVector3();
-            GD.Print($"editor playtest: car at {ptAt[0]:0}, {ptAt[1]:0} heading {ptAt[2]:0}, {Time.GetTicksMsec() - I76.Game.Editor.EditorSession.SwitchedAtMs} ms after F5");
+            _playtestNote = why is null ? null : $"Car at the camera's pivot: {why}";
+            GD.Print($"editor playtest: car at {ptAt[0]:0}, {ptAt[1]:0} heading {ptAt[2]:0} {(why is null ? "under the cursor" : "at the pivot (" + why + ")")}, {Time.GetTicksMsec() - I76.Game.Editor.EditorSession.SwitchedAtMs} ms after F5");
         }
         // Placeholder behaviour without the script: chase the player when within 400 units.
         if (_opt.Ai == "chase")
@@ -988,6 +1012,22 @@ public partial class Main : Node3D
         _status += $"\n{statics.Objects.Count} colliders ({statics.Objects.Sum(o => o.Polys.Count)} polygons, {statics.Objects.Count(o => o.Surfaces.Count > 0)} drive-on structures)";
         _status += $"\n{world.Vehicles.Count} cars simulated; AI: {(_script is not null ? $"the mission script ({_script.Vm?.Threads.Count ?? 0} threads)" : _opt.Ai == "chase" ? "placeholder chase" : "parked")}";
         _status += $"\ndriving {def} at {pos.X:0},{pos.Y:0.0},{pos.Z:0} -- keys as Control Configuration has them (input.map; the original drives on the numpad), Ctrl+F5 free camera, C poetry, ` mirror, Esc menu, Ctrl+Q quit";
+    }
+
+    private string? _playtestNote;
+    private bool _switchFrameLogged;
+    private int _playFrames;
+    private static readonly int _debugReturn = int.TryParse(System.Environment.GetEnvironmentVariable("I76_PLAYTEST_RETURN"), out int dr) ? dr : 0;
+
+    /// <summary>Back from a playtest to the map editor (F5, Esc, or I76_PLAYTEST_RETURN's frame).</summary>
+    private void LeavePlaytest()
+    {
+        I76.Game.Editor.EditorSession.Playtest = false;
+        I76.Game.Editor.EditorSession.PlaytestAt = null;
+        I76.Game.Editor.EditorSession.SwitchedAtMs = Time.GetTicksMsec();
+        GetTree().Paused = false;
+        ReleaseCursor();
+        GetTree().ReloadCurrentScene();
     }
 
     private System.Collections.Generic.Dictionary<I76.Sim.Vehicles.Vehicle, CarNode> _carNodes = [];
@@ -2104,12 +2144,16 @@ public partial class Main : Node3D
         RenderingServer.DirectionalShadowAtlasSetSize(on ? 8192 : 4096, true);
         _sun.ShadowBlur = on ? 0f : 1f;
         _sun.DirectionalShadowMaxDistance = on ? 600 : 1500;
+        MissionBuilder.Trace("look: shadows, draw distance");
         _builder?.Materials?.SetMode1997(on);
         if (_builder?.Scenery is { } scenery) scenery.Modern = !on;
+        MissionBuilder.Trace("look: materials, scenery");
         if (_pit is not null) _pit.Faithful = on;
         if (_sim is not null) foreach (var c in _sim.Cars) { c.Modern = !on; if (c.Wrecked) _damageView?.Rebuild(c); }   // the wreck's shape: modern shell or the 1997 box
         GetViewport().Msaa3D = on ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa4X;
+        MissionBuilder.Trace("look: msaa");
         ApplyModernQuality();
+        MissionBuilder.Trace("look: modern quality");
         ApplySoftware();   // MainSoftware.cs
         if (on) UpdateVegetation();   // ApplyModernQuality leaves the 1997 look alone: hide the plants here
     }
@@ -2237,13 +2281,8 @@ public partial class Main : Node3D
         // a playtest from the map editor: F5 or Esc goes back to the editor, the camera where it was
         if (I76.Game.Editor.EditorSession.Playtest && _sim is not null && !_loading && e is InputEventKey { Pressed: true, Echo: false, CtrlPressed: false, Keycode: Key.F5 or Key.Escape })
         {
-            I76.Game.Editor.EditorSession.Playtest = false;
-            I76.Game.Editor.EditorSession.PlaytestAt = null;
-            I76.Game.Editor.EditorSession.SwitchedAtMs = Time.GetTicksMsec();
             GetViewport().SetInputAsHandled();
-            GetTree().Paused = false;
-            ReleaseCursor();
-            GetTree().ReloadCurrentScene();
+            LeavePlaytest();
             return;
         }
         if (_sim is null || _inMenu || _menu is not null || _loading || _picture is not null || _gamePaused) return;
@@ -2841,6 +2880,9 @@ public partial class Main : Node3D
             return;
         }
         if (_loading) return;
+        if (!_switchFrameLogged) { _switchFrameLogged = true; I76.Game.Editor.SwitchTimer.Mark("first interactive frame", true); }
+        // I76_PLAYTEST_RETURN=N (capture): a playtest goes back to the editor N frames after it opened, as F5 does
+        if (I76.Game.Editor.EditorSession.Playtest && _sim is not null && _debugReturn > 0 && ++_playFrames == _debugReturn) LeavePlaytest();
         PumpModernBuild();
         if (!_horizonEyeSet) SetHorizonEye();
         _animClock += delta;

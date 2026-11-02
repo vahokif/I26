@@ -69,7 +69,7 @@ public partial class MapEditor
         bar.AddChild(new VSeparator());
         var menu = EditorStyle.Button("MAP", ToggleMenu, s, 20);
         bar.AddChild(menu);
-        bar.AddChild(EditorStyle.Button("PLAYTEST  F5", Playtest, s, 20));
+        bar.AddChild(EditorStyle.Button("PLAYTEST  F5", () => Playtest(true), s, 20));
         _lookButton = EditorStyle.Button("LOOK  F12", () => { ToggleLook(); }, s, 20);
         bar.AddChild(_lookButton);
         _musicButton = EditorStyle.Button("MUSIC", ToggleMusic, s, 20);
@@ -368,7 +368,7 @@ public partial class MapEditor
         Item("Open...", OpenPicker);
         Item("Save   Ctrl+S", Save);
         Item("Save as...", SaveAs);
-        Item("Playtest   F5", Playtest);
+        Item("Playtest   F5", () => Playtest(true));
         Item("Exit editor", () => Confirm(Doc.Modified ? "Leave the editor? Edits not saved are lost." : "Leave the editor?", Exit));
         _root.AddChild(panel);
         _menu = panel;
@@ -465,7 +465,7 @@ public partial class MapEditor
         ("Tab", "Pan by moving the mouse to the window's edge, on or off"),
         ("B", "Hide or show the brush circle"),
         ("F12, F2", "Modern look or 1997 look"),
-        ("F5", "Playtest: drop a car where the camera looks. F5 or Esc comes back"),
+        ("F5", "Playtest: drop a car under the cursor (or at the camera's pivot). F5 or Esc comes back"),
         ("Esc", "Map menu"),
         ("F1", "This help"),
     ];

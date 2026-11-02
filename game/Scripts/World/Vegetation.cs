@@ -156,6 +156,10 @@ public partial class VegetationNode : Node3D
     private SwardMap? _sward;
     private Color _swardColour;
     private float _swardStrength;
+    private bool _reassert;
+
+    /// <summary>The sward's tint set again at the next frame (another scene's plants reset it as they left).</summary>
+    public void Reassert() => _reassert = true;
 
     /// <summary>
     /// The sward into the ground shader's globals (terrain_modern.gdshader) once it is made: its texture and where it
@@ -178,7 +182,8 @@ public partial class VegetationNode : Node3D
         }
         float target = _sward is not null && Visible && _placer is not null && SwardOn ? 1f : 0f;
         float k = now ? target : Mathf.MoveToward(_swardStrength, target, (float)delta * 2f);
-        if (k == _swardStrength && !now) return;
+        if (k == _swardStrength && !now && !_reassert) return;
+        _reassert = false;
         _swardStrength = k;
         RenderingServer.GlobalShaderParameterSet("i76_sward_tint", new Vector4(_swardColour.R, _swardColour.G, _swardColour.B, k));
     }

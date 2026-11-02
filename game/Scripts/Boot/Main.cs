@@ -200,6 +200,7 @@ public partial class Main : Node3D
     public override async void _Ready()
     {
         I76.Game.Editor.SwitchTimer.Mark("scene ready");
+        if (!I76.Game.Editor.EditorSession.Active) Stash.Drop();   // no editor session: nothing to wait for
         LogFile.InstallForced();
         VramWatch.Install(GetTree());   // --log / I76_LOG=1: the log file even where the setting is off
         // the log's first line from us: the build, so a bug report's godot.log says which one it came from
@@ -365,7 +366,7 @@ public partial class Main : Node3D
             _loading = true;
             if (loading is null)
             {
-                AddChild(loading = new LoadingScreen { Install = new GameInstall(_opt.Install), Mission = _opt.Mission, Faithful = _opt.Mode1997, Name = "Loading" });
+                AddChild(loading = new LoadingScreen { Install = new GameInstall(_opt.Install), Mission = _opt.Mission, Faithful = _opt.Mode1997, Name = "Loading", FadeSeconds = I76.Game.Editor.EditorSession.Active ? 0.1 : 0.32 });
                 await loading.FadeIn();
             }
             MissionBuilder.Trace("loading card up");
@@ -975,7 +976,7 @@ public partial class Main : Node3D
                 ptv.Pos = new I76.Sim.Math.Double3(ptAt[0], setup.Ground.Query(ptAt[0], 1e4, ptAt[1]).Height, ptAt[1]);
             pos = ptv.Pos.ToVector3();
             _playtestNote = why is null ? null : $"Car at the camera's pivot: {why}";
-            GD.Print($"editor playtest: car at {ptAt[0]:0}, {ptAt[1]:0} heading {ptAt[2]:0} {(why is null ? "under the cursor" : "at the pivot (" + why + ")")}, {Time.GetTicksMsec() - I76.Game.Editor.EditorSession.SwitchedAtMs} ms after F5");
+            GD.Print($"editor playtest: car at {ptAt[0]:0}, {ptAt[1]:0} (ground {setup.Ground.BareHeight(ptAt[0], ptAt[1]):0.00}) heading {ptAt[2]:0} {(why is null ? "under the cursor" : "at the pivot (" + why + ")")}, {Time.GetTicksMsec() - I76.Game.Editor.EditorSession.SwitchedAtMs} ms after F5");
         }
         // Placeholder behaviour without the script: chase the player when within 400 units.
         if (_opt.Ai == "chase")
@@ -1015,6 +1016,8 @@ public partial class Main : Node3D
     }
 
     private string? _playtestNote;
+    /// <summary>The looks (1 modern, 2 1997) whose effects have been rehearsed in this run.</summary>
+    private static int _warmedLooks;
     private bool _switchFrameLogged;
     private int _playFrames;
     private static readonly int _debugReturn = int.TryParse(System.Environment.GetEnvironmentVariable("I76_PLAYTEST_RETURN"), out int dr) ? dr : 0;
@@ -1025,6 +1028,7 @@ public partial class Main : Node3D
         I76.Game.Editor.EditorSession.Playtest = false;
         I76.Game.Editor.EditorSession.PlaytestAt = null;
         I76.Game.Editor.EditorSession.SwitchedAtMs = Time.GetTicksMsec();
+        if (ReturnToStashedEditor()) return;   // the editor's scene was waiting (MainStash.cs)
         GetTree().Paused = false;
         ReleaseCursor();
         GetTree().ReloadCurrentScene();
@@ -1052,6 +1056,9 @@ public partial class Main : Node3D
     private async System.Threading.Tasks.Task WarmEffects()
     {
         if (System.Environment.GetEnvironmentVariable("I76_NO_WARMUP") == "1" || GetViewport().GetCamera3D() is not { } cam) return;
+        // a second playtest in a run: the renderer has made these pipelines and the views' code has run, in this look, once already
+        if (I76.Game.Editor.EditorSession.Playtest && (_warmedLooks & (_mode1997 ? 2 : 1)) != 0 && System.Environment.GetEnvironmentVariable("I76_WARM_AGAIN") != "1") { GD.Print("effects warm-up: done already in this look"); return; }
+        _warmedLooks |= _mode1997 ? 2 : 1;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         GetTree().Paused = true;
         // all of it at a spot far below the world, out of sight (the renderer makes a material's pipelines when its instance is made, seen
@@ -2237,6 +2244,7 @@ public partial class Main : Node3D
     public override void _ExitTree()
     {
         if (Controls.Held == _held) Controls.Held = null;   // (a reloaded scene may have set its own already)
+        if (I76.Game.ForceFeedback.Held?.Target == this) I76.Game.ForceFeedback.Held = null;   // it would keep this scene, and all it built, alive
         MouseCamera.Active = false;
         MouseCamera.WheelView = null;
         ReleaseCursor();
@@ -2244,7 +2252,6 @@ public partial class Main : Node3D
 
     private static void ToggleFullscreen() =>
         DisplayServer.WindowSetMode(DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen ? DisplayServer.WindowMode.Windowed : DisplayServer.WindowMode.Fullscreen);
-        if (I76.Game.ForceFeedback.Held?.Target == this) I76.Game.ForceFeedback.Held = null;   // it would keep this scene, and all it built, alive
 
     /// <summary>The script holds the camera (pushCam ... popCam): no view can be selected (the camera view selection at mode 5).</summary>
     private bool CameraHeld => _scriptCam?.Current == true;
@@ -2881,9 +2888,9 @@ public partial class Main : Node3D
             return;
         }
         if (_loading) return;
-        if (!_switchFrameLogged) { _switchFrameLogged = true; I76.Game.Editor.SwitchTimer.Mark("first interactive frame", true); }
-        // I76_PLAYTEST_RETURN=N (capture): a playtest goes back to the editor N frames after it opened, as F5 does
-        if (I76.Game.Editor.EditorSession.Playtest && _sim is not null && _debugReturn > 0 && ++_playFrames == _debugReturn) LeavePlaytest();
+        if (!_switchFrameLogged) { _switchFrameLogged = true; I76.Game.Editor.SwitchTimer.Mark(I76.Game.Editor.EditorSession.Playtest ? "playtest: first interactive frame" : "editor: first interactive frame", true); }
+        // I76_PLAYTEST_RETURN=N (capture): F5 is pressed N frames after a playtest opened
+        if (I76.Game.Editor.EditorSession.Playtest && _sim is not null && _debugReturn > 0 && ++_playFrames == _debugReturn) Input.ParseInputEvent(new InputEventKey { Keycode = Key.F5, PhysicalKeycode = Key.F5, Pressed = true });
         PumpModernBuild();
         if (!_horizonEyeSet) SetHorizonEye();
         _animClock += delta;

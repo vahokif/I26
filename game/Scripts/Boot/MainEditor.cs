@@ -18,6 +18,7 @@ public partial class Main
             Name = "MapEditor", Builder = _builder!, Doc = I76.Game.Editor.EditorSession.Doc!, Cam = cam, Undo = I76.Game.Editor.EditorSession.Undo!,
             Origin = () => _origin, ToggleLook = ToggleLook, Is1997 = () => _mode1997, VegetationOf = () => _veg,
             Reload = () => { ReleaseCursor(); GetTree().ReloadCurrentScene(); },
+            EnterPlaytest = EnterPlaytest,
             Leave = LeaveEditor, Install = new GameInstall(_opt.Install!),
         };
         AddChild(_editor);

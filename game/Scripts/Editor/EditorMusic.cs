@@ -20,6 +20,7 @@ public sealed partial class EditorMusic : Node
     private readonly List<(string Path, int Track)> _tracks = [];
     private AudioStreamPlayer? _player;
     private int _last = -1;
+    private bool _fadedOut;
 
     public bool Available => _tracks.Count > 0;
     public bool Playing => _player is { Playing: true };
@@ -75,10 +76,19 @@ public sealed partial class EditorMusic : Node
         _pausedForPlaytest = true;
         GD.Print($"editor music: fading out for the playtest (track {Track})");
         p.Finished -= Next;
+        _fadedOut = true;
         var tw = CreateTween().SetPauseMode(Tween.TweenPauseMode.Process);
         tw.TweenProperty(p, "volume_db", -60.0, seconds);
         tw.TweenCallback(Callable.From(p.Stop));
         return true;
+    }
+
+    /// <summary>Back from a playtest the scene was kept for: a track again (the one faded out is over).</summary>
+    public void Resume()
+    {
+        if (_player is null) return;
+        if (_fadedOut) { _player.Finished += Next; _fadedOut = false; }
+        Apply();
     }
 
     public override void _ExitTree() => _player?.Stop();

@@ -46,7 +46,7 @@ public partial class LoadingScreen : CanvasLayer
     private SignalAwaiter Ramp(Color to)
     {
         var t = CreateTween().SetPauseMode(Tween.TweenPauseMode.Process);
-        t.TweenProperty(_root, "modulate", to, Fade);
+        t.TweenProperty(_root, "modulate", to, FadeSeconds);
         return ToSignal(t, Tween.SignalName.Finished);
     }
 
@@ -69,6 +69,8 @@ public partial class LoadingScreen : CanvasLayer
     private Control _root = null!;
     private Label? _status;
     private const double Fade = 32 * 0.01;
+    /// <summary>How long the card takes to come up and to go: the original's ramp, or a short one where the card only covers a switch (the map editor's playtest).</summary>
+    public double FadeSeconds { get; init; } = Fade;
 
     /// <summary>A line under the picture: what a network join is doing ("Joining via server...").</summary>
     public string? Status

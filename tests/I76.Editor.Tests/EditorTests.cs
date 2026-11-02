@@ -24,6 +24,27 @@ public class EditorTests
     private static BrushSettings Brush(BrushKind k, float radius = 40, float strength = 1, Falloff f = Falloff.Smooth) => new() { Kind = k, Radius = radius, Strength = strength, Falloff = f };
 
     [Fact]
+    public void RevisionCountsEveryEditAndNeverGoesDown()
+    {
+        var doc = Doc();
+        long r0 = doc.Revision;
+        Assert.Equal(r0, doc.Revision);                      // reading changes nothing
+        new BrushStroke(doc, Brush(BrushKind.Raise, radius: 50, strength: 0.5f)).Stamp(64, 64, 0.5);
+        long r1 = doc.Revision;
+        Assert.True(r1 > r0);
+        doc.MarkSaved();                                     // a save clears the modified flag, not the history
+        Assert.Equal(r1, doc.Revision);
+        Assert.False(doc.Modified);
+        doc.Flatten(300);
+        Assert.True(doc.Revision > r1);
+        var look = new MapLook("c.act", "a.map", "b.map", "", 12);
+        doc.InitLook(look, look);
+        long r2 = doc.Revision;
+        doc.SetLook(look with { Hour = 13 });
+        Assert.True(doc.Revision > r2);
+    }
+
+    [Fact]
     public void FalloffIsOneAtTheCentreZeroAtTheRimAndFalls()
     {
         foreach (var f in Enum.GetValues<Falloff>())
@@ -576,5 +597,68 @@ public class MapLookCatalogTests
         Assert.Equal(t01.Palette, cat.Suited(t01 with { Ground = "tp181sw6.map" }).Palette);
         // and back to a 16-bit ground, the palette stays (it colours nothing then)
         Assert.Equal(grey.Palette, cat.Suited(grey with { Ground = t01.Ground }).Palette);
+    }
+}
+
+public class ViewStashTests
+{
+    private sealed class View { public bool Disposed; }
+
+    private static ViewStash<View> Stash() => new(v => v.Disposed = true);
+
+    [Fact]
+    public void AViewComesBackOnlyForTheRevisionItWasBuiltAt()
+    {
+        var stash = Stash();
+        var v = new View();
+        stash.Hold(v, "i76|t01", 7);
+        Assert.True(stash.Holds);
+        Assert.Same(v, stash.Take("i76|t01", 7));
+        Assert.False(v.Disposed);
+        Assert.False(stash.Holds);
+
+        var w = new View();
+        stash.Hold(w, "i76|t01", 7);
+        Assert.Null(stash.Take("i76|t01", 8));      // an edit since: not reused, freed
+        Assert.True(w.Disposed);
+
+        var x = new View();
+        stash.Hold(x, "i76|t01", 8);
+        Assert.Null(stash.Take("nitro|t01", 8));    // another install or map
+        Assert.True(x.Disposed);
+    }
+
+    [Fact]
+    public void HoldingAnotherOrDroppingFreesTheFirst()
+    {
+        var stash = Stash();
+        var a = new View(); var b = new View();
+        stash.Hold(a, "k", 1);
+        stash.Hold(b, "k", 1);
+        Assert.True(a.Disposed);
+        Assert.False(b.Disposed);
+        stash.Drop();
+        Assert.True(b.Disposed);
+        Assert.Null(stash.Take("k", 1));
+    }
+
+    [Fact]
+    public void AnEditMadeAfterTheViewWasKeptShowsInTheRevisionAndSurvivesTheReturn()
+    {
+        // the editor's way: keep the view at the document's revision, play, come back: same revision, same view; edit, play, come back: a new one
+        var grid = new byte[MissionFile.ZmapGrid * MissionFile.ZmapGrid];
+        Array.Fill(grid, MissionFile.ZmapEmpty);
+        grid[0] = 0;
+        int n = TerrainTiles.Tile * TerrainTiles.Tile;
+        var ter = new byte[n * 2];
+        var doc = new TerrainDocument(new TerrainTiles(ter, 1, grid), "t");
+        var stash = Stash();
+        var view = new View();
+        stash.Hold(view, "k", doc.Revision);
+        Assert.Same(view, stash.Take("k", doc.Revision));
+        stash.Hold(view, "k", doc.Revision);
+        doc.SetHeight(3, 3, 400);                    // an edit in between (it cannot be made during a playtest; the guard is for any path that does)
+        Assert.Null(stash.Take("k", doc.Revision));
+        Assert.True(view.Disposed);
     }
 }

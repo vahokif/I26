@@ -69,6 +69,7 @@ public static class EditorSession
         Active = Playtest = Modified = false;
         PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Layer = null; Look = null; StyleTab = -1;
         I76.Game.Editor.Intersections.IntersectionSession.End();
+        I76.Game.Boot.Main.Stash.Drop();
     }
 
     /// <summary>
@@ -94,12 +95,18 @@ public static class EditorSession
         }
         // the placed objects: read from the file once, then kept (a playtest's world is made from them)
         Layer ??= new ObjectLayer(I76.Formats.Mission.Edit.MapDocument.Load(world.Mission.Path), resolveDefinition, Roads);
-        Layer.Resolve = resolveDefinition;
-        Layer.Ground = (x, z) => (float)world.BilinearHeight(x, z);
-        doc.Layer = Layer;
+        // a playtest with the editor's scene kept aside (MainStash.cs) builds its world from the same layer, but the editor scene stays the layer's, the undo stack's and the session's document's owner
+        bool playsBesideEditor = Playtest && I76.Game.Boot.Main.Stash.Holds;
+        if (!playsBesideEditor)
+        {
+            Layer.Resolve = resolveDefinition;
+            Layer.Ground = (x, z) => (float)world.BilinearHeight(x, z);
+            doc.Layer = Layer;
+        }
         world.Placements.Clear();
         world.Placements.AddRange(Layer.Items.Select(i => i.Placement));
         I76.Game.Editor.Intersections.IntersectionSession.Sync(world);   // the intersection pieces are the road tool's (they follow the roads)
+        if (playsBesideEditor) return;
         Doc = doc;
         if (Undo is null) Undo = new UndoStack(doc);
         Undo.Doc = doc;

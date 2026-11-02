@@ -23,6 +23,8 @@ public partial class MapEditor : Node
     public required Action ToggleLook { get; init; }
     public required Func<bool> Is1997 { get; init; }
     public required Action Reload { get; init; }
+    /// <summary>Starts the playtest, the editor's scene waiting aside for it (or reloaded, when it cannot, after the music's fade when it is fading).</summary>
+    public required Action<bool> EnterPlaytest { get; init; }
     /// <summary>Leaves the editor for the game's shell (or the end of the program, when it was started on a mission).</summary>
     public required Action Leave { get; init; }
     public I76.Formats.Vfs.GameInstall? Install { get; init; }
@@ -79,7 +81,7 @@ public partial class MapEditor : Node
         }
         ApplyEnvironmentCamera();
         GD.Print($"map editor: camera pivot {Cam.Pivot.X:0}, {Cam.Pivot.Z:0}, ground {Cam.Pivot.Y:0.0} m; {Doc.Tiles.TileCount} tiles, bounds {Doc.Bounds()}");
-        if (EditorSession.SwitchedAtMs != 0) { GD.Print($"editor: back from the playtest in {Time.GetTicksMsec() - EditorSession.SwitchedAtMs} ms"); EditorSession.SwitchedAtMs = 0; }
+        if (EditorSession.SwitchedAtMs != 0) { GD.Print($"editor: back from the playtest in {Time.GetTicksMsec() - EditorSession.SwitchedAtMs} ms"); }
         RoadsTool = new RoadTool { Name = "RoadTool", Ed = this };
         AddChild(RoadsTool);
         Objects = new ObjectEditor { Name = "Objects", Ed = this, Builder = Builder, Cam = Cam, Doc = Doc, Undo = Undo, Layer = Doc.Layer!, Origin = Origin, PickGround = PickGround };
@@ -102,6 +104,17 @@ public partial class MapEditor : Node
         RenderingServer.GlobalShaderParameterSet("i76_surface_on", Vector4.Zero);
         if (GodotObject.IsInstanceValid(Builder.Terrain)) Terrain.Editing = false;
     }
+
+    /// <summary>Back from a playtest with this scene kept aside (MainStash.cs): the music again, the cursor and the window's size as they are now.</summary>
+    public void Resumed()
+    {
+        _leavingForPlaytest = false;
+        _music?.Resume();
+        BuildUi(); SyncUi();
+        SwitchTimer.Mark("editor resumed", true);
+        _resumeCountdown = 90;
+    }
+    private int _resumeCountdown;
 
     private void OnResize() { BuildUi(); SyncUi(); }
 
@@ -153,8 +166,9 @@ public partial class MapEditor : Node
     {
         if (!IsInsideTree()) return;
         _frame++;
+        if (_resumeCountdown > 0 && --_resumeCountdown == 0) { SwitchTimer.Mark("editor 90 frames after the return", true); EditorSession.SwitchedAtMs = 0; }
         if (_frame == 1) SwitchTimer.Mark("editor first frame");
-        else if (!_switchSettled && Terrain.StaleChunks == 0) { _switchSettled = true; SwitchTimer.Mark("editor terrain drawn", true); }
+        else if (!_switchSettled && Terrain.StaleChunks == 0) { _switchSettled = true; SwitchTimer.Mark("editor terrain drawn", true); EditorSession.SwitchedAtMs = 0; }
         HookFrame();
         if (!IsInsideTree()) return;   // a hook left the scene (the playtest)
         _overUi = GetViewport().GuiGetHoveredControl() is not null;
@@ -449,14 +463,10 @@ public partial class MapEditor : Node
         EditorSession.Playtest = true;
         EditorSession.SwitchedAtMs = Time.GetTicksMsec();
         EditorSession.PlaytestAt = [Cam.Pivot.X, Cam.Pivot.Z, Cam.HeadingDegrees];
-        // the music fades out first (the mission has its own); the editor starts it again on the way back
-        const double fade = 0.4;
-        if (_music?.FadeOut(fade) == true)
-        {
-            _leavingForPlaytest = true;
-            GetTree().CreateTimer(fade, processAlways: true).Timeout += Reload;
-        }
-        else Reload();
+        // the music fades out while the playtest loads (the mission has its own); the editor starts it again on the way back
+        bool fading = _music?.FadeOut(0.4) == true;
+        _leavingForPlaytest = true;
+        EnterPlaytest(fading);
     }
 
     /// <summary>The MUSIC button: the editor's soundtrack on or off, kept with the settings (a new key; nothing else in them changes).</summary>
@@ -682,6 +692,9 @@ public partial class MapEditor : Node
                         Rebase(piv);
                         break;
                     }
+                case "height":   // height:x,z: logs the edited ground there and the document's state (a playtest and its return keep the edits)
+                    GD.Print($"editor height at {F(0):0}, {F(1):0}: {GroundH(F(0), F(1)):0.00} (modified {Doc.Modified}, revision {Doc.Revision}, undo {Undo.CanUndo})");
+                    break;
                 case "undo": DoUndo(); break;
                 case "redo": DoRedo(); break;
                 case "exit": Exit(); break;

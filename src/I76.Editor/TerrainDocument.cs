@@ -14,6 +14,13 @@ public sealed class TerrainDocument : IMapDocument
     public const int MaxHeight = MissionFile.HeightMask;   // 4095 = 409.5 m
     private readonly List<(int Row, int Col)>[] _cells;
     private int _dirty;
+    private long _revision;
+
+    /// <summary>
+    /// Counts every change to the map as the editor holds it (heights, roads, placed objects, the look): never goes down, not even by a save or an undo.
+    /// A copy of the world built at one revision shows the map exactly while the revision is still that one.
+    /// </summary>
+    public long Revision => _revision + Roads.Version + (Layer?.Version ?? 0);
 
     /// <param name="sourcePath">The mission file the map was read from (saving reads it again to write over).</param>
     /// <param name="saveDir">Where saves go: the install's addon\ folder.</param>
@@ -62,7 +69,7 @@ public sealed class TerrainDocument : IMapDocument
     public void SetLook(MapLook look)
     {
         if (look.Equals(Look)) return;
-        Look = look;
+        Look = look; _revision++;
         LookChanged?.Invoke();
     }
 
@@ -92,7 +99,7 @@ public sealed class TerrainDocument : IMapDocument
         ushort now = (ushort)((old & ~MaxHeight) | Math.Clamp(raw, 0, MaxHeight));
         if (now == old) return;
         Tiles.SetSample(sx, sz, now);
-        _dirty++;
+        _dirty++; _revision++;
         Notify(tile, new SampleRect(sx, sz, sx, sz));
     }
 
@@ -102,7 +109,7 @@ public sealed class TerrainDocument : IMapDocument
         int lx = offset % TerrainTiles.Tile, lz = offset / TerrainTiles.Tile;
         var (r0, c0) = _cells[tile][0];
         Tiles.SetSample(c0 * TerrainTiles.Tile + lx, r0 * TerrainTiles.Tile + lz, value);
-        _dirty++;
+        _dirty++; _revision++;
         foreach (var (r, c) in _cells[tile])
         {
             int sx = c * TerrainTiles.Tile + lx, sz = r * TerrainTiles.Tile + lz;
@@ -140,7 +147,7 @@ public sealed class TerrainDocument : IMapDocument
         for (int t = 0; t < Tiles.TileCount; t++)
             if (_cells[t].Count > 0)
                 for (int i = 0; i < n; i++) PutSample(t, i, samples[t * n + i]);
-        _dirty++;
+        _dirty++; _revision++;
         return true;
     }
 
@@ -164,7 +171,7 @@ public sealed class TerrainDocument : IMapDocument
         for (int t = 0; t < Tiles.TileCount; t++)
             if (_cells[t].Count > 0)
                 for (int i = 0; i < TerrainTiles.Tile * TerrainTiles.Tile; i++) PutSample(t, i, (ushort)raw);
-        _dirty++;
+        _dirty++; _revision++;
         Changed?.Invoke(Bounds());
     }
 

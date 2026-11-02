@@ -502,7 +502,7 @@ The names are what stock WRLDs hold, 12 characters at most, the right extension,
 (`MapLook.Problem`); anything else is refused and never written. The light table (WRLD +0x97) follows the hour in the engine, not
 the file (`i76 looks` prints every stock mission's). Not offered: the movie, overview, `.npt`, scrounge and music fields.
 
-**Applying rebuilds the world**, as a playtest's return does (about 4 s on T01, a loading card): it is built again from the file with the look patched over
+**Applying rebuilds the world**, as a playtest's return used to (about 3 s on T01, a loading card): it is built again from the file with the look patched over
 its WRLD in memory (`WorldSettings.Patch`, `MissionWorld.RefreshLook`, `EditorSession.Look`), so everything derived from the choice follows exactly as
 in a fresh open and in both looks: the ground material and its fitted noise, the roads' blend, the sky, its fog and colours, the 3D
 horizon ring and its profile, the sun or moon and the night, the vegetation (a custom or unlisted map grows by its ground family; the campaign's
@@ -525,11 +525,26 @@ when they are clicked. The car settles on its suspension before the first tick, 
 is on the sky, off the map or at its edge, on ground the map marks impassable: water or a cliff, on or inside a building or other
 collider) or the cursor was not over the 3D view (a key press with it on a window, the bar or outside the window), the car goes where it
 used to, at the camera's pivot, and a line at the bottom of the playtest's view says why for a few seconds. The editor's camera is kept
-for the return. The edited heights and the undo history
-travel in `EditorSession`: the game reloads its scene for a mission, once to go and once to come back, so each way takes a mission
-load (3.7 s there and 2.9 s back on T01, with the road layers made anew; the baked cache is skipped while the ground is edited so a playtest's every
-variant does not fill the user's cache folder). The sim's ground, its colliders, the plants and the drawn ground are all built from the
-edited heights.
+for the return.
+
+**Switching fast.** The editor's scene is not thrown away for a playtest: it is put aside, inert and out of sight (`Main.Suspend`: processing
+off, its windows and 3D nodes hidden, its world environment out of the tree), a second `Main` scene is added beside it and plays the map, and
+the way back frees that scene and takes the editor's back (`Main.Stash`, a `ViewStash` from `I76.Editor`). Going back builds nothing: about
+0.05 to 0.1 s (the look and the globals the playtest's nodes reset are set again a frame later, and the managed side collected), against
+2 to 3 s for a scene reload. The editor's copy is kept only for the document revision (`TerrainDocument.Revision`, which counts every edit of
+the heights, roads, objects and look and never goes down) and the map and install it was made for; anything else frees it and the scene is
+reloaded as before. A map streamed in pieces (`Terrain.Huge`) is not kept (it would be held twice), and `I76_EDITOR_STASH=0` switches the
+keeping off. The playtest's scene builds its world from the heights, roads, objects and look the editor handed over (`EditorSession.Prepare`),
+so an edit made before F5 is in the playtest, and the editor's own document, undo history and objects (never touched by the playtest's
+world) are as they were on the way back. Going in takes the mission's build (1.9 s on T01, 1.3 s in the 1997 look, a loading card of 0.1 s
+over it) with the music fading out meanwhile; the effects rehearsal behind the card is skipped from the second playtest of a run in the
+same look (the renderer has made those pipelines, `I76_WARM_AGAIN=1` rehearses again). The sim's ground, its colliders, the plants and the
+drawn ground are all built from the edited heights. The road layers' baked cache is skipped while the ground is edited so a playtest's every
+variant does not fill the user's cache folder.
+
+Two leaks the switching showed are closed: a playtest's smoke emitters stayed in the smoke layer's table and the force feedback's `Held`
+delegate stayed on the last scene, each keeping the scene, its builder and all it made (some 400 MB of meshes and textures a playtest)
+alive for the rest of the run.
 
 ## Saving
 
@@ -548,6 +563,7 @@ a spawn in the middle.
   the fit), `Junctions` (detect, cut, settle after edits), `PieceStore`, `JunctionCommand`; `StructureAttach` (the ends of a deck or ramp, shared with the object tool); `Objects/`: `ObjectCatalogue`, `ObjectLayer` and `ObjectCommands`, `Footprint` and `PlaceRules`, `Snapping`, `RoadGeometry`, `RoadSplit`, `MapChecks`. Tests: `tests/I76.Editor.Tests` (brush maths, strokes, undo, saving through the real writers in a scratch folder,
   and that a refreshed `TerrainSurface` draws where a fresh one does; `RoadTests.cs`: curve sampling, snapping, grade limiting, the RSEG
   conventions against the stock roads, extension and loops, edits, conforming, undo, saving). `tests/I76.Sim.Tests/EditorRoadTests.cs`: the AI on a made road, the stock bridges and ramps against the structure ends.
+- `src/I76.Editor/ViewStash.cs` and `game/Scripts/Boot/MainStash.cs`: the editor's scene kept aside for its playtest (tests: `ViewStashTests` in `EditorTests.cs`, `RevisionCountsEveryEditAndNeverGoesDown`).
 - `src/I76.Sim/Terrain/PlaytestSpawn.cs`: the cursor ray to the playtest's spawn point and its refusals (tests: `PlaytestSpawnTests.cs`).
 - `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `EditorSession`, `MapLookPanel` (the map style window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.
 - The object surveys behind the catalogue and the snapping rules are in `tools/I76.Cli/ObjectSurvey.cs`: `i76 objects OUT.tsv` (every name, type

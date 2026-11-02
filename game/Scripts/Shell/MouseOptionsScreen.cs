@@ -60,6 +60,20 @@ public sealed class MouseOptionsScreen : OverlayScreen
 
     internal int Selected => _sel;
 
+    /// <summary>The settings this screen edits, copied from one settings object to another (the in-mission menu takes them back from the screen's shell).</summary>
+    public static void CopyMouse(ShellSettings from, ShellSettings to)
+    {
+        to.MouseCamera = from.MouseCamera;
+        to.MouseSensitivity = from.MouseSensitivity;
+        to.MouseInvertY = from.MouseInvertY;
+        to.MouseCockpit = from.MouseCockpit;
+        to.ChaseCrosshair = from.ChaseCrosshair;
+        to.WheelCycleWeapon = from.WheelCycleWeapon;
+        to.CameraReturn = from.CameraReturn;
+        to.ZoomReset = from.ZoomReset;
+        to.KeepMouseInWindow = from.KeepMouseInWindow;
+    }
+
     public override void Enter()
     {
         var st = Shell.Settings;

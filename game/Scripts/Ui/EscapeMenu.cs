@@ -483,7 +483,9 @@ public sealed partial class EscapeMenu : Control
     /// <summary>
     /// Control Configuration (and from it the controller screen) as the shell's own screens: a shell with nothing but that overlay
     /// on the pad's place over the paused game. The pad hides while it is up and takes no input; Done saves and applies the bindings
-    /// (Controls.Save puts them in use), Cancel and Esc come back unchanged.
+    /// (Controls.Save puts them in use), Cancel and Esc come back unchanged. Mouse Options (from here or from Control Configuration)
+    /// saves its own settings on its Done; the menu commits nothing of its own on the way there and takes only those settings back
+    /// (<see cref="MouseOptionsScreen.CopyMouse"/>), so its own Done and Cancel still decide the rest.
     /// </summary>
     private void OpenControls() => OpenHosted(new ControlsScreen());
     private void OpenMouse() => OpenHosted(new MouseOptionsScreen());
@@ -491,7 +493,6 @@ public sealed partial class EscapeMenu : Control
     private void OpenHosted(ShellScreen screen)
     {
         if (_host is not null || GetParent() is not { } parent) return;
-        Settings.Save();
         Visible = false;
         _pressed = null;
         _host = new I76.Game.Shell.Shell
@@ -505,11 +506,14 @@ public sealed partial class EscapeMenu : Control
 
     private void CloseControls()
     {
+        if (_host?.Settings is { } hosted)
+        {
+            // the mouse's settings as Mouse Options left them (its Done saved them; its Cancel put them back), into what the menu holds
+            MouseOptionsScreen.CopyMouse(hosted, Settings);
+            MouseOptionsScreen.CopyMouse(hosted, _snap);
+        }
         _host?.QueueFree();
         _host = null;
-        Settings = ShellSettings.Load();
-        _snap = ShellSettings.Load();
-        Live?.Invoke(Settings);
         _padNav.Settle();
         Visible = true;
         QueueRedraw();

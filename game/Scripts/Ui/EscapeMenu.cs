@@ -307,13 +307,9 @@ public sealed partial class EscapeMenu : Control
             Scrolling(10, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
             Scrolling(11, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
-            // and the mouse orbiting the chase view, live
-            Scrolling(12, Cycle, "Mouse Camera", I76.Sim.Views.MouseLook.Names.Length, I76.Sim.Views.MouseLook.Names, s => s.MouseCamera, (s, v) => s.MouseCamera = v, apply: () => Live?.Invoke(Settings)),
-            // and the hidden mouse kept inside the window, live
-            Scrolling(13, Cycle, "Keep Mouse In Window", 2, offOn, s => s.KeepMouseInWindow ? 1 : 0, (s, v) => s.KeepMouseInWindow = v != 0, apply: () => Live?.Invoke(Settings)),
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(14, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(15, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(12, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(13, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -385,8 +381,6 @@ public sealed partial class EscapeMenu : Control
         Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On;
         Settings.Vegetation = 1;
         Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
-        Settings.MouseCamera = I76.Sim.Views.MouseLook.Normal;
-        Settings.KeepMouseInWindow = false;
         Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;
         Settings.VSync = true;
         Live?.Invoke(Settings);
@@ -498,6 +492,7 @@ public sealed partial class EscapeMenu : Control
     private void OpenHosted(ShellScreen screen)
     {
         if (_host is not null || GetParent() is not { } parent) return;
+        Settings.Save();
         Visible = false;
         _pressed = null;
         _host = new I76.Game.Shell.Shell

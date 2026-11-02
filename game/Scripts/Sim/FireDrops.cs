@@ -32,6 +32,7 @@ public partial class FireDrops : Node3D
     private readonly Dictionary<I76.Sim.Vehicles.Vehicle, Round> _last = [];
     private readonly List<Round> _gone = [];
     private MultiMesh _mm = null!;
+    private static Texture2D? _ribbonS, _puddleS, _glowRibbonS, _glowPuddleS;   // generated once for the run (the same from the same seeds)
     private Texture2D _ribbon = null!, _puddle = null!, _glowRibbon = null!, _glowPuddle = null!;
     private readonly GpuParticles3D[] _embers = new GpuParticles3D[Slots];
     private readonly Patch?[] _slotOwner = new Patch?[Slots];
@@ -42,9 +43,13 @@ public partial class FireDrops : Node3D
     public override void _Ready()
     {
         for (int i = 0; i < MaxPatches; i++) _patches[i] = new Patch();
-        var rnd = new Random(7611);
-        _ribbon = Bake(false, rnd.Next(), false); _puddle = Bake(true, rnd.Next(), false);
-        _glowRibbon = Bake(false, rnd.Next(), true); _glowPuddle = Bake(true, rnd.Next(), true);
+        if (_glowPuddleS is null)
+        {
+            var rnd = new Random(7611);
+            _ribbonS = Bake(false, rnd.Next(), false); _puddleS = Bake(true, rnd.Next(), false);
+            _glowRibbonS = Bake(false, rnd.Next(), true); _glowPuddleS = Bake(true, rnd.Next(), true);
+        }
+        (_ribbon, _puddle, _glowRibbon, _glowPuddle) = (_ribbonS!, _puddleS!, _glowRibbonS!, _glowPuddleS);
 
         var flame = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/fire_patch.gdshader") };
         _mm = new MultiMesh

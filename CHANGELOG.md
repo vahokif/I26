@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### New
-- Map editor: switching between the editor and its playtest is much faster. Coming back to the editor is instant (it was a 2 to 3 second reload) because the editor is kept aside while you play, and going into the playtest takes 1 to 2 seconds instead of 2 to 3. An edit you make always shows in the playtest.
+- Map editor: switching between the editor and its playtest is much faster. Coming back to the editor is instant (it was a 2 to 3 second reload) because the editor is kept aside while you play, and going into the playtest takes about 1 second (1.6 s on the big T01 map in the modern look) instead of 2 to 3 (and more on a slow machine). An edit you make always shows in the playtest.
 - Map editor: a playtest (F5, the PLAYTEST button) drops your car under the mouse cursor, on the ground, a road or a bridge's deck, facing the way the camera looks; with the cursor on the sky, off the map, on water, on a cliff or in a building, or off the 3D view, it goes where it used to, at the camera's pivot, and says why.
 - Map editor: F12 switches between the modern and the 1997 look, as in a mission (F2 still works too).
 - Map editor: the game's soundtrack plays while you edit, a random track after another at the Music level of Audio Control; a MUSIC button in the top bar turns it off and on, and a playtest hands over to the mission's own music.

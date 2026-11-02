@@ -21,6 +21,8 @@ public sealed class TextureResolver(AssetVfs vfs)
 {
     private static readonly Regex Slot = new(@"^V(.)\s*(..)\s*(..)\.(MAP|M16|TMT)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Dictionary<string, string> FaceAlias = new(StringComparer.OrdinalIgnoreCase) { ["LF"] = "LT", ["RG"] = "RT" };
+    public AssetVfs Vfs => vfs;
+
     public static readonly string[] Extensions = [".m16", ".map", ".vqm"];
 
     private readonly Dictionary<string, Codebook?> _cbk = new(StringComparer.OrdinalIgnoreCase);

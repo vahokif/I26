@@ -55,6 +55,15 @@ public sealed class TerrainLodMesh
     /// <summary>Quads along a chunk's edge at a level: 128, 64, 32 (the sample grid), 16, 8.</summary>
     public static int Quads(int level) => TerrainNode.Chunk * 4 >> level;
 
+    /// <summary>
+    /// <see cref="Build"/>, kept for the map editor session when the surface is one as built (not edited since): a playtest drops its car where
+    /// the last one did, and the coarsest level of every chunk is the same every time. Only for the levels a build asks for up front.
+    /// </summary>
+    public static TerrainLodMesh BuildCached(ITerrainSurface surf, int x0, int z0, int level) =>
+        surf is TerrainSurface { Key: { } key } && I76.Formats.Vfs.SessionStore.Active
+            ? I76.Formats.Vfs.SessionStore.GetOrAdd($"lod|{key}|{x0},{z0},{level}", () => Build(surf, x0, z0, level), m => m is null ? 0 : m.Vertices.Length * 72L + m.Indices.Length * 4L)!
+            : Build(surf, x0, z0, level);
+
     public static TerrainLodMesh Build(ITerrainSurface surf, int x0, int z0, int level)
     {
         int n = Quads(level) + 1;

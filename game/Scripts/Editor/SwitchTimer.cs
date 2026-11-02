@@ -25,7 +25,7 @@ public static class SwitchTimer
     {
         if (Collect) { System.GC.Collect(); System.GC.WaitForPendingFinalizers(); }
         long M(Performance.Monitor m) => (long)Performance.GetMonitor(m);
-        return $"resident {Resident() >> 20} MB ({Split()}), engine {M(Performance.Monitor.MemoryStatic) >> 20} MB, video {M(Performance.Monitor.RenderVideoMemUsed) >> 20} MB (textures {M(Performance.Monitor.RenderTextureMemUsed) >> 20}, buffers {M(Performance.Monitor.RenderBufferMemUsed) >> 20}), {M(Performance.Monitor.ObjectNodeCount)} nodes ({M(Performance.Monitor.ObjectOrphanNodeCount)} orphans), {M(Performance.Monitor.ObjectResourceCount)} resources, {M(Performance.Monitor.ObjectCount)} objects, managed {System.GC.GetTotalMemory(false) >> 20} MB";
+        return $"resident {Resident() >> 20} MB ({Split()}), engine {M(Performance.Monitor.MemoryStatic) >> 20} MB, video {M(Performance.Monitor.RenderVideoMemUsed) >> 20} MB (textures {M(Performance.Monitor.RenderTextureMemUsed) >> 20}, buffers {M(Performance.Monitor.RenderBufferMemUsed) >> 20}), {M(Performance.Monitor.ObjectNodeCount)} nodes ({M(Performance.Monitor.ObjectOrphanNodeCount)} orphans), {M(Performance.Monitor.ObjectResourceCount)} resources, {M(Performance.Monitor.ObjectCount)} objects, managed {System.GC.GetTotalMemory(false) >> 20} MB, session store {I76.Formats.Vfs.SessionStore.Count} items {I76.Formats.Vfs.SessionStore.Bytes >> 20} MB";
     }
 
     /// <summary>What the resident set is made of (Linux): anonymous memory (the allocators' heaps), file mappings, shared memory (the GPU driver's).</summary>

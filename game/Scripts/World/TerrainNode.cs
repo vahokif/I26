@@ -122,7 +122,15 @@ public partial class TerrainNode : Node3D
         // the 1997 meshes' arrays on every core, the nodes here
         var origins = ChunkOrigins(world.Terrain);
         var arrays = new (Vector3[], Vector3[], Vector2[], Vector2[], int[])[origins.Count];
-        Parallel.For(0, origins.Count, i => arrays[i] = FaithfulArrays(world, origins[i].X0, origins[i].Z0));
+        // a playtest of the map editor builds the ground it already built for its editor from the same heights: the arrays are kept for the session
+        string scope = I76.Formats.Vfs.SessionStore.Active ? $"terrain97|{world.Terrain.ContentHash():x}|" : "";
+        Parallel.For(0, origins.Count, i =>
+        {
+            var (x0, z0) = origins[i];
+            arrays[i] = scope.Length == 0 ? FaithfulArrays(world, x0, z0)
+                : I76.Formats.Vfs.SessionStore.GetOrAdd(scope + x0 + "," + z0, () => new Boxed(FaithfulArrays(world, x0, z0)),
+                    b => b is null ? 0 : (b.A.V.Length * 24L + b.A.Uv.Length * 16L + b.A.I.Length * 4L))!.A;
+        });
         MissionBuilder.Trace("terrain: 1997 arrays");
         for (int i = 0; i < origins.Count; i++) AddChunk(origins[i].X0, origins[i].Z0, arrays[i]);
         MissionBuilder.Trace("terrain: chunks added");
@@ -155,7 +163,7 @@ public partial class TerrainNode : Node3D
         var range = new (float, float)[origins.Count];
         Parallel.For(0, origins.Count, i =>
         {
-            coarse[i] = TerrainLodMesh.Build(surf, origins[i].X0, origins[i].Z0, TerrainLodMesh.Levels - 1);
+            coarse[i] = TerrainLodMesh.BuildCached(surf, origins[i].X0, origins[i].Z0, TerrainLodMesh.Levels - 1);
             range[i] = surf.HeightRange(origins[i].X0, origins[i].Z0, Chunk);
         });
         return new Prepared(surf, coarse, range);
@@ -170,10 +178,11 @@ public partial class TerrainNode : Node3D
         if (world.Terrain.Huge) return new BlockedSurface(world.Terrain);
         var seeds = TerrainSurface.Seeds(world).ToList();
         var cache = MissionBuilder.HeightCache;
-        string? key = cache is null ? null : TerrainSurface.CacheKey(world.Terrain, seeds);
-        if (key is not null && cache!.Read("surface", key) is { } blobs && TerrainSurface.FromBlobs(blobs) is { } hit) return hit;
-        var surf = new TerrainSurface(world.Terrain, seeds);
-        if (key is not null) MissionBuilder.Background(() => cache!.Write("surface", key, surf.ToBlobs()));
+        bool session = I76.Formats.Vfs.SessionStore.Active;
+        string? key = cache is null && !session ? null : TerrainSurface.CacheKey(world.Terrain, seeds);
+        if (cache is not null && key is not null && cache.Read("surface", key) is { } blobs && TerrainSurface.FromBlobs(blobs) is { } hit) { hit.Key = key; return hit; }
+        var surf = new TerrainSurface(world.Terrain, seeds) { Key = key };
+        if (cache is not null && key is not null) MissionBuilder.Background(() => cache.Write("surface", key, surf.ToBlobs()));
         return surf;
     }
 
@@ -269,6 +278,8 @@ public partial class TerrainNode : Node3D
     }
 
     /// <summary>The 1997 mesh's arrays for the chunk at (x0, z0): pure CPU, any thread.</summary>
+    private sealed record Boxed((Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I) A);
+
     private static (Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I) FaithfulArrays(MissionWorld w, int x0, int z0)
     {
         int tileX = x0 - x0 % TerrainTiles.Tile, tileZ = z0 - z0 % TerrainTiles.Tile;
@@ -694,7 +705,7 @@ public partial class TerrainNode : Node3D
             {
                 var now = _now;
                 var built = new TerrainLodMesh[now.Count];
-                Parallel.For(0, now.Count, i => built[i] = now[i].Pending[now[i].Want] is { } p ? p.Result : TerrainLodMesh.Build(surf, now[i].X0, now[i].Z0, now[i].Want));
+                Parallel.For(0, now.Count, i => built[i] = now[i].Pending[now[i].Want] is { } p ? p.Result : TerrainLodMesh.BuildCached(surf, now[i].X0, now[i].Z0, now[i].Want));
                 for (int i = 0; i < now.Count; i++) { now[i].Lod[now[i].Want] = built[i].ToMesh(); now[i].BuiltVer[now[i].Want] = now[i].Ver; now[i].Pending[now[i].Want] = null; }
             }
             else

@@ -285,6 +285,47 @@ public partial class HorizonTerrain : Node3D
     private long _tHeights, _tShadow, _tArrays, _finishFrom = -1;
     private System.Diagnostics.Stopwatch? _sw;
 
+    /// <summary>
+    /// <see cref="Compute"/>, or what it made last time for the same ground, panels, light and colour in this map editor session (a playtest
+    /// builds the ring its editor built; the CPU work is more than a second on a big map and the rest of the build waits for it).
+    /// The key is the terrain and the seeds of its reachable ground (the surface's key), the panels' profile, the light and the ground's colour;
+    /// the stored result is the fields <see cref="Compute"/> sets and the chunks' arrays, read only (<see cref="Finish"/> copies them into meshes).
+    /// </summary>
+    public void ComputeCached(MissionWorld world, Profile profile, System.Numerics.Vector3 lightGame, Color ground)
+    {
+        if (!I76.Formats.Vfs.SessionStore.Active || world.Terrain.Huge) { Compute(world, profile, lightGame, ground); return; }
+        string key;
+        using (var k = new I76.Formats.Assembly.BakeCache.Key("horizon-ring"))
+        {
+            k.Add(I76.Formats.Assembly.TerrainSurface.CacheKey(world.Terrain, I76.Formats.Assembly.TerrainSurface.Seeds(world).ToList()));
+            k.Add<float>(profile.Height).Add<Color>(profile.Rock).Add(profile.Scrub.ToRgba32().ToString()).Add(profile.RockLight.ToRgba32().ToString())
+                .Add(profile.RockDark.ToRgba32().ToString()).Add(profile.Snow).Add(profile.Dark);
+            k.Add(lightGame.X).Add(lightGame.Y).Add(lightGame.Z).Add(ground.ToRgba32().ToString()).Add(Segments).Add(Reach).Add(Aspect);
+            key = "horizon|" + k.Finish();
+        }
+        bool mine = false;
+        var made = I76.Formats.Vfs.SessionStore.GetOrAdd(key, () =>
+        {
+            Compute(world, profile, lightGame, ground);
+            mine = true;
+            return new Computed([.. _fields.Select(f => (f, f.GetValue(this)))], [.. _pending], Vertices);
+        }, c => c is null ? 0 : c.Vertices * 56L)!;
+        if (mine) return;
+        _sw = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var (f, v) in made.Fields) f.SetValue(this, v);
+        _pending.Clear();
+        _pending.AddRange(made.Pending);
+        PrintHash(profile);
+    }
+
+    private sealed record Computed((System.Reflection.FieldInfo F, object? V)[] Fields, (string Name, Godot.Collections.Array Arrays)[] Pending, int Vertices);
+
+    /// <summary>What <see cref="Compute"/> leaves in the node besides the arrays, by reflection: every instance field this class declares that is not a Godot object, the stopwatch or the pending list.</summary>
+    private static readonly System.Reflection.FieldInfo[] _fields = typeof(HorizonTerrain)
+        .GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly)
+        .Where(f => !typeof(GodotObject).IsAssignableFrom(f.FieldType) && f.FieldType != typeof(System.Diagnostics.Stopwatch) && f.Name != "_pending")
+        .ToArray();
+
     /// <summary>Builds the ring's arrays: pure CPU, safe on any thread (no GPU resource, no node). <see cref="Finish"/> then makes the meshes on the main thread.</summary>
     public void Compute(MissionWorld world, Profile profile, System.Numerics.Vector3 lightGame, Color ground)
     {
@@ -510,6 +551,11 @@ public partial class HorizonTerrain : Node3D
         }
         Vertices = count;
         _tArrays = sw.ElapsedMilliseconds;
+        PrintHash(profile);
+    }
+
+    private void PrintHash(Profile profile)
+    {
         if (MissionBuilder.HashOn)
         {
             using var hh = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);

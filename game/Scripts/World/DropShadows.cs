@@ -62,16 +62,22 @@ public partial class DropShadows : Node3D
     private readonly List<MeshInstance3D> _pool = [];
     private ShaderMaterial _mat = null!;
 
+    private static Shader[]? _layerShaders;
+    private static Shader? _farShader;
+
     public override void _Ready()
     {
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/drop_shadow_1997.gdshader") };
         var code = GD.Load<Shader>("res://Shaders/drop_shadow_soft.gdshader").Code;
+        // the shaders (one per layer, as the stencil reference is in the code) are made once for the run: a new Shader is compiled again, tens of ms for the set
+        _layerShaders ??= new Shader[Layers];
+        _farShader ??= new Shader { Code = code };
         for (int i = 0; i < Layers; i++)
         {
             // a Vogel disc: layer i at radius sqrt((i + .5) / n), turned by the golden angle
             float r = Mathf.Sqrt((i + 0.5f) / Layers), a = i * 2.39996f;
             // the stencil reference is a literal in the shader, so one shader per layer
-            var m = new ShaderMaterial { Shader = new Shader { Code = code.Replace("compare_not_equal, 1;", $"compare_not_equal, {i + 1};") } };
+            var m = new ShaderMaterial { Shader = _layerShaders[i] ??= new Shader { Code = code.Replace("compare_not_equal, 1;", $"compare_not_equal, {i + 1};") } };
             m.SetShaderParameter("jitter", new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
             m.SetShaderParameter("spread", Spread);
             // the layer's own stencil reference: one pixel is covered once per layer
@@ -80,7 +86,7 @@ public partial class DropShadows : Node3D
             if (i > 0) _softMats[i - 1].NextPass = m;
             _softMats[i] = m;
         }
-        _far = new ShaderMaterial { Shader = new Shader { Code = code } };   // one layer, with the first one's stencil reference
+        _far = new ShaderMaterial { Shader = _farShader };   // one layer, with the first one's stencil reference
         _far.SetShaderParameter("jitter", Vector2.Zero);
         _far.SetShaderParameter("spread", Spread);
         _far.RenderPriority = -100;

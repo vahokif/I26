@@ -15,11 +15,16 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
 
     private readonly Dictionary<string, I76.Formats.Assembly.RoadRaster.Tex?> _rgba = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>What a stored texture depends on besides its name: the files it was read from (the install and the map's own folder) and the palette.</summary>
+    private readonly string _scope = $"{resolver.Vfs.Install.Root}|{resolver.Vfs.Install.MapDir}|{(palette is null ? "-" : Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(palette.Rgb)))}|";
+
     /// <summary>A texture's RGBA (index 255 keyed to alpha 0), for CPU-side painting.</summary>
     public I76.Formats.Assembly.RoadRaster.Tex? GetRgba(string member)
     {
         if (_rgba.TryGetValue(member, out var r)) return r;
-        r = resolver.Load(member) is { } t ? new I76.Formats.Assembly.RoadRaster.Tex(t.Width, t.Height, TextureReader.ToRgba(t, palette)) : null;
+        r = I76.Formats.Vfs.SessionStore.GetOrAdd("rgba|" + _scope + member,
+            () => resolver.Load(member) is { } t ? new I76.Formats.Assembly.RoadRaster.Tex(t.Width, t.Height, TextureReader.ToRgba(t, palette)) : null,
+            x => x?.Rgba.Length ?? 0);
         return _rgba[member] = r;
     }
 
@@ -28,7 +33,14 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     public Entry? Get(string member)
     {
         if (_cache.TryGetValue(member, out var e)) return e;
-        e = null;
+        e = I76.Formats.Vfs.SessionStore.GetOrAdd("tex|" + _scope + member, () => Make(member), x => x is null ? 0 : x.Rgba.LongLength * 5 / 2);
+        _cache[member] = e;
+        return e;
+    }
+
+    private Entry? Make(string member)
+    {
+        Entry? e = null;
         if (resolver.Load(member) is { } t)
         {
             var rgba = TextureReader.ToRgba(t, palette);
@@ -39,7 +51,6 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
             img.GenerateMipmaps();
             e = new Entry(ImageTexture.CreateFromImage(img), key, t.Width, t.Height, rgba);
         }
-        _cache[member] = e;
         return e;
     }
 

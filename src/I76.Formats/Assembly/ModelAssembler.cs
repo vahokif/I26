@@ -95,9 +95,12 @@ public sealed class ModelAssembler(AssetVfs vfs)
         lock (_geo)
         {
             if (_geo.TryGetValue(nodeName, out var g)) return g;
-            var d = vfs.TryRead(nodeName + ".GEO");
-            try { g = d is null ? null : GeoMesh.Parse(d); }
-            catch (InvalidDataException) { g = null; }
+            g = SessionStore.GetOrAdd($"geo|{vfs.Install.Root}|{vfs.Install.MapDir}|{nodeName}", () =>
+            {
+                var d = vfs.TryRead(nodeName + ".GEO");
+                try { return d is null ? null : GeoMesh.Parse(d); }
+                catch (InvalidDataException) { return null; }
+            }, m => m is null ? 0 : m.Vertices.Length * 16L + m.Faces.Length * 64L);
             _geo[nodeName] = g;
             return g;
         }

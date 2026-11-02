@@ -44,6 +44,20 @@ public sealed class TerrainTiles
     }
 
     /// <summary>Tile id at grid cell (row, col), or 255 if the cell is empty or names a tile past ZMAP's count (the ZMAP handler rejects such a grid: "zone number too big").</summary>
+    /// <summary>A hash of everything that is drawn or driven on: the tile grid and every sample (heights and surface bits). Equal terrain hashes equal; used to know a build's work is still good.</summary>
+    public ulong ContentHash()
+    {
+        ulong h = 14695981039346656037UL;
+        foreach (var b in Grid) h = (h ^ b) * 1099511628211UL;
+        h = (h ^ (ulong)TileCount) * 1099511628211UL;
+        var s = _samples.AsSpan(0, Math.Min(_samples.Length, TileCount * Tile * Tile));
+        int i = 0;
+        for (; i + 3 < s.Length; i += 4)
+            h = (h ^ ((ulong)s[i] | (ulong)s[i + 1] << 16 | (ulong)s[i + 2] << 32 | (ulong)s[i + 3] << 48)) * 1099511628211UL;
+        for (; i < s.Length; i++) h = (h ^ s[i]) * 1099511628211UL;
+        return h;
+    }
+
     public byte TileAt(int row, int col) => Grid[row * MissionFile.ZmapGrid + col] is var t && t < TileCount ? t : MissionFile.ZmapEmpty;
 
     /// <summary>

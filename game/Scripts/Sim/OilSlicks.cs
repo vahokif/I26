@@ -21,7 +21,10 @@ public partial class OilSlicks : Node3D
     private const float Reach = 8f, Within = 1.5f, Spread = 0.5f, FadeOut = 4f, EffectWidth = 4f;
     private const int Variants = 3;
 
-    private readonly Texture2D[] _ribbon = new Texture2D[Variants];
+    // generated once for the run (the same from the same seeds): a restart, a playtest or the next mission reuses them
+    private static Texture2D[]? _ribbonS;
+    private static Texture2D? _puddleS, _ormS, _normalS;
+    private Texture2D[] _ribbon = null!;
     private Texture2D _puddle = null!, _orm = null!, _normal = null!;
     private readonly Dictionary<Vehicle, Round> _last = [];
     /// <summary>The drawn ground's height under a Godot-space point at a drop's level (see GroundMark).</summary>
@@ -29,10 +32,16 @@ public partial class OilSlicks : Node3D
 
     public override void _Ready()
     {
-        var rnd = new Random(7601);
-        for (int v = 0; v < Variants; v++) _ribbon[v] = Bake(false, rnd.Next(), out _, out _);
-        _puddle = Bake(true, rnd.Next(), out _, out _);
-        Bake(false, 1, out _orm, out _normal); // the ORM and the ripple are shared by every shape
+        if (_ribbonS is null || _puddleS is null || _ormS is null || _normalS is null)
+        {
+            var rnd = new Random(7601);
+            var ribbons = new Texture2D[Variants];
+            for (int v = 0; v < Variants; v++) ribbons[v] = Bake(false, rnd.Next(), out _, out _);
+            _puddleS = Bake(true, rnd.Next(), out _, out _);
+            Bake(false, 1, out _ormS, out _normalS); // the ORM and the ripple are shared by every shape
+            _ribbonS = ribbons;
+        }
+        (_ribbon, _puddle, _orm, _normal) = (_ribbonS, _puddleS, _ormS, _normalS);
     }
 
     private static float Hash(int x, int y, int s)

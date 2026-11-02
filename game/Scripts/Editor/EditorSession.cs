@@ -59,6 +59,7 @@ public static class EditorSession
     public static void Begin(string mission)
     {
         End();
+        I76.Formats.Vfs.SessionStore.Begin();   // what the editor's builds decode is kept for its playtests, until the session ends
         Active = true;
         Mission = mission.ToLowerInvariant();
     }
@@ -70,6 +71,7 @@ public static class EditorSession
         PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Layer = null; Look = null; StyleTab = -1;
         I76.Game.Editor.Intersections.IntersectionSession.End();
         I76.Game.Boot.Main.Stash.Drop();
+        I76.Formats.Vfs.SessionStore.End();
     }
 
     /// <summary>

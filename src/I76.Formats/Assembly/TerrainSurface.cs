@@ -65,6 +65,12 @@ public sealed class TerrainSurface : ITerrainSurface
 
     public int OpenCells => _openCount;
 
+    /// <summary>
+    /// Names this surface's arrays (<see cref="CacheKey"/>) while they are as built, so what is made from it can be kept for the same surface made
+    /// again; cleared when the surface is edited (<see cref="Refresh"/>).
+    /// </summary>
+    public string? Key { get; set; }
+
     /// <summary>Changes with anything that changes the surface's arrays: cached surfaces (<see cref="CacheKey"/>) are keyed by it.</summary>
     public const int Version = 1;
 
@@ -301,6 +307,7 @@ public sealed class TerrainSurface : ITerrainSurface
     /// </summary>
     public (int X0, int Z0, int X1, int Z1) Refresh(TerrainTiles tiles, int sx0, int sz0, int sx1, int sz1)
     {
+        Key = null;
         int w = _w, hh = _h;
         // the rectangle in array coordinates, clipped
         (int, int, int, int) Box(int pad) => (Math.Max(0, sx0 - _sx0 - pad), Math.Max(0, sz0 - _sz0 - pad), Math.Min(w - 1, sx1 - _sx0 + pad), Math.Min(hh - 1, sz1 - _sz0 + pad));

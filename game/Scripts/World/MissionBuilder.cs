@@ -168,8 +168,10 @@ public sealed class MissionBuilder(AssetVfs vfs)
         Dictionary<int, RoadRaster.Tex?> roadTex, List<(int X0, int Z0)> origins)
     {
         var cache = CompressRoadLayers ? HeightCache : null;
+        // a map editor session keeps the layers it baked in memory too, for its playtests of ground the disk cache is not used for (edited)
+        bool session = CompressRoadLayers && I76.Formats.Vfs.SessionStore.Active;
         string? key = null;
-        if (cache is not null)
+        if (cache is not null || session)
         {
             using var k = new BakeCache.Key("road-layers");
             k.Add(RoadRaster.Version).Add(EngineVersion).Add(RoadLayerResolution).Add(CompressRoadLayers).Add(flat).Add(tris);
@@ -180,7 +182,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
             }
             foreach (var o in origins) k.Add(o.X0).Add(o.Z0);
             key = k.Finish();
-            if (cache.Read("roads", key) is { } blobs)
+            if (session && I76.Formats.Vfs.SessionStore.TryGet<Dictionary<(int, int), Image>>("roads|" + key) is { } kept)
+            {
+                if (HashOn) TraceLayers("session", origins, kept, null);
+                return new Dictionary<(int, int), Image>(kept);
+            }
+            if (cache?.Read("roads", key) is { } blobs)
             {
                 var got = new Image[blobs.Count];
                 System.Threading.Tasks.Parallel.For(0, blobs.Count, i =>
@@ -188,6 +195,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 var hit = new Dictionary<(int, int), Image>();
                 for (int i = 0; i < blobs.Count; i++) hit[((int)(blobs[i].Tag >> 32), (int)blobs[i].Tag)] = got[i];
                 if (HashOn) TraceLayers("cache", origins, hit, null);
+                if (session) I76.Formats.Vfs.SessionStore.Put("roads|" + key, new Dictionary<(int, int), Image>(hit), hit.Values.Sum(i => (long)i.GetWidth() * i.GetHeight() * 3 / 2));
                 return hit;
             }
         }
@@ -229,6 +237,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             var blobs = origins.Where(keep.ContainsKey).Select(o => new BakeCache.Blob((long)o.X0 << 32 | (uint)o.Z0, (int)made[o].GetFormat(), keep[o])).ToList();
             Background(() => cache.Write("roads", key, blobs));   // off the load's path, at low priority
         }
+        if (session && key is not null) I76.Formats.Vfs.SessionStore.Put("roads|" + key, new Dictionary<(int, int), Image>(made), made.Values.Sum(i => (long)i.GetWidth() * i.GetHeight() * 3 / 2));
         return made;
     }
 
@@ -395,7 +404,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             HorizonBuild = System.Threading.Tasks.Task.Run(() =>
             {
                 var profile = (panels is null ? null : HorizonTerrain.Measure(panels)) ?? HorizonTerrain.Default();
-                h.Compute(world, profile, light.Direction, groundColour);
+                h.ComputeCached(world, profile, light.Direction, groundColour);
                 return h;
             });
         }
@@ -602,6 +611,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         }
         Trace("terrain build");
         Terrain.Build(world);
+        if (I76.Game.Editor.SwitchTimer.On) GD.Print($"switch: terrain content {world.Terrain.ContentHash():x16}");
         Trace("terrain built");
         root.AddChild(Terrain);
         RoadBakeMs = sw.ElapsedMilliseconds;

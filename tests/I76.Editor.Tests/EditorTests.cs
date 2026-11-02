@@ -45,6 +45,21 @@ public class EditorTests
     }
 
     [Fact]
+    public void TheTerrainsContentHashFollowsTheHeightsAndComesBackWithThem()
+    {
+        // what a playtest keeps of the ground it built (the 1997 meshes, the distant terrain) is keyed by this: an edit must change it, an undo must give it back
+        var doc = Doc();
+        ulong h0 = doc.Tiles.ContentHash();
+        Assert.Equal(h0, Doc().Tiles.ContentHash());          // the same ground, the same hash
+        var before = doc.Snapshot();
+        new BrushStroke(doc, Brush(BrushKind.Raise, radius: 50, strength: 0.5f)).Stamp(64, 64, 0.5);
+        ulong h1 = doc.Tiles.ContentHash();
+        Assert.NotEqual(h0, h1);
+        Assert.True(doc.Restore(before));
+        Assert.Equal(h0, doc.Tiles.ContentHash());
+    }
+
+    [Fact]
     public void FalloffIsOneAtTheCentreZeroAtTheRimAndFalls()
     {
         foreach (var f in Enum.GetValues<Falloff>())

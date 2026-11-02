@@ -2154,9 +2154,12 @@ public partial class Main : Node3D
         _sun.ShadowEnabled = !on;
         UpdateDrops();
         ApplyDrawDistance();
-        RenderingServer.DirectionalSoftShadowFilterSetQuality(on ? RenderingServer.ShadowQuality.Hard : RenderingServer.ShadowQuality.SoftLow);
+        // (each is a change of the renderer's shadow settings, which it pays for even when the value is the one it has: only when it is not)
+        if (_shadowFilterSet != on) RenderingServer.DirectionalSoftShadowFilterSetQuality(on ? RenderingServer.ShadowQuality.Hard : RenderingServer.ShadowQuality.SoftLow);
+        _shadowFilterSet = on;
         // crisp: a bigger atlas, no blur and a shorter reach, so the near texels are fine
-        RenderingServer.DirectionalShadowAtlasSetSize(on ? 8192 : 4096, true);
+        if (_atlasSet != on) RenderingServer.DirectionalShadowAtlasSetSize(on ? 8192 : 4096, true);
+        _atlasSet = on;
         _sun.ShadowBlur = on ? 0f : 1f;
         _sun.DirectionalShadowMaxDistance = on ? 600 : 1500;
         MissionBuilder.Trace("look: shadows, draw distance");
@@ -2174,6 +2177,8 @@ public partial class Main : Node3D
     }
 
     private DamageView? _damageView;
+    /// <summary>The look the renderer's shadow filter and atlas were last set for (null: not yet this run).</summary>
+    private static bool? _shadowFilterSet, _atlasSet;
 
     // ---- the keys ----------------------------------------------------------
 

@@ -536,11 +536,22 @@ the heights, roads, objects and look and never goes down) and the map and instal
 reloaded as before. A map streamed in pieces (`Terrain.Huge`) is not kept (it would be held twice), and `I76_EDITOR_STASH=0` switches the
 keeping off. The playtest's scene builds its world from the heights, roads, objects and look the editor handed over (`EditorSession.Prepare`),
 so an edit made before F5 is in the playtest, and the editor's own document, undo history and objects (never touched by the playtest's
-world) are as they were on the way back. Going in takes the mission's build (1.9 s on T01, 1.3 s in the 1997 look, a loading card of 0.1 s
-over it) with the music fading out meanwhile; the effects rehearsal behind the card is skipped from the second playtest of a run in the
+world) are as they were on the way back. Going in builds the mission's world again, but not what the editor session already has: while a session is open (from picking a map to leaving the editor) a `SessionStore` (`I76.Formats`) keeps what the builds decode from the install and make from the heights, bounded at
+512 MB (past it the store is emptied and starts over) and dropped when the session ends. In it: the textures (indexed data, RGBA and the
+engine's image, per install, map folder and palette), the model parts read from the install, the road layers baked for the map's roads and
+textures (also for edited ground, where the disk cache is not used), the 1997 ground's chunk arrays and the modern ground's coarse and
+near levels, and the distant terrain's arrays, each keyed by a hash of what it was made from (the terrain's grid and every sample, the
+surface's seeds, the panels, the light), not by `TerrainDocument.Revision`: an edit of the heights changes the key, an undo gives the earlier
+one back, and the ground of another document never matches. The roads, objects and look edits reach the playtest through the key parts they
+change (road layers: the quads; the ring: the palette and light) or are not cached at all (scenery is placed from the editor's object layer
+every time). Besides, three small things are made once per run (the oil and fire patches' textures, the drop shadows' shaders) and the
+renderer's shadow filter and atlas are set only when the look changes them. Entering a playtest of T01 takes 1.6 s in the modern look and
+1.0 s in the 1997 look (3.3 s and 2.2 s before); a 16-tile flat map 1.1 s and 0.7 s (2.4 s and 1.7 s). What is left is mostly the Godot
+objects of the world (ground and scenery meshes, the cars and their wrecks, the effects views, the plants), 0.05 to 0.2 s each; the
+music fades out meanwhile with a loading card of 0.1 s over it. The effects rehearsal behind the card is skipped from the second playtest of a run in the
 same look (the renderer has made those pipelines, `I76_WARM_AGAIN=1` rehearses again). The sim's ground, its colliders, the plants and the
-drawn ground are all built from the edited heights. The road layers' baked cache is skipped while the ground is edited so a playtest's
-every variant does not fill the user's cache folder.
+drawn ground are all built from the edited heights. The road layers' baked cache on disk is skipped while the ground is edited so a
+playtest's every variant does not fill the user's cache folder.
 
 Leaks the switching showed are closed: a playtest's smoke emitters stayed in the smoke layer's table and the force feedback's `Held`
 delegate stayed on the last scene, each keeping the scene, its builder and all it made (some 400 MB of meshes and textures a playtest) alive for the

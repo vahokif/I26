@@ -404,7 +404,8 @@ public partial class CarNode : Node3D
         }
         """;
     private static Shader? _glowShader;
-    private static readonly Dictionary<Texture2D, ShaderMaterial> GlowMats = [];
+    /// <summary>One glow material per texture; weakly keyed, so a finished scene's car textures are not held for the rest of the run.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Texture2D, ShaderMaterial> GlowMats = new();
     internal static void ResetForGameSwitch() => GlowMats.Clear();
     private const float BrakeLevel = 1.3f, TailLevel = 0.6f;
 
@@ -429,7 +430,7 @@ public partial class CarNode : Node3D
         for (int i = 0; i < m.GetSurfaceCount(); i++)
         {
             if (m.SurfaceGetMaterial(i) is not ShaderMaterial sm || sm.GetShaderParameter("albedo_tex").As<Texture2D>() is not { } tex) continue;
-            if (!GlowMats.TryGetValue(tex, out var gm)) { gm = new ShaderMaterial { Shader = _glowShader, RenderPriority = 1 }; gm.SetShaderParameter("albedo_tex", tex); GlowMats[tex] = gm; }
+            if (!GlowMats.TryGetValue(tex, out var gm)) { gm = new ShaderMaterial { Shader = _glowShader, RenderPriority = 1 }; gm.SetShaderParameter("albedo_tex", tex); GlowMats.Add(tex, gm); }
             m.SurfaceSetMaterial(i, gm); any = true;
         }
         return any ? m : null;

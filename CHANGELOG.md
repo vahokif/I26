@@ -13,6 +13,7 @@
 ### Fixed
 - Black parts of a car's paint (stripes, trim, grilles, tyres) may no longer look corrupt on some graphics cards (may fix the reported black car textures): the cars' per-part finishes are gone, every car is clear-coated paint all over with only the windows kept as glass.
 - Memory use no longer climbs with every mission you start in one session (some 400 MB each in a big map): a finished mission's smoke and the force feedback no longer keep it alive.
+- Memory use stays level when you restart a mission or go between the map editor and its playtest over and over: the cars' tail-lamp glow, a stray node per scene and the memory a freed scene left in the allocator's heap (10 to 20 MB every time) no longer pile up.
 - The distant mountains no longer vanish behind a map on high ground in the modern look: a map made or edited in the map editor or built from the real world gets its ring of mountains placed once for the map, from its lowest ground, so they stand over the horizon wherever you drive and never shift as you move. Stock maps look as before. The 1997 look's horizon mountains stand as in the original, at every draw distance and in the map editor, sinking with the camera's height.
 - Map editor: the 2 m wood ramp is placed the right way round on a road, climbing along the road instead of lying across it.
 - Co-op: a gun emplacement that has been shot down now keeps its burnt shape as a solid obstacle for the other players' cars too (and for players who join afterwards), so a client no longer collides with the intact gun and gets snapped back.

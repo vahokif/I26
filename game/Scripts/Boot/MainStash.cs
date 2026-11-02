@@ -112,8 +112,7 @@ public partial class Main
         if (!IsInsideTree()) return;
         // the playtest's scene is gone; what it made is held by managed wrappers until a collection: let go of it now, not when the collector gets to it
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        System.GC.Collect();
-        System.GC.WaitForPendingFinalizers();
+        HeapTrim.Run();
         GD.Print($"collected the playtest's leftovers in {(System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0} ms");
         var saved = I76.Game.Shell.ShellSettings.Load();
         _lookSaved = saved.Look1997;

@@ -197,9 +197,13 @@ public partial class Main : Node3D
         _checkpoint = null; _retry = null;
     }
 
+    /// <summary>A scene has built a world before in this run (so there is a finished one to let go of).</summary>
+    private static bool _sceneBuilt;
+
     public override async void _Ready()
     {
         I76.Game.Editor.SwitchTimer.Mark("scene ready");
+        HeapTrim.Configure();
         if (!I76.Game.Editor.EditorSession.Active) Stash.Drop();   // no editor session: nothing to wait for
         LogFile.InstallForced();
         VramWatch.Install(GetTree());   // --log / I76_LOG=1: the log file even where the setting is off
@@ -374,6 +378,10 @@ public partial class Main : Node3D
             await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
             if (!IsInsideTree()) return;
         }
+        // the scene before this one is gone (a restart, the next mission, the shell): its meshes and textures are held by wrappers until a
+        // collection, and its native memory stays with the allocator until trimmed; let both go before the next build takes its share
+        if (_sceneBuilt && !Stash.Holds) HeapTrim.Run();
+        _sceneBuilt = true;
         _worldRoot = new Node3D { Name = "WorldRoot" };
         AddChild(_worldRoot);
         SetupEnvironment();
@@ -2944,6 +2952,13 @@ public partial class Main : Node3D
         if (!_resumed && int.TryParse(System.Environment.GetEnvironmentVariable("I76_CHECKPOINT_RETRY"), out int retryAt) && _frames == retryAt && CanRetry && _menu is null)
         {
             RetryCheckpoint();
+            return;
+        }
+        // test hook: I76_REPLAY_AT=frame chooses Replay Mission from the menu at that frame (every load: a run of restarts)
+        if (int.TryParse(System.Environment.GetEnvironmentVariable("I76_REPLAY_AT"), out int replayAt) && _frames == replayAt && !_ended && _menu is null)
+        {
+            GD.Print($"replay: {I76.Game.Editor.SwitchTimer.Memory()}");
+            MenuClosed(MenuOutcome.Replay);
             return;
         }
         if (_spawnStops.Count > 0 && _sim?.Session is { } stopSess && stopSess.World.Player is { } sp && stopSess.World.Time >= _spawnStops.Peek().At)

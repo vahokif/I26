@@ -689,6 +689,12 @@ public partial class ScenerySpawner : Node3D
     /// <summary>The keyword placements' debug markers (spawn points, regen points): shown in the flyover, hidden in play.</summary>
     public Node3D Markers { get; } = new() { Name = "Markers" };
 
+    /// <summary>The markers' node is only added to the tree when there is a marker; one that never was would stay a stray node for the rest of the run.</summary>
+    public override void _ExitTree()
+    {
+        if (Markers.GetParent() is null && IsInstanceValid(Markers)) Markers.Free();
+    }
+
     private void AddMarker(Placement p)
     {
         if (Markers.GetParent() is null) AddChild(Markers);

@@ -539,12 +539,17 @@ so an edit made before F5 is in the playtest, and the editor's own document, und
 world) are as they were on the way back. Going in takes the mission's build (1.9 s on T01, 1.3 s in the 1997 look, a loading card of 0.1 s
 over it) with the music fading out meanwhile; the effects rehearsal behind the card is skipped from the second playtest of a run in the
 same look (the renderer has made those pipelines, `I76_WARM_AGAIN=1` rehearses again). The sim's ground, its colliders, the plants and the
-drawn ground are all built from the edited heights. The road layers' baked cache is skipped while the ground is edited so a playtest's every
-variant does not fill the user's cache folder.
+drawn ground are all built from the edited heights. The road layers' baked cache is skipped while the ground is edited so a playtest's
+every variant does not fill the user's cache folder.
 
-Two leaks the switching showed are closed: a playtest's smoke emitters stayed in the smoke layer's table and the force feedback's `Held`
-delegate stayed on the last scene, each keeping the scene, its builder and all it made (some 400 MB of meshes and textures a playtest)
-alive for the rest of the run.
+Leaks the switching showed are closed: a playtest's smoke emitters stayed in the smoke layer's table and the force feedback's `Held`
+delegate stayed on the last scene, each keeping the scene, its builder and all it made (some 400 MB of meshes and textures a playtest) alive for the
+rest of the run; the cars' tail-lamp glow materials were kept by texture for the run, holding every finished scene's car textures; a scene whose
+scenery had no markers, and an editor that never drew a bridge stretch, left a stray node each. The process's memory used to climb with every
+playtest or mission restart (10 to 20 MB a cycle) because the freed scene's memory stayed in the C allocator's heap as holes the next
+scene's blocks did not fit: now blocks of 1 MB and more are mapped (and returned) directly, and the heap is trimmed after a collection of the
+managed side (twice: the first frees wrappers whose native objects hold others) when a playtest returns and before a second mission's build.
+`I76_SWITCH_TIMING=1` with `I76_SWITCH_MEM=1` prints the counts that show it, and `I76_REPLAY_AT=N` restarts a mission over and over.
 
 ## Saving
 

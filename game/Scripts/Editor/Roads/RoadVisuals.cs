@@ -173,6 +173,11 @@ public sealed partial class RoadVisuals : Node3D
     private StandardMaterial3D? _ghostMat;
     private bool _stretchAdded;
 
+    public override void _ExitTree()
+    {
+        if (!_stretchAdded && IsInstanceValid(_stretch)) _stretch.Free();   // never added: it would stay a stray node
+    }
+
     /// <summary>
     /// The pieces of a bridge or tunnel stretch as translucent copies of their models at the planned heights and pitch, a ribbon along the deck
     /// (green, amber when the plan has warnings), and a post at each joint down to the ground where the ground will be raised for it.

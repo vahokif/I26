@@ -80,6 +80,7 @@ public partial class Main
             }
         }
         Walk(this);
+        _editor?.Suspended();
         _stashedProcess = ProcessMode;
         ProcessMode = ProcessModeEnum.Disabled;
         Visible = false;

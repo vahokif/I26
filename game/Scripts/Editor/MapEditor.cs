@@ -105,6 +105,13 @@ public partial class MapEditor : Node
         if (GodotObject.IsInstanceValid(Builder.Terrain)) Terrain.Editing = false;
     }
 
+    /// <summary>Put aside for a playtest (MainStash.cs): the brush and surface overlays are globals every terrain draws, so they go dark.</summary>
+    public void Suspended()
+    {
+        RenderingServer.GlobalShaderParameterSet("i76_brush", Vector4.Zero);
+        RenderingServer.GlobalShaderParameterSet("i76_surface_on", Vector4.Zero);
+    }
+
     /// <summary>Back from a playtest with this scene kept aside (MainStash.cs): the music again, the cursor and the window's size as they are now.</summary>
     public void Resumed()
     {

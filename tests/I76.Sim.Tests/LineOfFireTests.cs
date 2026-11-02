@@ -118,6 +118,20 @@ public class LineOfFireTests
     }
 
     [Fact]
+    public void OnlyTheWeaponsWhoseRoundsFlyStraightHaveALine()
+    {
+        static GizmoDef K(uint kind, float g) => Mg() with { Kind = kind, Ordnance = new OrdnanceDef(kind, 150, g, 1, 0, ["", "", "", ""], ["", "", "", ""]) };
+        // machine guns, cannons, the FireRite, the Ball O'Flame
+        foreach (uint k in new uint[] { 1, 6, 2, 0x15 }) Assert.True(Combat.FliesStraight(K(k, 0)), $"kind {k}");
+        // mortars and the howitzer (gravity), the .45, the heat and radar missiles, the flame weapons, the droppers
+        foreach (var (k, g) in new (uint, float)[] { (4, 4), (5, 4), (7, 4), (0x16, 4), (0x12, 0.1f), (3, 0), (8, 0), (0x14, 0), (9, 0), (10, 0), (11, 0), (0xc, 1), (0xe, 1), (0xf, 1), (0x10, 1), (0x11, 1) })
+            Assert.False(Combat.FliesStraight(K(k, g)), $"kind {k}");
+        // a mortar asked anyway has no line
+        var (_, c, me, gun) = Rig(K(4, 4));
+        Assert.Null(c.LineOfFire(me, gun));
+    }
+
+    [Fact]
     public void TheReachIsTheRoundsFlightOverItsLife()
     {
         // the machine gun at a constant 150 m/s for 3.33 s

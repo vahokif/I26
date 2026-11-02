@@ -229,7 +229,9 @@ public partial class Hud : CanvasLayer
 /// A 3D-projected aiming crosshair for the F2 chase view (Mouse Options -> Chase Crosshair): where a round of the selected weapon
 /// fired now would land, as the simulation's own hit test finds it (<see cref="I76.Sim.Weapons.Combat.LineOfFire"/>: the first
 /// car, structure or ground along the muzzle's line, out to the weapon's reach), drawn on the car as it is shown. Red when that
-/// round (or, with the weapons linked, one of the linked ones') would hit a car. View only: it asks and changes nothing.
+/// round (or, with the weapons linked, one of the linked ones') would hit a car. Only for a weapon whose rounds fly straight from
+/// the muzzle (<see cref="I76.Sim.Weapons.Combat.FliesStraight"/>: guns, cannons, the FireRite, the Ball O'Flame); none for a
+/// lobbed, guided, flame or dropped one, where a line would mislead. View only: it asks and changes nothing.
 /// </summary>
 public partial class ChaseCrosshair : Control
 {

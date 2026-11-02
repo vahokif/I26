@@ -14,8 +14,16 @@ public readonly record struct FireLine(float Distance, object? Victim, bool Car)
 
 public sealed partial class Combat
 {
-    /// <summary>Whether a weapon's rounds fly a line from the muzzle: no gravity in the ordnance.</summary>
-    public static bool FliesStraight(GizmoDef def) => def.Ordnance is { Gravity: 0 };
+    /// <summary>
+    /// Whether a weapon's rounds fly straight on from the muzzle along its forward, so that its line of fire is a line the car (or
+    /// its turret) aims: no gravity in the ordnance and a step that never turns the round. That is the bullet step (machine guns,
+    /// kind 1; cannons, 6; the Nitro Pack's Ball O'Flame, 0x15) and the unguided rocket (the FireRite, 2, whose speed changes but
+    /// not its heading). Not: the mortars and the howitzer (4, 5, 7, 0x16; gravity 4, lobbed), the .45 (0x12; gravity 0.1, and the
+    /// driver aims it out of a side window), the heat and radar missiles (3, 8, 0x14; they turn to their target), the flame
+    /// weapons (9 to 11; a short stream that spreads and droops, no line) and the droppers (oil, fire, caltrops, mines, Blox:
+    /// 0xc, 0x11, 0xe, 0xf, 0x10, 0x13). The chase crosshair shows only for these.
+    /// </summary>
+    public static bool FliesStraight(GizmoDef def) => def.Ordnance is { Gravity: 0 } && def.Kind is 1 or 2 or 6 or 0x15;
 
     /// <summary>
     /// How far a round flies before its life runs out (<see cref="Spawn"/>, <see cref="Step"/>): it leaves at the weapon's speed

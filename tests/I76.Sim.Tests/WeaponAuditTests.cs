@@ -100,6 +100,31 @@ public class WeaponAuditTests
         Assert.Empty(a.Group);
     }
 
+    /// <summary>
+    /// The wheel's step back through the weapons (Mouse Options' Cycle Weapon; the port's, the original steps forward only): the
+    /// previous hardpoint with HP left, wrapping; with the link on it lands on the first of that kind, whose group the link builds.
+    /// </summary>
+    [Fact]
+    public void TheBackwardCycleStepsBackOverDeadOnesAndWraps()
+    {
+        var a = Armoury(Arm(Def(1, 0)), Arm(Def(2, 0)), Arm(Def(2, 0), hp: 0), Arm(Def(4, 0)));
+        Assert.Equal(1, a.Select(false, false, out bool changed, cyclePrevKey: true));
+        Assert.True(changed);
+        Assert.Equal(3, a.Selected);
+        a.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(1, a.Selected);
+        // the forward key wins in a frame that has both
+        a.Select(true, false, out _, cyclePrevKey: true);
+        Assert.Equal(3, a.Selected);
+
+        var l = Armoury(Arm(Def(1, 0)), Arm(Def(4, 0)), Arm(Def(4, 0)));
+        l.Select(false, true, out _);
+        Assert.True(l.Link);
+        l.Select(false, false, out _, cyclePrevKey: true);
+        Assert.Equal(1, l.Selected);
+        Assert.Equal([2], l.Group);
+    }
+
     [Fact]
     public void ACycleWithNowhereToGoChangesNothingAndIsSilent()
     {

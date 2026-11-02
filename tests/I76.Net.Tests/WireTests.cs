@@ -388,6 +388,16 @@ public class InputQueueTests
 {
     private static InputMessage Msg(uint tick, params CarInput[] newestFirst) => new(tick, newestFirst);
 
+    /// <summary>The wheel's step back through the weapons (Mouse Options' Cycle Weapon) reaches the server as the forward step does.</summary>
+    [Fact]
+    public void TheWeaponCycleBothWaysIsCarried()
+    {
+        var q = new InputQueue(SimRate.R28);
+        var i = new CarInput { Commands = CarCommands.WeaponCyclePrev | CarCommands.WeaponCycle };
+        Assert.Equal(i, q.Check(i));
+        Assert.Equal(0, q.Corrected);
+    }
+
     [Fact]
     public void EachClientTickIsAppliedOnceInOrder_ALateOneHoldsTheKeys()
     {

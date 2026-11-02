@@ -42,7 +42,7 @@ public sealed class InputQueue
     public sbyte Slack { get; private set; }
 
     public const CarButtons Buttons = (CarButtons)0xffff;
-    public const CarCommands Commands = CarCommands.Reverse | CarCommands.Lights | CarCommands.WeaponCycle | CarCommands.WeaponLink
+    public const CarCommands Commands = CarCommands.Reverse | CarCommands.Lights | CarCommands.WeaponCycle | CarCommands.WeaponCyclePrev | CarCommands.WeaponLink
         | CarCommands.TargetNearest | CarCommands.TargetNext | CarCommands.TargetFrontal | CarCommands.TargetReset
         | CarCommands.ShiftUp | CarCommands.ShiftDown | CarCommands.StartEngine | CarCommands.Special1 | CarCommands.Special2 | CarCommands.Special3
         | CarCommands.RadarRange | CarCommands.RadarCamera | CarCommands.SelfDestruct | CarCommands.TargetPrev | CarCommands.RadarRangeReset | CarCommands.RaiseDead | CarCommands.ResetUpright;

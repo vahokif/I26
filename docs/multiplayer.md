@@ -212,6 +212,9 @@ by itself in 43 s; Space 3 s after a death was refused, 6.5 s after it brought a
   go to `user://gamekeys.cfg` (game key id → key text) and `GameKeyMap.Load(text, mine)` lays them over it (a game key's own keys
   go, the key leaves any other game key); Restore goes back to gamekey.map's. The other game keys (views, Pause, Ctrl+Q ...)
   stay gamekey.map's.
+- **Weapon cycle back**: Mouse Options' Wheel Up / Down on Cycle Weapon sends the wheel's step back as `CarCommands.WeaponCyclePrev` (bit 28 of the
+  commands the wire already carries, so no protocol change of its own), which the server's input check lets through and a client's prediction runs, as
+  `WeaponCycle`.
 - **Chase crosshair** (protocol 22): the port's aiming aid in the F2 chase view (Mouse Options' Chase Crosshair, `CrosshairPolicy`) shows in a
   network game, melee or co-op, only where the host allows it: the host form's CHASE CROSSHAIR (the base form's `X-hair: Off` beside `Turrets` (Unlim. Turrets, shortened to make room), CHASE CROSSHAIR in the Nitro and co-op forms' game options; shell.cfg `[port] host_crosshair`, written only when
   on; `--crosshair` / `--no-crosshair` for a listen host and `i26-server --crosshair`; `ServerOptions.AllowCrosshair`, off by default, also in

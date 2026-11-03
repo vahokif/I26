@@ -82,6 +82,8 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         public int Scroll;
         /// <summary>A list on a pop-up frame; else the notepad.</summary>
         public ListFrame? Art;
+        /// <summary>ARMOR: the rows laid out as the form's DEFENSE block (<see cref="DefenseLayout"/>) on the notepad, not one under another.</summary>
+        public bool Defense;
     }
 
     private readonly List<Page> _stack = [];
@@ -111,12 +113,27 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
 
     private int VisibleRows => Cur.Art?.Rows ?? NotepadRows;
     private int Rows => Math.Min(VisibleRows, Cur.Cache.Count);
-    private static Rect2I Panel(Page p) => new(PadX, PadY, PadW, RowsY - PadY + Math.Max(1, Math.Min(NotepadRows, p.Cache.Count)) * RowH + 10);
+    private static Rect2I Panel(Page p) => p.Defense
+        ? new(PadX, PadY, PadW, DefenseAt.Y + DefenseLayout.H + 8 - PadY)
+        : new(PadX, PadY, PadW, RowsY - PadY + Math.Max(1, Math.Min(NotepadRows, p.Cache.Count)) * RowH + 10);
+
+    /// <summary>The DEFENSE block's top-left on the ARMOR page: under the title bar, where the first row's rule would be.</summary>
+    private static readonly Vector2I DefenseAt = new(PadX + (PadW - DefenseLayout.W) / 2, RowsY - 1);
+    private static Rect2I OnBlock(Rect2I r) => new(r.Position + DefenseAt, r.Size);
 
     /// <summary>Where a visible row of the page is, for the mouse and the pad.</summary>
     private static Rect2I RowRect(Page p, int i) => p.Art is { } f
         ? new(FrameX + f.List.X0 + 1, FrameY + f.List.Y0 + i * RowH, f.List.X1 - f.List.X0 - 2, RowH)
+        : p.Defense ? OnBlock(DefenseLayout.Row(p.Scroll + i))
         : new(PadX + 6, RowsY + i * RowH, PadW - 12, RowH);
+
+    /// <summary>Where a press on an adjust row's [-] or [+] counts (the row by its index on the page).</summary>
+    private static Rect2I StepRect(Page p, int idx, bool plus)
+    {
+        if (p.Defense) return OnBlock(DefenseLayout.Hit(idx, plus));
+        int y = RowRect(p, idx - p.Scroll).Position.Y;
+        return plus ? PlusR(y) : MinusR(y);
+    }
 
     private static Rect2I PopRect((int X0, int X1, int Y0, int Y1) r) => new(FrameX + r.X0, FrameY + r.Y0, r.X1 - r.X0, r.Y1 - r.Y0);
 
@@ -352,6 +369,19 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
             Rect(new Rect2I(PadX + 8, PadY + 8, PadW - 16, 17), _bar);
             Rect(new Rect2I(PadX + 8, PadY + 8, PadW - 16, 1), _ink); Rect(new Rect2I(PadX + 8, PadY + 24, PadW - 16, 1), _ink);
             Rect(new Rect2I(PadX + 8, PadY + 8, 1, 17), _ink); Rect(new Rect2I(PadX + PadW - 9, PadY + 8, 1, 17), _ink);
+            if (page.Defense)
+            {
+                // ARMOR: the form's own DEFENSE block, cut from its picture as it is (labels, boxes, rules, BALANCE); the values go over it
+                for (int y = 0; y < DefenseLayout.H; y++)
+                    for (int x = 0; x < DefenseLayout.W; x++)
+                    {
+                        int at = (DefenseAt.Y + y) * ShellFrame.W + DefenseAt.X + x;
+                        px[at] = src.Pixels[(DefenseLayout.FormY + y) * src.Width + DefenseLayout.FormX + x];
+                        _keep[at] = true;
+                    }
+                Frame.LoadBackground(Pcx.Create(ShellFrame.W, ShellFrame.H, px, pal), 0, 0, black: false);
+                return;
+            }
             int n = Math.Min(NotepadRows, page.Cache.Count);
             for (int i = 0; i <= n; i++) Rect(new Rect2I(PadX + 6, RowsY + i * RowH - 1, PadW - 12, 1), i == 0 || i == n ? _ink : _rule);
             bool labels = page.Cache.Any(r => r.Kind is RowKind.Normal or RowKind.Adjust);
@@ -497,6 +527,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         string title = _stack.Count > 1 ? string.Join(" / ", _stack.Skip(1).Select(p => p.Title)) : "CONFIGURE CHASSIS";
         title = Fit(F47, title, PadW - 24);
         Text(F47, PadX + PadW / 2 - F47.Measure(title) / 2, PadY + 8 + (17 - F47.Height) / 2, title);
+        if (page.Defense) { DrawDefense(); return; }
         var arrow = Shell.Db.Bank(0x24)[14];
         for (int i = 0; i < Rows; i++)
         {
@@ -583,6 +614,31 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         if (lit) Frame.Fill(r.Position.X + 2, r.End.Y - 3, r.Size.X - 4, 1, _red);
     }
 
+    /// <summary>
+    /// ARMOR in the 1997 look: the values over the form's own DEFENSE block (the background has its art), where the 2D form prints them, in
+    /// font 0x47; the cell under the cursor underlined by the red pencil, BALANCE lit as the form's buttons are.
+    /// </summary>
+    private void DrawDefense()
+    {
+        var c = _m.Inv.Car;
+        int ox = DefenseAt.X, oy = DefenseAt.Y;
+        for (int cell = 0; cell < DefenseLayout.Cells; cell++)
+        {
+            var (zone, chassis) = DefenseLayout.ZoneOf(cell);
+            int car = ChassisRules.Zone[zone], x = ox + DefenseLayout.ValueLeft(cell), y = oy + zone * DefenseLayout.RowH + DefenseLayout.ValueY;
+            Text(F47, x, y, DefenseLayout.Value(chassis ? c.Chassis[car] : c.Armour[car]));
+            if (_hover == cell)
+            {
+                var minus = OnBlock(DefenseLayout.Box(cell, false));
+                int x0 = minus.End.X + 2, x1 = OnBlock(DefenseLayout.Box(cell, true)).Position.X - 2;
+                Frame.Fill(x0, oy + zone * DefenseLayout.RowH + 15, x1 - x0, 1, _red);
+            }
+        }
+        Text(F47, ox + DefenseLayout.LbsValueX, oy + DefenseLayout.LbsValueY, DefenseLayout.Value(c.Ninth));
+        var b = OnBlock(DefenseLayout.Balance);
+        if (_hover == DefenseLayout.BalanceRow) Frame.Fill(b.Position.X + 3, b.End.Y - 3, b.Size.X - 6, 1, _red);
+    }
+
     // an armour or chassis row: [-] value [+], the form's DEFENSE buttons
     private static Rect2I MinusR(int y) => new(PadX + ValueX + 2, y + 2, 13, 13);
     private static Rect2I PlusR(int y) => new(PadX + PadW - 36, y + 2, 13, 13);
@@ -653,6 +709,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         ui.Paper(pr, 6);
         string title = _stack.Count > 1 ? string.Join(" / ", _stack.Skip(1).Select(p => p.Title)) : "CONFIGURE CHASSIS";
         ui.Bar(new Rect2(PadX + 8, PadY + 8, PadW - 16, 17), title);
+        if (page.Defense) { PaintDefense(ui); return; }
         int n = Math.Min(NotepadRows, page.Cache.Count);
         bool labels = page.Cache.Any(r => r.Kind is RowKind.Normal or RowKind.Adjust);
         ui.Rules(new Rect2(PadX + 6, RowsY, PadW - 12, n * RowH), n, RowH, labels ? PadX + ValueX - 4 : null);
@@ -702,6 +759,63 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
             if (lit && row.Kind is not (RowKind.Adjust or RowKind.Button)) ui.Pencil(r.Position.X + 9, r.Position.Y + 15.4f, r.Size.X - 12);
         }
         ui.ScrollBar(pr.End.X - 12, RowsY, Rows * RowH, VisibleRows, page.Cache.Count, page.Scroll);
+    }
+
+    // the DEFENSE block's inks, sampled from the form: the zone names and LBS. AVAILABLE, the small "armor" / "chassis", DEFENSE, the rules
+    private static readonly Color ZoneInk = Color.Color8(123, 100, 69), SmallInk = Color.Color8(150, 124, 88), DefenseInk = Color.Color8(83, 71, 49), BlockRule = Color.Color8(94, 79, 54);
+    // the form's faces are narrower than Arial: its caps (the zone names, LBS. AVAILABLE) a size down to keep to the form's columns
+    private static readonly GText Small = new(GFace.Sans, 10.5f), Caps = new(GFace.Sans, 11f);
+
+    /// <summary>
+    /// ARMOR in the modern look: the form's DEFENSE block drawn from scratch on its own geometry (<see cref="DefenseLayout"/>): DEFENSE up its
+    /// shaded column, a row for each side with "armor" and "chassis" side by side, each [-] value [+], LBS. AVAILABLE with its underlined
+    /// value, BALANCE; the cell under the cursor underlined by the red pencil.
+    /// </summary>
+    private void PaintDefense(GarageUi ui)
+    {
+        var c = _m.Inv.Car;
+        float ox = DefenseAt.X, oy = DefenseAt.Y;
+        const int W = DefenseLayout.W, H = DefenseLayout.H, B = DefenseLayout.Border, RH = DefenseLayout.RowH;
+        Rect2 On(Rect2I r) => new(ox + r.Position.X, oy + r.Position.Y, r.Size.X, r.Size.Y);
+        // the DEFENSE column's shade, the rules, the border (the form's frame: two units on three sides, a single rule on top)
+        ui.Fill(new Rect2(ox + B, oy + 1, DefenseLayout.LabelCol - B, H - B - 1), GarageInk.Bar);
+        for (int k = 1; k <= DefenseLayout.Zones; k++) ui.HLine(ox + DefenseLayout.LabelCol, ox + W - B, oy + k * RH, BlockRule);
+        ui.VLine(ox + DefenseLayout.LabelCol, oy, oy + H - B, BlockRule);
+        foreach (int x in new[] { DefenseLayout.ZoneCol, DefenseLayout.ArmorCol, DefenseLayout.PairCol, DefenseLayout.ChassisCol })
+            ui.VLine(ox + x, oy, oy + DefenseLayout.LbsY, BlockRule);
+        ui.HLine(ox, ox + W, oy, GarageInk.Ink);
+        ui.Fill(new Rect2(ox, oy, B, H), GarageInk.Ink);
+        ui.Fill(new Rect2(ox + W - B, oy, B, H), GarageInk.Ink);
+        ui.Fill(new Rect2(ox, oy + H - B, W, B), GarageInk.Ink);
+        ui.TextUp(GText.Heading, "DEFENSE", new Vector2(ox + (B + DefenseLayout.LabelCol) / 2f, oy + (H - B) / 2f), DefenseInk);
+        const float Baseline = 13.8f;   // the form's caps stand on its rows' 14th line
+        for (int zone = 0; zone < DefenseLayout.Zones; zone++)
+        {
+            float top = oy + zone * RH, by = top + Baseline;
+            ui.Text(Caps, DefenseLayout.ZoneNames[zone], ox + DefenseLayout.ZoneX, by, ZoneInk);
+            ui.Text(Small, "armor", ox + DefenseLayout.ArmorLabelX, by - 1, SmallInk);
+            ui.Text(Small, "chassis", ox + DefenseLayout.ChassisLabelX, by - 1, SmallInk);
+            foreach (bool chassis in new[] { false, true })
+            {
+                int cell = DefenseLayout.CellOf(zone, chassis), car = ChassisRules.Zone[zone];
+                Rect2 minus = On(DefenseLayout.Box(cell, false)), plus = On(DefenseLayout.Box(cell, true));
+                ui.StepBox(minus, false, form: true);
+                ui.StepBox(plus, true, form: true);
+                string v = DefenseLayout.Value(chassis ? c.Chassis[car] : c.Armour[car]);
+                float mid = (minus.End.X + plus.Position.X) / 2;
+                ui.Text(GText.Label, v, mid - GarageUi.Measure(GText.Label, v) / 2, by, GarageInk.Ink);
+                if (_hover == cell) ui.Pencil(minus.End.X + 2, top + 15.4f, plus.Position.X - minus.End.X - 4, mark: false);
+            }
+        }
+        // LBS. AVAILABLE: its value on the form's underline (moved along should the label run longer than the form's narrow face)
+        float ly = oy + DefenseLayout.UnderlineY;   // the label stands on the underline's level, the value just above the line
+        const string Lbs = "LBS. AVAILABLE:";
+        ui.Text(Caps, Lbs, ox + DefenseLayout.LbsLabelX, ly, ZoneInk);
+        float ux0 = Math.Max(ox + DefenseLayout.UnderlineX0, ox + DefenseLayout.LbsLabelX + GarageUi.Measure(Caps, Lbs) + 3);
+        float ux1 = Math.Max(ox + DefenseLayout.UnderlineX1, ux0 + 40);
+        ui.HLine(ux0, ux1, oy + DefenseLayout.UnderlineY, GarageInk.Ink);
+        ui.Text(GText.Label, DefenseLayout.Value(c.Ninth), ux0 + (DefenseLayout.LbsValueX - DefenseLayout.UnderlineX0), ly - 2, GarageInk.Ink);
+        ui.Button(On(DefenseLayout.Balance), "BALANCE", _hover == DefenseLayout.BalanceRow, GText.ButtonSmall);
     }
 
     /// <summary>A pick list on a paper of its own: a header bar with the page's title, the ruled rows in the handwriting, the scroll triangles and CANCEL.</summary>
@@ -1304,9 +1418,11 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
 
     private static readonly string[] ZoneNames = ["Front", "Right", "Left", "Rear"];
 
+    /// <summary>ARMOR: the form's DEFENSE block; its rows are the eight cells in reading order, then LBS. AVAILABLE and BALANCE (<see cref="DefenseLayout"/>).</summary>
     private Page ArmourPage() => new()
     {
         Title = "ARMOR",
+        Defense = true,
         Rows = () =>
         {
             var c = _m.Inv.Car;
@@ -1386,8 +1502,8 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
                 var r = RowRect(page, i);
                 if (row.Kind == RowKind.Adjust)
                 {
-                    l.Add(PadRegion.Of(MinusR(r.Position.Y), edge));
-                    l.Add(PadRegion.Of(PlusR(r.Position.Y), edge));
+                    l.Add(PadRegion.Of(StepRect(page, idx, false), edge));
+                    l.Add(PadRegion.Of(StepRect(page, idx, true), edge));
                 }
                 else l.Add(PadRegion.Of(r, edge));
             }
@@ -1656,10 +1772,9 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
             else if (hit >= 0)
             {
                 var row = page.Cache[hit];
-                int y = RowRect(page, hit - page.Scroll).Position.Y;
                 if (row.Kind == RowKind.Adjust)
                 {
-                    int dir = MinusR(y).HasPoint(m) ? -1 : PlusR(y).HasPoint(m) ? 1 : 0;
+                    int dir = StepRect(page, hit, false).HasPoint(m) ? -1 : StepRect(page, hit, true).HasPoint(m) ? 1 : 0;
                     if (dir != 0 && page.Step?.Invoke(hit, dir) == true) { Shell.Sound(82); _hold.Begin(hit * 2 + (dir > 0 ? 1 : 0)); Refresh(); }
                 }
                 else { _hover = hit; ChooseRow(hit); }
@@ -1673,8 +1788,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         else if (heldId >= 0)
         {
             int r = heldId / 2;
-            int y = RowRect(Cur, r - Cur.Scroll).Position.Y;
-            int hit = HitAt(m) == r && (MinusR(y).HasPoint(m) || PlusR(y).HasPoint(m)) ? heldId : -1;
+            int hit = HitAt(m) == r && (StepRect(Cur, r, false).HasPoint(m) || StepRect(Cur, r, true).HasPoint(m)) ? heldId : -1;
             for (int n = _hold.Update(Shell.MouseHeld, hit, Shell.Delta); n > 0; n--)
                 if (Cur.Step?.Invoke(r, heldId % 2 == 1 ? 1 : -1) == true) Repaint();
         }

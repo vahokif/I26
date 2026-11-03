@@ -155,6 +155,18 @@ public sealed class GarageUi(CanvasItem canvas, float scale, Vector2 origin)
         f.DrawString(canvas.GetCanvasItem(), at, text, HorizontalAlignment.Left, -1, PxSize(s, S), colour ?? GarageInk.Ink);
     }
 
+    /// <summary>Text written up the page (turned a quarter to the left, read from the bottom), centred on a point: the DEFENSE column's label.</summary>
+    public void TextUp(GText s, string text, Vector2 centre, Color? colour = null)
+    {
+        if (text.Length == 0 || GarageFonts.Of(s.Face) is not { } f) return;
+        int size = PxSize(s, S);
+        float w = Measure(s, text) * S;
+        // the caps' middle on the centre: the baseline half a cap height (Arial's caps are 0.716 of the size) below it, before the turn
+        canvas.DrawSetTransform(P(centre.X, centre.Y), -Mathf.Pi / 2);
+        f.DrawString(canvas.GetCanvasItem(), new Vector2(-w / 2, 0.358f * size), text, HorizontalAlignment.Left, -1, size, colour ?? GarageInk.Ink);
+        canvas.DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+    }
+
     public void TextCentred(GText s, string text, Rect2 box, float baseline, Color? colour = null)
         => Text(s, text, box.Position.X + (box.Size.X - Measure(s, text)) / 2, baseline, colour);
 
@@ -229,14 +241,14 @@ public sealed class GarageUi(CanvasItem canvas, float scale, Vector2 origin)
         Poly([new(cx - w, cy - d * h / 2), new(cx + w, cy - d * h / 2), new(cx, cy + d * h / 2)], lit ? GarageInk.Red : GarageInk.Ink, 1.1f);
     }
 
-    /// <summary>A small square button with a - or + (the DEFENSE steppers).</summary>
-    public void StepBox(Rect2 r, bool plus, bool lit = false)
+    /// <summary>A small square button with a - or + (the DEFENSE steppers); <paramref name="form"/>: as the form's own, orange with a heavy bar.</summary>
+    public void StepBox(Rect2 r, bool plus, bool lit = false, bool form = false)
     {
-        Fill(r, new Color(GarageInk.Paper, 0.9f));
+        Fill(r, form ? GarageInk.Orange : new Color(GarageInk.Paper, 0.9f));
         Frame(r, lit ? GarageInk.Red : GarageInk.Ink, 1f);
-        float cx = r.Position.X + r.Size.X / 2, cy = r.Position.Y + r.Size.Y / 2;
-        HLine(cx - 3, cx + 3, cy - 0.5f, GarageInk.Ink, 1.2f);
-        if (plus) VLine(cx - 0.5f, cy - 3, cy + 3, GarageInk.Ink, 1.2f);
+        float cx = r.Position.X + r.Size.X / 2, cy = r.Position.Y + r.Size.Y / 2, arm = form ? 2.6f : 3f, bar = form ? 1.8f : 1.2f;
+        HLine(cx - arm, cx + arm, cy - bar / 2, GarageInk.Ink, bar);
+        if (plus) VLine(cx - bar / 2, cy - arm, cy + arm, GarageInk.Ink, bar);
     }
 
     /// <summary>A long list's place: a track and a thumb on the paper's right edge.</summary>

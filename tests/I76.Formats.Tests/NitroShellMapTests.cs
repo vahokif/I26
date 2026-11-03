@@ -46,6 +46,7 @@ public class NitroShellMapTests
         var n = Nitro();
         for (int id = 1; id <= 32; id++) Assert.Equal(768, n.Background(id).Palette.Length);
         Assert.Equal(22, NitroShellMap.Record(26));          // the main menu's card is the Nitro logo
+        Assert.Equal(12, NitroShellMap.Record(16));          // control configuration / mouse options sheet
         for (int id = 33; id <= 64; id++) _ = n.Bank(id);
         for (int id = 66; id <= 71; id++) Assert.True(n.Font(id).Height > 0, $"font {id}");
         foreach (int id in new[] { 1, 3, 4, 5, 14, 27, 31 }) Assert.True(n.Has(id) || id is 27 or 31);

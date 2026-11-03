@@ -74,7 +74,7 @@ public partial class Cockpit : Node
         var tex = new ImageTexture?[n + 1];
         for (int i = 1; i <= n; i++)
             if (Image(string.Format(pattern, LightVariant, i)) is { } img) tex[i] = ImageTexture.CreateFromImage(img);
-        return (Resolver.FindByStem(string.Format(pattern, 1, 1)), tex);
+        return (Resolver.FindByStem(string.Format(pattern, 1, 1)) ?? Resolver.FindByStem(string.Format(pattern, LightVariant, 1)), tex);
     }
 
     private Image? Image(string stem) =>

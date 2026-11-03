@@ -11,8 +11,8 @@ namespace I76.Game.World;
 ///
 /// Chunks of 32x32 samples (160 m, the map's own chunk grid) over the empty cells round the camera, built off the main thread:
 /// <list type="bullet">
-/// <item>Modern look: within <see cref="ModernReach"/> (or the camera's far plane), with the ring's material and its shading data,
-/// at 1.25, 2.5 or 5 m between vertices by distance (<see cref="LevelRange"/>). Every level's vertices lie on the bilinear surface,
+/// <item>Modern look: within <see cref="ModernReach"/> (or the camera's far plane), with the ring's shading and its shading data,
+/// at 1.25, 2.5, 5 or 10 m between vertices by distance (<see cref="LevelRange"/>). Every level's vertices lie on the bilinear surface,
 /// which along a chunk's edge (a line of samples) is the same straight segments at any level, so neighbours meet; a skirt hides the
 /// rest (the ring's coarser cells where the chunks end).</item>
 /// <item>1997 look: the map's own 1997 terrain (TerrainNode's 1997 mesh, its material: the engine's light through the palette), within
@@ -28,17 +28,51 @@ public partial class OutsideTerrain : Node3D
     public const float ModernReach = 1200f;
     /// <summary>The 1997 look draws within the original's clip.</summary>
     public const float Reach1997 = HorizonEdge.Clip;
-    /// <summary>Modern levels: 1.25 m between vertices nearer than LevelRange[0], 2.5 m nearer than LevelRange[1], else 5 m.</summary>
-    public static readonly float[] LevelRange = [100f, 450f];
+    /// <summary>
+    /// Modern levels: 1.25 m between vertices nearer than LevelRange[0], 2.5 m nearer than LevelRange[1], 5 m nearer than LevelRange[2],
+    /// else 10 m. The vertices are on the simulation's bilinear surface; between them a triangle stands off it by a quarter of its cell's
+    /// twist over the vertices' spacing squared (5 m triangles: under a centimetre on most of the outside ground round T01, 33 cm on the
+    /// roughest hundredth; at 1.25 m, 2 cm), so the levels near the car are the fine ones.
+    /// </summary>
+    public static readonly float[] LevelRange = [60f, 200f, 600f];
+    public const int Levels = 4;
+    /// <summary>
+    /// From this far from the camera the modern chunks ease onto the ring's own surface (they are on it by <see cref="ModernReach"/>, so the
+    /// ring, coarser, goes on where they end without a step): rendering only, the simulation keeps the outside ground's samples.
+    /// </summary>
+    public const float MorphStart = 800f;
     /// <summary>How far the modern chunks' skirts hang below their edges, metres.</summary>
-    public const float Skirt = 10f;
+    public const float Skirt = 30f;
     private const int MaxJobs = 4, MaxUploads = 4;
 
     private MissionWorld? _world;
     private OutsideGround? _ground;
     private bool _modern = true;
-    /// <summary>The ring's material: the modern chunks are drawn with it (null until the ring is made).</summary>
-    public ShaderMaterial? Modern { get; set; }
+    /// <summary>
+    /// The ring's material (null until the ring is made): the modern chunks are drawn with its shading and parameters, copied into their
+    /// own material (horizon_near.gdshader: no depth writes or masks, so hidden fragments are rejected before they are shaded).
+    /// </summary>
+    public ShaderMaterial? Modern
+    {
+        get => _ring;
+        set
+        {
+            _ring = value;
+            if (value is null) { _near = null; return; }
+            _near ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/horizon_near.gdshader") };
+            foreach (var u in _near.Shader.GetShaderUniformList())
+            {
+                var name = u.AsGodotDictionary()["name"].AsString();
+                _near.SetShaderParameter(name, value.GetShaderParameter(name));
+            }
+            if (_groundTex is not null) { _near.SetShaderParameter("ground_tex", _groundTex); _near.SetShaderParameter("has_ground_tex", true); }
+            _near.SetShaderParameter("morph_start", MorphStart);
+            _near.SetShaderParameter("morph_end", ModernReach);
+            foreach (var p in _pieces.Values) if (p.Level >= 0 && p.Mi is not null) p.Mi.MaterialOverride = _near;
+        }
+    }
+    private ShaderMaterial? _ring, _near;
+    private Texture2D? _groundTex;
     /// <summary>The ring, for its baked sun visibility and its near mask.</summary>
     public HorizonTerrain? Ring { get; set; }
     private ShaderMaterial? _faithful;
@@ -69,6 +103,7 @@ public partial class OutsideTerrain : Node3D
         _ground = world.Outside;
         if (faithful is not null)
         {
+            _groundTex = faithful.GetShaderParameter("ground_tex").As<Texture2D>();
             _faithful = (ShaderMaterial)faithful.Duplicate();
             _faithful.SetShaderParameter("clip_depth", Reach1997);
         }
@@ -80,6 +115,9 @@ public partial class OutsideTerrain : Node3D
         _modern = modern;
         Clear();   // every chunk made again in the other look
     }
+
+    /// <summary>I76_OUTSIDE_DEBUG=1: a line every 30 frames, what is wanted, drawn and being made.</summary>
+    private static readonly bool Debug = System.Environment.GetEnvironmentVariable("I76_OUTSIDE_DEBUG") == "1";
 
     /// <summary>Kept this far past the reach, so a chunk at its edge does not come and go.</summary>
     private const float Keep = 100f;
@@ -112,7 +150,7 @@ public partial class OutsideTerrain : Node3D
                 int want = -1;
                 if (modern)
                 {
-                    want = 2;
+                    want = Levels - 1;
                     for (int l = 0; l < LevelRange.Length; l++) if (d < LevelRange[l]) { want = l; break; }
                     // hysteresis: back to a finer level only well inside its range
                     if (p.Level >= 0 && want < p.Level && d > LevelRange[want] - 10) want = p.Level;
@@ -142,7 +180,7 @@ public partial class OutsideTerrain : Node3D
                 var (x0, z0) = (key.X * Chunk, key.Z * Chunk);
                 var world = _world; var ground = _ground; var ring = Ring;
                 p.JobLevel = level;
-                p.Job = Task.Run(() => level < 0 ? Faithful(world, x0, z0) : ModernArrays(ground, x0, z0, level, ring is null ? null : ring.Visibility));
+                p.Job = Task.Run(() => level < 0 ? Faithful(world, x0, z0) : ModernArrays(ground, x0, z0, level, ring is null ? null : ring.Visibility, ring is null ? null : ring.RingHeight));
                 _jobs++;
             }
         // gone out of reach (with a margin, so a chunk at the edge does not come and go)
@@ -156,11 +194,17 @@ public partial class OutsideTerrain : Node3D
             _pieces.Remove(key);
         }
         UpdateMask(modern);
+        if (Debug && Engine.GetProcessFrames() % 30 == 0)
+            GD.Print($"outside: {(modern ? "modern" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_jobs} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
     }
 
     private void Clear()
     {
-        foreach (var p in _pieces.Values) p.Mi?.QueueFree();
+        foreach (var p in _pieces.Values)
+        {
+            p.Mi?.QueueFree();
+            if (p.Job is not null) _jobs--;   // left to finish on its own, unread
+        }
         if (_pieces.Count > 0) _maskDirty = true;
         _pieces.Clear();
         UpdateMask(false);
@@ -186,6 +230,14 @@ public partial class OutsideTerrain : Node3D
         arrays[(int)Mesh.ArrayType.Index] = a.I;
         var mesh = new ArrayMesh();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        if (level >= 0)
+        {
+            // the box takes in the ring's heights too, which the far chunks ease onto in the shader
+            var box = mesh.GetAabb();
+            float lo = box.Position.Y, hi = box.End.Y;
+            for (int k = 0; k < a.Uv2.Length; k++) if (a.Uv2[k].Y > 0.5f) { lo = MathF.Min(lo, a.Uv2[k].X); hi = MathF.Max(hi, a.Uv2[k].X); }
+            mesh.CustomAabb = new Aabb(new Vector3(box.Position.X, lo, box.Position.Z), new Vector3(box.Size.X, hi - lo, box.Size.Z));
+        }
         p.Mi ??= new MeshInstance3D { Name = $"outside_{key.X}_{key.Z}", Layers = TerrainNode.TerrainLayer, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         if (!p.Mi.IsInsideTree()) AddChild(p.Mi);
         p.Mi.Mesh = mesh;
@@ -196,7 +248,7 @@ public partial class OutsideTerrain : Node3D
         }
         else
         {
-            p.Mi.MaterialOverride = Modern;
+            p.Mi.MaterialOverride = _near;
             var c = _ground!.Centre;
             p.Mi.Position = new Vector3(c.X, 0, -c.Y);
         }
@@ -250,25 +302,27 @@ public partial class OutsideTerrain : Node3D
     }
 
     /// <summary>
-    /// A modern chunk at sample origin (x0, z0), <paramref name="level"/> 0..2 (1.25, 2.5, 5 m between vertices): positions centre-relative
-    /// (Godot frame), heights the simulation's, the ring's shading data (sun visibility, rockiness, style; height over its base, distance
-    /// from the map) from the function at the samples, bilinear between, and a skirt round the edge.
+    /// A modern chunk at sample origin (x0, z0), <paramref name="level"/> 0..3 (1.25, 2.5, 5, 10 m between vertices): positions centre-relative
+    /// (Godot frame), heights the simulation's (at 10 m, every other sample's: far off, where the cut corners do not show), the ring's
+    /// shading data (sun visibility, rockiness, style; height over its base, distance from the map) from the function at the samples,
+    /// bilinear between, and a skirt round the edge.
     /// </summary>
-    public static Arrays ModernArrays(OutsideGround g, int x0, int z0, int level, Func<float, float, float>? visibility)
+    public static Arrays ModernArrays(OutsideGround g, int x0, int z0, int level, Func<float, float, float>? visibility, Func<float, float, float>? ringHeight = null)
     {
-        int sub = 4 >> level, n = Chunk * sub + 1;
+        int quarters = 1 << level;   // quarter samples between vertices
+        int n = Chunk * 4 / quarters + 1;
         var c = g.Centre;
         // the function at the chunk's samples (and one beyond, for the gradients' sake no more is needed)
         var aux = new OutsideGround.Point[(Chunk + 1) * (Chunk + 1)];
         for (int j = 0; j <= Chunk; j++)
             for (int i = 0; i <= Chunk; i++) aux[j * (Chunk + 1) + i] = g.SampleAt(x0 + i, z0 + j);
-        float step = 1f / sub;
+        float step = quarters / 4f;   // samples between vertices
         float H(int i, int j)   // vertex (i, j) of the chunk's grid, may be one past it
         {
-            int si = Math.DivRem(i, sub, out int ri), sj = Math.DivRem(j, sub, out int rj);
-            if (ri < 0) { ri += sub; si--; }
-            if (rj < 0) { rj += sub; sj--; }
-            return SimHeight(g, x0 + si, z0 + sj, ri * step, rj * step);
+            int si = Math.DivRem(i * quarters, 4, out int ri), sj = Math.DivRem(j * quarters, 4, out int rj);
+            if (ri < 0) { ri += 4; si--; }
+            if (rj < 0) { rj += 4; sj--; }
+            return SimHeight(g, x0 + si, z0 + sj, ri * 0.25f, rj * 0.25f);
         }
         int skirtN = 4 * (n - 1);
         var v = new Vector3[n * n + skirtN];
@@ -276,7 +330,7 @@ public partial class OutsideTerrain : Node3D
         var col = new Color[n * n + skirtN];
         var uv = new Vector2[n * n + skirtN];
         var uv2 = new Vector2[n * n + skirtN];
-        float spacing = TerrainNode.SampleSize / sub;
+        float spacing = TerrainNode.SampleSize * step;
         for (int j = 0; j < n; j++)
             for (int i = 0; i < n; i++)
             {
@@ -298,7 +352,9 @@ public partial class OutsideTerrain : Node3D
                 float vis = visibility?.Invoke(gx - c.X, gz - c.Y) ?? 1f;
                 col[k] = new Color(vis, L(p00.Rocky, p10.Rocky, p01.Rocky, p11.Rocky), L(p00.Style, p10.Style, p01.Style, p11.Style), 1);
                 uv[k] = new Vector2(hrel, MathF.Max(d, 0));
-                uv2[k] = new Vector2(h - g.Base, 1);   // y: one of these chunks (the ring gives way under them)
+                // the ring's own height here, which the shader eases the far chunks onto (horizon_near.gdshader)
+                float rh = ringHeight?.Invoke(gx - c.X, gz - c.Y) ?? float.NaN;
+                uv2[k] = float.IsNaN(rh) ? Vector2.Zero : new Vector2(rh, 1);
             }
         // the skirt: each edge vertex again, Skirt lower
         var edge = new List<int>(skirtN);
@@ -310,7 +366,7 @@ public partial class OutsideTerrain : Node3D
         {
             int src = edge[e], k = n * n + e;
             v[k] = v[src] - new Vector3(0, Skirt, 0);
-            nr[k] = nr[src]; col[k] = col[src]; uv[k] = uv[src]; uv2[k] = uv2[src];
+            nr[k] = nr[src]; col[k] = col[src]; uv[k] = uv[src]; uv2[k] = uv2[src] - new Vector2(Skirt, 0);
         }
         var idx = new List<int>((n - 1) * (n - 1) * 6 + skirtN * 6);
         // which winding faces up (Godot's front face is clockwise seen from the front), as the ring finds it

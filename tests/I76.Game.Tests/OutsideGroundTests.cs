@@ -127,8 +127,7 @@ public class OutsideGroundTests(ITestOutputHelper log) : IDisposable
 
     /// <summary>
     /// The modern look's chunks of the outside ground (OutsideTerrain.ModernArrays) stand on the simulation's ground: every vertex, at every
-    /// level of detail, is TerrainGround.Height at its point to the bit, and every chunk at a coarser level meets its finer neighbours along
-    /// their shared edge (the bilinear surface along a line of samples is the same straight pieces at any level).
+    /// level of detail, is TerrainGround.Height at its point to the bit.
     /// </summary>
     [InstallTheory]
     [InlineData("t01")]
@@ -145,14 +144,15 @@ public class OutsideGroundTests(ITestOutputHelper log) : IDisposable
         var origins = new[] { (c0 * 128 - 32, r0 * 128), (c0 * 128, r0 * 128 - 32), (c0 * 128 - 32, r0 * 128 - 32), (c0 * 128 - 96, r0 * 128 - 160) };
         int checkedVerts = 0;
         foreach (var (x0, z0) in origins)
-            for (int level = 0; level <= 2; level++)
+            for (int level = 0; level < OutsideTerrain.Levels; level++)
             {
                 var a = OutsideTerrain.ModernArrays(o, x0, z0, level, null);
-                int sub = 4 >> level, n = OutsideTerrain.Chunk * sub + 1;
+                float step = (1 << level) / 4f;   // samples between vertices
+                int n = (int)(OutsideTerrain.Chunk / step) + 1;
                 for (int k = 0; k < n * n; k++)
                 {
                     var v = a.V[k];
-                    float gx = (x0 + k % n / (float)sub) * 5f, gz = (z0 + k / n / (float)sub) * 5f;
+                    float gx = (x0 + k % n * step) * 5f, gz = (z0 + k / n * step) * 5f;
                     Assert.Equal(gx - c.X, v.X);
                     float sim = ground.Height(gx, gz);
                     Assert.True(sim == v.Y, $"{mission} chunk {x0},{z0} level {level}: vertex at {gx:0.00},{gz:0.00} is {v.Y} where the simulation has {sim}");

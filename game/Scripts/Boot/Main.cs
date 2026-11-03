@@ -1747,13 +1747,14 @@ public partial class Main : Node3D
         var _horizon = this._horizon!;
         _horizon.Position = Coords.ToGodot(_horizon.Centre.X, 0, _horizon.Centre.Y);
         _worldRoot.AddChild(_horizon);
-        if (_builder?.OutsideNode is { } outside) { outside.Modern = _horizon.Material; outside.Ring = _horizon; }
         _horizonEyeSet = false;
         SetHorizonEye();
         foreach (var p in new[] { "horizon_color", "sprite_dir", "light_strength" })
             _horizon.Material.SetShaderParameter(p, sky.GetShaderParameter(p));
         // night air: the dark rock shows as silhouettes against the sky, as the night panels drew it
         if (!light.IsDay) _horizon.Material.SetShaderParameter("haze_reach", 20000f);
+        // the ground past the map near the camera: the ring's shading, its parameters as now set
+        if (_builder?.OutsideNode is { } outside) { outside.Ring = _horizon; outside.Modern = _horizon.Material; }
         // out of view, but still in the sky's light: the ring is lit by it as the panels' scene was (sky_modern.gdshaderinc)
         sky.SetShaderParameter("horizon_light", sky.GetShaderParameter("has_horizon"));
         sky.SetShaderParameter("has_horizon", false);

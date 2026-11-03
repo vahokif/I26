@@ -226,7 +226,7 @@ public partial class HorizonTerrain : Node3D
     private (float X0, float Z0, float X1, float Z1) _bounds;
     private float _base;
     // the baked sun visibility on the polar grid, for OutsideTerrain's chunks near the camera (Visibility)
-    private float[] _vis = [];
+    private float[] _vis = [], _hgt = [];
     private float _innerR = 1, _lnq = 1;
     private int _rings, _n;
 
@@ -422,7 +422,7 @@ public partial class HorizonTerrain : Node3D
         });
 
         long tShadow = _tShadow = sw.ElapsedMilliseconds;
-        (_vis, _innerR, _lnq, _rings, _n) = (vis, inner, lnq, rings, n);
+        (_vis, _hgt, _innerR, _lnq, _rings, _n) = (vis, hgt, inner, lnq, rings, n);
         if (System.Environment.GetEnvironmentVariable("I76_HORIZON_DEBUG") == "1")
         {
             // the skyline from the centre, at the base height: the 3D ring's against the panels'
@@ -595,6 +595,24 @@ public partial class HorizonTerrain : Node3D
         foreach (var (x0, z0, x1, z1) in _tiles)
             if (x >= x0 && x <= x1 && z >= z0 && z <= z1) return true;
         return false;
+    }
+
+    /// <summary>
+    /// The ring's drawn height at a centre-relative point: its polar mesh's triangle there (each cell cut from its (ring, segment + 1)
+    /// corner to its (ring + 1, segment) one), read in the grid's own coordinates. OutsideTerrain's farthest chunks ease onto it, so
+    /// where they end the ring goes on at the same height. NaN off the grid.
+    /// </summary>
+    public float RingHeight(float x, float z)
+    {
+        if (_hgt.Length == 0) return float.NaN;
+        float r = Len(x, z);
+        float fj = MathF.Log(MathF.Max(r, _innerR) / _innerR) / _lnq;
+        if (fj >= _rings - 1) return float.NaN;
+        float fi = (MathF.Atan2(x, z) / MathF.Tau + 1) % 1 * _n;
+        int j0 = (int)fj, i0 = (int)fi % _n, i1 = (i0 + 1) % _n;
+        float tj = fj - j0, ti = fi - MathF.Floor(fi);
+        float a = _hgt[j0 * _n + i0], b = _hgt[j0 * _n + i1], c = _hgt[(j0 + 1) * _n + i0], d = _hgt[(j0 + 1) * _n + i1];
+        return ti + tj <= 1 ? a + (b - a) * ti + (c - a) * tj : d + (c - d) * (1 - ti) + (b - d) * (1 - tj);
     }
 
     /// <summary>

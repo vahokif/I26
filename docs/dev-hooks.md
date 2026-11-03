@@ -204,6 +204,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_HORIZON_TINT` | debug | `1`: the 3D distant terrain drawn flat magenta, to see where it shows (it must never show over the map's own ground). |
 | `I76_HORIZON_MASK` | debug | `0`: the distant terrain drawn over the map's tiles as it was before the floor grid (HorizonTerrain.FloorGrid), for before captures. |
 | `I76_OUTSIDE_CHUNKS` | debug | `0`: no chunks of the ground past the map near the camera (OutsideTerrain): the modern look's ring alone draws it, the 1997 look nothing (the simulation still drives on it), for A/B frame times. |
+| `I76_OUTSIDE_DEBUG` | debug | `1`: OutsideTerrain prints a line every 30 frames: the look, the eye, the chunks wanted and drawn, the jobs running and the levels. |
 | `I76_BAKE_CACHE` | tuning | `0`: no bake cache: road layers, ground materials and terrain surfaces are made afresh and not kept (`user://cache/terrain/`, keyed by their inputs, 1 GB at most). |
 | `I76_GROUND_MATERIALS` | tuning | `0`: procedural ground only (and a painted ground without the asphalt scan). |
 | `I76_GROUND_PAINT` | tuning | `0`: a painted ground (M15's parking lot, GroundMarkings) drawn as fitted noise like a natural one. |

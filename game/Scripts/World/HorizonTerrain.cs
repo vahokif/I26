@@ -587,6 +587,28 @@ public partial class HorizonTerrain : Node3D
         return 0;
     }
 
+    private ShaderMaterial? _material1997;
+
+    /// <summary>
+    /// The ring in the 1997 look, as the map editor draws it (horizon_1997.gdshader): the map's 1997 terrain light and ground texture
+    /// (<paramref name="faithful"/>'s parameters) with the ring's own masks; made once, after <see cref="Finish"/>.
+    /// </summary>
+    public ShaderMaterial Material1997(ShaderMaterial faithful)
+    {
+        if (_material1997 is not null) return _material1997;
+        var m = _material1997 = OutsideTerrain.Lit1997("res://Shaders/horizon_1997.gdshader", faithful, _centre);
+        foreach (var name in new[] { "map_floor", "map_origin", "map_extent" }) m.SetShaderParameter(name, Material.GetShaderParameter(name));
+        return m;
+    }
+
+    /// <summary>Draws the ring with <paramref name="material"/> (<see cref="Material1997"/>), or with its own <see cref="Material"/> (null).</summary>
+    public void Use1997(ShaderMaterial? material)
+    {
+        var m = material ?? Material;
+        foreach (var child in GetChildren())
+            if (child is MeshInstance3D mi && mi.MaterialOverride != m) mi.MaterialOverride = m;
+    }
+
     private static float Len(float x, float z) => MathF.Sqrt(x * x + z * z);
 
     /// <summary>Whether a centre-relative point lies on one of the map's tiles.</summary>

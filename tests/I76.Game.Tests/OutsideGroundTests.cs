@@ -161,4 +161,29 @@ public class OutsideGroundTests(ITestOutputHelper log) : IDisposable
             }
         log.WriteLine($"{mission}: {checkedVerts} vertices on the simulation's ground");
     }
+
+    /// <summary>
+    /// In the map editor's own view the 1997 look draws the outside ground as far as the modern look does, with no clip (the map's 1997
+    /// terrain near the camera, the 10 m chunks beyond); a mission, and so the editor's playtest, keeps the original's 600 m clip. From
+    /// the editor's high camera the chunks under it are the coarse ones in either look; a mission's levels go by the distance across the ground.
+    /// </summary>
+    [Fact]
+    public void TheEditorsViewDrawsTheWholeOutsideGroundIn1997()
+    {
+        // a mission's 1997 look: within 600 m, cut at 600 m view depth, the map's own 1997 terrain
+        Assert.Equal(600f, OutsideTerrain.Reach(modern: false, editorView: false));
+        Assert.Equal(600f, OutsideTerrain.ClipDepth(editorView: false));
+        Assert.Equal(-1, OutsideTerrain.Level(false, false, 550, int.MinValue));
+        // the editor's 1997 view: as far as the modern look, uncut
+        Assert.Equal(OutsideTerrain.ModernReach, OutsideTerrain.Reach(modern: false, editorView: true));
+        Assert.Equal(OutsideTerrain.ModernReach, OutsideTerrain.Reach(modern: true, editorView: false));
+        Assert.Equal(0f, OutsideTerrain.ClipDepth(editorView: true));
+        Assert.Equal(-1, OutsideTerrain.Level(false, true, 300, int.MinValue));
+        Assert.Equal(OutsideTerrain.Levels - 1, OutsideTerrain.Level(false, true, 900, int.MinValue));
+        Assert.Equal(OutsideTerrain.Levels - 1, OutsideTerrain.Level(false, true, 595, OutsideTerrain.Levels - 1));   // hysteresis
+        // 3000 m up over a chunk: coarse in the editor, by the distance across the ground in a mission
+        Assert.Equal(OutsideTerrain.Levels - 1, OutsideTerrain.Level(true, true, OutsideTerrain.LevelDistance(true, 0, 3000), int.MinValue));
+        Assert.Equal(OutsideTerrain.Levels - 1, OutsideTerrain.Level(false, true, OutsideTerrain.LevelDistance(true, 0, 3000), int.MinValue));
+        Assert.Equal(0, OutsideTerrain.Level(true, false, OutsideTerrain.LevelDistance(false, 0, 3000), int.MinValue));
+    }
 }

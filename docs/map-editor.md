@@ -36,9 +36,23 @@ the modern look is the one it is built for.
 | `F` | bring the point under the cursor to the middle |
 | Tab | pan with the mouse at the window's edge, on or off (off at first) |
 | `B` | hide or show the brush circle |
-| `F12` or `F2` | modern look or 1997 look, as F12 does in a mission; it works with a text field focused too, and in a playtest F12 is the mission's own (the 1997 look draws the horizon mountain panels by the original's rule, as a playtest, F5, does: their foot sinks 10.2 times the camera's height, so from the free camera, tens of metres up and more, they sink out of sight, as they do in the game on high ground) |
+| `F12` or `F2` | modern look or 1997 look, as F12 does in a mission; it works with a text field focused too, and in a playtest F12 is the mission's own (the 1997 look draws the horizon mountain panels by the original's rule, as a playtest, F5, does: their foot sinks 10.2 times the camera's height, so from the free camera, tens of metres up and more, they sink out of sight, as they do in the game on high ground). The editing view shows the ground past the map's tiles whole in both looks (see "The ground past the map" below) |
 | `F5` | playtest, with the car under the cursor; `F5` or `Esc` comes back |
 | `F1` | the help overlay |
+
+**The ground past the map.** The editing view (not a playtest, which is a mission and draws as one) shows all of the ground past the
+map's tiles (`OutsideGround`) in both looks, with nothing clipped: Draw Distance does not apply there (it is always Far: no 600 m clip,
+no fade into the sky in the modern look), and the 1997 look, which in a mission draws the outside ground only within 600 m of the
+camera and cuts it at 600 m view depth, draws it as far as the modern look does (`OutsideTerrain.EditorView`): the map's own 1997 terrain
+within 600 m of the camera, the modern look's 10 m chunks lit as the 1997 terrain is (the engine's light per vertex, from the
+gradient their normals carry, through the mission's light ramp, the ground texture; `outside_1997.gdshader`) out to 1.2 km, easing
+onto the distant ring, which is drawn in the same light (`horizon_1997.gdshader`, its masks shared with the modern ring's in
+`horizon_mask.gdshaderinc`) out to 20 km. An editor opened in the 1997 look makes the ring in the background (well under a second
+on T01, the 1997 view showing the near chunks meanwhile); a mission in that look still makes it only when the modern look is first
+asked for. In both looks the chunks' level of detail goes by their distance from the camera in 3D (a mission's by the distance
+across the ground), so from high up the coarse ones are drawn. Frame times on an integrated GPU at 1280x720 (`I76_FRAME_PROFILE`,
+GPU ms, T01 / canyonl3, the camera 150, 1500 and 3000 m up looking off the map): modern 5.9/6.8, 6.1/6.0, 6.0/6.3 (6 to 8
+before); 1997 2.0/2.7, 3.0/2.8, 3.3/2.9 (1.6 to 2.7 before, when it drew little or nothing out there).
 
 **Music.** The game's soundtrack plays while you edit: the CD tracks of the install the editor was opened from (Interstate '76's or the Nitro Pack's, whichever the map belongs to), a random one after another and never the one just played, at the Music level of Audio Control (nothing plays at level 0 or 1, or with no tracks in the install). The top bar's **MUSIC** button switches it off and on; the choice is kept with the player's settings (`editor_music` in the `[port]` section, written only when off). A playtest (F5) fades the music out for the mission's own and the editor starts a track again on the way back; leaving the editor ends it for the menu's music. `I76_EDITOR_MUSIC_SEEK=SECONDS` starts each track that far in (capture scripts: `music` presses the button, `key:F12` sends a key).
 | `M` `P` | the object tools: select, build (the palette). `J` `R` `Y` `Z` arm a spawn point, regen pad, CTF flag, race checkpoint (the rest of their keys are in "Building" below) |

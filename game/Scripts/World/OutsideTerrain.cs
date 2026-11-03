@@ -18,6 +18,11 @@ namespace I76.Game.World;
 /// <item>1997 look: the map's own 1997 terrain (TerrainNode's 1997 mesh, its material: the engine's light through the palette), within
 /// the original's 600 m clip only, cut at 600 m view depth as the map's ground is by the far plane, whatever the draw distance; the
 /// horizon panels and sky stand beyond as they do over the map.</item>
+/// <item>The map editor's own view (<see cref="EditorView"/>; its playtest is a mission and draws as above): the 1997 look too draws it
+/// out to <see cref="ModernReach"/>, unclipped, the map's 1997 terrain within <see cref="LevelRange"/>[2] of the camera and the modern
+/// look's 10 m chunks lit as the 1997 terrain beyond (outside_1997.gdshader), easing onto the ring, which the editor draws in that light
+/// too (HorizonTerrain.Use1997); and in either look a chunk's level goes by its distance from the camera in 3D, as the editor's camera
+/// flies high.</item>
 /// </list>
 /// </summary>
 public partial class OutsideTerrain : Node3D
@@ -47,7 +52,19 @@ public partial class OutsideTerrain : Node3D
 
     private MissionWorld? _world;
     private OutsideGround? _ground;
-    private bool _modern = true;
+    private bool _modern = true, _editorView;
+
+    /// <summary>The map editor's own view (not its playtest): the 1997 look draws as far as the modern, unclipped, and levels go by 3D distance.</summary>
+    public bool EditorView
+    {
+        get => _editorView;
+        set
+        {
+            if (_editorView == value) return;
+            _editorView = value;
+            Clear();
+        }
+    }
     /// <summary>
     /// The ring's material (null until the ring is made): the modern chunks are drawn with its shading and parameters, copied into their
     /// own material (horizon_near.gdshader: no depth writes or masks, so hidden fragments are rejected before they are shaded).
@@ -58,6 +75,7 @@ public partial class OutsideTerrain : Node3D
         set
         {
             _ring = value;
+            _maskDirty = true;
             if (value is null) { _near = null; return; }
             _near ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/horizon_near.gdshader") };
             foreach (var u in _near.Shader.GetShaderUniformList())
@@ -68,14 +86,28 @@ public partial class OutsideTerrain : Node3D
             if (_groundTex is not null) { _near.SetShaderParameter("ground_tex", _groundTex); _near.SetShaderParameter("has_ground_tex", true); }
             _near.SetShaderParameter("morph_start", MorphStart);
             _near.SetShaderParameter("morph_end", ModernReach);
-            foreach (var p in _pieces.Values) if (p.Level >= 0 && p.Mi is not null) p.Mi.MaterialOverride = _near;
+            if (_modern) foreach (var p in _pieces.Values) if (p.Level >= 0 && p.Mi is not null) p.Mi.MaterialOverride = _near;
         }
     }
     private ShaderMaterial? _ring, _near;
     private Texture2D? _groundTex;
-    /// <summary>The ring, for its baked sun visibility and its near mask.</summary>
-    public HorizonTerrain? Ring { get; set; }
-    private ShaderMaterial? _faithful;
+    /// <summary>The ring, for its baked sun visibility, its heights (the far chunks ease onto them) and its near mask.</summary>
+    public HorizonTerrain? Ring
+    {
+        get => _ringNode;
+        set
+        {
+            if (_ringNode == value) return;
+            _ringNode = value;
+            // the chunks made before it (the editor's 1997 view, while the ring builds) are made again with its heights, each shown until then
+            foreach (var p in _pieces.Values) if (p.Level >= 0) p.Stale = true;
+        }
+    }
+    private HorizonTerrain? _ringNode;
+    /// <summary>The ring's 1997 material in the map editor (HorizonTerrain.Material1997), which takes the near mask too.</summary>
+    public ShaderMaterial? Ring1997 { get => _ring1997; set { _ring1997 = value; _maskDirty = true; } }
+    private ShaderMaterial? _ring1997;
+    private ShaderMaterial? _faithful, _faithfulOpen, _near1997;
 
     private sealed class Piece
     {
@@ -85,6 +117,8 @@ public partial class OutsideTerrain : Node3D
         public int JobLevel;
         public float Distance;
         public int Want;
+        public bool Stale;                    // made before the ring was there: made again
+        public float Top = float.NaN;         // the highest vertex shown (for the 3D distance)
     }
     private readonly Dictionary<(int X, int Z), Piece> _pieces = [];
     private readonly List<(int X, int Z)> _drop = [];
@@ -95,7 +129,7 @@ public partial class OutsideTerrain : Node3D
 
     /// <summary>Chunks drawn.</summary>
     public int Drawn { get; private set; }
-    private bool _maskDirty = true, _maskModern;
+    private bool _maskDirty = true, _maskRing;
 
     public void Setup(MissionWorld world, ShaderMaterial? faithful)
     {
@@ -105,8 +139,67 @@ public partial class OutsideTerrain : Node3D
         {
             _groundTex = faithful.GetShaderParameter("ground_tex").As<Texture2D>();
             _faithful = (ShaderMaterial)faithful.Duplicate();
-            _faithful.SetShaderParameter("clip_depth", Reach1997);
+            _faithful.SetShaderParameter("clip_depth", ClipDepth(false));
+            _faithfulOpen = (ShaderMaterial)faithful.Duplicate();
+            _faithfulOpen.SetShaderParameter("clip_depth", ClipDepth(true));
+            _near1997 = Lit1997("res://Shaders/outside_1997.gdshader", faithful, world.Outside?.Centre ?? default);
+            _near1997.SetShaderParameter("morph_start", MorphStart);
+            _near1997.SetShaderParameter("morph_end", ModernReach);
         }
+    }
+
+    /// <summary>
+    /// A material of the outside ground's 1997 shading in the map editor (outside_1997.gdshaderinc): the map's 1997 terrain's light and
+    /// ground texture (its parameters copied from <paramref name="faithful"/>), on meshes centre-relative to <paramref name="centre"/>.
+    /// </summary>
+    public static ShaderMaterial Lit1997(string shader, ShaderMaterial faithful, System.Numerics.Vector2 centre)
+    {
+        var m = new ShaderMaterial { Shader = GD.Load<Shader>(shader) };
+        foreach (var u in m.Shader.GetShaderUniformList())
+        {
+            var name = u.AsGodotDictionary()["name"].AsString();
+            var v = faithful.GetShaderParameter(name);
+            if (v.VariantType != Variant.Type.Nil) m.SetShaderParameter(name, v);
+        }
+        m.SetShaderParameter("centre", new Vector2(centre.X, centre.Y));
+        return m;
+    }
+
+    /// <summary>How far round the camera chunks are drawn (the far plane aside): the modern look's reach, the original's clip in a mission's 1997 look.</summary>
+    public static float Reach(bool modern, bool editorView) => modern || editorView ? ModernReach : Reach1997;
+
+    /// <summary>The view depth the 1997 look's chunks of the map's own terrain are cut at (0: none): the original's clip but in the map editor's own view.</summary>
+    public static float ClipDepth(bool editorView) => editorView ? 0 : Reach1997;
+
+    /// <summary>
+    /// The distance a chunk's level goes by: across the ground (<paramref name="across"/>, to the chunk's box), and in the map editor's
+    /// view, whose camera flies high, in 3D, <paramref name="above"/> the eye's height over the chunk (its highest vertex shown, else the
+    /// ground under the eye).
+    /// </summary>
+    public static float LevelDistance(bool editorView, float across, float above)
+    {
+        if (!editorView) return across;
+        above = MathF.Max(above, 0);
+        return MathF.Sqrt(across * across + above * above);
+    }
+
+    /// <summary>
+    /// The level a chunk is drawn at, <paramref name="distance"/> from the camera (<see cref="LevelDistance"/>), <paramref name="shown"/>
+    /// the level it shows (int.MinValue: none): modern, 0..3 by <see cref="LevelRange"/>; 1997, -1 (the map's own 1997 terrain), and in the
+    /// map editor's view the 10 m level (3) past <see cref="LevelRange"/>[2]. Back to a finer level only well inside its range.
+    /// </summary>
+    public static int Level(bool modern, bool editorView, float distance, int shown)
+    {
+        if (modern)
+        {
+            int want = Levels - 1;
+            for (int l = 0; l < LevelRange.Length; l++) if (distance < LevelRange[l]) { want = l; break; }
+            if (shown >= 0 && want < shown && distance > LevelRange[want] - 10) want = shown;
+            return want;
+        }
+        if (!editorView) return -1;
+        float near = LevelRange[^1];
+        return distance < near && !(shown == Levels - 1 && distance > near - 10) ? -1 : Levels - 1;
     }
 
     public void UseModern(bool modern)
@@ -127,9 +220,16 @@ public partial class OutsideTerrain : Node3D
         if (_ground is null || _world is null || GetViewport()?.GetCamera3D() is not { } cam) return;
         var eye = ToLocal(cam.GlobalPosition);
         float ex = eye.X, ez = -eye.Z;   // game frame
-        bool modern = _modern;
+        bool modern = _modern, open = !modern && _editorView;   // open: the editor's 1997 view, as far as the modern look
         if (modern && Modern is null) { Clear(); return; }
-        float reach = modern ? MathF.Min(ModernReach, cam.Far + ChunkSize) : Reach1997;
+        float reach = MathF.Min(Reach(modern, _editorView), cam.Far + ChunkSize);
+        // the editor's camera flies high: there a chunk's level goes by its distance in 3D (to the highest of it shown, else the ground under the eye)
+        float eyeGround = 0;
+        if (_editorView)
+        {
+            int sx = (int)MathF.Floor(ex / TerrainNode.SampleSize), sz = (int)MathF.Floor(ez / TerrainNode.SampleSize);
+            eyeGround = (float)((_world.Terrain.Sample(sx, sz) is { } v ? v & MissionFile.HeightMask : _ground.Raw(sx, sz)) * MissionWorld.HeightScale);
+        }
         int span = (int)MathF.Ceiling((reach + Keep) / ChunkSize) + 1;
         int ccx = (int)MathF.Floor(ex / ChunkSize), ccz = (int)MathF.Floor(ez / ChunkSize);
         // what is wanted: the empty cells' chunks near the camera, and the level for each
@@ -147,15 +247,7 @@ public partial class OutsideTerrain : Node3D
                     _pieces[(cx, cz)] = p = new Piece();
                 }
                 p.Distance = d;
-                int want = -1;
-                if (modern)
-                {
-                    want = Levels - 1;
-                    for (int l = 0; l < LevelRange.Length; l++) if (d < LevelRange[l]) { want = l; break; }
-                    // hysteresis: back to a finer level only well inside its range
-                    if (p.Level >= 0 && want < p.Level && d > LevelRange[want] - 10) want = p.Level;
-                }
-                p.Want = want;
+                p.Want = Level(modern, _editorView, LevelDistance(_editorView, d, eye.Y - (float.IsNaN(p.Top) ? eyeGround : p.Top)), p.Level);
             }
         // finished jobs become meshes, a few a frame
         int uploads = 0;
@@ -171,15 +263,16 @@ public partial class OutsideTerrain : Node3D
         }
         // new jobs, nearest first
         bool work = false;
-        foreach (var p in _pieces.Values) if (p.Distance < float.MaxValue && p.Level != p.Want && p.Job is null) { work = true; break; }
+        foreach (var p in _pieces.Values) if (p.Distance < float.MaxValue && (p.Level != p.Want || p.Stale) && p.Job is null) { work = true; break; }
         if (work && _jobs < MaxJobs)
-            foreach (var (key, p) in _pieces.Where(kv => kv.Value.Distance < float.MaxValue && kv.Value.Level != kv.Value.Want && kv.Value.Job is null)
+            foreach (var (key, p) in _pieces.Where(kv => kv.Value.Distance < float.MaxValue && (kv.Value.Level != kv.Value.Want || kv.Value.Stale) && kv.Value.Job is null)
                          .OrderBy(kv => kv.Value.Distance).Take(MaxJobs - _jobs).ToList())
             {
                 int level = p.Want;
                 var (x0, z0) = (key.X * Chunk, key.Z * Chunk);
                 var world = _world; var ground = _ground; var ring = Ring;
                 p.JobLevel = level;
+                p.Stale = false;
                 p.Job = Task.Run(() => level < 0 ? Faithful(world, x0, z0) : ModernArrays(ground, x0, z0, level, ring is null ? null : ring.Visibility, ring is null ? null : ring.RingHeight));
                 _jobs++;
             }
@@ -193,9 +286,9 @@ public partial class OutsideTerrain : Node3D
             if (p.Mi is not null) { p.Mi.QueueFree(); _maskDirty = true; }
             _pieces.Remove(key);
         }
-        UpdateMask(modern);
+        UpdateMask(modern || open);
         if (Debug && Engine.GetProcessFrames() % 30 == 0)
-            GD.Print($"outside: {(modern ? "modern" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_jobs} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
+            GD.Print($"outside: {(modern ? "modern" : open ? "1997 (editor)" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_jobs} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
     }
 
     private void Clear()
@@ -243,15 +336,16 @@ public partial class OutsideTerrain : Node3D
         p.Mi.Mesh = mesh;
         if (level < 0)
         {
-            p.Mi.MaterialOverride = _faithful;
+            p.Mi.MaterialOverride = _editorView ? _faithfulOpen : _faithful;
             p.Mi.Position = new Vector3(key.X * ChunkSize, 0, -key.Z * ChunkSize);
         }
         else
         {
-            p.Mi.MaterialOverride = _near;
+            p.Mi.MaterialOverride = _modern ? _near : _near1997;
             var c = _ground!.Centre;
             p.Mi.Position = new Vector3(c.X, 0, -c.Y);
         }
+        p.Top = mesh.GetAabb().End.Y;
         p.Level = level;
         _maskDirty = true;
     }
@@ -262,13 +356,16 @@ public partial class OutsideTerrain : Node3D
     private ImageTexture? _maskTex;
     private const int MaskCells = 32;
 
-    private void UpdateMask(bool modern)
+    /// <param name="ring">Whether the ring is drawn round these chunks (the modern look, the editor's 1997 view): it gives way under every one drawn.</param>
+    private void UpdateMask(bool ring)
     {
-        if (Modern is not { } m || _ground is null || (!_maskDirty && modern == _maskModern)) return;
-        _maskDirty = false; _maskModern = modern;
-        var drawn = _pieces.Where(kv => modern && kv.Value.Level >= 0 && kv.Value.Mi is not null).Select(kv => kv.Key).ToList();
+        if (_ground is null || (!_maskDirty && ring == _maskRing)) return;
+        _maskDirty = false; _maskRing = ring;
         Drawn = _pieces.Count(kv => kv.Value.Mi is not null && kv.Value.Level != int.MinValue);
-        if (drawn.Count == 0) { m.SetShaderParameter("near_cells", 0f); return; }
+        var mats = new[] { Modern, _ring1997 };
+        if (mats.All(m => m is null)) return;
+        var drawn = _pieces.Where(kv => ring && kv.Value.Level != int.MinValue && kv.Value.Mi is not null).Select(kv => kv.Key).ToList();
+        if (drawn.Count == 0) { foreach (var m in mats) m?.SetShaderParameter("near_cells", 0f); return; }
         int minX = drawn.Min(k => k.X), minZ = drawn.Min(k => k.Z);
         _maskImg ??= Image.CreateEmpty(MaskCells, MaskCells, false, Image.Format.R8);
         _maskImg.Fill(Colors.Black);
@@ -276,9 +373,13 @@ public partial class OutsideTerrain : Node3D
             if (x - minX < MaskCells && z - minZ < MaskCells) _maskImg.SetPixel(x - minX, z - minZ, Colors.White);
         if (_maskTex is null) _maskTex = ImageTexture.CreateFromImage(_maskImg); else _maskTex.Update(_maskImg);
         var c = _ground.Centre;
-        m.SetShaderParameter("near_mask", _maskTex);
-        m.SetShaderParameter("near_origin", new Vector2(minX * ChunkSize - c.X, minZ * ChunkSize - c.Y));
-        m.SetShaderParameter("near_cells", (float)MaskCells);
+        foreach (var m in mats)
+        {
+            if (m is null) continue;
+            m.SetShaderParameter("near_mask", _maskTex);
+            m.SetShaderParameter("near_origin", new Vector2(minX * ChunkSize - c.X, minZ * ChunkSize - c.Y));
+            m.SetShaderParameter("near_cells", (float)MaskCells);
+        }
     }
 
     // ---- the arrays (pure CPU, any thread) ----

@@ -439,7 +439,7 @@ public partial class Main : Node3D
             MissionBuilder.Trace("damage view prewarmed");
             if (_builder.Scenery is { } sc) sc.Markers.Visible = false;   // the original draws no marker for its keywords
         }
-        if (_editorMode && _builder?.World is not null) StartEditor();
+        if (_editorMode && _builder?.World is not null) { StartEditor(); StartRingBuild(); }
         // From the menu the scene is rebuilt after the frame's _Process calls and that frame is still
         // drawn, so tick 0 and the camera choice happen here, or the chase view flashes before a cut-scene.
         if (_sim is not null)
@@ -1791,7 +1791,19 @@ public partial class Main : Node3D
     private IEnumerable<object?> ModernJob()
     {
         foreach (var step in _builder!.ModernSteps()) yield return step;
-        if (_horizonSky is not { } sky || _builder.World is not { } world) yield break;
+        // the ring: the map editor's 1997 view may have it already, or be making it (StartRingBuild), which this job then finishes
+        if (_ringJob is { } ring)
+        {
+            _ringJob = null;
+            while (ring.MoveNext()) yield return ring.Current;
+        }
+        else if (_horizon is null) foreach (var step in RingJob()) yield return step;
+    }
+
+    /// <summary>The distant ring for a mission that started in the 1997 look (it waits for the modern look otherwise): its heights off the main thread, its meshes a few a frame.</summary>
+    private IEnumerable<object?> RingJob()
+    {
+        if (_horizonSky is not { } sky || _builder?.World is not { } world) yield break;
         var light = _horizonLight;
         var ground = new Color(0.5f, 0.32f, 0.2f);
         if (_builder.TerrainMaterial?.GetShaderParameter("ground_tex").As<Texture2D>() is { } gt && gt.GetImage() is { } gi)
@@ -1814,6 +1826,39 @@ public partial class Main : Node3D
         _horizon?.QueueFree();
         _horizon = h;
         PlaceHorizon(sky, light);
+    }
+
+    private IEnumerator<object?>? _ringJob;
+    private System.Threading.Tasks.Task? _ringWait;
+
+    /// <summary>
+    /// The map editor's own view started in the 1997 look: the ring is made now, in the background (as the modern look's build would, a
+    /// couple of milliseconds a frame), as that view draws it too (ApplyEditorOutside).
+    /// </summary>
+    private void StartRingBuild()
+    {
+        if (!_editorMode || _ringJob is not null || _horizon is not null || _horizonSky is null || _builder is not { DeferModern: true }) return;
+        _ringJob = RingJob().GetEnumerator();
+    }
+
+    private void PumpRingBuild()
+    {
+        if (_ringJob is null || _ringWait is { IsCompleted: false }) return;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            while (_ringJob is not null)
+            {
+                if (!_ringJob.MoveNext()) { _ringJob = null; _ringWait = null; return; }
+                if (_ringJob.Current is System.Threading.Tasks.Task t) { _ringWait = t; return; }
+                if (sw.Elapsed.TotalMilliseconds >= 2) return;
+            }
+        }
+        catch (System.Exception e)
+        {
+            GD.PrintErr($"horizon ring build failed: {e}");
+            _ringJob = null; _ringWait = null;
+        }
     }
 
     private void PumpModernBuild()
@@ -1887,7 +1932,7 @@ public partial class Main : Node3D
     /// </summary>
     private void ApplyDrawDistance()
     {
-        bool original = I76.Formats.Imaging.DrawDistance.ModernFog(_drawDistance);
+        bool original = I76.Formats.Imaging.DrawDistance.ModernFog(DrawDistanceNow);
         // a map that fills the grid has ground only as far as the terrain streams (TerrainNode.StreamRadius): at Far it fades into the sky there
         bool hugeMap = _builder?.World?.Terrain.Huge == true;
         if (_skyFog is not null)
@@ -1900,12 +1945,13 @@ public partial class Main : Node3D
             }
         }
         if (_horizon is not null) _horizon.Visible = !_mode1997 && !original;
+        ApplyEditorOutside();
         if (_modernEnv?.Sky?.SkyMaterial is ShaderMaterial sky && _horizon is not null && _horizon.IsInsideTree())
         {
             // the panels stand in for the ring: the sky draws them itself, and the haze below the horizon is the ring's.
             // A mission with no panels of its own (Nitro's n01, n03, n35, n65) has none to draw, as in the original (an
             // unset texture array reads as white, a white band over the mountains' place), and the sky is plain to the ground
-            bool panels = I76.Formats.Imaging.DrawDistance.ModernPanels(_drawDistance, _builder?.Horizon is not null);
+            bool panels = I76.Formats.Imaging.DrawDistance.ModernPanels(DrawDistanceNow, _builder?.Horizon is not null);
             foreach (var m in new[] { sky, _skyFog?.MaterialOverride as ShaderMaterial })
             {
                 m?.SetShaderParameter("has_horizon", panels);
@@ -1918,6 +1964,26 @@ public partial class Main : Node3D
     private static int DrawDistanceHook(int setting) => int.TryParse(OS.GetEnvironment("I76_DRAW_DISTANCE"), out int dd) ? I76.Formats.Imaging.DrawDistance.Parse(dd) : setting;
 
     private int _drawDistance = I76.Formats.Imaging.DrawDistance.Far;
+
+    /// <summary>The Draw Distance in use: the setting's, but Far in the map editor's own view (its playtest is a mission and keeps the setting), which shows everything.</summary>
+    private int DrawDistanceNow => _editorMode ? I76.Formats.Imaging.DrawDistance.Far : _drawDistance;
+
+    /// <summary>
+    /// The map editor's own view draws the ground past the map's tiles whole in the 1997 look too (OutsideTerrain.EditorView): the
+    /// outside ground's chunks as far as the modern look's, unclipped, and the distant ring in the 1997 terrain's light (horizon_1997.gdshader).
+    /// A mission (and the editor's playtest) keeps the original's clip.
+    /// </summary>
+    private void ApplyEditorOutside()
+    {
+        if (!_editorMode) return;
+        var outside = _builder?.OutsideNode;
+        if (outside is not null) outside.EditorView = true;
+        if (_horizon is null || _builder?.TerrainMaterial is not ShaderMaterial faithful) return;
+        var ring1997 = _horizon.Material1997(faithful);
+        if (outside is not null) outside.Ring1997 = ring1997;
+        _horizon.Use1997(_mode1997 ? ring1997 : null);
+        if (_mode1997) _horizon.Visible = true;
+    }
 
     /// <summary>
     /// The modern look's distance fog (sky_fog.gdshader). The original never
@@ -2909,6 +2975,7 @@ public partial class Main : Node3D
         // I76_PLAYTEST_RETURN=N (capture): F5 is pressed N frames after a playtest opened
         if (I76.Game.Editor.EditorSession.Playtest && _sim is not null && _debugReturn > 0 && ++_playFrames == _debugReturn) Input.ParseInputEvent(new InputEventKey { Keycode = Key.F5, PhysicalKeycode = Key.F5, Pressed = true });
         PumpModernBuild();
+        PumpRingBuild();
         if (!_horizonEyeSet) SetHorizonEye();
         _animClock += delta;
         _builder?.Materials?.Animate(_animClock);
@@ -2921,8 +2988,8 @@ public partial class Main : Node3D
             if (_opt.QuitAfter > 0 && _frames >= _opt.QuitAfter) GetTree().Quit();
             return;
         }
-        // Draw Distance: Original clips where the original did (the world camera rebuild's 600), in either look
-        ActiveCamera.Far = I76.Formats.Imaging.DrawDistance.CameraFar(_drawDistance);
+        // Draw Distance: Original clips where the original did (the world camera rebuild's 600), in either look (not the map editor's view)
+        ActiveCamera.Far = I76.Formats.Imaging.DrawDistance.CameraFar(DrawDistanceNow);
         UpdateSoftwareBand();   // MainSoftware.cs
         if (_pit?.Binoculars == true && ActiveCamera == _car?.CockpitCamera) ActiveCamera.Far = System.Math.Min(ActiveCamera.Far * 8, 100000f);   // Far = zoom * far, zoom 8
         bool free = ActiveCamera == _cam;   // the fly camera (--cam): the origin follows it, not the car, or a far view loses depth precision

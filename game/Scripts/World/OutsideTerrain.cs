@@ -13,8 +13,8 @@ namespace I76.Game.World;
 /// <list type="bullet">
 /// <item>Modern look: within <see cref="ModernReach"/> (or the camera's far plane), with the ring's shading and its shading data,
 /// at 1.25, 2.5, 5 or 10 m between vertices by distance (<see cref="LevelRange"/>). Every level's vertices lie on the bilinear surface,
-/// which along a chunk's edge (a line of samples) is the same straight segments at any level, so neighbours meet; a skirt hides the
-/// rest (the ring's coarser cells where the chunks end).</item>
+/// which along a chunk's edge (a line of samples) is the same straight pieces at 1.25 to 5 m, so those neighbours meet; a skirt hides
+/// the rest (a 10 m chunk's edge cutting a sample's corner). From <see cref="MorphStart"/> they ease onto the ring's surface.</item>
 /// <item>1997 look: the map's own 1997 terrain (TerrainNode's 1997 mesh, its material: the engine's light through the palette), within
 /// the original's 600 m clip only, cut at 600 m view depth as the map's ground is by the far plane, whatever the draw distance; the
 /// horizon panels and sky stand beyond as they do over the map.</item>
@@ -80,7 +80,7 @@ public partial class OutsideTerrain : Node3D
     private sealed class Piece
     {
         public MeshInstance3D? Mi;
-        public int Level = int.MinValue;      // shown: 0..2 modern, -1 1997
+        public int Level = int.MinValue;      // shown: 0..3 modern, -1 1997
         public Task<Arrays>? Job;
         public int JobLevel;
         public float Distance;

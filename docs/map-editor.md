@@ -45,6 +45,11 @@ the modern look is the one it is built for.
 
 The status bar shows the tool, radius, strength, falloff, the ground's height and position under the cursor, and the frame rate.
 
+The tool column at the left is taller than most windows (it was cut off below the object tools, issue 146): it scrolls with the
+mouse wheel over it or its scroll bar, as tall as its tools or the window allows, and a tool chosen by its key while its button is
+out of sight is scrolled into view. The panels at the right (brush, road, object inspector, map check) and the keys overlay (F1)
+scroll the same way when the window is short; the overlay's descriptions wrap to the window's width (`FitScroll`, `EditorStyle.Scrolling`).
+
 ## The brushes
 
 Heights are the .ter's samples: 5 m apart, 12 bits in tenths of a metre (0 to 409.5 m), with the surface and edge nibble above them
@@ -581,7 +586,7 @@ a spawn in the middle.
   conventions against the stock roads, extension and loops, edits, conforming, undo, saving). `tests/I76.Sim.Tests/EditorRoadTests.cs`: the AI on a made road, the stock bridges and ramps against the structure ends.
 - `src/I76.Editor/ViewStash.cs` and `game/Scripts/Boot/MainStash.cs`: the editor's scene kept aside for its playtest (tests: `ViewStashTests` in `EditorTests.cs`, `RevisionCountsEveryEditAndNeverGoesDown`).
 - `src/I76.Sim/Terrain/PlaytestSpawn.cs`: the cursor ray to the playtest's spawn point and its refusals (tests: `PlaytestSpawnTests.cs`).
-- `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `EditorSession`, `MapLookPanel` (the map style window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.
+- `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `FitScroll` (the columns that scroll), `EditorSession`, `MapLookPanel` (the map style window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.
 - The object surveys behind the catalogue and the snapping rules are in `tools/I76.Cli/ObjectSurvey.cs`: `i76 objects OUT.tsv` (every name, type
   and flag the stock maps place, with counts, kinds of map and model sizes), `i76 facing` (which side of a building the stock maps put
   the road on), `i76 decks` (road points inside each stock bridge, ramp and tunnel), `i76 bridges` and `i76 roadpts MAP` (roads near

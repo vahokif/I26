@@ -6,6 +6,9 @@ namespace I76.Game.Editor;
 /// <summary>The editor's widgets in the modern HUD's style (HudStyle): dark brown panels with a faint edge, parchment text, amber for what is on.</summary>
 public static class EditorStyle
 {
+    /// <summary>The tool column's buttons' width (unscaled): with the column's scroll bar the column ends where the windows beside it begin (232).</summary>
+    public const float ToolWidth = 178;
+
     public static StyleBoxFlat Flat(Color bg, float radius, float s, Color? border = null, float margin = 0)
     {
         var b = new StyleBoxFlat { BgColor = bg, AntiAliasing = true };
@@ -67,6 +70,12 @@ public static class EditorStyle
         b.Pressed += () => onPress();
         return b;
     }
+
+    /// <summary>
+    /// A column of widgets that scrolls when the window is too short for it (<see cref="FitScroll"/>): <paramref name="top"/> and
+    /// <paramref name="bottom"/> are the room the window keeps above and below its panel (unscaled; the panel's margins are added).
+    /// </summary>
+    public static FitScroll Scrolling(Control content, float s, float top, float bottom) => new(content, s, (top + bottom + 28) * s);
 
     public static void Slider(HSlider sl, float s)
     {

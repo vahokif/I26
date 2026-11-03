@@ -26,6 +26,9 @@ public partial class MapEditor
     private Button _overlayButton = null!;
     private LineEdit _height = null!;
     private Control? _menu, _help, _dialog;
+    /// <summary>The tool column's scroller: a window too short for the column scrolls it (issue 146).</summary>
+    private FitScroll? _toolScroll;
+    private VBoxContainer? _tools;
     private double _toastUntil;
     private bool _syncing;
 
@@ -91,7 +94,10 @@ public partial class MapEditor
         _root.AddChild(palette);
         var tools = new VBoxContainer();
         tools.AddThemeConstantOverride("separation", (int)(6 * s));
-        palette.AddChild(tools);
+        _tools = tools;
+        // the column is taller than a 720 or 768 line window (and 1440 too, at its scale): it scrolls, by the wheel or the bar
+        _toolScroll = EditorStyle.Scrolling(tools, s, 70, 50);
+        palette.AddChild(_toolScroll);
         var tl = new Label { Text = "TERRAIN" };
         EditorStyle.Title(tl, 18 * s);
         tools.AddChild(tl);
@@ -101,7 +107,7 @@ public partial class MapEditor
             var b = EditorStyle.Button(key.Length == 0 ? name : $"{key}   {name}", () => SetTool(kind), s, 22, toggle: true);
             b.ButtonGroup = group; b.TooltipText = tip;
             b.Alignment = HorizontalAlignment.Left;
-            b.CustomMinimumSize = new Vector2(190 * s, 38 * s);
+            b.CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 38 * s);
             // the tool's colour as its brush draws
             b.AddThemeColorOverride("icon_normal_color", ToolColour(kind));
             tools.AddChild(b);
@@ -115,7 +121,7 @@ public partial class MapEditor
         undoRow.AddChild(EditorStyle.Button("UNDO", DoUndo, s, 20));
         undoRow.AddChild(EditorStyle.Button("REDO", DoRedo, s, 20));
         tools.AddChild(undoRow);
-        _undoLabel = new Label { ClipText = true, CustomMinimumSize = new Vector2(190 * s, 0) };
+        _undoLabel = new Label { ClipText = true, CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 0) };
         EditorStyle.Body(_undoLabel, 14 * s, dim: true);
         tools.AddChild(_undoLabel);
 
@@ -128,7 +134,7 @@ public partial class MapEditor
         Objects.SetBrushPanel(side);
         var bx = new VBoxContainer { CustomMinimumSize = new Vector2(260 * s, 0) };
         bx.AddThemeConstantOverride("separation", (int)(6 * s));
-        side.AddChild(bx);
+        side.AddChild(EditorStyle.Scrolling(bx, s, 70, 50));
         var bl = new Label { Text = "BRUSH" };
         EditorStyle.Title(bl, 18 * s);
         bx.AddChild(bl);
@@ -292,7 +298,17 @@ public partial class MapEditor
         _overlayButton.SetPressedNoSignal(_overlayOn);
         if (!_height.HasFocus()) _height.Text = Brush.TargetHeight.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
         _syncing = false;
+        ShowPressedTool();
     }
+
+    /// <summary>A tool chosen by its key while its button is scrolled out of sight: the column scrolls to it.</summary>
+    private void ShowPressedTool() => Callable.From(() =>
+    {
+        // after the tools have set their buttons (the object tools set theirs after this)
+        if (_toolScroll is null || _tools is null || !IsInstanceValid(_toolScroll) || !IsInstanceValid(_tools)) return;
+        foreach (var c in _tools.GetChildren())
+            if (c is Button { ToggleMode: true, ButtonPressed: true } b) { _toolScroll.Show(b); return; }
+    }).CallDeferred();
 
     public void Toast(string text, bool error = false)
     {
@@ -480,7 +496,9 @@ public partial class MapEditor
         holder.AddChild(new ColorRect { Color = new Color(0, 0, 0, 0.5f), AnchorRight = 1, AnchorBottom = 1, MouseFilter = Control.MouseFilterEnum.Ignore });
         var panel = new PanelContainer { AnchorLeft = 0.5f, AnchorRight = 0.5f, AnchorTop = 0.5f, AnchorBottom = 0.5f, GrowHorizontal = Control.GrowDirection.Both, GrowVertical = Control.GrowDirection.Both };
         panel.AddThemeStyleboxOverride("panel", EditorStyle.Panel(s));
-        var box = new VBoxContainer { CustomMinimumSize = new Vector2(860 * s, 0) };
+        // as wide as the window lets it be (the descriptions wrap), and the rows scroll when the window is short (1280x720)
+        float boxW = Math.Min(860 * s, GetViewport().GetVisibleRect().Size.X - 70 * s);
+        var box = new VBoxContainer { CustomMinimumSize = new Vector2(boxW, 0) };
         box.AddThemeConstantOverride("separation", (int)(5 * s));
         var t = new Label { Text = "MAP EDITOR KEYS" };
         EditorStyle.Title(t, 30 * s);
@@ -492,11 +510,11 @@ public partial class MapEditor
         {
             var kl = new Label { Text = k, CustomMinimumSize = new Vector2(290 * s, 0) };
             EditorStyle.Body(kl, 17 * s, colour: HudStyle.Amber);
-            var wl = new Label { Text = w };
+            var wl = new Label { Text = w, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(boxW - (290 + 26 + 16) * s, 0) };
             EditorStyle.Body(wl, 17 * s);
             grid.AddChild(kl); grid.AddChild(wl);
         }
-        box.AddChild(grid);
+        box.AddChild(EditorStyle.Scrolling(grid, s, 70, 70));
         var foot = new Label { Text = "Press F1 or Esc to close." };
         EditorStyle.Body(foot, 15 * s, dim: true);
         box.AddChild(foot);

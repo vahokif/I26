@@ -40,7 +40,7 @@ public sealed partial class RoadTool
             var b = EditorStyle.Button($"{key}   {name}", () => SetMode(m), s, 22, toggle: true);
             b.ButtonGroup = group; b.TooltipText = tip;
             b.Alignment = HorizontalAlignment.Left;
-            b.CustomMinimumSize = new Vector2(190 * s, 38 * s);
+            b.CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 38 * s);
             tools.AddChild(b);
             _modeButtons[mode] = b;
         }
@@ -51,7 +51,7 @@ public sealed partial class RoadTool
             var sb = EditorStyle.Button("    " + name, () => { if (Active && Build == bm) SetBuild(BuildMode.Ground); else SetBuild(bm); }, s, 22, toggle: true);
             sb.TooltipText = tip;
             sb.Alignment = HorizontalAlignment.Left;
-            sb.CustomMinimumSize = new Vector2(190 * s, 38 * s);
+            sb.CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 38 * s);
             tools.AddChild(sb);
             _buildPalette[bm] = sb;
         }
@@ -137,7 +137,7 @@ public sealed partial class RoadTool
         root.AddChild(_panel);
         var bx = new VBoxContainer { CustomMinimumSize = new Vector2(270 * s, 0) };
         bx.AddThemeConstantOverride("separation", (int)(6 * s));
-        _panel.AddChild(bx);
+        _panel.AddChild(EditorStyle.Scrolling(bx, s, 70, 50));
         var t = new Label { Text = "ROAD" };
         EditorStyle.Title(t, 18 * s);
         bx.AddChild(t);

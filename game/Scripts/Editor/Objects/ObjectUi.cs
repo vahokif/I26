@@ -48,7 +48,7 @@ public partial class ObjectEditor
         {
             var b = EditorStyle.Button(text, a, s, 20, toggle: true);
             b.ButtonGroup = group; b.TooltipText = tip; b.Alignment = HorizontalAlignment.Left;
-            b.CustomMinimumSize = new Vector2(190 * s, 30 * s);
+            b.CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 30 * s);
             tools.AddChild(b);
             return b;
         }
@@ -337,7 +337,8 @@ public partial class ObjectEditor
         root.AddChild(_inspector);
         _inspectBox = new VBoxContainer { CustomMinimumSize = new Vector2(280 * s, 0) };
         _inspectBox.AddThemeConstantOverride("separation", (int)(5 * s));
-        _inspector.AddChild(_inspectBox);
+        // a short window: the inspector scrolls above the map check (the palette, when open, is below both)
+        _inspector.AddChild(EditorStyle.Scrolling(_inspectBox, s, 70, 44 + 338 + 120));
 
         _checks = new PanelContainer { Name = "MapCheck", Visible = false };
         _checks.AnchorLeft = 1; _checks.AnchorRight = 1; _checks.AnchorTop = 1; _checks.AnchorBottom = 1;
@@ -347,7 +348,7 @@ public partial class ObjectEditor
         root.AddChild(_checks);
         _checkBox = new VBoxContainer { CustomMinimumSize = new Vector2(280 * s, 0) };
         _checkBox.AddThemeConstantOverride("separation", (int)(4 * s));
-        _checks.AddChild(_checkBox);
+        _checks.AddChild(EditorStyle.Scrolling(_checkBox, s, 70 + 260, 44 + 338));
     }
 
     private void UiChecksChanged()

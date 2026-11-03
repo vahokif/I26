@@ -31,6 +31,7 @@ Network games use protocol 22: this release does not play with 0.11.0 or earlier
 - Police sirens wail as in the original: once a mission turns a police car's siren on, it keeps sounding until the mission turns it off or the car is wrecked, instead of playing once, and the trip's and the scenarios' own police cars sound the siren rather than a short car horn, as on the 1997 CD. A Sheriff that honks at a car in its way turns its siren on too.
 - Your car no longer hops at the start of a mission: it is already at rest on its suspension when the loading screen lifts, instead of dropping onto the ground in the first moments (#141).
 - The menu music no longer cuts out for a moment after the loading screen: it plays on through the last part of the loading, and the mission's own track starts without a hitch (#142).
+- Map editor: the tool column on the left scrolls (with the mouse wheel or its scroll bar) when the window is too short for it, so every tool can be reached at any window size, and a tool chosen by its key is scrolled into view; the panels on the right and the keys overlay (F1) scroll and wrap the same way (#146).
 
 ## 0.11.0 (31 October 2026)
 

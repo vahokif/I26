@@ -173,7 +173,7 @@ public partial class Hud : CanvasLayer
         }
         if (GetNodeOrNull<CanvasItem>("Target") is { } target) target.Visible = !cut;
         if (GetNodeOrNull<CanvasItem>("Crosshair") is { } ch)
-            ch.Visible = !cut && I76.Sim.Views.CrosshairPolicy.Shown(MouseCamera.ChaseCrosshair, Network?.Invoke() == true, HostAllowsCrosshair?.Invoke() == true);
+            ch.Visible = !cut && I76.Sim.Views.CrosshairPolicy.Shown(ChaseCrosshair.Enabled, Network?.Invoke() == true, HostAllowsCrosshair?.Invoke() == true);
         if (_binoMask is not null)
         {
             _binoMask.Visible = !cut && InCockpit?.Invoke() == true && Pit?.Invoke() is { Binoculars: true };
@@ -239,6 +239,8 @@ public partial class Hud : CanvasLayer
 /// </summary>
 public partial class ChaseCrosshair : Control
 {
+    /// <summary>The player's choice, Play Options' Chase Crosshair (shell.cfg [port] chase_crosshair); online the host must allow it too.</summary>
+    public static bool Enabled;
     public required Func<Vehicle?> Player { get; init; }
     public required I76.Sim.Weapons.Combat Combat { get; init; }
     public required Func<System.Numerics.Vector3> Origin { get; init; }
@@ -269,7 +271,7 @@ public partial class ChaseCrosshair : Control
 
     public override void _Draw()
     {
-        if (!MouseCamera.ChaseCrosshair || InCockpit?.Invoke() == true || Player() is not { } p || I76.Sim.Weapons.Combat.IsDead(p) || p.Armory is not { } a) return;
+        if (!Enabled || InCockpit?.Invoke() == true || Player() is not { } p || I76.Sim.Weapons.Combat.IsDead(p) || p.Armory is not { } a) return;
         var cam = GetViewport().GetCamera3D();
         if (cam is not I76.Game.Camera.ChaseCamera { Fixed: null }) return;
 

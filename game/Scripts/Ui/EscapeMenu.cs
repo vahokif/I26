@@ -276,6 +276,17 @@ public sealed partial class EscapeMenu : Control
                 else if (m == 9) { Settings.AutoReverse = _snap.AutoReverse; it.Value = Settings.AutoReverse ? 1 : 0; }
             },
         });
+        // Chase Crosshair: the F2 chase view's aiming mark, from the resume on (Play Options is not on a network game's pad)
+        _play.Items.Add(new Item
+        {
+            Flags = Check, Label = "Chase Crosshair", Pair = 33, N = 2,
+            Cb = (it, m) =>
+            {
+                if (m == 6) it.Value = Settings.ChaseCrosshair ? 1 : 0;
+                else if (m == 8) { Settings.ChaseCrosshair = it.Value != 0; _snap.ChaseCrosshair = Settings.ChaseCrosshair; }
+                else if (m == 9) { Settings.ChaseCrosshair = _snap.ChaseCrosshair; it.Value = Settings.ChaseCrosshair ? 1 : 0; }
+            },
+        });
         _play.Items.Add(Setting(Cycle, "Difficulty Level", 24, 3, ["Wimp", "Champ", "Badass"], s => s.Difficulty, (s, v) => s.Difficulty = v));
         _play.Items.Add(DoneButton());
         _play.Items.Add(CancelButton());
@@ -641,9 +652,10 @@ public sealed partial class EscapeMenu : Control
         17 => (new(87, 407, 147, 426), null),
         >= 18 and <= 23 => Box(1 + (p - 18)),          // the original's six check rows, on rows 1..6 (the original spaced them every other row)
         26 => Box(7),                                  // the port's own after them: Modern Physics, (Simulation Rate on row 8), Checkpoints,
-        31 => Box(9),                                  // Force Feedback, Auto Reverse
+        31 => Box(9),                                  // Force Feedback, Auto Reverse, Chase Crosshair
         30 => Box(10),
         25 => Box(11),
+        33 => Box(12),
         32 => (RowA(11), new Rect4(24, RowY(12), 301, RowY(12) + 24)),   // the net game's CB Microphone: the label on the row, the device's name under it
         24 => (RowA(13), new Rect4(226, 360, 301, 384)),
         27 => (new(40, 245, 80, 269), null),

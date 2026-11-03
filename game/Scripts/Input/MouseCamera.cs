@@ -16,8 +16,6 @@ public static class MouseCamera
     public static bool InvertY;
     /// <summary>Mouse free look in the F1 3D cockpit (shell.cfg [port] mouse_cockpit).</summary>
     public static bool CockpitLook;
-    /// <summary>3D-projected weapon crosshair in the F2 chase view (shell.cfg [port] chase_crosshair).</summary>
-    public static bool ChaseCrosshair;
     /// <summary>The mouse wheel cycles weapons instead of zooming the external views (shell.cfg [port] wheel_cycle_weapon).</summary>
     public static bool WheelCycleWeapon;
     /// <summary>The camera eases back behind the car (or forward in the cockpit) after the mouse or stick rests (Camera Return); off, it stays where it was left.</summary>
@@ -56,7 +54,6 @@ public static class MouseCamera
         Sensitivity = MouseLook.ClampSensitivity(s.MouseSensitivity);
         InvertY = s.MouseInvertY;
         CockpitLook = s.MouseCockpit;
-        ChaseCrosshair = s.ChaseCrosshair;
         WheelCycleWeapon = s.WheelCycleWeapon;
         Confine = s.KeepMouseInWindow;
         ReturnBehind = s.CameraReturn;

@@ -82,8 +82,10 @@ are for another game and are not listed.
 Controls follow the original's keys, as set in Options > Control Configuration (which edits keys, the mouse
 and a pad). Options > Mouse Options (also opened from Control Configuration and the in-mission Esc menu) holds the
 mouse's settings: Mouse Camera (the F2 chase view), Mouse Sensitivity, Invert Y Axis, Cockpit Mouse Look, Camera
-Return, View Zoom Reset, Mouse In Window, Chase Crosshair, the bindings of the five mouse buttons (the two side buttons
-included) and what the wheel does (View Zoom or Cycle Weapon).
+Return, View Zoom Reset, Mouse In Window, the bindings of the five mouse buttons (the two side buttons
+included) and what the wheel does (View Zoom or Cycle Weapon). Chase Crosshair, an aiming mark in the F2 chase view
+for keyboard, pad and mouse alike, is in Play Options (the second page in the shell, and the in-mission Esc menu's
+Play Options); in a network game it shows only if the host allows it.
 
 | Action | Default |
 |---|---|

@@ -650,6 +650,7 @@ public partial class Main : Node3D
     {
         if (_sim is not null) _sim.AutoReverse = s.AutoReverse;
         I76.Game.ForceFeedback.Enabled = s.ForceFeedback;
+        I76.Game.Ui.ChaseCrosshair.Enabled = s.ChaseCrosshair;
         I76.Game.ForceFeedback.Held = () => _menu is not null || _picture is not null || _ended;
         // Modern Physics, flipped from Play Options as by F7 (EnableModern keeps a network session on the original's)
         if (_modernSetup is not null && s.ModernPhysics != (_modern?.Enabled == true)) EnableModern(s.ModernPhysics);

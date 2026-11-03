@@ -35,10 +35,10 @@ public sealed class MouseOptionsScreen : OverlayScreen
 
     private int _savedMouse;
     private float _savedSens;
-    private bool _savedInvert, _savedCockpit, _savedCrosshair, _savedWheelCycle, _savedReturn, _savedZoomReset, _savedConfine;
+    private bool _savedInvert, _savedCockpit, _savedWheelCycle, _savedReturn, _savedZoomReset, _savedConfine;
 
     internal const string Title = "MOUSE OPTIONS";
-    internal const int LeftCount = 8;
+    internal const int LeftCount = 7;
     internal const int ButtonCount = 5;
     internal const int WheelRow = LeftCount + ButtonCount;
     internal const int TotalRows = LeftCount + ButtonCount + 1;
@@ -67,7 +67,6 @@ public sealed class MouseOptionsScreen : OverlayScreen
         to.MouseSensitivity = from.MouseSensitivity;
         to.MouseInvertY = from.MouseInvertY;
         to.MouseCockpit = from.MouseCockpit;
-        to.ChaseCrosshair = from.ChaseCrosshair;
         to.WheelCycleWeapon = from.WheelCycleWeapon;
         to.CameraReturn = from.CameraReturn;
         to.ZoomReset = from.ZoomReset;
@@ -81,7 +80,6 @@ public sealed class MouseOptionsScreen : OverlayScreen
         _savedSens = st.MouseSensitivity;
         _savedInvert = st.MouseInvertY;
         _savedCockpit = st.MouseCockpit;
-        _savedCrosshair = st.ChaseCrosshair;
         _savedWheelCycle = st.WheelCycleWeapon;
         _savedReturn = st.CameraReturn;
         _savedZoomReset = st.ZoomReset;
@@ -133,7 +131,6 @@ public sealed class MouseOptionsScreen : OverlayScreen
         st.MouseSensitivity = MouseLook.DefaultSensitivity;
         st.MouseInvertY = false;
         st.MouseCockpit = false;
-        st.ChaseCrosshair = false;
         st.WheelCycleWeapon = false;
         st.CameraReturn = true;
         st.ZoomReset = true;
@@ -182,9 +179,6 @@ public sealed class MouseOptionsScreen : OverlayScreen
                 break;
             case 6:
                 st.KeepMouseInWindow = !st.KeepMouseInWindow;
-                break;
-            case 7:
-                st.ChaseCrosshair = !st.ChaseCrosshair;
                 break;
         }
         MouseCamera.Apply(st);
@@ -256,8 +250,7 @@ public sealed class MouseOptionsScreen : OverlayScreen
         3 => ("Cockpit Mouse Look", st.MouseCockpit ? "On" : "Off"),
         4 => ("Camera Return", st.CameraReturn ? "On" : "Off"),
         5 => ("View Zoom Reset", st.ZoomReset ? "On" : "Off"),
-        6 => ("Mouse In Window", st.KeepMouseInWindow ? "On" : "Off"),
-        _ => ("Chase Crosshair", st.ChaseCrosshair ? "On" : "Off"),
+        _ => ("Mouse In Window", st.KeepMouseInWindow ? "On" : "Off"),
     };
 
     private string Fit(string s, int max)
@@ -290,7 +283,6 @@ public sealed class MouseOptionsScreen : OverlayScreen
         st.MouseSensitivity = _savedSens;
         st.MouseInvertY = _savedInvert;
         st.MouseCockpit = _savedCockpit;
-        st.ChaseCrosshair = _savedCrosshair;
         st.WheelCycleWeapon = _savedWheelCycle;
         st.CameraReturn = _savedReturn;
         st.ZoomReset = _savedZoomReset;

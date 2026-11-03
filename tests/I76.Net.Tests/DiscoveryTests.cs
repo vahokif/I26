@@ -8,6 +8,13 @@ namespace I76.Net.Tests;
 /// <summary>Finding games: the session query and answer, the address book's addresses, a server answering on the LAN.</summary>
 public class DiscoveryTests
 {
+    /// <summary>What a listing with no drivers and no arena name ends with after the crosshair byte: the arena name's length and the drivers' names' count (protocol 22).</summary>
+    internal const int Names = 2;
+
+    /// <summary>The same for a listing as written: the arena name's length and text, the count, and each listed driver's make and model with its length.</summary>
+    internal static int NamesOf(SessionInfo i) =>
+        2 + System.Text.Encoding.UTF8.GetByteCount(i.ArenaName) + i.Drivers.Sum(d => 1 + System.Text.Encoding.UTF8.GetByteCount(d.Model));
+
     [Fact]
     public void TheGamesSimulationRateIsListed()
     {
@@ -20,7 +27,7 @@ public class DiscoveryTests
         Assert.Equal(0, SessionInfo.TryRead(w.Span)!.RateHz);
         w = new NetWriter();
         new SessionInfo(1, Protocol.Version, "g", "m05", 1, 4, false, false, 0, 0, false, [], RateHz: 60).Write(w);
-        Assert.Equal(0, SessionInfo.TryRead(w.Span[..^5])!.RateHz);       // (protocol 22 ends with the lobby, car reset, CB and crosshair bytes, after the rate)
+        Assert.Equal(0, SessionInfo.TryRead(w.Span[..^(5 + Names)])!.RateHz);       // (protocol 22 ends with the lobby, car reset, CB and crosshair bytes, after the rate, then the names)
     }
 
     /// <summary>The host's Car Reset (the reset-upright key) is listed; a build that did not say (no key) is "no".</summary>
@@ -36,7 +43,7 @@ public class DiscoveryTests
         }
         var old = new NetWriter();
         new SessionInfo(1, Protocol.Version, "g", "m05", 1, 4, false, false, 0, 0, false, [], RateHz: 60, CarReset: true).Write(old);
-        var older = SessionInfo.TryRead(old.Span[..^3])!;
+        var older = SessionInfo.TryRead(old.Span[..^(3 + Names)])!;
         Assert.False(older.CarReset);
         Assert.True(older.Cb);
         Assert.Equal(60, older.RateHz);
@@ -55,7 +62,7 @@ public class DiscoveryTests
         }
         var old = new NetWriter();
         new SessionInfo(1, Protocol.Version, "g", "m05", 1, 4, false, false, 0, 0, false, [], CarReset: true, Cb: false).Write(old);
-        Assert.True(SessionInfo.TryRead(old.Span[..^2])!.Cb);
+        Assert.True(SessionInfo.TryRead(old.Span[..^(2 + Names)])!.Cb);
     }
 
     /// <summary>The host's Chase Crosshair is listed; a build that did not say does not allow it.</summary>
@@ -71,7 +78,7 @@ public class DiscoveryTests
         }
         var old = new NetWriter();
         new SessionInfo(1, Protocol.Version, "g", "m05", 1, 4, false, false, 0, 0, false, [], Cb: false, Crosshair: true).Write(old);
-        var older = SessionInfo.TryRead(old.Span[..^1])!;
+        var older = SessionInfo.TryRead(old.Span[..^(1 + Names)])!;
         Assert.False(older.Crosshair);
         Assert.False(older.Cb);
     }

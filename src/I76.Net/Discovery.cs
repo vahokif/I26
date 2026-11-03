@@ -6,8 +6,14 @@ using LiteNetLib.Layers;
 
 namespace I76.Net;
 
-/// <summary>One driver in a game as the session list shows it: name, car file and team (0 without team play).</summary>
-public sealed record SessionDriver(string Name, string Car, byte Team);
+/// <summary>
+/// One driver in a game as the session list shows it: name, car and team (0 without team play). <see cref="Car"/> names the car so
+/// the asker can name it from its own files: an install's car file (vppirna3.vcf), or for a car the host serves by its content (a
+/// player's own variant, a bot's car with weapons taken off) its body (vppirna.vdf), never the file name it is served under.
+/// <see cref="Model"/> is the car's make and model in the host's words, said only when its body is not the install's own (a community
+/// car the asker may lack); empty otherwise.
+/// </summary>
+public sealed record SessionDriver(string Name, string Car, byte Team, string Model = "");
 
 /// <summary>
 /// What a server says about its game to anyone who asks (LAN discovery, or
@@ -19,7 +25,8 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
     bool TeamPlay, bool InviteOnly, int MaxScore, float TimeLimit, bool Over, IReadOnlyList<SessionDriver> Drivers,
     I76.Sim.Missions.MeleeKind Kind = I76.Sim.Missions.MeleeKind.Combat, I76.Sim.Missions.MeleeGoal Goal = I76.Sim.Missions.MeleeGoal.None, int GoalValue = 0, byte Teams = 2,
     byte[]? MapHash = null, bool MapShared = false, uint MapSize = 0, bool Locked = false,
-    I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true, bool Crosshair = false)
+    I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true, bool Crosshair = false,
+    string ArenaName = "")
 {
     /// <summary>
     /// Whether a joiner's own check lets hidden cars and weapons through: the game allows them, or it does not say
@@ -75,11 +82,20 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         t.Bool(Cb);
         // the host allows the chase crosshair, an aiming aid of the port's (protocol 22), appended the same way; an older host says nothing: not allowed
         t.Bool(Crosshair);
-        var shown = Shown(AnswerBytes - w.Length - 1 - t.Length);
+        // the arena's name as the host's lists give it (its AREA OF PLAY; an asker without a custom map has no other), appended the same way (protocol 22)
+        t.Str(Clip(ArenaName, MaxArenaName));
+        // (the drivers' makes and models follow the tail, a count byte and a string each)
+        var shown = Shown(AnswerBytes - w.Length - 1 - t.Length - 1);
         w.U8((byte)shown.Count);
         foreach (var d in shown) { w.Str(Clip(d.Name, Protocol.MaxName)); w.Str(Clip(d.Car, 32)); w.U8(d.Team); }
         w.Bytes(t.ToArray());
+        // each driver's make and model where the host says it (a community car), else empty, appended the same way (protocol 22)
+        w.U8((byte)shown.Count);
+        foreach (var d in shown) w.Str(Clip(d.Model, MaxModel));
     }
+
+    /// <summary>The longest arena name and make and model listed: the files hold 16 and 20 bytes.</summary>
+    private const int MaxArenaName = 32, MaxModel = 32;
 
     /// <summary>The answer, or null for anything else (a stray datagram, another program's).</summary>
     public static SessionInfo? TryRead(ReadOnlySpan<byte> data)
@@ -127,8 +143,18 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
             bool carReset = r.Remaining >= 1 && r.Bool();
             bool cb = r.Remaining < 1 || r.Bool();
             bool crosshair = r.Remaining >= 1 && r.Bool();
+            string arenaName = r.Remaining >= 1 ? r.Str() : "";
+            if (r.Remaining >= 1)
+            {
+                int n = r.U8();
+                for (int i = 0; i < n; i++)
+                {
+                    string model = r.Str();
+                    if (i < drivers.Length) drivers[i] = drivers[i] with { Model = model };
+                }
+            }
             return new SessionInfo(id, version, name, arena, players, max, team, invite, score, limit, over, drivers, kind, goal, value, teams, hash, shared, size, locked,
-                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair);
+                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName);
         }
         catch (WireException) { return null; }
         catch (IndexOutOfRangeException) { return null; }
@@ -147,7 +173,8 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         int bytes = 0;
         foreach (var d in Drivers.Take(Protocol.MaxSeats))
         {
-            int n = 3 + System.Text.Encoding.UTF8.GetByteCount(Clip(d.Name, Protocol.MaxName)) + System.Text.Encoding.UTF8.GetByteCount(Clip(d.Car, 32));
+            int n = 4 + System.Text.Encoding.UTF8.GetByteCount(Clip(d.Name, Protocol.MaxName)) + System.Text.Encoding.UTF8.GetByteCount(Clip(d.Car, 32))
+                + System.Text.Encoding.UTF8.GetByteCount(Clip(d.Model, MaxModel));
             if (bytes + n > budget) break;
             bytes += n;
             shown.Add(d);

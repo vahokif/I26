@@ -547,7 +547,7 @@ public class RestrictionWireTests
         // an answer written before the fields (it ends at the password flag) has no restrictions and no hidden content
         var w = new NetWriter();
         Info(I76.Sim.Trip.WeaponRestrictions.Normalize(false, [(2, 6)]), true).Write(w);
-        var cut = w.Span[..^(2 + 3 + 1 + 1 + 1 + 1 + 1 + 1)].ToArray();     // the flags, the count, the pair, protocol 15's co-op byte, the rate's, protocol 20's lobby byte, the car reset's, the CB's and protocol 22's crosshair
+        var cut = w.Span[..^(2 + 3 + 1 + 1 + 1 + 1 + 1 + 1 + DiscoveryTests.Names)].ToArray();     // the flags, the count, the pair, protocol 15's co-op byte, the rate's, protocol 20's lobby byte, the car reset's, the CB's, protocol 22's crosshair and names
         var back = SessionInfo.TryRead(cut)!;
         Assert.NotNull(back);
         Assert.False(back.Hidden);
@@ -562,7 +562,7 @@ public class RestrictionWireTests
         var w = new NetWriter();
         Info(null, false).Write(w);
         var bytes = w.Span.ToArray();
-        bytes[^7] = 200;                       // the pair count (before the co-op, rate, lobby, car reset, CB and crosshair bytes), past the most a list carries
+        bytes[^(7 + DiscoveryTests.Names)] = 200;    // the pair count (before the co-op, rate, lobby, car reset, CB and crosshair bytes and the names), past the most a list carries
         Assert.Null(SessionInfo.TryRead(bytes));
     }
 }

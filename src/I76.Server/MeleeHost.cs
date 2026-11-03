@@ -557,13 +557,33 @@ public sealed partial class MeleeHost : IModeHost
         return stock != car && CarExists(stock) ? stock : Options.DefaultCar;
     }
 
-    /// <summary>The game as a session list shows it.</summary>
-    public SessionInfo Info() => new(Options.SessionId, Protocol.Version, Options.Name, Arena, _seats.Count, Options.MaxPlayers,
+    /// <summary>The game as a session list shows it: its name (the arena's when it was given none), and each driver's car as <see cref="Listed"/> names it.</summary>
+    public SessionInfo Info() => new(Options.SessionId, Protocol.Version, Options.Name.Trim() is { Length: > 0 } n ? n : ArenaTitle, Arena, _seats.Count, Options.MaxPlayers,
         Mode.Rules.TeamPlay, Options.InviteOnly, Options.MaxScore, Options.TimeLimit, Over,
-        [.. _seats.Select(s => new SessionDriver(s.Name, s.Actor.CarFile, (byte)s.Actor.Team)), .. Mode.Bots.Select(b => new SessionDriver(b.Name, b.Player.CarFile, (byte)b.Player.Team))],
+        [.. _seats.Select(s => Listed(s.Name, s.Actor.CarFile, s.Actor.Team)), .. Mode.Bots.Select(b => Listed(b.Name, b.Player.CarFile, b.Player.Team))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams,
         MapOffer?.Hash, MapOffer?.Shared ?? false, (uint)(MapOffer?.TotalSize ?? 0), Options.Password.Length > 0,
-        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair);
+        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair,
+        ArenaName: ArenaTitle);
+
+    private string? _arenaTitle;
+    /// <summary>The arena's name as the host forms list it (a co-op game's: its mission's title), the file's stem when it names none.</summary>
+    public string ArenaTitle => _arenaTitle ??= Options.Coop is not null ? I76.Formats.Mission.MissionTitles.CoopTitle(Vfs.Install, Arena)
+        : I76.Formats.Mission.MissionTitles.ArenaTitle(Vfs.Install, Arena) is { Length: > 0 } t ? t : Path.GetFileNameWithoutExtension(Arena);
+
+    /// <summary>
+    /// A driver as the session list shows them (<see cref="SessionDriver"/>): an install's car by its file, which every asker's
+    /// install has; a car served by its content (<paramref name="vcf"/>, or the file's own when it is one) by its body, whose make and
+    /// model the asker reads from its own files, and in the host's words too when the body is not the archive's (a community car).
+    /// The served file's name (n&lt;hash&gt;&lt;stem&gt;.vcf) means nothing to a player.
+    /// </summary>
+    public SessionDriver Listed(string name, string car, int team, byte[]? vcf = null)
+    {
+        if (vcf is not { Length: > 0 } && !_custom.TryGetValue(car, out vcf)) return new SessionDriver(name, car, (byte)team);
+        if (I76.Formats.Shell.CarNames.BodyOf(vcf) is not { } body) return new SessionDriver(name, car, (byte)team);
+        string model = Vfs.InArchive(body) ? "" : I76.Formats.Shell.CarNames.Of(Vfs, body) ?? "";
+        return new SessionDriver(name, body, (byte)team, model);
+    }
 
     /// <summary>
     /// A player joins: the car they asked for, built from the server's own

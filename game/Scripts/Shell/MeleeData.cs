@@ -187,8 +187,25 @@ public sealed class MeleeData
     }
 
     /// <summary>The make and model, VDFC's first 20 bytes (the shell's vehicle +0x00, 0x14 long: "Courcheval Courchel").</summary>
-    private static string? MakeModel(Bwd2File vdf) =>
-        vdf.First("VDFC") is { } c ? I76.Formats.Bin.CStr(vdf.Data, c.PayloadOffset, 20) : null;
+    private static string? MakeModel(Bwd2File vdf) => CarNames.OfBody(vdf);
+
+    private readonly Dictionary<string, string> _carNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A car's MAKE / MODEL as the network names it (the roster's game popup, a network game's STANDINGS): a car file of this list's
+    /// models by its model, the mission's own car of a co-op seat, else what this install's files say of the car file or body (a hidden
+    /// model, a car served by its content, which is listed by its body), else <paramref name="sent"/> (the host's words for a car whose
+    /// body this install may lack), else nothing: never a file name.
+    /// </summary>
+    public string CarName(string car, string? sent = null)
+    {
+        if (car == I76.Net.Protocol.MissionCar) return "Mission's own car";
+        if (car.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) && MakeModelOf(car) is { } m) return m;
+        if (_carNames.TryGetValue(car, out var named)) return named;
+        // (read once a name: the popup draws again with every answer)
+        if (car.Length > 0 && CarNames.Of(_vfs, car) is { Length: > 0 } n) return _carNames[car] = n;
+        return sent?.Trim() ?? "";
+    }
 
     /// <summary>The parts a variant lists under PARTS (x 470, from y 177): engine, suspension, brakes, then its tyres.</summary>
     public List<string> Parts(int model, int variant, I76.Sim.Trip.PartsDatabase db) =>

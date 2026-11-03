@@ -1176,7 +1176,19 @@ messages; `src/I76.Net/Discovery.cs`):
 | Message | Way | What |
 |---|---|---|
 | query | anyone → server: a LAN broadcast to ports 7676–7679, the same at 127.0.0.1, or one address | `"I76Q"`, protocol version |
-| session | server → asker | `"I76S"`, protocol version, session id (random per server), game name, arena, players, seats, team play, invite only, score and time limits, whether it is over, each player's name, car and team, the Nitro kind, goal and team count, a custom map's hash, whether it is shared and its size, whether the game is locked (protocol 12; the password itself is never sent) |
+| session | server → asker | `"I76S"`, protocol version, session id (random per server), game name, arena, players, seats, team play, invite only, score and time limits, whether it is over, each player's name, car and team, the Nitro kind, goal and team count, a custom map's hash, whether it is shared and its size, whether the game is locked (protocol 12; the password itself is never sent), ...; protocol 22 ends with the arena's name and each listed player's make and model where the host says it (below) |
+
+**The names on the roster** (`SessionDriver`, `NetLines.GameName`, `NetLines.AreaName`). The game popup's MAKE / MODEL is the car's
+make and model as the original's shows it (its body's VDFC name, "Courcheval Courchel"), read by the asker from its own files: the host
+lists an install's car by its file (vppirna3.vcf) and a car it serves by its content (a player's own variant, a bot's car with weapons
+taken off; served as n&lt;hash&gt;&lt;stem&gt;.vcf, a name that means nothing to a player) by its body (vppirnha.vdf). Only for a body that
+is not the install's archive's (a community car) does the host add the make and model in its own words, in a list after the tail (a
+string per listed driver, empty for the others), which the asker uses when its own files do not name the car. A co-op seat in the
+mission's own car (`*mission`) reads "Mission's own car". The STANDINGS read a served car's body from the file the join accept carries.
+The answer also ends with the arena's name as the host's lists give it (its AREA OF PLAY: the base game's table or the file's WRLD
+name; a co-op game's mission title), since an asker without a custom map has no other. The popup's AREA OF PLAY is the host's name for
+a custom map and the asker's own for the rest; a game listed with no name, or with a mission file's name, is shown by its area's name
+(a host given no name lists it so itself), never by the file.
 
 `SessionBrowser` asks and collects the answers, one per game by its session
 id. A game that stops answering drops out after 3.5 s. Answers of another

@@ -716,10 +716,10 @@ public sealed class StandingsScreen : ShellScreen
                 {
                     int t = g.Key - 1;
                     lines.Add((true, t >= 0 && t < TeamNames.Length ? TeamNames[t] : "", "", g.Sum(r => r.Deaths), g.Sum(r => r.Kills), g.Sum(r => r.Score)));
-                    foreach (var r in g) lines.Add((false, "  " + r.Driver, Shell.Melee.MakeModelOf(r.Car) ?? "", r.Deaths, r.Kills, r.Score));
+                    foreach (var r in g) lines.Add((false, "  " + r.Driver, Shell.Melee.CarName(r.Car), r.Deaths, r.Kills, r.Score));
                 }
             }
-            else foreach (var r in sorted) lines.Add((false, r.Driver, Shell.Melee.MakeModelOf(r.Car) ?? "", r.Deaths, r.Kills, r.Score));
+            else foreach (var r in sorted) lines.Add((false, r.Driver, Shell.Melee.CarName(r.Car), r.Deaths, r.Kills, r.Score));
         }
         else if (Result is { } m) lines.Add((false, m.Driver, m.Model, m.Deaths, m.Kills, m.Score));
         var f = Shell.Db.Font(0x45);

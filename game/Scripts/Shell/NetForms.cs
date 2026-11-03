@@ -272,7 +272,7 @@ public sealed partial class MeleeScreen
             // "(players/seats)" is right-aligned to the arrow: "(64/64)" is wider than the original's "(8/8)", and the name gives way
             string count = $"({g.Players}/{g.MaxPlayers})";
             int cx = Math.Min(nx == 14 ? 160 : 156, 203 - _font.Measure(count));
-            Frame.Text(_font, nx, y, AddressBookPopup.Fit(_font, g.Name, cx - 2 - nx - tagW - lockW));
+            Frame.Text(_font, nx, y, AddressBookPopup.Fit(_font, ListedName(Shell.Install, g), cx - 2 - nx - tagW - lockW));
             if (tag.Length > 0) Frame.Text(_font, cx - 2 - tagW, y, tag);
             if (g.Locked) DrawLock(cx - 2 - tagW - 11, y + 2);
             Frame.Text(_font, cx, y, count);
@@ -421,10 +421,30 @@ public sealed partial class MeleeScreen
     /// <summary>A game's name on the roster's top line: a co-op game's with its mission's title when the name does not say it (the rows have no room).</summary>
     private string RowName(SessionInfo g)
     {
-        if (!g.Coop) return g.Name;
+        string name = ListedName(Shell.Install, g);
+        if (!g.Coop) return name;
         string title = I76.Formats.Mission.MissionTitles.CoopTitle(Shell.Install, g.Arena);
-        return g.Name.Contains(title, StringComparison.OrdinalIgnoreCase) ? g.Name : $"{title}: {g.Name}";
+        return name.Contains(title, StringComparison.OrdinalIgnoreCase) ? name : $"{title}: {name}";
     }
+
+    /// <summary>A listed game's arena by this install's name for it: a co-op game's mission title, else the base table's or the file's own (empty when it lacks the map).</summary>
+    private static string LocalArea(I76.Formats.Vfs.GameInstall install, SessionInfo g)
+    {
+        if (g.Coop) return I76.Formats.Mission.MissionTitles.CoopTitle(install, g.Arena);
+        // (read once an arena: the roster draws again with every answer; a map downloaded later is read then)
+        string key = $"{install.Root}|{g.Arena}";
+        if (AreaNames.TryGetValue(key, out var known)) return known;
+        string n = I76.Formats.Mission.MissionTitles.ArenaTitle(install, g.Arena);
+        if (n.Length > 0) AreaNames[key] = n;
+        return n;
+    }
+    private static readonly Dictionary<string, string> AreaNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A listed game's AREA OF PLAY (<see cref="NetLines.AreaName"/>), never its file name.</summary>
+    internal static string AreaOf(I76.Formats.Vfs.GameInstall install, SessionInfo g) => NetLines.AreaName(g, LocalArea(install, g));
+
+    /// <summary>A listed game's name (<see cref="NetLines.GameName"/>): GAME NAME as the host typed it, or its AREA OF PLAY.</summary>
+    internal static string ListedName(I76.Formats.Vfs.GameInstall install, SessionInfo g) => NetLines.GameName(g, LocalArea(install, g));
 
     private static string TypeTag(SessionInfo g) => g.Kind switch
     {
@@ -897,11 +917,11 @@ public sealed class SessionPopup : ShellScreen
         else Frame.Blit(art, X, Y);
         Frame.Fill(X + 6, Y + H, W, 6, 0x0f);
         Frame.Fill(X + W, Y + 6, 6, H, 0x0f);
-        string area = Info.Coop ? I76.Formats.Mission.MissionTitles.CoopTitle(Shell.Install, Info.Arena) : NitroLists.DisplayName(Shell.Install, Info.Arena);
+        string area = MeleeScreen.AreaOf(Shell.Install, Info), name = MeleeScreen.ListedName(Shell.Install, Info);
         int dy;
         if (NitroLayout)
         {
-            Frame.Text(Font, X + 20, Y + 34, AddressBookPopup.Fit(Font, Info.Name, 154));
+            Frame.Text(Font, X + 20, Y + 34, AddressBookPopup.Fit(Font, name, 154));
             Frame.Text(Font, X + 20, Y + 78, AddressBookPopup.Fit(Font, NetLines.SessionType(Info), 154));
             Frame.Text(Font, X + 210, Y + 34, AddressBookPopup.Fit(Font, NetLines.SessionLimit(Info), 154));
             Frame.Text(Font, X + 210, Y + 79, AddressBookPopup.Fit(Font, area, 154));
@@ -914,7 +934,7 @@ public sealed class SessionPopup : ShellScreen
         else
         {
             int y = Y + 33;
-            Frame.Text(Font, X + 20, y, AddressBookPopup.Fit(Font, Info.Name, 150));
+            Frame.Text(Font, X + 20, y, AddressBookPopup.Fit(Font, name, 150));
             Frame.Text(Font, X + 181, y, AddressBookPopup.Fit(Font, Info.Coop ? (Info.Lobby ? $"Co-op lobby {Type}" : $"Co-op {Type}") : Type, 126));
             Frame.Text(Font, X + 314, y, Info.MaxScore > 0 ? Info.MaxScore.ToString() : "None");
             Frame.Text(Font, X + 459, y, Info.TeamPlay ? "Yes" : "No");
@@ -924,7 +944,7 @@ public sealed class SessionPopup : ShellScreen
         // the original's list holds eight; with more drivers (up to 64) the wheel, Up/Down and PgUp/PgDn page through it
         foreach (var d in Info.Drivers.Skip(_scroll).Take(Rows))
         {
-            string car = Data.MakeModelOf(d.Car ?? "") ?? d.Car ?? "";
+            string car = Data.CarName(d.Car ?? "", d.Model);
             Frame.Text(Font, X + 18, dy, AddressBookPopup.Fit(Font, d.Name ?? "", NitroLayout ? 156 : 160));
             Frame.Text(Font, X + (NitroLayout ? 180 : 184), dy, AddressBookPopup.Fit(Font, car, 270));
             Frame.Text(Font, X + (NitroLayout ? 457 : 460), dy, AddressBookPopup.Fit(Font, TeamName(d.Team), 145));

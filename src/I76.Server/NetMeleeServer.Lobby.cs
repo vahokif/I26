@@ -42,7 +42,7 @@ public sealed partial class NetMeleeServer
         return i with
         {
             Players = Host.Seats.Count + _lobby.Count, Lobby = true,
-            Drivers = [.. _lobby.Select(m => new SessionDriver(m.Request.Name, m.Request.Car, 0))],
+            Drivers = [.. _lobby.Select(m => Host.Listed(m.Request.Name, m.Request.Car, 0, m.Request.Config))],
         };
     }
 

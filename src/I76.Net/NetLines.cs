@@ -28,6 +28,34 @@ public static class NetLines
         _ => "Unknown",
     };
 
+    /// <summary>
+    /// A listed game's AREA OF PLAY: the host's name for a custom map (the asker's copy, if any, may be another), else the asker's
+    /// own name for it (<paramref name="local"/>: the base game's table or the file's WRLD name; empty when it lacks the arena), else
+    /// the host's, else the file's stem.
+    /// </summary>
+    public static string AreaName(SessionInfo g, string? local)
+    {
+        string host = g.ArenaName.Trim();
+        if (g.CustomMap && host.Length > 0) return host;
+        if (local?.Trim() is { Length: > 0 } l) return l;
+        return host.Length > 0 ? host : Path.GetFileNameWithoutExtension(g.Arena);
+    }
+
+    /// <summary>
+    /// A listed game's name on the roster and its popup: what the host typed in GAME NAME, or the arena's name (<see cref="AreaName"/>)
+    /// for a game listed with none or with a mission file's name (the area's name is what the host form names a game by).
+    /// </summary>
+    public static string GameName(SessionInfo g, string? local)
+    {
+        string n = g.Name.Trim();
+        return n.Length == 0 || IsMissionFile(n, g.Arena) ? AreaName(g, local) : n;
+    }
+
+    /// <summary>A name that is the arena's file name or its stem, or any mission file's name (a stem with .cbt, .rac, .lvl ...).</summary>
+    private static bool IsMissionFile(string name, string arena) =>
+        name.Equals(arena, StringComparison.OrdinalIgnoreCase) || name.Equals(Path.GetFileNameWithoutExtension(arena), StringComparison.OrdinalIgnoreCase)
+        || (I76.Formats.Vfs.GameInstall.IsMissionFile(name) && !name.Contains(' '));
+
     /// <summary>The same popup's LIMIT: "%d Laps", "%d Captures", "%d Points", "%d Kills" or "%d Minutes", else "No Limits!".</summary>
     public static string SessionLimit(SessionInfo g)
     {

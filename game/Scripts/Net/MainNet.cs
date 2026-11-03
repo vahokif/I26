@@ -488,10 +488,13 @@ public partial class Main
         GetTree().ReloadCurrentScene();
     }
 
-    /// <summary>The last scoreboard as STANDINGS rows, each player's car file from the mirror.</summary>
+    /// <summary>The last scoreboard as STANDINGS rows, each player's car from the mirror: its file, or the body of one served by its content (whose file name means nothing).</summary>
     private List<I76.Game.Shell.StandingRow> NetRows() =>
-        _net?.Client.Scores?.Players.Select(p => new I76.Game.Shell.StandingRow(p.Name, _netWorld?.Cars.GetValueOrDefault(p.CarSerial)?.Info.Def ?? "",
+        _net?.Client.Scores?.Players.Select(p => new I76.Game.Shell.StandingRow(p.Name, CarOf(_netWorld?.Cars.GetValueOrDefault(p.CarSerial)?.Info),
             p.Deaths, p.Kills, p.Score, p.Team)).ToList() ?? [];
+
+    private static string CarOf(CarInfo? c) =>
+        c is null ? "" : c.Vcf is { Length: > 0 } v && I76.Formats.Shell.CarNames.BodyOf(v) is { } body ? body : c.Def;
 
     /// <summary>
     /// Test hook: I76_NET_TEST=players[,seconds]. A network game does not

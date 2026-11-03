@@ -95,8 +95,9 @@ Run from the repository root:
 # Transcribe everything (both I76 and Nitro):
 dotnet run --project tools/I76.Subtitles
 
-# Or run the published/release binary directly:
-./i26-subtitles
+# Or run the published/release binary directly (alongside i26 / i26.exe):
+./i26-subtitles       # Linux / macOS
+.\i26-subtitles.exe   # Windows
 
 # Specific options:
 dotnet run --project tools/I76.Subtitles -- --game i76 --cutscenes-only

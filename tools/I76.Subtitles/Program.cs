@@ -176,18 +176,18 @@ public static class Program
         Console.WriteLine($"Platform: {Environment.OSVersion} ({System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture})");
         Console.WriteLine($"Threads:  {threads}");
 
-        string repoRoot = FindRepoRoot();
-        outDir ??= Path.Combine(repoRoot, "subtitles");
+        string rootDir = FindAppOrRepoRoot();
+        outDir ??= Path.Combine(rootDir, "subtitles");
         string userSubtitlesDir = GetUserSubtitlesDir();
         Console.WriteLine($"Output:   {outDir}");
         if (copyUser && !string.IsNullOrEmpty(userSubtitlesDir))
             Console.WriteLine($"User dir: {userSubtitlesDir}");
 
-        i76Install ??= FindInstall("i76", repoRoot);
-        nitroInstall ??= FindInstall("nitro", repoRoot);
+        i76Install ??= FindInstall("i76", rootDir);
+        nitroInstall ??= FindInstall("nitro", rootDir);
 
         // Resolve Whisper GGML model
-        string resolvedModelPath = await ResolveModelAsync(modelPath, modelName, repoRoot);
+        string resolvedModelPath = await ResolveModelAsync(modelPath, modelName, rootDir);
         Console.WriteLine($"Model:    {resolvedModelPath}");
 
         using var whisperFactory = WhisperFactory.FromPath(resolvedModelPath);
@@ -262,13 +262,37 @@ public static class Program
         Console.WriteLine("  --help, -h                  Show this help message");
     }
 
-    private static string FindRepoRoot()
+    private static string FindAppOrRepoRoot()
     {
+        // If run as a published launcher next to i26 executable or pck
+        string? procPath = Environment.ProcessPath;
+        if (!string.IsNullOrEmpty(procPath))
+        {
+            string? procDir = Path.GetDirectoryName(procPath);
+            if (!string.IsNullOrEmpty(procDir) &&
+                (File.Exists(Path.Combine(procDir, "i26.exe")) ||
+                 File.Exists(Path.Combine(procDir, "i26.x86_64")) ||
+                 File.Exists(Path.Combine(procDir, "i26.arm64")) ||
+                 File.Exists(Path.Combine(procDir, "i26")) ||
+                 File.Exists(Path.Combine(procDir, "i26.pck"))))
+            {
+                return procDir;
+            }
+        }
+
         string? cur = AppDomain.CurrentDomain.BaseDirectory;
         while (!string.IsNullOrEmpty(cur))
         {
             if (File.Exists(Path.Combine(cur, "I76.sln")) || Directory.Exists(Path.Combine(cur, "src", "I76.Formats")))
                 return cur;
+            if (File.Exists(Path.Combine(cur, "i26.exe")) ||
+                File.Exists(Path.Combine(cur, "i26.x86_64")) ||
+                File.Exists(Path.Combine(cur, "i26.arm64")) ||
+                File.Exists(Path.Combine(cur, "i26")) ||
+                File.Exists(Path.Combine(cur, "i26.pck")))
+            {
+                return cur;
+            }
             cur = Path.GetDirectoryName(cur);
         }
         return Directory.GetCurrentDirectory();
@@ -295,19 +319,28 @@ public static class Program
         }
     }
 
-    private static string? FindInstall(string gameName, string repoRoot)
+    private static string? FindInstall(string gameName, string rootDir)
     {
         string envName = gameName.Equals("nitro", StringComparison.OrdinalIgnoreCase) ? "I76_NITRO_INSTALL" : "I76_INSTALL";
         string? env = Environment.GetEnvironmentVariable(envName);
         if (!string.IsNullOrEmpty(env) && Directory.Exists(env)) return env;
 
+        string subName = gameName.ToLowerInvariant();
         List<string> candidates =
         [
-            Path.Combine(repoRoot, "dist", "i26-0.11.0", gameName.ToLowerInvariant()),
-            Path.Combine(repoRoot, gameName.ToLowerInvariant()),
-            Path.Combine(Directory.GetCurrentDirectory(), "dist", "i26-0.11.0", gameName.ToLowerInvariant()),
-            Path.Combine(Directory.GetCurrentDirectory(), gameName.ToLowerInvariant())
+            Path.Combine(rootDir, subName),
+            Path.Combine(Directory.GetCurrentDirectory(), subName)
         ];
+
+        if (Directory.Exists(Path.Combine(rootDir, "dist")))
+        {
+            try
+            {
+                foreach (string d in Directory.GetDirectories(Path.Combine(rootDir, "dist")))
+                    candidates.Add(Path.Combine(d, subName));
+            }
+            catch { }
+        }
 
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (gameName.Equals("i76", StringComparison.OrdinalIgnoreCase))

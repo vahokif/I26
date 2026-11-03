@@ -25,3 +25,4 @@ the rules of the project are in [../CHARTER.md](../CHARTER.md).
 | [savestate.md](savestate.md) | Snapshots of the whole simulation: what they hold, versioning, the completeness guard, restoring. |
 | [modern-vegetation.md](modern-vegetation.md) | The modern look's procedural plants: species and their L-systems, placement, drawing, cost. |
 | [compatibility-renderer.md](compatibility-renderer.md) | Running on OpenGL when there is no Vulkan or D3D12: what is lacking and what the game does. |
+| [subtitles.md](subtitles.md) | Cutscene and mission subtitles: speech-to-text generation, SRT and JSON formats, player installation and options. |

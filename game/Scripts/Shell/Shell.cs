@@ -1188,6 +1188,8 @@ public sealed class ShellSettings
     public bool NetNames { get; set; } = true;
     /// <summary>The port's own: the map editor plays the game's soundtrack while you edit (the editor's MUSIC button; shell.cfg [port] editor_music, written only when off).</summary>
     public bool EditorMusic { get; set; } = true;
+    /// <summary>The port's own: Subtitles on the screen for missions and cutscenes (Audio Control; on by default).</summary>
+    public bool Subtitles { get; set; } = true;
     /// <summary>The port's own, kept out of the menus: [port] seed fixes every mission's rand seed, as --seed does (absent: the clock's, as the original).</summary>
     public uint? Seed { get; set; }
 
@@ -1263,6 +1265,7 @@ public sealed class ShellSettings
         s.ZoomReset = (bool)c.GetValue("port", "zoom_reset", true);
         s.NetNames = (bool)c.GetValue("port", "net_names", true);
         s.EditorMusic = (bool)c.GetValue("port", "editor_music", true);
+        s.Subtitles = (bool)c.GetValue("port", "subtitles", true);
         // no version step: absent, it is off. The override file is what Godot reads; the setting is the player's word for it
         s.LogFile = (bool)c.GetValue("port", "log_file", false);
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
@@ -1323,6 +1326,7 @@ public sealed class ShellSettings
         if (!ZoomReset) c.SetValue("port", "zoom_reset", false);
         if (!NetNames) c.SetValue("port", "net_names", false);
         if (!EditorMusic) c.SetValue("port", "editor_music", false);
+        c.SetValue("port", "subtitles", Subtitles);
         if (LogFile) c.SetValue("port", "log_file", true);
         if (Renderer != I76.Game.Boot.RendererChoice.Auto) c.SetValue("port", "renderer", Renderer.ToString());
         c.Save(Path);

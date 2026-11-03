@@ -106,10 +106,10 @@ run godot-mono --headless --path game --export-release "Linux arm64"
 rm -rf game/.godot/mono/temp/bin game/.godot/mono/temp/obj 2>/dev/null || true
 (unset RuntimeFrameworkVersion; cd game && run dotnet build >/dev/null) || { echo "the dev rebuild failed: run dotnet build in game/" >&2; exit 1; }
 
-# the dedicated server (tools/I76.Server) shares the game export's .NET runtime: it is published self-contained (not
-# single-file) against the same RuntimeFrameworkVersion, and only i26-server.dll/.deps.json/.runtimeconfig.json go into
-# the game's data folder (step 5); the launcher next to i26.exe is the published apphost with its embedded
-# relative app path patched to that folder. The artifacts go under the cache, so the dev builds' obj/bin are not touched.
+# the dedicated server (tools/I76.Server) and subtitle tool (tools/I76.Subtitles) share the game export's .NET runtime:
+# they are published self-contained (not single-file) against the same RuntimeFrameworkVersion, and only their .dll/.deps.json/.runtimeconfig.json
+# go into the game's data folder (step 5); the launchers next to i26.exe are the published apphosts with their embedded
+# relative app paths patched to that folder. The artifacts go under the cache, so the dev builds' obj/bin are not touched.
 rids=(win-x64 linux-x64 linux-arm64)
 [ "${I26_ARMV7:-0}" = 1 ] && rids+=(linux-arm)
 for rid in "${rids[@]}"; do
@@ -117,6 +117,10 @@ for rid in "${rids[@]}"; do
     rm -rf "$cache/server-$rid" "$cache/server-art-$rid"
     run dotnet publish tools/I76.Server/I76.Server.Tool.csproj -c Release -r $rid --self-contained \
         -p:DebugType=none -o "$cache/server-$rid" --artifacts-path "$cache/server-art-$rid" >"$log" 2>&1 || { tail -30 "$log" >&2; echo "server publish ($rid) failed" >&2; exit 1; }
+    log_sub=$cache/subtitles-publish-$rid.log
+    rm -rf "$cache/subtitles-$rid" "$cache/subtitles-art-$rid"
+    run dotnet publish tools/I76.Subtitles/I76.Subtitles.csproj -c Release -r $rid --self-contained \
+        -p:DebugType=none -o "$cache/subtitles-$rid" --artifacts-path "$cache/subtitles-art-$rid" >"$log_sub" 2>&1 || { tail -30 "$log_sub" >&2; echo "subtitles publish ($rid) failed" >&2; exit 1; }
 done
 
 # 3. one pck for both, if the two exports agree
@@ -236,6 +240,43 @@ size = sum(os.path.getsize(os.path.join(data, f)) for f in os.listdir(data) if f
 print(f"server ({plat}): {size} bytes of its own files (launcher + i26-server.dll/.json), runtime shared with the game")
 PY
 }
+add_subtitles() {
+python3 - "$1" "$2" "$cache" <<'PY'
+import glob, os, shutil, sys
+plat, stage, cache = sys.argv[1:]
+rid, host, sep = ("win-x64", "i26-subtitles.exe", "\\") if plat == "windows" else ("linux-arm64" if plat == "linux-arm64" else "linux-x64", "i26-subtitles", "/")
+pub = os.path.join(cache, "subtitles-" + rid)
+if not os.path.exists(pub): return
+data = glob.glob(os.path.join(stage, "data_I76.Game_*"))[0]
+rel = os.path.basename(data)
+for f in sorted(os.listdir(pub)):
+    if f == host: continue
+    src = os.path.join(pub, f)
+    dst = os.path.join(data, f)
+    if os.path.isdir(src):
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        continue
+    if os.path.exists(dst):
+        if f.startswith("I76.") and f.endswith(".dll"): continue
+        if open(dst, "rb").read() != open(src, "rb").read():
+            sys.exit(f"subtitles/game runtime mismatch: {f} differs between the subtitles publish and the game export")
+    else:
+        shutil.copy(src, dst)
+        if not f.startswith("i26-subtitles."): print("note: subtitles file not in the game export:", f)
+d = bytearray(open(os.path.join(pub, host), "rb").read())
+old = b"i26-subtitles.dll\0"
+i = d.find(old)
+if i < 0 or d.find(old, i + 1) >= 0 or d[i:i + 1024].strip(b"i26-subtitles.dl\0") != b"":
+    sys.exit("apphost: embedded app path not found")
+p = (rel + sep + "i26-subtitles.dll").encode()
+d[i:i + 1024] = p + b"\0" * (1024 - len(p))
+out = os.path.join(stage, host)
+open(out, "wb").write(d)
+os.chmod(out, 0o755)
+size = sum(os.path.getsize(os.path.join(data, f)) for f in os.listdir(data) if f.startswith("i26-subtitles.")) + len(d)
+print(f"subtitles ({plat}): {size} bytes of its own files (launcher + i26-subtitles.dll/.json), runtime shared with the game")
+PY
+}
 for plat in windows linux linux-arm64; do
     src=$plat; [ $plat = windows ] && src=win
     exe=i26.x86_64; [ $plat = windows ] && exe=i26.exe; [ $plat = linux-arm64 ] && exe=i26.arm64
@@ -244,6 +285,7 @@ for plat in windows linux linux-arm64; do
     cp "$out/$src/$exe" "$out/$src/i26.pck" "$stage/"
     cp -r "$out"/$src/data_I76.Game_* "$stage/"
     add_server $plat "$stage"
+    add_subtitles $plat "$stage"
     [ $plat != windows ] && chmod +x "$stage/$exe"
     sed -e "s/@VERSION@/$ver/g" -e "s/@BUILD@/$stamp/g" tools/release/README.txt > "$stage/README.txt"
     cp tools/release/THIRD-PARTY-NOTICES.txt "$stage/"

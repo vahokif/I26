@@ -28,7 +28,9 @@ public abstract class OverlayScreen : ShellScreen
         public bool Repeats;
         /// <summary>Scrolled out of view: not drawn, not hit, not focusable.</summary>
         public bool Hidden;
-        public bool Hit(Vector2I m) => Click is not null && !Hidden && X <= m.X && m.X < X + W && Y <= m.Y && m.Y < Y + H;
+        public bool Disabled;
+        public byte[]? Ink;
+        public bool Hit(Vector2I m) => !Disabled && Click is not null && !Hidden && X <= m.X && m.X < X + W && Y <= m.Y && m.Y < Y + H;
     }
 
     protected Item Add(int x, int y, Func<string> text, Action? click, ShellFont? font = null, int w = -1, int h = -1)
@@ -54,6 +56,9 @@ public abstract class OverlayScreen : ShellScreen
 
     protected abstract void Build();
 
+    protected byte[] DimInk => _dimInk ??= ShellFrame.MakeInk(Frame.Nearest(Color.Color8(160, 150, 135)));
+    private byte[]? _dimInk;
+
     /// <summary>The background back, every row drawn again.</summary>
     protected virtual void Redraw()
     {
@@ -65,7 +70,8 @@ public abstract class OverlayScreen : ShellScreen
             var s = it.Text();
             if (it.W < 0) it.W = Math.Max(1, f.Measure(s.TrimStart('~')));
             if (it.H < 0) it.H = f.Height;
-            Frame.Text(f, it.X, it.Y, s, ShellFrame.OverlayInk);
+            var ink = it.Ink ?? (it.Disabled ? DimInk : ShellFrame.OverlayInk);
+            Frame.Text(f, it.X, it.Y, s, ink);
         }
         DrawExtra();
     }
@@ -73,7 +79,7 @@ public abstract class OverlayScreen : ShellScreen
     protected virtual void DrawExtra() { }
 
     public override IReadOnlyList<PadRegion> PadRegions =>
-        [.. Items.Where(i => i.Click is not null && i.W > 0 && !i.Hidden).Select(i => PadRegion.Of(i.X, i.Y, i.W, i.H))];
+        [.. Items.Where(i => !i.Disabled && i.Click is not null && i.W > 0 && !i.Hidden).Select(i => PadRegion.Of(i.X, i.Y, i.W, i.H))];
 
     public override void Tick()
     {
@@ -307,6 +313,7 @@ public sealed class AudioScreen : OverlayScreen
     protected override int Record => 7;
     private byte[] _saved = [];
     private string _savedMic = "";
+    private bool _savedSubtitles;
     // Number Of Channels (+0x53, 347) is gone: it capped the sound hardware's voices, and this port plays every sound
     private static readonly (int Y, string Label, int Boxes)[] Rows = [(140, "Music Level", 10), (209, "Sfx Level", 10), (278, "Voice Level", 10)];
 
@@ -315,6 +322,7 @@ public sealed class AudioScreen : OverlayScreen
         var s = Shell.Settings;
         _saved = (byte[])s.Audio.Clone();
         _savedMic = s.CbMic;
+        _savedSubtitles = s.Subtitles;
         for (int r = 0; r < Rows.Length; r++)
         {
             int row = r;
@@ -327,13 +335,22 @@ public sealed class AudioScreen : OverlayScreen
                 Add(202 + 17 * (i - 1), y + 24, () => Check(s.Audio[row] >= n), () => { s.Audio[row] = (byte)n; Apply(row); }, Small, w: 12, h: 15);
             }
         }
-        // the port's: the microphone the CB voice chat uses (network games), under the levels; a click steps through the input devices
-        Frame.CopyBackground(200, 324, 150, 18, 200, 371);      // (the sheet's unused check boxes on that line, wiped)
-        Add(204, 347, "CB Microphone", null);
-        Add(204, 371, () => PlayOptionsScreen.MicLabel(s.CbMic), () => s.CbMic = PlayOptionsScreen.NextMic(s.CbMic), w: 300, h: 18);
+        // the port's: Subtitles toggle and CB voice chat microphone under the levels, clean within the notepad sheet
+        Frame.CopyBackground(180, 343, 270, 20, 180, 365);      // (the sheet's unused check boxes on that line, wiped)
+        Frame.CopyBackground(180, 343, 270, 20, 180, 367);
+        bool hasSubs = I76.Formats.Subtitles.SubtitleLoader.HasSubtitles(Shell.Install?.Root);
+        var subLabel = Add(204, 347, "Subtitles", hasSubs ? () => s.Subtitles = !s.Subtitles : null);
+        var subVal = Add(400, 347, () => !hasSubs ? "Off" : (s.Subtitles ? "On" : "Off"), hasSubs ? () => s.Subtitles = !s.Subtitles : null);
+        if (!hasSubs)
+        {
+            subLabel.Disabled = true;
+            subVal.Disabled = true;
+        }
+        Add(204, 370, "CB Microphone", () => s.CbMic = PlayOptionsScreen.NextMic(s.CbMic));
+        Add(320, 370, () => PlayOptionsScreen.MicLabel(s.CbMic), () => s.CbMic = PlayOptionsScreen.NextMic(s.CbMic), Small, w: 160, h: 18);
         Add(350, 438, "Done", () => { s.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
         // Cancel puts the four bytes back but resets only the music live (as written)
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, s.Audio, 4); s.CbMic = _savedMic; Apply(0); Shell.Overlay(new OptionsScreen()); }, Small);
+        Add(402, 438, "Cancel", () => { Array.Copy(_saved, s.Audio, 4); s.CbMic = _savedMic; s.Subtitles = _savedSubtitles; Apply(0); Shell.Overlay(new OptionsScreen()); }, Small);
     }
 
     // the music level is live; the SFX and voice levels reach their buses and play their preview (cammo.wav for the SFX level, croger.wav for the voice level)

@@ -253,8 +253,16 @@ public partial class Main : Node3D
         }
         // the saved look (Graphic Detail's 1997 Mode); --1997 forces it on for this run without touching the setting
         // the settings' game (Nitro keeps its own play flags) before any Load or Save; a wrong --install fails later, as before
-        try { I76.Game.Shell.ShellSettings.Nitro = _opt.Install is { } profileDir && new GameInstall(profileDir).IsNitro; }
-        catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException) { I76.Game.Shell.ShellSettings.Nitro = false; }
+        try
+        {
+            I76.Game.Shell.ShellSettings.Nitro = _opt.Install is { } profileDir && new GameInstall(profileDir).IsNitro;
+            I76.Formats.Subtitles.SubtitleLoader.IsNitro = I76.Game.Shell.ShellSettings.Nitro;
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+        {
+            I76.Game.Shell.ShellSettings.Nitro = false;
+            I76.Formats.Subtitles.SubtitleLoader.IsNitro = false;
+        }
         // an install unpacked by an earlier I26 lacks the game's executable: restore it from the GOG installer if one is at hand (an existence check otherwise)
         if (_opt.Install is { Length: > 0 } fixDir)
         {
@@ -279,6 +287,10 @@ public partial class Main : Node3D
         MusicProbe.Install(GetTree());
         Controls.InstallDir = _opt.Install;
         GameKeys.InstallDir = _opt.Install;
+        if (_opt.Install is { Length: > 0 } instDir)
+            I76.Formats.Subtitles.SubtitleLoader.RegisterSearchDirectory(System.IO.Path.Combine(instDir, "subtitles"));
+        try { I76.Formats.Subtitles.SubtitleLoader.RegisterSearchDirectory(ProjectSettings.GlobalizePath("user://subtitles")); }
+        catch { }
         // over the engine's boot splash: this install's loadgame.pcx
         if (_opt.Install is not null) { I76.Game.Shell.ShellSettings.Load(); BootSplash.Show(this, _opt.Install, _opt.Mode1997); }
         // a network melee from the shell's MULTI MELEE forms: the launch says what --host-listen / --connect would
@@ -1298,7 +1310,7 @@ public partial class Main : Node3D
         var wiggle = new Wiggle { Name = "Wiggle", InCockpit = () => _car?.CockpitCamera?.Current == true, Player = () => _car?.Sim };
         AddChild(wiggle);
         if (combat.Damage is I76.Sim.Damage.DamageModel wdm) wdm.Damaging += wiggle.Damaging;
-        AddChild(new Hud { Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
+        AddChild(new Hud { Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Script = _script, Objectives = _objectives, Mission = _opt.Mission, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
             Texture = n => _builder?.Resolver?.FindByStem(n) is { } m ? _builder.Textures?.Get(m)?.Texture : null, Faithful = () => _mode1997, Palette = _builder?.ActPalette, Variant = DriverVariant(), ReadFile = n => _builder?.Vfs.TryRead(n) });
         AddMirrorTarget(combat);
         // a mission (or, with View Zoom Reset, a respawn) starts every view at the original's framing

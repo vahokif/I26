@@ -39,9 +39,11 @@ public partial class Hud : CanvasLayer
     private Texture2D? _handsetHalf, _handsetUp;
     private double _handsetT = -1;   // seconds since the handset began to rise (or, negative, to fall)
     public I76.Formats.Mission.ObjectiveText? Objectives { get; set; }
+    public string? Mission { get; set; }
     /// <summary>True while the debug text shows (Ctrl+F3): the port's CB line rides with it.</summary>
     public Func<bool>? Debug { get; set; }
-    private Label _banner = null!, _cb = null!;
+    private Label _banner = null!, _cb = null!, _subtitle = null!;
+    private I76.Formats.Subtitles.SubtitleTrack? _subtitles;
     /// <summary>A file from the game's data by name (the binoculars' masks), or null.</summary>
     public Func<string, byte[]?>? ReadFile { get; set; }
     private ColorRect? _binoMask;
@@ -70,6 +72,20 @@ public partial class Hud : CanvasLayer
         _banner.AnchorLeft = 0; _banner.AnchorRight = 1; _banner.AnchorTop = _banner.AnchorBottom = 0.3f;
         _banner.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         AddChild(_banner);
+
+        if (!string.IsNullOrEmpty(Mission))
+            _subtitles = I76.Formats.Subtitles.SubtitleLoader.Load(Mission);
+        _subtitle = Label(22);
+        _subtitle.HorizontalAlignment = HorizontalAlignment.Center;
+        _subtitle.VerticalAlignment = VerticalAlignment.Bottom;
+        _subtitle.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
+        _subtitle.OffsetLeft = 80;
+        _subtitle.OffsetRight = -80;
+        _subtitle.OffsetBottom = -36;
+        _subtitle.OffsetTop = -140;
+        _subtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _subtitle.Visible = false;
+        AddChild(_subtitle);
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -79,11 +95,32 @@ public partial class Hud : CanvasLayer
     /// <summary>The line on the CB (the objectives are the notepad's, N: MissionPicture).</summary>
     private void UpdateScript()
     {
-        if (Script is null) { _banner.Visible = _cb.Visible = false; return; }
+        if (Script is null) { _banner.Visible = _cb.Visible = _subtitle.Visible = false; return; }
         var h = Script.Host;
         _cb.Visible = h.Cb.Current is not null && Debug?.Invoke() != false;
         if (h.Cb.Current is { } l) _cb.Text = $"CB: {(l.Speaker as I76.Sim.Missions.Entity)?.Name ?? "radio"} ({l.Name})";
         _banner.Visible = false;      // the end of a mission is the outro or the end menu (EscapeMenu), as the original's start-up does
+
+        if (I76.Game.Shell.ShellSettings.Load().Subtitles && h.Cb.Current is { } cur)
+        {
+            string? text = _subtitles?.BySound(cur.Name);
+            if (string.IsNullOrEmpty(text))
+            {
+                var soundTrack = I76.Formats.Subtitles.SubtitleLoader.Load(cur.Name);
+                text = soundTrack?.BySound(cur.Name) ?? soundTrack?.Cues.FirstOrDefault()?.Text;
+            }
+            if (!string.IsNullOrEmpty(text))
+            {
+                // For long cues (e.g. poem stanzas) show at most two wrapped lines (~160 chars at
+                // the subtitle font size).  Trim at the last word boundary before the limit so the
+                // label never shows a wall of text.
+                string display = I76.Formats.Subtitles.SubtitleTrack.Page(text, (h.Cb.NowMs - cur.StartedMs) / 1000.0, cur.Length);
+                if (_subtitle.Text != display) _subtitle.Text = display;
+                _subtitle.Visible = true;
+            }
+            else _subtitle.Visible = false;
+        }
+        else _subtitle.Visible = false;
     }
 
     private static Label Label(int size)

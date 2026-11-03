@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Godot;
+using I76.Formats.Subtitles;
 using I76.Formats.Video;
 
 namespace I76.Game.Ui;
@@ -40,6 +41,9 @@ public partial class MoviePlayer : CanvasLayer
     private int _pendingAt;
     private double _clock;
     private bool _started, _done;
+    private SubtitleTrack? _subtitles;
+    private Label? _subtitleLabel;
+    private bool _showSubtitles;
     /// <summary>Frames the decoder has made (its thread counts them), for the watch on a decoder that stops.</summary>
     private volatile int _produced;
     private readonly MovieWatch _watch = new();
@@ -55,14 +59,17 @@ public partial class MoviePlayer : CanvasLayer
             CallDeferred(MethodName.Finish);
             return;
         }
-        AddChild(new ColorRect { Color = Colors.Black, AnchorRight = 1, AnchorBottom = 1, MouseFilter = Control.MouseFilterEnum.Ignore });
+        var black = new ColorRect { Color = Colors.Black, MouseFilter = Control.MouseFilterEnum.Ignore };
+        black.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        AddChild(black);
         _deband = !Faithful && System.Environment.GetEnvironmentVariable("I76_MOVIE_DEBAND") == "1";   // off by default (the user's call); =1 tries it
         _view = new TextureRect
         {
-            AnchorRight = 1, AnchorBottom = 1, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = Control.MouseFilterEnum.Ignore,
             TextureFilter = Faithful ? CanvasItem.TextureFilterEnum.Nearest : CanvasItem.TextureFilterEnum.Linear,
         };
+        _view.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_view);
         if (_deband)
         {
@@ -85,11 +92,33 @@ public partial class MoviePlayer : CanvasLayer
         if (_movie.HasAudio(0))
         {
             var gen = new AudioStreamGenerator { MixRate = _movie.SampleRate(0), BufferLength = 0.5f };
-            var player = new AudioStreamPlayer { Stream = gen, Name = "Sound" };
+            var player = new AudioStreamPlayer { Stream = gen, Name = "Sound", Bus = "Voice" };
             AddChild(player);
             player.Play();
             _out = (AudioStreamGeneratorPlayback)player.GetStreamPlayback();
         }
+        _subtitleLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+            ZIndex = 10,
+        };
+        _subtitleLabel.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
+        _subtitleLabel.OffsetLeft = 60;
+        _subtitleLabel.OffsetRight = -60;
+        _subtitleLabel.OffsetBottom = -36;
+        _subtitleLabel.OffsetTop = -140;
+        _subtitleLabel.AddThemeFontSizeOverride("font_size", 22);
+        _subtitleLabel.AddThemeColorOverride("font_color", new Color(1, 0.95f, 0.82f));
+        _subtitleLabel.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _subtitleLabel.AddThemeConstantOverride("outline_size", 6);
+        AddChild(_subtitleLabel);
+        _showSubtitles = I76.Game.Shell.ShellSettings.Load().Subtitles;
+        _subtitles = SubtitleLoader.Load(Path);
+        GD.Print($"movie {Path}: subtitles {(_subtitles != null ? $"{_subtitles.Cues.Count} cues" : "none")}");
         _thread = new Thread(Decode) { IsBackground = true, Name = "smacker" };
         _thread.Start();
     }
@@ -147,12 +176,11 @@ public partial class MoviePlayer : CanvasLayer
     public override void _Process(double delta)
     {
         if (_done || _movie is null) return;
-        // the clock starts with the first frame, so a slow first decode does not eat into the picture
-        // (a decoder that died or never delivers ends the movie instead: nothing else would ever start the clock, and the
-        // black under the picture would stay over the paused game, MovieWatch)
+        // Pre-buffer frames and audio before starting playback so the queue never starves or drops frames
         if (!_started)
         {
-            if (_frames.IsEmpty)
+            PushSound();
+            if (_frames.Count < Math.Min(8, _movie.FrameCount) && !_decoded)
             {
                 if (Watch(0) == MovieStep.NoFirstFrame) { GiveUp("no first frame"); Finish(); }
                 return;
@@ -190,6 +218,35 @@ public partial class MoviePlayer : CanvasLayer
                 else _tex.Update(img);
             }
         }
+        if (_subtitleLabel is not null)
+        {
+            if (!_showSubtitles)
+            {
+                _subtitleLabel.Visible = false;
+            }
+            else
+            {
+                _subtitles ??= SubtitleLoader.Load(Path);
+                if (_subtitles is not null)
+                {
+                    var cue = _subtitles.CueAt(_clock);
+                    string? text = cue is null ? null : SubtitleTrack.Page(cue.Text, _clock - cue.Start, cue.End - cue.Start);
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        if (_subtitleLabel.Text != text) _subtitleLabel.Text = text;
+                        _subtitleLabel.Visible = true;
+                    }
+                    else
+                    {
+                        _subtitleLabel.Visible = false;
+                    }
+                }
+                else
+                {
+                    _subtitleLabel.Visible = false;
+                }
+            }
+        }
         switch (Watch(want))
         {
             case MovieStep.Over: Finish(); break;
@@ -212,7 +269,14 @@ public partial class MoviePlayer : CanvasLayer
                 _pendingAt = 0;
             }
             int n = Math.Min(room, _pending.Length - _pendingAt);
-            _out.PushBuffer(_pending.AsSpan(_pendingAt, n).ToArray());
+            if (_pendingAt == 0 && n == _pending.Length)
+            {
+                _out.PushBuffer(_pending);
+            }
+            else
+            {
+                _out.PushBuffer(_pending.AsSpan(_pendingAt, n).ToArray());
+            }
             _pendingAt += n;
             room -= n;
         }

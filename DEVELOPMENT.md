@@ -1,6 +1,6 @@
 # Developing I26
 
-I26 is a .NET solution (`I76.sln`: the libraries `src/I76.Formats`, `src/I76.Sim`, `src/I76.Net`, `src/I76.Server`, `src/I76.Editor`, the CLI `tools/I76.Cli`, and the tests) plus the Godot 4.7 .NET project in `game/`. The libraries and tests need only the .NET SDK, not Godot. [docs/README.md](docs/README.md) indexes the documentation, [docs/dev-hooks.md](docs/dev-hooks.md) lists the environment variables, [AGENTS.md](AGENTS.md) the practical notes (layout, pitfalls) and [CONTRIBUTING.md](CONTRIBUTING.md) the ground rules.
+I26 is a .NET solution (`I76.sln`: the libraries `src/I76.Formats`, `src/I76.Sim`, `src/I76.Net`, `src/I76.Server`, `src/I76.Editor`, the CLI `tools/I76.Cli`, the subtitle tool `tools/I76.Subtitles`, and the tests) plus the Godot 4.7 .NET project in `game/`. The libraries and tests need only the .NET SDK, not Godot. [docs/README.md](docs/README.md) indexes the documentation, [docs/dev-hooks.md](docs/dev-hooks.md) lists the environment variables, [AGENTS.md](AGENTS.md) the practical notes (layout, pitfalls) and [CONTRIBUTING.md](CONTRIBUTING.md) the ground rules.
 
 ## Building from source
 
@@ -71,6 +71,17 @@ By hand, on any OS: install the Godot 4.7 mono export templates in the editor (E
 
 `tools/release.sh VERSION` is the maintainer's script and is Linux/Nix only. It builds `dist/i26-VERSION-windows.zip`, `-linux.zip`, `-linux-arm64.zip` (ETC2/ASTC textures for ARM GPUs) and `-macos.zip` (and, with `I26_ARMV7=1`, `dist/i26-server-VERSION-linux-armv7.zip`: the dedicated server alone, 32-bit ARM, no Godot; unverified on hardware). It uses Nix to get Godot's matching export templates (`.#export-templates`) and the .NET runtime packs from NuGet, so it needs network the first time. The macOS zip is a universal build that is ad-hoc signed by Godot only: it is not signed with an Apple developer ID, not notarised, and has not been tested on a Mac, so it is not an official platform.
 
+## Subtitle generation (i26-subtitles)
+
+`tools/I76.Subtitles` is a cross-platform CLI tool sharing the game's .NET runtime that transcribes cutscene videos (`.SMK`) and in-mission dialogue audio from the game install into time-aligned `.srt` and `.json` subtitle files using local Whisper AI (via Whisper.net).
+
+```bash
+dotnet build tools/I76.Subtitles/I76.Subtitles.csproj
+dotnet run --project tools/I76.Subtitles -- --game all
+```
+
+It automatically downloads the required Whisper GGML model on first run into user cache, reads audio streams directly with zero external dependencies (no Python or FFmpeg required), and automatically synchronizes the generated files to your user data folder (`user://subtitles`), making them immediately active in the game. It compiles and runs on Windows, Linux, and macOS (with Apple Silicon Metal acceleration). See [docs/subtitles.md](docs/subtitles.md).
+
 ## Screenshots and profiling
 
 `tools/shot.sh OUT.png --mission t01 --1997` renders one frame off-screen on Linux (see the header of the script for its options). It needs `I76_INSTALL`, a Godot .NET binary (`$GODOT`, default `godot-mono`, else `godot`), a built `game/` (`dotnet build game/I76.Game.csproj`) and either Weston or Xvfb. By default it uses a private headless Weston on the GPU; it falls back to Xvfb with Mesa's software Vulkan, which runs anywhere (force it with `I76_SHOT_GPU=0`; pick another GPU's Vulkan driver with `I76_SHOT_ICD`). `I76_SHOT_GL=1` renders with the OpenGL Compatibility renderer instead. It runs the game in a scratch user folder and never touches yours.
@@ -84,7 +95,7 @@ src/I76.Net/        the wire protocol and netcode
 src/I76.Server/     the dedicated/listen server host
 game/               the Godot 4 .NET project
 tests/              xUnit
-tools/              the `i76` CLI, scripts for captures, assets and releases
+tools/              the `i76` CLI, `i26-subtitles` transcription tool, scripts for captures, assets and releases
 docs/               the specifications the implementation follows (the behaviour of the original game) and the list of deliberate deviations
 ```
 

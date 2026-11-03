@@ -77,6 +77,11 @@ map whose terrain file is missing is still listed, as in the original, but choos
 with a note naming the file. Interstate '82 maps (`.msa`)
 are for another game and are not listed.
 
+**Subtitles.** Cutscene videos and in-mission CB radio dialogue support optional subtitles. Because subtitles are derived from game audio, they are not committed to the repository.
+- **Installing:** Place the `subtitles/` folder (`subtitles/i76` and `subtitles/nitro`) in your portable game folder next to the executable, or in your operating system's personal user data folder (`%APPDATA%\I26\subtitles\` on Windows, `~/.local/share/I26/subtitles/` on Linux, `~/Library/Application Support/I26/subtitles/` on macOS).
+- **Generating:** Run the native `i26-subtitles` tool (included in releases and buildable via `tools/I76.Subtitles`) to transcribe cutscenes (`.SMK`) and mission dialogue audio directly from your Interstate '76 files using local Whisper AI.
+- **Controls & Greyout:** Subtitles are on by default when files exist. They can be toggled in the front end's **Audio Control** menu or during a mission via the `Escape` menu. If no subtitle files are installed, the Subtitles option is automatically greyed out, disabled, and displays "Off". See [docs/subtitles.md](subtitles.md).
+
 ### Controls
 
 Controls follow the original's keys, as set in Options > Control Configuration (which edits keys, the mouse

@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### New
+- **Subtitles**: Full subtitle support for all 31 cutscenes and in-mission CB radio dialogue across Interstate '76 and the Nitro Pack expansion (`docs/subtitles.md`).
+  - Smacker cutscenes display time-accurate subtitles with exact millisecond speech synchronization.
+  - In-mission CB radio dialogue shows on the HUD while voice radio transmissions play.
+  - **Auto-Detection & Greyout**: The Subtitles option in the main menu's Audio Control screen and the in-game Escape menu automatically greys out, locks to "Off", and becomes non-clickable if no `subtitles/` folder or subtitle files are found.
+  - Subtitles can be toggled on or off at any time in Audio Control or while driving via the Escape menu; the preference is saved in `shell.cfg`.
+  - Subtitle tracks are discovered automatically from the portable game folder (`subtitles/i76` and `subtitles/nitro`), the game install directory, or personal user data (`%APPDATA%\I26\subtitles` on Windows, `~/.local/share/I26/subtitles` on Linux, `~/Library/Application Support/I26/subtitles` on macOS).
+- **Native Subtitle Generation Tool (`i26-subtitles`)**: A cross-platform C# CLI tool (`tools/I76.Subtitles`) sharing the game's .NET runtime that automatically extracts audio from Smacker cutscenes and ZFS dialogue archives, resamples to 16kHz mono PCM, runs local OpenAI Whisper speech recognition (via Whisper.net), detects speakers (Groove, Taurus, Skeeter, Jade, etc.), and generates word-aligned `.srt` and `.json` subtitle files for Windows, Linux, and macOS.
 - Map editor: switching between the editor and its playtest is much faster. Coming back to the editor is instant (it was a 2 to 3 second reload) because the editor is kept aside while you play, and going into the playtest takes about 1 second (1.6 s on the big T01 map in the modern look) instead of 2 to 3 (and more on a slow machine). An edit you make always shows in the playtest.
 - Map editor: a playtest (F5, the PLAYTEST button) drops your car under the mouse cursor, on the ground, a road or a bridge's deck, facing the way the camera looks; with the cursor on the sky, off the map, on water, on a cliff or in a building, or off the 3D view, it goes where it used to, at the camera's pivot, and says why.
 - Map editor: F12 switches between the modern and the 1997 look, as in a mission (F2 still works too).

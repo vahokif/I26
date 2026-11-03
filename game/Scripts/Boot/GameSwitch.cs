@@ -36,6 +36,7 @@ public static class GameSwitch
         Controls.ResetForGameSwitch();
         GameKeys.ResetForGameSwitch();
         BootSplash.ResetForGameSwitch();
+        I76.Formats.Subtitles.SubtitleLoader.ClearCache();
         AssetVfs.Addon.Clear();
         Sim.SimClock.Ticks = null;
         LaunchOptions.Extracted = null;

@@ -109,5 +109,16 @@ Type a line to say it in the game's chat; Ctrl+C stops it. i26-server --help
 lists the options (players, teams, score and time limits, races, capture the
 flag).
 
+Subtitles generator
+-------------------
+(Windows and Linux builds, arm64 too.) i26-subtitles (i26-subtitles.exe on Windows) generates
+speech-to-text subtitles directly from the original cutscenes (.SMK) and mission dialogues (.WAV):
+
+    i26-subtitles
+
+It finds your game install automatically, downloads the speech recognition model on first run,
+and saves subtitles directly into your user subtitles directory. Run i26-subtitles --help
+to view available options (choosing game, model size, or filters).
+
 Credits and licences of the parts that ship with I26 are in
 THIRD-PARTY-NOTICES.txt.

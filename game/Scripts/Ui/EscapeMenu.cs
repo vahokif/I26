@@ -35,6 +35,7 @@ public sealed partial class EscapeMenu : Control
         public int Value;
         /// <summary>The item's callback (msg 2/3 own step, 4 activate, 6 opened, 7 changed, 8 done, 9 cancel); null = not selectable.</summary>
         public Action<Item, int>? Cb;
+        public bool Disabled;
         /// <summary>One of the port's rows in the scrolling part of a pad: Pair is its place in the list, the pad row is Pair minus the screen's scroll.</summary>
         public bool Scrolls;
         public int Type => Flags & 0x3ff;
@@ -320,10 +321,20 @@ public sealed partial class EscapeMenu : Control
         Item Level(string label, int row, int n, int at, bool live) =>
             Setting(Slider | Min1, label, row, n, null, s => Math.Clamp((int)s.Audio[at], 1, n - 1), (s, v) => s.Audio[at] = (byte)v, live,
                 apply: () => Live?.Invoke(Settings), changed: () => LevelPreview.Play(this, Vfs, at));   // the preview on a change only, not on Cancel's restore (msg 9)
+        bool hasSubs = I76.Formats.Subtitles.SubtitleLoader.HasSubtitles(InstallDir);
+        Item subItem = Setting(Cycle, "Subtitles", 11, 2, offOn, s => s.Subtitles ? 1 : 0, (s, v) => s.Subtitles = v != 0, apply: () => Live?.Invoke(Settings));
+        if (!hasSubs)
+        {
+            subItem.Disabled = true;
+            subItem.Cb = null;
+            subItem.Names = ["Off", "Off"];
+            subItem.Value = 0;
+        }
         _audio.Items = [
             Level("Music Level", 2, 11, 0, true),
             Level("SFX Level", 5, 11, 1, true),
             Level("Voice Level", 8, 11, 2, true),
+            subItem,
             DoneButton(),
             CancelButton(),
         ];
@@ -335,7 +346,7 @@ public sealed partial class EscapeMenu : Control
             try { mics.AddRange(Godot.AudioServer.GetInputDeviceList().Where(d => d != "Default")); } catch { }
             if (!mics.Contains(Settings.CbMic)) mics.Add(Settings.CbMic);
             var names = mics.Select(PlayOptionsScreen.MicLabel).ToArray();
-            _audio.Items.Insert(3, Setting(Cycle, "CB Microphone", 32, mics.Count, names, s => Math.Max(0, mics.IndexOf(s.CbMic)), (s, v) => s.CbMic = mics[v],
+            _audio.Items.Insert(4, Setting(Cycle, "CB Microphone", 12, mics.Count, names, s => Math.Max(0, mics.IndexOf(s.CbMic)), (s, v) => s.CbMic = mics[v],
                 apply: () => Live?.Invoke(Settings)));
         }
 
@@ -785,10 +796,10 @@ public sealed partial class EscapeMenu : Control
         return Math.Max(1, (int)MathF.Round(cell * _s * cell / Math.Max(1f, h)));
     }
 
-    private void Print(Font f, int cell, float x, float y, string s)
+    private void Print(Font f, int cell, float x, float y, string s, Color? color = null)
     {
         int size = Size(f, cell);
-        DrawString(f, At(x, y) + new Vector2(0, f.GetAscent(size)), s, HorizontalAlignment.Left, -1, size, Ink);
+        DrawString(f, At(x, y) + new Vector2(0, f.GetAscent(size)), s, HorizontalAlignment.Left, -1, size, color ?? Ink);
     }
 
     private float Width(Font f, int cell, string s) => f.GetStringSize(s, HorizontalAlignment.Left, -1, Size(f, cell)).X / _s;
@@ -844,11 +855,12 @@ public sealed partial class EscapeMenu : Control
             DrawRect(r, _grey);
             DrawRect(r, Colors.Black, false, Mathf.Max(1, _s));
         }
+        var col = it.Disabled ? _grey : Ink;
         if (it.Label is { Length: > 0 } label)
         {
             float x = a.X0 + 3, y = a.Y0 + 3;
-            if (!it.Scrolls && Centred(it.Pair)) { x += ((a.X1 - x) - Width(font, cell, label)) / 2; Print(font, cell, x, y, label); }
-            else foreach (var line in Wrap(font, cell, label, a.X1 - x)) { Print(font, cell, x, y, line); y += 24; }
+            if (!it.Scrolls && Centred(it.Pair)) { x += ((a.X1 - x) - Width(font, cell, label)) / 2; Print(font, cell, x, y, label, col); }
+            else foreach (var line in Wrap(font, cell, label, a.X1 - x)) { Print(font, cell, x, y, line, col); y += 24; }
         }
         if (b is not { } bb && it.Type != Slider) return;
         string? value = null;
@@ -875,7 +887,7 @@ public sealed partial class EscapeMenu : Control
         {
             float w = Width(font, cell, value), x = vb.X0;
             if (x + w > vb.X1) x = vb.X1 - w;
-            Print(font, cell, x, vb.Y0, value);
+            Print(font, cell, x, vb.Y0, value, col);
         }
     }
 

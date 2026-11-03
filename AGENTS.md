@@ -13,7 +13,7 @@ time before. Read [CHARTER.md](CHARTER.md) first; it is short.
 | `game/` | the Godot 4.7 .NET project: rendering (modern look and 1997 look), sound, input, the front end (`Scripts/Shell`). |
 | `tests/` | xUnit: `I76.Sim.Tests`, `I76.Net.Tests`, `I76.Editor.Tests` (no install needed), `I76.Formats.Tests` (skips without an install). |
 | `src/I76.Editor` | the map editor's logic (document, brushes, undo, saving through the map writers). No Godot. The editor's windows are `game/Scripts/Editor`; see docs/map-editor.md. |
-| `tools/` | `I76.Cli` (inspect files, run a mission headless), `shot.sh` (off-screen captures), `release.sh`, asset fetchers. |
+| `tools/` | `I76.Cli` (inspect files, run a mission headless), `I76.Subtitles` (transcribe cutscenes & dialogue audio), `shot.sh` (off-screen captures), `release.sh`, asset fetchers. |
 | `docs/` | the design notes and specifications the code follows: `architecture.md`, `deviations.md`, `frame-rate.md`, `multiplayer.md`, ... |
 
 The sim never touches Godot; the game layer reads sim state and draws it. Keep that split: gameplay rules go in `src/`,

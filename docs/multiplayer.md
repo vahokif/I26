@@ -528,7 +528,7 @@ may hear you does.
   until the key is first pressed, the device is closed again after 30 s of silence, and switching back to None closes it at once. Without any input
   device the first press says so in the console. The sound card's rate is brought to 8 kHz by `VoiceResampler`. The macOS export asks for the
   microphone with a usage description and the hardened runtime's audio-input entitlement.
-- **Settings and commands.** Play Options' second page: `CB Voice` (shell.cfg `[port] cb_voice`, on by default; off neither sends nor plays); Audio Control has `CB Microphone` (the incoming voice's level is the Voice Level there). In the chat line: `/mute NAME`, `/unmute NAME` (a name, or a unique start or part of one; kept for the session, not by slot),
+- **Settings and commands.** Play Options: `CB Voice` (shell.cfg `[port] cb_voice`, on by default; off neither sends nor plays); Audio Control has `CB Microphone` (the incoming voice's level is the Voice Level there). In the chat line: `/mute NAME`, `/unmute NAME` (a name, or a unique start or part of one; kept for the session, not by slot),
   `/cb on` and `/cb off` (for this game), `/mute` alone lists who is muted.
 - **Muting.** Three levels. (1) *For yourself*: `/mute NAME` / `/unmute NAME` (and `/cb off`, which mutes everybody). The client plays nothing of that
   player and also tells the server (`MsgType.VoiceIgnore`, reliable: a flag for everyone, else the slots; resent when the set or the roster

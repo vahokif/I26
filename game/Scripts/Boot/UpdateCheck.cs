@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace I76.Game.Boot;
 
 /// <summary>
-/// The start-up check for a newer release (Play Options, second page: Check for Updates): the logic only, with no engine calls so it can be tested.
+/// The start-up check for a newer release (Play Options: Check for Updates): the logic only, with no engine calls so it can be tested.
 /// One request per start to the release list's "latest" answer, which never offers a draft or a pre-release; a build without a release version
 /// ("dev", from the source) never asks and never shows a line.
 /// </summary>

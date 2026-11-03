@@ -1171,7 +1171,7 @@ public sealed class ShellSettings
     public bool CbRadio { get; set; } = true;
     /// <summary>The port's own: a hosted game allows the chase crosshair (the host form's Chase Crosshair; shell.cfg [port] host_crosshair, written only when on).</summary>
     public bool HostCrosshair { get; set; }
-    /// <summary>The port's own: CB Voice (Play Options, second page; shell.cfg [port] cb_voice, written only when off): push-to-talk voice in network games. Off neither sends nor plays it.</summary>
+    /// <summary>The port's own: CB Voice (Play Options; shell.cfg [port] cb_voice, written only when off): push-to-talk voice in network games. Off neither sends nor plays it.</summary>
     public bool CbVoice { get; set; } = true;
     /// <summary>The port's own: the microphone CB Voice uses (shell.cfg [port] cb_mic; Play Options steps through the sound system's list). Empty is the system default.</summary>
     /// <summary>The CB voice chat's input device: empty is none, the default for anyone who has not chosen (the audio input is never opened); "Default" is the system's.</summary>
@@ -1182,9 +1182,9 @@ public sealed class ShellSettings
     /// CHASSIS's pickers and the complete hidden models MAKE / MODEL, and a hosted game allows them (docs/hidden-content.md).
     /// </summary>
     public bool HiddenContent { get; set; }
-    /// <summary>The port's own: Unlim. Turrets (Play Options, second page; off, as the original): any number of turrets on a car, each on a roof mount (docs/deviations.md).</summary>
+    /// <summary>The port's own: Unlim. Turrets (Play Options; off, as the original): any number of turrets on a car, each on a roof mount (docs/deviations.md).</summary>
     public bool UnlimTurrets { get; set; }
-    /// <summary>The port's own: Check for Updates (Play Options, second page; shell.cfg [port] update_check, written only when off). On: each start asks GitHub, once, whether a newer release exists and says so under the version in the corner.</summary>
+    /// <summary>The port's own: Check for Updates (Play Options; shell.cfg [port] update_check, written only when off). On: each start asks GitHub, once, whether a newer release exists and says so under the version in the corner.</summary>
     public bool UpdateCheck { get; set; } = true;
     /// <summary>The port's own: Graphic Detail's Log File (user://logs/godot.log; off). Godot reads it at start, so a change shows from the next start (<see cref="I76.Game.Boot.LogFile"/>).</summary>
     public bool LogFile { get; set; }

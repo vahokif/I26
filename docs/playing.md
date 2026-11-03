@@ -58,7 +58,7 @@ location between runs; an old `[install]` entry in `settings.cfg` is ignored.
 `%APPDATA%\I26\` on Windows. Delete it to start from scratch. The first run copies
 the settings and saves of the older "Interstate '76 (Godot)" folder if there is one.
 
-**Update check.** At every start I26 asks GitHub (one request, nothing about you or your machine is sent) whether a newer release exists and, if so, shows "version X available" under the version in the corner of the chooser and the main menu; click it to open the release page. Options > Play Options (second page) > Check for Updates turns it off, and then nothing is requested. A build run from source never asks.
+**Update check.** At every start I26 asks GitHub (one request, nothing about you or your machine is sent) whether a newer release exists and, if so, shows "version X available" under the version in the corner of the chooser and the main menu; click it to open the release page. Options > Play Options > Check for Updates (near the end of the sheet's scrolling list) turns it off, and then nothing is requested. A build run from source never asks.
 
 **Log file.** Off by default, so it cannot grow. For a bug report, start the game once with `--log` (or the environment
 variable `I76_LOG=1`) and attach `logs/godot.log` from the user folder (the last three runs' logs are kept as
@@ -84,7 +84,7 @@ and a pad). Options > Mouse Options (also opened from Control Configuration and 
 mouse's settings: Mouse Camera (the F2 chase view), Mouse Sensitivity, Invert Y Axis, Cockpit Mouse Look, Camera
 Return, View Zoom Reset, Mouse In Window, the bindings of the five mouse buttons (the two side buttons
 included) and what the wheel does (View Zoom or Cycle Weapon). Chase Crosshair, an aiming mark in the F2 chase view
-for keyboard, pad and mouse alike, is in Play Options (the second page in the shell, and the in-mission Esc menu's
+for keyboard, pad and mouse alike, is in Play Options (the last row of the shell sheet's scrolling list, and the in-mission Esc menu's
 Play Options); in a network game it shows only if the host allows it.
 
 | Action | Default |

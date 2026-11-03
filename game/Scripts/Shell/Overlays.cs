@@ -151,16 +151,76 @@ public sealed class OptionsScreen : OverlayScreen
     protected override void Escape() => Shell.Overlay(null);
 }
 
+/// <summary>
+/// An overlay whose port rows scroll in the sheet's free lines under the original's (Graphic Detail, Play Options): the mouse
+/// wheel, Up/Down and Page Up/Down, or the pad past the first or last visible row move the list; a thin bar in the sheet's ink,
+/// with an arrow at an end where there is more, marks it. The rest of the sheet (the original's rows, Done, Cancel) stays put.
+/// </summary>
+public abstract class ScrollingOverlayScreen : OverlayScreen
+{
+    protected readonly ScrollRows<Item> List = new();
+    /// <summary>The scroll mark's x: a thumb 5 px wide, its track on x + 2.</summary>
+    protected abstract int MarkX { get; }
+
+    /// <summary>An item of the scrolling list, in its slot, <paramref name="dy"/> px below its line.</summary>
+    protected Item Listed(Item it, int slot, int dy = 0) => List.Add(it, slot, dy);
+
+    protected override void Redraw()
+    {
+        foreach (var (it, y, shows) in List.Layout()) { it.Y = y; it.Hidden = !shows; }
+        PrepareLines();
+        base.Redraw();
+    }
+
+    /// <summary>The sheet under the visible lines made ready for the rows now on them (before anything is drawn).</summary>
+    protected virtual void PrepareLines() { }
+
+    protected override bool Wheeled(int rows) => List.ScrollBy(Math.Sign(rows));
+
+    public override void Tick()
+    {
+        var k = Shell.Keys;
+        int by = List.KeyStep(k.Contains(Key.Up), k.Contains(Key.Down), k.Contains(Key.Pageup), k.Contains(Key.Pagedown));
+        bool moved = by != 0 && List.ScrollBy(by);
+        base.Tick();
+        if (moved && Shell.Current == this) Redraw();
+    }
+
+    // a press past the top or bottom visible row scrolls the list a row
+    public override IReadOnlyList<PadRegion> PadRegions =>
+        [.. Items.Where(i => i.Click is not null && i.W > 0 && !i.Hidden)
+            .Select(i => PadRegion.Of(i.X, i.Y, i.W, i.H, List.SlotOf(i) < 0 ? null : d => List.EdgeStep(i, d) is var by && by != 0 && ScrollThenDraw(by)))];
+
+    private bool ScrollThenDraw(int by)
+    {
+        if (!List.ScrollBy(by)) return false;
+        Redraw();
+        return true;
+    }
+
+    protected override void DrawExtra()
+    {
+        if (List.Mark() is not { } m) return;
+        int x = MarkX;
+        Frame.Fill(x + 2, m.Top, 1, m.H, 200);
+        Frame.Fill(x, m.ThumbAt, 5, m.Thumb, 200);
+        for (int k = 0; k < 4; k++)
+        {
+            if (m.MoreAbove) Frame.Fill(x + 2 - k, m.Top - 7 + k, 1 + 2 * k, 1, 200);
+            if (m.MoreBelow) Frame.Fill(x + 2 - (3 - k), m.Top + m.H + 3 + k, 1 + 2 * (3 - k), 1, 200);
+        }
+    }
+}
+
 /// <summary>Play Options, overlay 4: record 10, the cheat and salvage flags and the difficulty.</summary>
-public sealed class PlayOptionsScreen : OverlayScreen
+public sealed class PlayOptionsScreen : ScrollingOverlayScreen
 {
     protected override int Record => 10;
+    // in the value column's right end: the labels run up to the column's rule
+    protected override int MarkX => 458;
     private int _savedFlags;
     private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair;
     private int _savedRate, _savedDownloads;
-    /// <summary>0 the sheet, 1 its second page (the port's rows past the sheet's fourteen lines: Unlim. Turrets, CB Voice, Check for Updates, Chase Crosshair), a click on More / Back turns it.</summary>
-    public int Page { get; init; }
-    private static PlayOptionsScreen? _first;       // the first page's snapshot, which Cancel restores from either page
     private static readonly (int Y, string Label, int Bit)[] Rows =
     [
         (139, "Arcade Phys.", 0x01), (162, "No Salv. Manag.", 0x02), (185, "Unlim. Ammo", 0x04),
@@ -173,12 +233,26 @@ public sealed class PlayOptionsScreen : OverlayScreen
         return o[(i + 1) % o.Length].Label;
     }
     private static readonly string[] Levels = ["Wimp", "Champion", "Badass"];
+    /// <summary>The list slots that are check rows (the others a value): their line gets a check box.</summary>
+    private readonly HashSet<int> _checks = [];
+
+    /// <summary>
+    /// Where the port's rows scroll: the base game's sheet has the original's six check rows on consecutive lines from 139 and
+    /// Difficulty on its last line (415), the six lines between for the list; Nitro's keeps Arcade Phys. (139), Unlim. Wiper
+    /// Fluid (185) and Difficulty (323) where its sheet has them, the five lines between the last two for the list.
+    /// </summary>
+    public static (int Top, int Shown) ListLines(bool nitro) => nitro ? (208, 5) : (277, 6);
+
+    /// <summary>The port's rows, in the list's order (a check row, or a value row stepped by a click).</summary>
+    public static readonly string[] PortRows =
+    [
+        "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
+        "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair",
+    ];
 
     protected override void Build()
     {
         var s = Shell.Settings;
-        if (Page == 1) { BuildSecond(); return; }
-        _first = this;
         _savedFlags = s.PlayOptions;
         _savedAutoReverse = s.AutoReverse;
         _savedModern = s.ModernPhysics;
@@ -191,10 +265,11 @@ public sealed class PlayOptionsScreen : OverlayScreen
         _savedCb = s.CbVoice;
         _savedUpdate = s.UpdateCheck;
         _savedCrosshair = s.ChaseCrosshair;
-        // the original's six check rows first, on consecutive ruled lines, then the port's own on the lines under them. The sheet
-        // prints a check box only on every other line (where the original's rows were): the others get Arcade Phys.'s box copied
         bool nitro = Shell.Install.IsNitro;
-        foreach (int y in nitro ? new[] { 116, 162, 208, 254 } : new[] { 116, 162, 208, 254, 346 }) Frame.CopyBackground(200, 139, 22, 18, 200, y);
+        (List.Top, List.Shown) = ListLines(nitro);
+        // the original's six check rows on consecutive ruled lines. The sheet prints a check box only on every other line (where
+        // the original's rows were): the others get Arcade Phys.'s box copied
+        if (!nitro) foreach (int y in new[] { 162, 208, 254 }) Frame.CopyBackground(200, 139, 22, 18, 200, y);
         // Nitro's table has three rows: Arcade Phys. (222,139), Unlim. Wiper Fluid (222,185), Difficulty (222,323);
         // the salvage-management and cheat rows are the base game's
         foreach (var (y, label, bit) in Rows)
@@ -205,58 +280,58 @@ public sealed class PlayOptionsScreen : OverlayScreen
             // the check strip, x 205..404, y+1..y+12; a set bit shows "x" at (205, y+1)
             Add(205, ry + 1, () => Check((s.PlayOptions & bit) != 0), () => s.PlayOptions ^= bit, Small, w: 200, h: 12);
         }
-        void Toggle(int y, string label, Func<bool> get, Action flip)
-        {
-            Add(222, y, label, null);
-            Add(205, y + 1, () => Check(get()), flip, Small, w: 200, h: 12);
-        }
-        // Hidden Weapons & Cars (docs/hidden-content.md), on the sheet's first line, the only one free
-        Toggle(116, "Hidden Wpns & Cars", () => s.HiddenContent, () => s.HiddenContent = !s.HiddenContent);
-        Toggle(nitro ? 162 : 277, "Modern Physics", () => s.ModernPhysics, () => s.ModernPhysics = !s.ModernPhysics);   // Ctrl+F7 flips it in play
-        // Simulation Rate (docs/frame-rate.md): a click steps to the next rate
-        Add(222, 300, "Simulation Rate", null);
-        Add(205, 301, () => "", () => { s.SimRate = NextRate(s.SimRate); WarnRate(); }, Small, w: 300, h: 12);
-        Add(398, 302, () => $"{s.SimRate} Hz", null);
-        // Nitro's Difficulty sits on 323, where the base game puts Checkpoints; there Checkpoints take the free line at 208
-        Toggle(nitro ? 208 : 323, "Checkpoints", () => s.Checkpoints, () => s.Checkpoints = !s.Checkpoints);            // docs/savestate.md
-        Toggle(nitro ? 231 : 346, "Force Feedback", () => s.ForceFeedback, () => s.ForceFeedback = !s.ForceFeedback);   // the pad's rumble
-        Toggle(nitro ? 254 : 369, "Auto Reverse", () => s.AutoReverse, () => s.AutoReverse = !s.AutoReverse);
-        // Map Downloads (docs/multiplayer.md "Custom maps"): a network host's map this game lacks is asked about, always
-        // downloaded or never; a click steps
-        Add(222, 392, "Map Downloads", null);
-        Add(205, 393, () => "", () => s.MapDownloads = (s.MapDownloads + 1) % 3, Small, w: 300, h: 12);
-        Add(398, 394, () => ShellSettings.MapDownloadNames[Math.Clamp(s.MapDownloads, 0, 2)], null);
         int dy = nitro ? 323 : 415;
         Add(222, dy, "Difficulty Level", null);
         Add(205, dy + 1, () => "", () => s.Difficulty = s.Difficulty >= 2 ? 0 : s.Difficulty + 1, Small, w: 300, h: 12);
         Add(398, dy + 2, () => Levels[Math.Clamp(s.Difficulty, 0, 2)], null);
-        Add(246, 438, "More", () => Shell.Overlay(new PlayOptionsScreen { Page = 1 }), Small);
+
+        // the port's own rows, one to a line, scrolling in the free lines
+        int slot = 0;
+        void Toggle(string label, Func<bool> get, Action flip)
+        {
+            _checks.Add(slot);
+            Listed(Add(222, 0, label, null), slot);
+            Listed(Add(205, 0, () => Check(get()), flip, Small, w: 200, h: 12), slot, 1);
+            slot++;
+        }
+        void Step(string label, Action click, Func<string> value)
+        {
+            Listed(Add(222, 0, label, null), slot);
+            Listed(Add(205, 0, () => "", click, Small, w: 300, h: 12), slot, 1);
+            Listed(Add(398, 0, value, null), slot, 2);
+            slot++;
+        }
+        // Hidden Weapons & Cars (docs/hidden-content.md)
+        Toggle(PortRows[0], () => s.HiddenContent, () => s.HiddenContent = !s.HiddenContent);
+        Toggle(PortRows[1], () => s.ModernPhysics, () => s.ModernPhysics = !s.ModernPhysics);   // Ctrl+F7 flips it in play
+        // Simulation Rate (docs/frame-rate.md): a click steps to the next rate
+        Step(PortRows[2], () => { s.SimRate = NextRate(s.SimRate); WarnRate(); }, () => $"{s.SimRate} Hz");
+        Toggle(PortRows[3], () => s.Checkpoints, () => s.Checkpoints = !s.Checkpoints);            // docs/savestate.md
+        Toggle(PortRows[4], () => s.ForceFeedback, () => s.ForceFeedback = !s.ForceFeedback);   // the pad's rumble
+        Toggle(PortRows[5], () => s.AutoReverse, () => s.AutoReverse = !s.AutoReverse);
+        // Map Downloads (docs/multiplayer.md "Custom maps"): a network host's map this game lacks is asked about, always
+        // downloaded or never; a click steps
+        Step(PortRows[6], () => s.MapDownloads = (s.MapDownloads + 1) % 3, () => ShellSettings.MapDownloadNames[Math.Clamp(s.MapDownloads, 0, 2)]);
+        Toggle(PortRows[7], () => s.UnlimTurrets, () => s.UnlimTurrets = !s.UnlimTurrets);
+        // CB Voice: push-to-talk in network games (the Poem key); its microphone is chosen in Audio Control
+        Toggle(PortRows[8], () => s.CbVoice, () => s.CbVoice = !s.CbVoice);
+        // Check for Updates: whether the next start asks GitHub if a newer release exists (a line under the version says so)
+        Toggle(PortRows[9], () => s.UpdateCheck, () => s.UpdateCheck = !s.UpdateCheck);
+        // Chase Crosshair: the aiming mark in the F2 chase view (a network game shows it only when the host allows it)
+        Toggle(PortRows[10], () => s.ChaseCrosshair, () => s.ChaseCrosshair = !s.ChaseCrosshair);
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
     }
 
-    /// <summary>The second page: the sheet's fourteen lines are all taken, so the port's later rows go on a page of their own (the boxes of the first page's rows wiped).</summary>
-    private void BuildSecond()
+    /// <summary>Each visible line of the list gets the sheet's check box when a check row is on it and blank paper when a value row is (or none).</summary>
+    protected override void PrepareLines()
     {
-        var s = Shell.Settings;
-        Frame.CopyBackground(200, 139, 22, 18, 200, 116);
-        for (int k = 1; k < 14; k++) if (k != 1) Frame.CopyBackground(300, 116 + 23 * k, 22, 18, 200, 116 + 23 * k);    // (the sheet's own box on the second line stays: CB Voice's)
-        Add(222, 116, "Unlim. Turrets", null);
-        Add(205, 117, () => Check(s.UnlimTurrets), () => s.UnlimTurrets = !s.UnlimTurrets, Small, w: 200, h: 12);
-        // CB Voice: push-to-talk in network games (the Poem key); its microphone is chosen in Audio Control
-        Add(222, 139, "CB Voice", null);
-        Add(205, 140, () => Check(s.CbVoice), () => s.CbVoice = !s.CbVoice, Small, w: 200, h: 12);
-        // Check for Updates: whether the next start asks GitHub if a newer release exists (a line under the version says so)
-        Frame.CopyBackground(200, 139, 22, 18, 200, 162);
-        Add(222, 162, "Check for Updates", null);
-        Add(205, 163, () => Check(s.UpdateCheck), () => s.UpdateCheck = !s.UpdateCheck, Small, w: 200, h: 12);
-        // Chase Crosshair: the aiming mark in the F2 chase view (a network game shows it only when the host allows it)
-        Frame.CopyBackground(200, 139, 22, 18, 200, 185);
-        Add(222, 185, "Chase Crosshair", null);
-        Add(205, 186, () => Check(s.ChaseCrosshair), () => s.ChaseCrosshair = !s.ChaseCrosshair, Small, w: 200, h: 12);
-        Add(246, 438, "Back", () => Shell.Overlay(new PlayOptionsScreen()), Small);
-        Add(350, 438, "Done", Done, Small);
-        Add(402, 438, "Cancel", Cancel, Small);
+        for (int line = 0; line < List.Shown; line++)
+        {
+            int y = List.Top + List.LineH * line;
+            Frame.CopyBackground(300, y, 22, 18, 200, y);
+            if (_checks.Contains(List.SlotOn(line))) Frame.CopyBackground(200, 139, 22, 18, 200, y);
+        }
     }
 
     /// <summary>The CB Microphone choices: none (the empty string), the system's default, then each input device.</summary>
@@ -282,10 +357,9 @@ public sealed class PlayOptionsScreen : OverlayScreen
     private void Cancel()
     {
         var s = Shell.Settings;
-        var f = _first ?? this;
-        s.CbVoice = f._savedCb; s.UpdateCheck = f._savedUpdate; s.ChaseCrosshair = f._savedCrosshair;
-        s.PlayOptions = f._savedFlags; s.AutoReverse = f._savedAutoReverse; s.ModernPhysics = f._savedModern; s.ForceFeedback = f._savedForce; s.Checkpoints = f._savedCheckpoints;
-        s.SimRate = f._savedRate; s.MapDownloads = f._savedDownloads; s.HiddenContent = f._savedHidden; s.UnlimTurrets = f._savedTurrets;   // the difficulty is not restored
+        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair;
+        s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
+        s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored
         Shell.Overlay(new OptionsScreen());
     }
 
@@ -357,7 +431,7 @@ public sealed class AudioScreen : OverlayScreen
 }
 
 /// <summary>Graphic Detail, overlay 5: record 9, the sixteen-byte graphics block.</summary>
-public sealed class GraphicsScreen : OverlayScreen
+public sealed class GraphicsScreen : ScrollingOverlayScreen
 {
     protected override int Record => 9;
     private byte[] _saved = [];
@@ -381,101 +455,22 @@ public sealed class GraphicsScreen : OverlayScreen
     private void Apply(bool on) { Shell.Settings.HdMenuArt = on; HdAssets.Enabled = on; }
 
     // the port's own rows scroll in the sheet's free space under the original's: eight rows show of twelve, on the original's 23 px line
-    private const int ListY = 256, LineH = 23, Shown = 8;
-    private int _scroll;
-    private readonly List<(Item It, int Slot, int Dy)> _list = [];
-
-    private int Slots => _list.Count == 0 ? 0 : _list.Max(l => l.Slot) + 1;
-    private int MaxScroll => Math.Max(0, Slots - Shown);
+    private const int ListY = 256, Shown = 8;
+    protected override int MarkX => 386;    // in the gap before the value column
 
     /// <summary>One of the scrolling rows: its label and its value (a click on the value is <paramref name="click"/>), in list slot <paramref name="slot"/>.</summary>
     private void Row(int slot, string label, Func<string> value, Action click)
     {
         // the menu-art row (slot 0) is there only when an art pack is installed; without one the rest move up a line
         if (!HdAssets.Installed) { if (slot == 0) return; slot--; }
-        _list.Add((Add(200, ListY, label, null), slot, 0));
-        _list.Add((Add(397, ListY, value, click), slot, 0));
-    }
-
-    private void Reposition()
-    {
-        _scroll = Math.Clamp(_scroll, 0, MaxScroll);
-        foreach (var (it, slot, dy) in _list)
-        {
-            int row = slot - _scroll;
-            it.Hidden = row < 0 || row >= Shown;
-            it.Y = ListY + LineH * row + dy;
-        }
-    }
-
-    private bool ScrollBy(int by)
-    {
-        int to = Math.Clamp(_scroll + by, 0, MaxScroll);
-        if (to == _scroll) return false;
-        _scroll = to;
-        return true;
-    }
-
-    protected override void Redraw() { Reposition(); base.Redraw(); }
-
-    protected override bool Wheeled(int rows) => ScrollBy(Math.Sign(rows));
-
-    public override void Tick()
-    {
-        int by = (Shell.Keys.Contains(Key.Down) ? 1 : 0) - (Shell.Keys.Contains(Key.Up) ? 1 : 0)
-            + (Shell.Keys.Contains(Key.Pagedown) ? Shown : 0) - (Shell.Keys.Contains(Key.Pageup) ? Shown : 0);
-        bool moved = by != 0 && ScrollBy(by);
-        base.Tick();
-        if (moved && Shell.Current == this) Redraw();
-    }
-
-    public override IReadOnlyList<PadRegion> PadRegions
-    {
-        get
-        {
-            // a press past the top or bottom visible row scrolls the list a row
-            var l = new List<PadRegion>();
-            foreach (var i in Items)
-            {
-                if (i.Click is null || i.W <= 0 || i.Hidden) continue;
-                var slot = _list.FirstOrDefault(e => e.It == i);
-                Func<NavDir, bool>? edge = null;
-                if (slot.It is not null)
-                {
-                    int row = slot.Slot - _scroll;
-                    edge = d => d == NavDir.Up && row == 0 ? ScrollThenDraw(-1) : d == NavDir.Down && row == Shown - 1 ? ScrollThenDraw(1) : false;
-                }
-                l.Add(PadRegion.Of(i.X, i.Y, i.W, i.H, edge));
-            }
-            return l;
-        }
-    }
-
-    private bool ScrollThenDraw(int by)
-    {
-        if (!ScrollBy(by)) return false;
-        Redraw();
-        return true;
-    }
-
-    /// <summary>The list's scroll mark, in the sheet's ink: a thin track in the gap before the value column with a thumb, and an arrow at an end where there is more.</summary>
-    protected override void DrawExtra()
-    {
-        if (MaxScroll == 0) return;
-        const int x = 386, top = ListY + 6, h = LineH * Shown - 18;
-        int thumb = Math.Max(10, h * Shown / Slots), at = top + (h - thumb) * _scroll / MaxScroll;
-        Frame.Fill(x + 2, top, 1, h, 200);
-        Frame.Fill(x, at, 5, thumb, 200);
-        for (int k = 0; k < 4; k++)
-        {
-            if (_scroll > 0) Frame.Fill(x + 2 - k, top - 7 + k, 1 + 2 * k, 1, 200);
-            if (_scroll < MaxScroll) Frame.Fill(x + 2 - (3 - k), top + h + 3 + k, 1 + 2 * (3 - k), 1, 200);
-        }
+        Listed(Add(200, ListY, label, null), slot);
+        Listed(Add(397, ListY, value, click), slot);
     }
 
     protected override void Build()
     {
         var g = Shell.Settings.Graphics;
+        (List.Top, List.Shown) = (ListY, Shown);
         _saved = (byte[])g.Clone();
         _savedHd = Shell.Settings.HdMenuArt;
         _savedLook = Shell.Settings.Look1997;
@@ -498,7 +493,7 @@ public sealed class GraphicsScreen : OverlayScreen
         var st = Shell.Settings;
         // the port's own rows, one to a line: the menu art pack's (only when one is installed), with the pack's name beside it
         Row(0, "HD Menu Art", () => st.HdMenuArt ? "On" : "Off", () => Apply(!st.HdMenuArt));
-        if (HdAssets.Installed) _list.Add((Add(318, ListY + 3, () => HdAssets.Label ?? "", null, Small), 0, 3));
+        if (HdAssets.Installed) Listed(Add(318, ListY + 3, () => HdAssets.Label ?? "", null, Small), 0, 3);
         // the 1997 look: off, the original's 3D card or its software renderer (the shell keeps the look it started in; a change shows
         // from the next start or mission), with the modern look's palette grade (SoftwareLook) after it
         string[] modes = ["Off", "3D Card", "Software"];

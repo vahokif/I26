@@ -135,6 +135,35 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
+        bool isInteractive = args.Length == 0 && !Console.IsInputRedirected;
+        try
+        {
+            int code = await RunAsync(args);
+            if (isInteractive)
+            {
+                Console.WriteLine("\nPress Enter to exit...");
+                try { Console.ReadLine(); } catch { }
+            }
+            return code;
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine($"\n[ERROR] Unhandled Exception: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
+            Console.ResetColor();
+
+            if (!Console.IsInputRedirected)
+            {
+                Console.WriteLine("\nPress Enter to exit...");
+                try { Console.ReadLine(); } catch { }
+            }
+            return 1;
+        }
+    }
+
+    private static async Task<int> RunAsync(string[] args)
+    {
         string game = "all";
         string? i76Install = null;
         string? nitroInstall = null;
@@ -185,6 +214,16 @@ public static class Program
 
         i76Install ??= FindInstall("i76", rootDir);
         nitroInstall ??= FindInstall("nitro", rootDir);
+
+        if (string.IsNullOrEmpty(i76Install) && string.IsNullOrEmpty(nitroInstall))
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("\n[Warning] Neither Interstate '76 nor Nitro Pack was found on your system.");
+            Console.WriteLine("Copy your game folders here as 'i76' or 'nitro', or specify:");
+            Console.WriteLine("  --i76-install <path>   and/or   --nitro-install <path>");
+            Console.ResetColor();
+            return 1;
+        }
 
         // Resolve Whisper GGML model
         string resolvedModelPath = await ResolveModelAsync(modelPath, modelName, rootDir);
@@ -342,9 +381,17 @@ public static class Program
             catch { }
         }
 
+        try
+        {
+            foreach (string gog in I76.Formats.Installers.GogLibrary.FindOnSystem(_ => { }))
+                candidates.Add(gog);
+        }
+        catch { }
+
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (gameName.Equals("i76", StringComparison.OrdinalIgnoreCase))
         {
+            candidates.Add(@"C:\Program Files (x86)\GOG.com\Interstate 76 Arsenal\interstate 76");
             candidates.Add(@"C:\GOG Games\Interstate 76");
             candidates.Add(@"C:\Program Files (x86)\GOG Galaxy\Games\Interstate 76");
             candidates.Add(Path.Combine(home, ".wine", "drive_c", "GOG Games", "Interstate 76"));
@@ -353,6 +400,7 @@ public static class Program
         }
         else
         {
+            candidates.Add(@"C:\Program Files (x86)\GOG.com\Interstate 76 Arsenal\Interstate 76 Nitro Pack");
             candidates.Add(@"C:\GOG Games\Interstate 76 Nitro Pack");
             candidates.Add(@"C:\Program Files (x86)\GOG Galaxy\Games\Interstate 76 Nitro Pack");
             candidates.Add(Path.Combine(home, ".wine", "drive_c", "GOG Games", "Interstate 76 Nitro Pack"));
@@ -410,7 +458,7 @@ public static class Program
 
         foreach (var p in places)
         {
-            if (File.Exists(p)) return p;
+            if (File.Exists(p) && new FileInfo(p).Length > 1_000_000) return p;
         }
 
         // Needs download
@@ -418,11 +466,15 @@ public static class Program
         Console.WriteLine($"Model {fileName} not found locally. Downloading from repository...");
         Console.WriteLine($"Target: {target}");
 
-        using (var modelStream = await WhisperGgmlDownloader.Default.GetGgmlModelAsync(ggmlType))
-        using (var fileWriter = File.Create(target))
+        string tempTarget = target + ".tmp";
+        using (var modelStream = await WhisperGgmlDownloader.GetGgmlModelAsync(ggmlType))
+        using (var fileWriter = File.Create(tempTarget))
         {
             await modelStream.CopyToAsync(fileWriter);
         }
+
+        if (File.Exists(target)) File.Delete(target);
+        File.Move(tempTarget, target);
 
         Console.WriteLine("Download complete.");
         return target;

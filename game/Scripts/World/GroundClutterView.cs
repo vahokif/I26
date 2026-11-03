@@ -70,7 +70,7 @@ public partial class GroundClutterView : Node3D
         float tanH = cam.KeepAspect == Camera3D.KeepAspectEnum.Height ? t * aspect : t;
         var fwd = Axis(-cam.GlobalBasis.Z);
         var view = new GroundClutter.View(Coords.ToGame(local), Axis(cam.GlobalBasis.X), Axis(cam.GlobalBasis.Y), fwd, tanH, tanV);
-        var cards = GroundClutter.Place(view, _world.BilinearHeight, Surface);
+        var cards = GroundClutter.Place(view, Height, Surface);
 
         var turn = Coords.ToGodot(Billboard.EngineRows(fwd));
         if (fwd != _forward || _turnVersion == 0) { _forward = fwd; _turnVersion++; }
@@ -102,11 +102,23 @@ public partial class GroundClutterView : Node3D
             }
     }
 
+    private I76.Sim.Terrain.TerrainGround? _ground;
+
+    /// <summary>The bilinear ground, the outside ground's past the map's tiles (TerrainGround.Height, as the cars stand on it).</summary>
+    private double Height(double x, double z)
+    {
+        if (_world!.Outside is null) return _world.BilinearHeight(x, z);
+        _ground ??= new I76.Sim.Terrain.TerrainGround(_world.Terrain, new I76.Sim.Terrain.Surface[8], _world.Outside);
+        return _ground.Height(x, z);
+    }
+
     private int Surface(double x, double z)
     {
-        // As TerrainGround.SurfaceId: the sample's top bits (5 outside the sample range, as the original returns it)
+        // As TerrainGround.SurfaceId: the sample's top bits (5 outside the sample range, as the original returns it; the outside ground's own past the tiles)
         int sx = (int)Math.Floor(I76.Sim.Terrain.TerrainGround.Scale * (float)x + 0.5f), sz = (int)Math.Floor(I76.Sim.Terrain.TerrainGround.Scale * (float)z + 0.5f);
+        if (_world!.Terrain.Sample(sx, sz) is { } v) return (v >> 13) & 7;
+        if (_world.Outside is { } o) return o.SurfaceId;
         if (sx < 0 || sz < 0 || sx > 0x2800 || sz > 0x2800) return 5;
-        return ((_world!.Terrain.Sample(sx, sz) ?? 0) >> 13) & 7;
+        return 0;
     }
 }

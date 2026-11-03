@@ -207,7 +207,8 @@ public sealed partial class MissionSetup
         bool network = melee is not null && meleeRules?.Network == true;
         var settings = WorldSettings.Read(w.Mission);
         var surfaces = settings is null ? Enumerable.Repeat(new Surface(1.9f, 0.03f, 0, 0, 0), 8).ToArray() : TerrainGround.ReadSurfaces(settings);
-        var terrain = new TerrainGround(w.Terrain, surfaces);
+        // past the map's tiles: the outside ground (the one the drawing reads too), the same on every machine
+        var terrain = new TerrainGround(w.Terrain, surfaces, w.Outside);
         var statics = new StaticWorld();
         var staticOf = new Dictionary<Placement, StaticObject>();
         var classes = new Dictionary<string, Func<string, uint>>(StringComparer.OrdinalIgnoreCase);

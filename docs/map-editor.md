@@ -247,7 +247,9 @@ seen by everything built from the world. After an edit, `MapEditor` redraws what
 - **Cavity maps** (`TerrainNode.RefreshCavities`): the hollows the ground materials put gravel in.
 - **Roads** are painted into the terrain and follow it. When the road tool changes them, only the chunks they reach are painted again (see Roads).
 
-Not redrawn: the distant horizon ring (`HorizonTerrain`: it is made from the map once, so an edit at the map's very edge is not in it),
+Not redrawn: the distant horizon ring (`HorizonTerrain`: it is made from the map once, so an edit at the map's very edge is not in it)
+and the ground past the map's tiles (`OutsideGround`, `OutsideTerrain`: made from the map's edge when it loads, so it follows an edit there
+from the next playtest or reload, which the simulation drives on too),
 the grass tint map (`SwardMap`, the whole map, once), the ground faces painted from scenery (`GroundDecals`), rolling tumbleweeds'
 cached points. A reload (a playtest, opening a map) makes all of them again.
 

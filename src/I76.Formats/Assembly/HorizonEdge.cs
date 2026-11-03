@@ -37,18 +37,21 @@ public static class HorizonEdge
     /// <summary>
     /// The lowest ground within <paramref name="radius"/> of the eye (x, z), sampled every 25 units: the 1997 software
     /// sky's band stands on the line where this height meets the far clip (the 1997 build keeps the least
-    /// height of the terrain vertices it drew; 0 with no terrain drawn).
+    /// height of the terrain vertices it drew; 0 with no terrain drawn). Off the map's tiles, the outside ground where the map has
+    /// one (the 1997 look draws it within the clip).
     /// </summary>
     public static float Lowest(MissionWorld world, double x, double z, float radius = Clip)
     {
         float low = float.MaxValue;
+        var outside = world.Outside;
         for (float dz = -radius; dz <= radius; dz += Step)
             for (float dx = -radius; dx <= radius; dx += Step)
             {
                 if (dx * dx + dz * dz > radius * radius) continue;
                 double px = x + dx, pz = z + dz;
-                if (world.Terrain.Sample(MissionWorld.ToSample(px), MissionWorld.ToSample(pz)) is null) continue;
-                low = Math.Min(low, (float)world.GroundHeight(px, pz));
+                int sx = MissionWorld.ToSample(px), sz = MissionWorld.ToSample(pz);
+                if (world.Terrain.Sample(sx, sz) is not null) low = Math.Min(low, (float)world.GroundHeight(px, pz));
+                else if (outside is not null) low = Math.Min(low, outside.Raw(sx, sz) * (float)MissionWorld.HeightScale);
             }
         return low == float.MaxValue ? 0f : low;
     }

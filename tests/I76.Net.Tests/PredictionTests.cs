@@ -92,6 +92,45 @@ public class PredictionTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Off the map (the outside ground, OutsideGround): the server's car and the client's prediction stay the same car bit for bit while
+    /// it drives about past M01's south edge and past its north edge, which is the edge of the 80x80 grid too (beyond it the original read
+    /// 0 whatever the samples), crossing back over the edge as the drive turns: host and client make the same ground from the map.
+    /// </summary>
+    [Theory]
+    [InlineData(2240.0, 49080.0, 20)]
+    [InlineData(2240.0, 51300.0, 28)]
+    public void TheClientsStepIsTheServersOffTheMap(double x, double z, int hz)
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var rate = SimRate.FromLabel(hz);
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Seed = 7, Rate = rate });
+        var seat = host.Join("a", "vppirna1.vcf", 0);
+        var car = seat.Player.Car;
+        car.Pos = new I76.Sim.Math.Double3(x, host.Setup.Ground.BareHeight(x, z) + 0.5, z);
+        var mirror = new ClientWorld(HostTests.Mirror("m01"), host.AcceptFor(seat));
+        var client = new MeleeClient();
+        var predictor = new OwnCarPredictor(mirror, client);
+        int n = rate.TicksFor(60);
+        double far = 0;
+        for (uint t = 1; t <= n; t++)
+        {
+            var input = Script(t);
+            seat.Inputs.Add(new InputMessage(t, [input]));
+            host.Step();
+            host.TakeEvents();
+            predictor.Step(t, input);
+            client.Inject(Through(host, seat));
+            predictor.Reconcile();
+            far = Math.Max(far, Math.Max(49280 - car.Pos.Z, car.Pos.Z - 51200));
+        }
+        output.WriteLine($"{hz} Hz from {x},{z}: {predictor.Compared} compared, {predictor.Inexact} not exact, max {predictor.MaxError:0.000} m; " +
+            $"up to {far:0} m off the map, now at {car.Pos.X:0.0},{car.Pos.Y:0.0},{car.Pos.Z:0.0} (ground {host.Setup.Ground.BareHeight(car.Pos.X, car.Pos.Z):0.0})");
+        Assert.True(far > 100, $"only {far:0} m off the map");
+        Assert.True(predictor.Compared > n - 5, $"{predictor.Compared} of {n}");
+        Assert.Equal(0, predictor.Inexact);
+    }
+
+    /// <summary>
     /// A small correction is drawn away, not jumped: the server nudges the car half a metre and turns it 5°, and right
     /// after the snapshot is taken the car is drawn where it was before (the offset), then over a few tenths of a second
     /// where the prediction now has it; the car itself has snapped. A big one (8 m) is drawn at once.

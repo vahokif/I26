@@ -123,7 +123,7 @@ public partial class TerrainNode : Node3D
         var origins = ChunkOrigins(world.Terrain);
         var arrays = new (Vector3[], Vector3[], Vector2[], Vector2[], int[])[origins.Count];
         // a playtest of the map editor builds the ground it already built for its editor from the same heights: the arrays are kept for the session
-        string scope = I76.Formats.Vfs.SessionStore.Active ? $"terrain97|{world.Terrain.ContentHash():x}|" : "";
+        string scope = I76.Formats.Vfs.SessionStore.Active ? $"terrain97|{world.Terrain.ContentHash():x}|{world.Outside?.Key ?? "-"}|" : "";
         Parallel.For(0, origins.Count, i =>
         {
             var (x0, z0) = origins[i];
@@ -179,9 +179,10 @@ public partial class TerrainNode : Node3D
         var seeds = TerrainSurface.Seeds(world).ToList();
         var cache = MissionBuilder.HeightCache;
         bool session = I76.Formats.Vfs.SessionStore.Active;
-        string? key = cache is null && !session ? null : TerrainSurface.CacheKey(world.Terrain, seeds);
+        var outside = world.Outside;
+        string? key = cache is null && !session ? null : TerrainSurface.CacheKey(world.Terrain, seeds, outside);
         if (cache is not null && key is not null && cache.Read("surface", key) is { } blobs && TerrainSurface.FromBlobs(blobs) is { } hit) { hit.Key = key; return hit; }
-        var surf = new TerrainSurface(world.Terrain, seeds) { Key = key };
+        var surf = new TerrainSurface(world.Terrain, seeds, outside) { Key = key };
         if (cache is not null && key is not null) MissionBuilder.Background(() => cache.Write("surface", key, surf.ToBlobs()));
         return surf;
     }
@@ -280,12 +281,19 @@ public partial class TerrainNode : Node3D
     /// <summary>The 1997 mesh's arrays for the chunk at (x0, z0): pure CPU, any thread.</summary>
     private sealed record Boxed((Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I) A);
 
-    private static (Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I) FaithfulArrays(MissionWorld w, int x0, int z0)
+    /// <summary>
+    /// The 1997 mesh's arrays for the chunk at sample origin (x0, z0), chunk-local: one vertex per sample, as the engine's terrain is lit.
+    /// Off the map's tiles the outside ground's samples (the simulation's), so a chunk at the map's edge runs into it and a chunk of the
+    /// outside ground (OutsideTerrain) is drawn the same way.
+    /// </summary>
+    internal static (Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I) FaithfulArrays(MissionWorld w, int x0, int z0)
     {
         int tileX = x0 - x0 % TerrainTiles.Tile, tileZ = z0 - z0 % TerrainTiles.Tile;
+        var outside = w.Outside;
         int Sample(int sx, int sz)
         {
             if (w.Terrain.Sample(sx, sz) is { } v) return v & MissionFile.HeightMask;
+            if (outside is not null) return outside.Raw(sx, sz);
             sx = Math.Clamp(sx, tileX, tileX + TerrainTiles.Tile - 1);
             sz = Math.Clamp(sz, tileZ, tileZ + TerrainTiles.Tile - 1);
             return (w.Terrain.Sample(sx, sz) ?? 0) & MissionFile.HeightMask;

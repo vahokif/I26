@@ -72,15 +72,19 @@ public sealed class TerrainSurface : ITerrainSurface
     public string? Key { get; set; }
 
     /// <summary>Changes with anything that changes the surface's arrays: cached surfaces (<see cref="CacheKey"/>) are keyed by it.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
-    /// <summary>The bake cache's key for the surface of these tiles from these seeds: everything the arrays are made from.</summary>
-    public static string CacheKey(TerrainTiles tiles, IReadOnlyList<Vector2> seeds)
+    /// <summary>Samples of the outside ground the surface holds round the map's bounds (<see cref="OutsideGround"/>): the cubic and the filters reach this far.</summary>
+    public const int OutsidePad = 8;
+
+    /// <summary>The bake cache's key for the surface of these tiles from these seeds (and the ground outside them): everything the arrays are made from.</summary>
+    public static string CacheKey(TerrainTiles tiles, IReadOnlyList<Vector2> seeds, OutsideGround? outside = null)
     {
         using var k = new BakeCache.Key("terrain-surface");
         k.Add(Version).Add(tiles.TileCount).Add<byte>(tiles.Grid);
         for (int t = 0; t < tiles.TileCount; t++) k.Add(tiles.TileSamples(t));
         k.Add<Vector2>(seeds.ToArray());
+        k.Add(outside?.Key ?? "-");
         return k.Finish();
     }
 
@@ -113,8 +117,16 @@ public sealed class TerrainSurface : ITerrainSurface
     }
 
     /// <param name="seeds">Points known to be reachable, in sample coordinates (placements, roads); none: every gentle cell is open.</param>
-    public TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds = null)
-        : this(tiles, seeds, tiles.Bounds() is var (r0, r1, c0, c1) ? (c0 * TerrainTiles.Tile, r0 * TerrainTiles.Tile, (c1 - c0 + 1) * TerrainTiles.Tile, (r1 - r0 + 1) * TerrainTiles.Tile) : default)
+    /// <param name="outside">
+    /// The ground past the map's tiles: the surface then holds <see cref="OutsidePad"/> of its samples round the bounds (and in the empty
+    /// cells), so the map's last cells are drawn running into it as the simulation has them, and every gentle cell there is open (a car can
+    /// come in from outside). Null: samples off the tiles take the nearest one's height, the map's edge is level.
+    /// </param>
+    public TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds = null, OutsideGround? outside = null)
+        : this(tiles, seeds, tiles.Bounds() is var (r0, r1, c0, c1)
+            ? outside is null ? (c0 * TerrainTiles.Tile, r0 * TerrainTiles.Tile, (c1 - c0 + 1) * TerrainTiles.Tile, (r1 - r0 + 1) * TerrainTiles.Tile)
+                : (c0 * TerrainTiles.Tile - OutsidePad, r0 * TerrainTiles.Tile - OutsidePad, (c1 - c0 + 1) * TerrainTiles.Tile + 2 * OutsidePad, (r1 - r0 + 1) * TerrainTiles.Tile + 2 * OutsidePad)
+            : default, outside)
     {
     }
 
@@ -122,9 +134,9 @@ public sealed class TerrainSurface : ITerrainSurface
     /// The surface over a window of samples (a block of <see cref="BlockedSurface"/>): <paramref name="rect"/> is its corner and size in
     /// sample coordinates; seedless, so every gentle cell is open.
     /// </summary>
-    public TerrainSurface(TerrainTiles tiles, (int X0, int Z0, int W, int H) rect) : this(tiles, null, rect) { }
+    public TerrainSurface(TerrainTiles tiles, (int X0, int Z0, int W, int H) rect) : this(tiles, null, rect, null) { }
 
-    private TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds, (int X0, int Z0, int W, int H) rect)
+    private TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds, (int X0, int Z0, int W, int H) rect, OutsideGround? outside)
     {
         (_sx0, _sz0, _w, _h) = rect;
         int n = _w * _h;
@@ -137,6 +149,11 @@ public sealed class TerrainSurface : ITerrainSurface
                 {
                     int i = z * _w + x;
                     raw[i] = v & MissionFile.HeightMask; have[i] = true; queue.Enqueue(i);
+                }
+                else if (outside is not null)
+                {
+                    int i = z * _w + x;
+                    raw[i] = outside.Raw(_sx0 + x, _sz0 + z); have[i] = true;
                 }
         // samples in empty grid cells inside the bounds take the nearest one's height, so every point has one neighbourhood
         while (queue.Count > 0)
@@ -218,6 +235,17 @@ public sealed class TerrainSurface : ITerrainSurface
             Array.Copy(gentle, _open, n);
         else
         {
+            // with the outside ground, every gentle cell with a corner off the tiles is reachable: a car can drive in from there
+            if (outside is not null)
+                for (int z = 0; z < _h - 1; z++)
+                    for (int x = 0; x < w - 1; x++)
+                    {
+                        int i = z * _w + x;
+                        if (!gentle[i] || _open[i]) continue;
+                        if (tiles.Sample(_sx0 + x, _sz0 + z) is null || tiles.Sample(_sx0 + x + 1, _sz0 + z) is null
+                            || tiles.Sample(_sx0 + x, _sz0 + z + 1) is null || tiles.Sample(_sx0 + x + 1, _sz0 + z + 1) is null)
+                        { _open[i] = true; queue.Enqueue(i); }
+                    }
             foreach (var s in seedList)
             {
                 int cx = (int)Math.Floor(s.X) - _sx0, cz = (int)Math.Floor(s.Y) - _sz0;

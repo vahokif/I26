@@ -38,7 +38,8 @@ public sealed class Drawn1997
             }
     }
 
-    private int Sample(int sx, int sz) => (_world.Terrain.Sample(sx, sz) ?? 0) & MissionFile.HeightMask;
+    // off the map's tiles, the outside ground's samples (OutsideTerrain draws them so)
+    private int Sample(int sx, int sz) => _world.Terrain.Sample(sx, sz) is { } v ? v & MissionFile.HeightMask : _world.Outside?.Raw(sx, sz) ?? 0;
     private float Vertex(int sx, int sz) => (float)(TerrainTriangles.Despiked(Sample, sx, sz) * MissionWorld.HeightScale);
 
     /// <summary>The terrain mesh's height at a game-space (x, z).</summary>

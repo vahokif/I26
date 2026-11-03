@@ -5,6 +5,7 @@
 Network games use protocol 22: this release does not play with 0.11.0 or earlier, so everyone in a game needs it.
 
 ### New
+- You can drive off the edge of a map: the land carries on from the map's edge, smoothly and with no drop, into the hills and mountains on the horizon, and you can drive on them. In the 1997 look it shows within the original's 600 m view, with the horizon and sky beyond as before. Missions that fail you for leaving an area still do, and computer cars stay on the map as before.
 - Mouse Options: a new menu screen, opened from the Options menu, Control Configuration or the in-mission Escape menu, gathers the mouse settings in one place: Mouse Camera, a finer Mouse Sensitivity (10% to 200% in 10% steps), Invert Y Axis, Camera Return, View Zoom Reset, Mouse In Window, and direct bindings for the left, right, middle and two side mouse buttons. These settings have moved out of Graphic Detail (#145).
 - Cockpit Mouse Look (Mouse Options, off by default): the mouse turns the driver's head in the 3D cockpit, so you can look out of the side windows and over your shoulder (#145).
 - Chase Crosshair (Play Options, off by default): a small crosshair in the F2 chase view shows where a shot from your selected gun, cannon or rocket would land, and turns red when it would hit a car. In a network game it shows only if the host ticks the new Chase Crosshair game option (#145).

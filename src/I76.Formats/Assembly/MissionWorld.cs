@@ -70,6 +70,24 @@ public sealed class MissionWorld
         }
     }
 
+    private Lazy<OutsideGround?>? _outside;
+
+    /// <summary>
+    /// The ground past the map's tiles (<see cref="OutsideGround"/>): made on first use, then the same object for the simulation and the
+    /// drawing; null for a map too big for it. <see cref="ForgetOutside"/> after the terrain changed (the map editor).
+    /// </summary>
+    public OutsideGround? Outside
+    {
+        get
+        {
+            if (_outside is null) Interlocked.CompareExchange(ref _outside, new Lazy<OutsideGround?>(() => OutsideGround.For(_vfs, this)), null);
+            return _outside!.Value;
+        }
+    }
+
+    /// <summary>The terrain was edited: <see cref="Outside"/> is made again from it when next asked for.</summary>
+    public void ForgetOutside() => _outside = null;
+
     /// <summary>The names WDEF holds, read again: after <see cref="WorldSettings.Patch"/> changed the mission's look in memory (the map editor).</summary>
     public void RefreshLook()
     {

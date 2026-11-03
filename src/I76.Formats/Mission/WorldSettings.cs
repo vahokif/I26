@@ -209,6 +209,6 @@ public static class HorizonList
         return names.Length >= Panels ? names[..Panels] : null;
     }
 
-    /// <summary>The top ring's height: half a panel's chord.</summary>
-    public static float PanelHeight => 0.5f * 2 * Radius * MathF.Sin(MathF.PI / Panels);
+    /// <summary>The top ring's height: half a panel's chord, 6000 sin(π/16), as a fixed number (a platform's sine could round it otherwise, and the outside ground stands on it).</summary>
+    public const float PanelHeight = 1170.542f;
 }

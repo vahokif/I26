@@ -1728,22 +1728,17 @@ public partial class Main : Node3D
     private bool _horizonEyeSet;
 
     /// <summary>
-    /// Fixes the 3D horizon ring's sink for the mission at a reference eye over the map's centre, at the map's average
-    /// ground height plus the chase eye's few metres: the original moves its ring with the eye's height (foot 10.2 x camY
-    /// below it), the modern look keeps one height for the mission. Once; nothing follows the camera after.
+    /// The 3D horizon ring's debug hooks, once it is in the scene. Its sinking for the mission (the original moves its ring with the eye's
+    /// height, foot 10.2 x camY below it; the modern look keeps one height for the mission, HorizonEdge.Ring) is in its heights already
+    /// (OutsideGround): nothing follows the camera.
     /// </summary>
     private void SetHorizonEye()
     {
         if (_horizonEyeSet || _horizon?.Material is not { } m || _builder?.World is not { } world) return;
         _horizonEyeSet = true;
-        var (low, eyeY) = I76.Formats.Assembly.HorizonEdge.Ring(world);   // one height for the map (HorizonEdge.Ring)
-        m.SetShaderParameter("ref_eye", new Vector3(0, eyeY, 0));
-        m.SetShaderParameter("sink_low", low);
-        float footK = -I76.Formats.Mission.Lighting.HorizonFoot(1f) / I76.Formats.Mission.HorizonList.Radius;
-        m.SetShaderParameter("foot_k", footK);
         if (System.Environment.GetEnvironmentVariable("I76_HORIZON_TINT") == "1") m.SetShaderParameter("debug_tint", 1f);
-        _horizon.FitCullBounds(eyeY, footK, low);   // the sunk ring's own bounds, or chunks are culled that are in view
-        if (System.Environment.GetEnvironmentVariable("I76_HORIZON_DEBUG") == "1") GD.Print($"horizon: ring sunk for an eye at game height {eyeY:0.0} (the map's average ground + 3)");
+        if (System.Environment.GetEnvironmentVariable("I76_HORIZON_DEBUG") == "1" && world.Outside is { } o)
+            GD.Print($"horizon: ring sunk for an eye at game height {o.Sink.EyeY:0.0} (counted from {o.Sink.Low:0.0})");
     }
 
     /// <summary>The finished ring into the scene, and the sky told it is there.</summary>
@@ -1752,6 +1747,7 @@ public partial class Main : Node3D
         var _horizon = this._horizon!;
         _horizon.Position = Coords.ToGodot(_horizon.Centre.X, 0, _horizon.Centre.Y);
         _worldRoot.AddChild(_horizon);
+        if (_builder?.OutsideNode is { } outside) { outside.Modern = _horizon.Material; outside.Ring = _horizon; }
         _horizonEyeSet = false;
         SetHorizonEye();
         foreach (var p in new[] { "horizon_color", "sprite_dir", "light_strength" })
@@ -2014,6 +2010,8 @@ public partial class Main : Node3D
     private void AddDropShadows()
     {
         if (_builder?.World is not { } w) return;
+        // the bare ground the cars stand on (the outside ground's past the map's tiles), else the map's own
+        float Bare(double x, double z) => _sim?.Session?.World.Ground is { } sg ? sg.BareHeight(x, z) : (float)w.BilinearHeight(x, z);
         // a night preset: the cars' lights (NightLights), which also pick the shadows' light near them
         NightLights? night = null;
         if (!_builder.Light.IsDay)
@@ -2021,13 +2019,13 @@ public partial class Main : Node3D
             float GroundGodot(float x, float z)
             {
                 var g = Coords.ToGame(new Vector3(x, 0, z)) + _origin;
-                return (float)w.BilinearHeight(g.X, g.Z) - _origin.Y;
+                return Bare(g.X, g.Z) - _origin.Y;
             }
             AddChild(night = new NightLights { Name = "NightLights", Cars = () => _sim?.Cars ?? [], Ground = GroundGodot, MoonIntensity = _builder.Light.Intensity });
         }
         _drops = new DropShadows
         {
-            Name = "DropShadows", Ground = (x, z) => (float)w.BilinearHeight(x, z), Origin = () => _origin,
+            Name = "DropShadows", Ground = (x, z) => Bare(x, z), Origin = () => _origin,
             Casters = Casters, Light = () => _lightDir,
             Surface = (x, y, z) => _sim?.Session?.World.Ground is { } g ? g.Query(x, y, z).Height : (float)w.BilinearHeight(x, z), LightAt = night is null ? null : night.ShadowLight,
         };
@@ -2145,6 +2143,7 @@ public partial class Main : Node3D
         _mode1997 = on;
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
         _builder?.Terrain?.UseModern(!on);
+        _builder?.OutsideNode?.UseModern(!on);
         _builder?.Roads?.SetMode1997(on);
         _builder?.RoadsOffGround?.SetMode1997(on);
         // both looks paint the roads and the road pieces into the terrain (RoadRaster); their meshes stay hidden

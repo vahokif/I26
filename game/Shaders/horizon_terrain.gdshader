@@ -32,14 +32,16 @@ uniform float haze_reach = 13000.0;  // then 1 - exp(-(d/reach)^2): 63% this far
 uniform float far_clip = 20000.0;    // wholly sky by here
 uniform float haze_floor = 0.0;      // air this much hazier from the start (night)
 
-// The original's panels stand on a ring whose foot is 10.2 x the eye's game height below the eye, so over
-// high ground they sink below the horizon. The ring's base is put on the cone from the reference eye (over the map's
-// centre at its average ground height; fixed for the mission, nothing moves with the camera) through that foot: height eye_y*(1 - foot_k*rho) at
-// horizontal distance rho from it, foot_k = 10.2/6000. The features, scaled with their radius, keep the panels' angular
-// size, so they rise and sink where the panels do. Fades in from the map's edge (800 m) so none shows between it and the ring.
-uniform float foot_k = 0.0;          // 0: no sinking
-uniform float sink_low = 0.0;        // the height the cone is counted from (HorizonEdge.Ring: 0 for a stock map, the lowest ground for a custom one)
-uniform vec3 ref_eye = vec3(0.0);    // the reference eye, centre-relative game frame (y absolute)
+// The heights come sunk as the panels sink (the cone through their foot for one reference eye per map, OutsideGround):
+// nothing here moves with the camera.
+
+// OutsideTerrain draws the outside ground's own samples near the camera with this material (UV2.y = 1 on its vertices): the
+// ring gives way under them. R of near_mask is 1 for each 160 m chunk they cover (near_origin its corner, centre-relative
+// game frame, near_cells chunks a side).
+uniform sampler2D near_mask : filter_nearest, repeat_disable;
+uniform vec2 near_origin = vec2(0.0);
+uniform float near_cells = 0.0;      // 0: none
+const float NEAR_CHUNK = 160.0;
 
 // R: the lowest playable ground near each 10 m texel of the map's bounds (1e9 off the tiles; HorizonTerrain.FloorGrid): over the
 // map the ring is drawn only where it is under that, as a backstop under the terrain's edge, never poking through the ground.
@@ -54,6 +56,7 @@ varying vec3 g_nrm;
 varying vec4 v_data;   // sun visibility, rockiness, style (0 peaks .. 1 mesas)
 varying vec2 v_aux;    // height above the base, distance from the map
 varying vec3 v_up;     // world up in view space, for light()
+varying float v_near;  // 1 on OutsideTerrain's chunks
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 // one without sin, for cell indices in the thousands (Hoskins' hash12)
@@ -78,18 +81,18 @@ void vertex() {
 	g_nrm = vec3(NORMAL.x, NORMAL.y, -NORMAL.z);
 	v_data = COLOR;
 	v_aux = UV;
-	if (foot_k > 0.0) {
-		float rho = length(g_pos.xz - ref_eye.xz);
-		float cone = sink_low + (ref_eye.y - sink_low) * (1.0 - foot_k * rho);
-		float base = g_pos.y - UV.x;   // the ring's ground under this vertex (UV.x is the height above it)
-		VERTEX.y += smoothstep(0.0, 800.0, UV.y) * min(cone - base, 0.0);
-	}
+	v_near = UV2.y;
 }
 
 void fragment() {
 	// every path writes DEPTH (the backstop below moves it): a shader that writes it on one path only leaves it undefined
 	// on the others, which some drivers take as near, drawing the whole ring over the map (#69)
 	DEPTH = FRAGCOORD.z;
+	if (near_cells > 0.0 && v_near < 0.5) {
+		vec2 cell = (g_pos.xz - near_origin) / NEAR_CHUNK;
+		if (cell.x >= 0.0 && cell.y >= 0.0 && cell.x < near_cells && cell.y < near_cells
+			&& textureLod(near_mask, (floor(cell) + 0.5) / near_cells, 0.0).r > 0.5) discard;
+	}
 	if (map_extent.x > 0.0) {
 		vec2 tuv = (g_pos.xz - map_origin) / map_extent;
 		if (tuv.x >= 0.0 && tuv.y >= 0.0 && tuv.x < 1.0 && tuv.y < 1.0) {
@@ -107,10 +110,10 @@ void fragment() {
 	float rocky = v_data.g, style = v_data.b;
 	float above = v_aux.x, from_map = v_aux.y;
 
-	// ---- detail: a few octaves of noise, as bumps and as colour ----
+	// ---- detail: a few octaves of noise, as bumps and as colour (down to 1.25 m, which only the near chunks' pixels are fine enough for) ----
 	vec2 grad = vec2(0.0);
 	float detail = 0.0, cell = 320.0, amp = 1.0;
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < 9; i++) {
 		float keep = smoothstep(1.0, 4.0, cell / footprint);
 		if (keep <= 0.0) break;
 		float a = float(i) * 2.3999632;

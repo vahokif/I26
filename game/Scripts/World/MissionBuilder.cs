@@ -12,6 +12,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public AssetVfs Vfs => vfs;
     public MissionWorld? World { get; private set; }
     public TerrainNode? Terrain { get; private set; }
+    /// <summary>The ground past the map's tiles near the camera (null for a map too big for it).</summary>
+    public OutsideTerrain? OutsideNode { get; private set; }
     public ScenerySpawner? Scenery { get; private set; }
     public MeshBuilder? Meshes { get; private set; }
     private I76.Game.Sim.CarPartsCache? _carParts;
@@ -614,6 +616,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
         if (I76.Game.Editor.SwitchTimer.On) GD.Print($"switch: terrain content {world.Terrain.ContentHash():x16}");
         Trace("terrain built");
         root.AddChild(Terrain);
+        if (world.Outside is not null && System.Environment.GetEnvironmentVariable("I76_OUTSIDE_CHUNKS") != "0")   // I76_OUTSIDE_CHUNKS=0: the ring alone out there (A/B)
+        {
+            OutsideNode = new OutsideTerrain { Name = "OutsideTerrain" };
+            OutsideNode.Setup(world, TerrainMaterial);
+            root.AddChild(OutsideNode);
+        }
         RoadBakeMs = sw.ElapsedMilliseconds;
 
         Roads = new RoadNode { Name = "Roads", Visible = false, LightY = Light.Direction.Y * Light.Intensity, Ambient = Light.Ambient };

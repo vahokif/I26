@@ -43,6 +43,8 @@ uniform sampler2D road_layer : source_color, filter_linear_mipmap_anisotropic, r
 uniform bool has_road = false;
 uniform float chunk_units = 160.0;
 uniform float road_light_y = 0.2588;
+// the outside ground's chunks (OutsideTerrain): cut at this view depth, the original's 600 m clip, whatever the draw distance (0: none)
+uniform float clip_depth = 0.0;
 
 // the engine's light ramp (the mission's .act and .lum): a vertex lit `light` takes LUMA[round(31·light)]
 #include "res://Shaders/ramp.gdshaderinc"
@@ -81,6 +83,7 @@ void vertex() {
 }
 
 void fragment() {
+	if (clip_depth > 0.0 && -VERTEX.z > clip_depth) discard;
 	vec3 texel = show_light_only ? vec3(1.0)
 		: i76_software ? (i76_sw_ground_on ? to_linear(i76_point(i76_sw_ground, UV / samples_per_texture).rgb) : i76_tex(i76_point(ground_tex, UV / samples_per_texture).rgb))
 		: i76_tex(texture(ground_tex, UV / samples_per_texture).rgb);

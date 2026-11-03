@@ -15,7 +15,7 @@ uniform sampler2D map_floor : filter_nearest, repeat_disable;
 uniform vec2 map_origin = vec2(0.0);
 uniform vec2 map_extent = vec2(0.0);   // 0: no floor
 
-// What the masks make of a fragment of the ring at g_pos (centre-relative, game frame): 0 drawn, 1 not drawn (under a chunk near the
+// What the masks make of a fragment of the ring at the given position (centre-relative, game frame): 0 drawn, 1 not drawn (under a chunk near the
 // camera, or over the map's ground), 2 drawn at twice its distance (over the outermost 10 m of a tile, which the modern surface can
 // pull a few metres in from the tile's edge: a backstop behind the terrain's edge, so that nothing of the ground stands behind it).
 int horizon_mask(vec3 g_pos) {

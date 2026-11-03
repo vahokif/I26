@@ -63,6 +63,8 @@ public partial class SmokeLayer : Node3D
     public static void Release(object owner) { lock (Lock) Slots.Remove(owner); }
 
     private const float SoftDistance = 1.5f;
+    /// <summary>I76_SMOKE_DEPTH_VIEW=1: the layer draws each puff as a square showing the scene's depth as the layer reads it (a cycle of hues for each doubling of the distance, red where the scene is nearer than the puff), to check its depth test on a new GPU or backend.</summary>
+    private static readonly bool DepthView = System.Environment.GetEnvironmentVariable("I76_SMOKE_DEPTH_VIEW") == "1";
 
     // ---- main thread: the compositor on the camera, the composite quad, the layer textures, the globals ----
     private MeshInstance3D? _quad;
@@ -198,7 +200,11 @@ public partial class SmokeLayer : Node3D
             vec4 lcount; vec4 lights[48];
         } u;
         layout(set = 0, binding = 2) uniform sampler2D noise_tex;
+        #ifdef MSAA
+        layout(set = 0, binding = 3) uniform sampler2DMS depth_tex;
+        #else
         layout(set = 0, binding = 3) uniform sampler2D depth_tex;
+        #endif
         layout(location = 0) in vec2 v_uv;
         layout(location = 1) flat in vec4 v_c;
         layout(location = 2) flat in vec4 v_t;
@@ -206,7 +212,50 @@ public partial class SmokeLayer : Node3D
         layout(location = 4) in vec3 v_lit;
         layout(location = 0) out vec4 o0;
         layout(location = 1) out vec4 o1;
+        // a scene texel's depth; with MSAA the nearest of its samples, read from the multisampled depth itself (the engine's
+        // resolved copy averages them, and at this point of the frame some GPUs had not yet written it: all of it on Apple's)
+        float depth_at(ivec2 p) {
+        #ifdef MSAA
+            float d = texelFetch(depth_tex, p, 0).r;
+            for (int s = 1; s < int(u.screen.z); s++) {
+                float e = texelFetch(depth_tex, p, s).r;
+                d = u.screen.w > 0.0 ? max(d, e) : min(d, e);
+            }
+            return d;
+        #else
+            return texelFetch(depth_tex, p, 0).r;
+        #endif
+        }
+        // the distance to the scene's nearest surface over every scene texel this layer pixel covers (SmokeDepth.Footprint),
+        // not the one under its centre: a layer pixel on a car's or a ridge's outline is hidden by the nearer of the two, so
+        // the upscaled layer never lays smoke over the outline
+        float scene_dist() {
+        #ifdef MSAA
+            ivec2 dsz = textureSize(depth_tex);
+        #else
+            ivec2 dsz = textureSize(depth_tex, 0);
+        #endif
+            vec2 k = u.screen.xy * vec2(dsz);
+            ivec2 lo = clamp(ivec2(floor((gl_FragCoord.xy - 0.5) * k)), ivec2(0), dsz - 1);
+            ivec2 hi = clamp(ivec2(ceil((gl_FragCoord.xy + 0.5) * k)) - 1, lo, dsz - 1);
+            float depth = depth_at(lo);
+            for (int j = 0; j < 3; j++)
+                for (int i = 0; i < 3; i++) {
+                    float d = depth_at(lo + ((hi - lo) * ivec2(i, j) + 1) / 2);
+                    depth = u.screen.w > 0.0 ? max(depth, d) : min(depth, d);   // screen.w: a larger depth is nearer (reversed z)
+                }
+            vec2 suv = gl_FragCoord.xy * u.screen.xy;
+            vec4 vp = u.invproj * vec4(suv * 2.0 - 1.0, depth, 1.0);
+            return -vp.z / vp.w;
+        }
         void main() {
+            if (u.cab_half.w > 0.0) {   // I76_SMOKE_DEPTH_VIEW: each puff a square showing the scene's distance as the layer reads it, a cycle of hues for each doubling, red where the scene hides the puff
+                float sd = scene_dist();
+                vec3 band = 0.5 + 0.5 * cos(6.2832 * (fract(log2(max(sd, 0.01))) + vec3(0.0, 0.33, 0.67)));
+                o0 = sd < -v_vpos.z ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(band * 0.6, 1.0);
+                o1 = vec4(0.0);
+                return;
+            }
             if (u.cab_half.x > 0.0) {
                 vec3 world = (u.invview * vec4(v_vpos, 1.0)).xyz;
                 vec3 q = abs((u.cab_inv * vec4(world, 1.0)).xyz) - u.cab_half.xyz;
@@ -236,11 +285,8 @@ public partial class SmokeLayer : Node3D
             vec3 col = base * lit * u.sun_light.w;
             // lit by the lamps: soot scatters little, steam and ash more
             col += mix(vec3(0.7), vec3(0.14), pow(v_c.z, 0.7)) * v_t.rgb * v_lit * (0.8 + 0.4 * n);
-            vec2 suv = gl_FragCoord.xy * u.screen.xy;
-            float depth = texture(depth_tex, suv).r;
-            vec4 vp = u.invproj * vec4(suv * 2.0 - 1.0, depth, 1.0);
             float dist = -v_vpos.z;
-            a *= clamp((-vp.z / vp.w - dist) / v_t.w, 0.0, 1.0);
+            a *= clamp((scene_dist() - dist) / v_t.w, 0.0, 1.0);
             if (u.cab_half.x > 0.0) a *= smoothstep(1.5, 5.0, dist);   // as damage_smoke_modern: puffs by the cockpit camera thin out
             a = clamp(a, 0.0, 1.0);
             o0 = vec4(col * a, a);
@@ -248,7 +294,8 @@ public partial class SmokeLayer : Node3D
         }
         """;
 
-    private static Rid _shader, _pipeline, _sampler, _noiseSampler, _ubo, _ssbo, _fb, _t0Rd, _t1Rd;
+    private static readonly Rid[] _shaders = new Rid[2], _pipelines = new Rid[2];
+    private static Rid _sampler, _noiseSampler, _ubo, _ssbo, _fb, _t0Rd, _t1Rd;
     private static Vector2I _size, _depthFor;
     private static long _fbFormat = -1;
     private static readonly float[] Ubo = new float[UboFloats];
@@ -261,7 +308,6 @@ public partial class SmokeLayer : Node3D
         public SmokeEffect()
         {
             EffectCallbackType = EffectCallbackTypeEnum.PostOpaque;
-            AccessResolvedDepth = true;
             Enabled = true;
         }
 
@@ -292,9 +338,13 @@ public partial class SmokeLayer : Node3D
         var full = buffers.GetInternalSize();
         if (full.X <= 0 || full.Y <= 0) return;
         var size = new Vector2I(Math.Max(1, full.X / Scale), Math.Max(1, full.Y / Scale));
-        if (!_shader.IsValid && !Setup(rd)) return;
+        if (!_shaders[0].IsValid && !Setup(rd)) return;
         if (size != _size || !_t0Rd.IsValid) MakeTargets(rd, size);
-        var depth = buffers.GetDepthLayer(0);
+        // with MSAA the layer reads the multisampled depth itself, the nearest of each texel's samples, not the engine's resolved
+        // copy: read after the opaque pass that copy was empty on Apple GPUs (Metal and MoltenVK alike) and at times in patches elsewhere
+        int samples = SmokeDepth.Samples(buffers.GetMsaa3D());
+        int variant = samples > 1 ? 1 : 0;
+        var depth = buffers.GetDepthLayer(0, samples > 1);
 
         // the camera: view, projection (as the scene's own shaders see it: clip y down), their inverses, the cab box, the sun
         var camT = scene.GetCamTransform();
@@ -310,7 +360,10 @@ public partial class SmokeLayer : Node3D
         }
         lock (Lock) { Ubo[92] = _lightCount; Array.Copy(_lights, 0, Ubo, 96, _lightCount * 12); }
         Ubo[87] = SceneLight;
-        Ubo[88] = 1f / size.X; Ubo[89] = 1f / size.Y;
+        Ubo[83] = DepthView ? 1f : 0f;
+        bool reversed = SmokeDepth.NearerIsLarger(proj);
+        if (reversed != _reversed) { _reversed = reversed; GD.Print($"smoke layer: scene depth {(reversed ? "reversed" : "forward")}, {buffers.GetMsaa3D()}, {full.X}x{full.Y}"); }
+        Ubo[88] = 1f / size.X; Ubo[89] = 1f / size.Y; Ubo[90] = samples; Ubo[91] = reversed ? 1f : -1f;
         System.Buffer.BlockCopy(Ubo, 0, _bytes, 0, UboFloats * 4);
         rd.BufferUpdate(_ubo, 0, UboFloats * 4, _bytes.AsSpan(0, UboFloats * 4).ToArray());
         if (count > 0)
@@ -327,11 +380,11 @@ public partial class SmokeLayer : Node3D
             Tex(2, _noiseSampler, noise),
             Tex(3, _sampler, depth),
         };
-        var set = rd.UniformSetCreate(uniforms, _shader, 0);
+        var set = rd.UniformSetCreate(uniforms, _shaders[variant], 0);
         var dl = rd.DrawListBegin(_fb, RenderingDevice.DrawFlags.ClearColorAll, [new Color(0, 0, 0, 0), new Color(0, 0, 0, 0)]);
         if (count > 0)
         {
-            rd.DrawListBindRenderPipeline(dl, _pipeline);
+            rd.DrawListBindRenderPipeline(dl, _pipelines[variant]);
             rd.DrawListBindUniformSet(dl, set, 0);
             rd.DrawListDraw(dl, false, (uint)count, 4);
         }
@@ -339,6 +392,8 @@ public partial class SmokeLayer : Node3D
         rd.FreeRid(set);
         _cleared = count == 0;
     }
+
+    private static bool? _reversed;
 
     private static RDUniform Buf(int binding, RenderingDevice.UniformType type, Rid id)
     {
@@ -459,15 +514,19 @@ public partial class SmokeLayer : Node3D
 
     private static bool Setup(RenderingDevice rd)
     {
-        var src = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceVertex = Vert, SourceFragment = Frag };
-        var spirv = rd.ShaderCompileSpirVFromSource(src);
-        if (!string.IsNullOrEmpty(spirv.CompileErrorVertex) || !string.IsNullOrEmpty(spirv.CompileErrorFragment))
+        // two builds of the fragment shader: the scene's depth single-sampled, and multisampled (MSAA)
+        for (int v = 0; v < 2; v++)
         {
-            _failed = true;
-            GD.PrintErr($"smoke layer: shader: {spirv.CompileErrorVertex} {spirv.CompileErrorFragment}");
-            return false;
+            var src = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceVertex = Vert, SourceFragment = v == 0 ? Frag : Frag.Replace("#version 450", "#version 450\n#define MSAA") };
+            var spirv = rd.ShaderCompileSpirVFromSource(src);
+            if (!string.IsNullOrEmpty(spirv.CompileErrorVertex) || !string.IsNullOrEmpty(spirv.CompileErrorFragment))
+            {
+                _failed = true;
+                GD.PrintErr($"smoke layer: shader: {spirv.CompileErrorVertex} {spirv.CompileErrorFragment}");
+                return false;
+            }
+            _shaders[v] = rd.ShaderCreateFromSpirV(spirv);
         }
-        _shader = rd.ShaderCreateFromSpirV(spirv);
         _sampler = rd.SamplerCreate(new RDSamplerState { MinFilter = RenderingDevice.SamplerFilter.Nearest, MagFilter = RenderingDevice.SamplerFilter.Nearest, RepeatU = RenderingDevice.SamplerRepeatMode.ClampToEdge, RepeatV = RenderingDevice.SamplerRepeatMode.ClampToEdge });
         _noiseSampler = rd.SamplerCreate(new RDSamplerState { MinFilter = RenderingDevice.SamplerFilter.Linear, MagFilter = RenderingDevice.SamplerFilter.Linear, RepeatU = RenderingDevice.SamplerRepeatMode.Repeat, RepeatV = RenderingDevice.SamplerRepeatMode.Repeat });
         _ubo = rd.UniformBufferCreate(UboFloats * 4);
@@ -489,9 +548,8 @@ public partial class SmokeLayer : Node3D
         _t1Rd = rd.TextureCreate(fmt, new RDTextureView());
         _fb = rd.FramebufferCreate([_t0Rd, _t1Rd]);
         var fbFormat = rd.FramebufferGetFormat(_fb);
-        if (fbFormat != _fbFormat || !_pipeline.IsValid)
+        if (fbFormat != _fbFormat || !_pipelines[0].IsValid)
         {
-            if (_pipeline.IsValid) rd.FreeRid(_pipeline);
             var blend = new RDPipelineColorBlendState();
             for (int i = 0; i < 2; i++)
                 blend.Attachments.Add(new RDPipelineColorBlendStateAttachment
@@ -500,13 +558,54 @@ public partial class SmokeLayer : Node3D
                     SrcColorBlendFactor = RenderingDevice.BlendFactor.One, DstColorBlendFactor = RenderingDevice.BlendFactor.OneMinusSrcAlpha, ColorBlendOp = RenderingDevice.BlendOperation.Add,
                     SrcAlphaBlendFactor = RenderingDevice.BlendFactor.One, DstAlphaBlendFactor = RenderingDevice.BlendFactor.OneMinusSrcAlpha, AlphaBlendOp = RenderingDevice.BlendOperation.Add,
                 });
-            _pipeline = rd.RenderPipelineCreate(_shader, fbFormat, -1, RenderingDevice.RenderPrimitive.TriangleStrips, new RDPipelineRasterizationState(), new RDPipelineMultisampleState(), new RDPipelineDepthStencilState(), blend);
+            for (int v = 0; v < 2; v++)
+            {
+                if (_pipelines[v].IsValid) rd.FreeRid(_pipelines[v]);
+                _pipelines[v] = rd.RenderPipelineCreate(_shaders[v], fbFormat, -1, RenderingDevice.RenderPrimitive.TriangleStrips, new RDPipelineRasterizationState(), new RDPipelineMultisampleState(), new RDPipelineDepthStencilState(), blend);
+            }
             _fbFormat = fbFormat;
         }
         _size = size;
         _cleared = false;
         _rid0 = _t0Rd; _rid1 = _t1Rd;
         _version++;
+    }
+}
+
+/// <summary>
+/// How the smoke layer reads the scene's depth: each of its pixels (1/Scale of the scene's size each way, rounded down) takes
+/// the nearest surface over the scene texels it covers, so the layer's pixels between them leave out no scene texel at the
+/// right or bottom edge whatever the size, and the projection says which way the depth runs.
+/// </summary>
+public static class SmokeDepth
+{
+    /// <summary>The scene texels (first, last) along one axis that layer pixel <paramref name="px"/> covers, as the layer's shader takes them.</summary>
+    public static (int Lo, int Hi) Footprint(int px, int layer, int scene)
+    {
+        double k = (double)scene / layer;
+        int lo = Math.Clamp((int)Math.Floor(px * k), 0, scene - 1);
+        int hi = Math.Clamp((int)Math.Ceiling((px + 1) * k) - 1, lo, scene - 1);
+        return (lo, hi);
+    }
+
+    /// <summary>The scene texels the shader reads in a footprint along one axis (three, spread from first to last).</summary>
+    public static int[] Taps(int lo, int hi) => [lo + ((hi - lo) * 0 + 1) / 2, lo + ((hi - lo) * 1 + 1) / 2, lo + ((hi - lo) * 2 + 1) / 2];
+
+    /// <summary>The samples a scene texel has under the viewport's MSAA, which the layer reads for the nearest (1: the depth is single-sampled).</summary>
+    public static int Samples(RenderingServer.ViewportMsaa msaa) => msaa switch
+    {
+        RenderingServer.ViewportMsaa.Msaa2X => 2,
+        RenderingServer.ViewportMsaa.Msaa4X => 4,
+        RenderingServer.ViewportMsaa.Msaa8X => 8,
+        _ => 1,
+    };
+
+    /// <summary>Whether a larger depth is nearer the eye under <paramref name="proj"/> (the reversed z of Godot's Forward+ projection).</summary>
+    public static bool NearerIsLarger(Projection proj)
+    {
+        var a = proj * new Vector4(0, 0, -1, 1);
+        var b = proj * new Vector4(0, 0, -2, 1);
+        return a.Z / a.W > b.Z / b.W;
     }
 }
 

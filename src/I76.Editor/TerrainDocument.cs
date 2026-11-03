@@ -20,7 +20,7 @@ public sealed class TerrainDocument : IMapDocument
     /// Counts every change to the map as the editor holds it (heights, roads, placed objects, the look): never goes down, not even by a save or an undo.
     /// A copy of the world built at one revision shows the map exactly while the revision is still that one.
     /// </summary>
-    public long Revision => _revision + Roads.Version + (Layer?.Version ?? 0);
+    public long Revision => _revision + Roads.Version + (Layer?.Version ?? 0) + (Paths?.Version ?? 0);
 
     /// <param name="sourcePath">The mission file the map was read from (saving reads it again to write over).</param>
     /// <param name="saveDir">Where saves go: the install's addon\ folder.</param>
@@ -51,7 +51,9 @@ public sealed class TerrainDocument : IMapDocument
     public RoadStore Roads { get; }
     /// <summary>The map's placed objects as the editor holds them (set when the editor opens the map); saved with the heights.</summary>
     public Objects.ObjectLayer? Layer { get; set; }
-    public bool Modified => _dirty != 0 || Roads.Dirty || Layer is { } l && l.Version != l.SavedVersion || Look != FileLook;
+    /// <summary>The script's nav paths as the editor holds them (set when the editor opens the map); saved with the heights.</summary>
+    public Paths.PathStore? Paths { get; set; }
+    public bool Modified => _dirty != 0 || Roads.Dirty || Layer is { } l && l.Version != l.SavedVersion || Paths is { Dirty: true } || Look != FileLook;
 
     /// <summary>The map's look as it is now (the map style: palette, sky, ground, horizon, hour). <see cref="LookChanged"/> fires when it is set.</summary>
     public MapLook? Look { get; private set; }
@@ -160,9 +162,9 @@ public sealed class TerrainDocument : IMapDocument
     }
 
     /// <summary>Sets the modified flag: a map reopened after a playtest carries it over.</summary>
-    public void SetModified(bool modified) { _dirty = modified ? Math.Max(1, _dirty) : 0; if (!modified) { Roads.MarkSaved(); if (Layer is { } l) l.SavedVersion = l.Version; } }
+    public void SetModified(bool modified) { _dirty = modified ? Math.Max(1, _dirty) : 0; if (!modified) { Roads.MarkSaved(); if (Layer is { } l) l.SavedVersion = l.Version; Paths?.MarkSaved(); } }
 
-    public void MarkSaved() { _dirty = 0; Roads.MarkSaved(); if (Layer is { } l) l.SavedVersion = l.Version; }
+    public void MarkSaved() { _dirty = 0; Roads.MarkSaved(); if (Layer is { } l) l.SavedVersion = l.Version; Paths?.MarkSaved(); }
 
     /// <summary>A flat map: every sample at <paramref name="raw"/> with a clear nibble (drivable, no walls), reported as one change.</summary>
     public void Flatten(int raw)

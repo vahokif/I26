@@ -60,6 +60,7 @@ public sealed class MapDocument
         Tree.ReplaceSubs("ODEF", "OBJ\0", Objects.Select(o => new BwdNode("OBJ\0", (byte[])o.Payload.Clone())).ToList(), n => n.Payload.Length >= 0x64);
         Tree.ReplaceSubs("RDEF", "RSEG", Roads.Select(r => new BwdNode("RSEG", r.ToPayload())).ToList(), n => n.Payload.Length >= 8);
         Tree.ReplaceSubs("LDEF", "OBJ\0", Lines.Select(l => new BwdNode("OBJ\0", l.ToPayload())).ToList(), n => LineEdit.Read(n.Payload) is not null);
+        WritePaths();
         if (_zmapNode is not null)
         {
             var p = new byte[1 + Zmap.Length + _zmapTail.Length];
@@ -147,10 +148,31 @@ public sealed class MapDocument
         }
     }
 
-    // ---- ADEF (opaque) ----
+    // ---- ADEF ----
 
-    /// <summary>The FSM script payload, never interpreted or changed by the writer.</summary>
+    /// <summary>The FSM script payload. The writer changes only its nav-path table (<see cref="Paths"/>), and only when that was edited.</summary>
     public byte[] FsmPayload => Tree.Subs("ADEF", "FSM\0").Select(s => s.Node.Payload).FirstOrDefault() ?? [];
+
+    private List<PathEntry>? _paths;
+
+    /// <summary>
+    /// The script's nav paths, in table order (the script names a path by its index: replace or append entries, do not move them).
+    /// Read on first use; <see cref="ToBytes"/> writes them into the payload's table, the rest of the script as it was.
+    /// </summary>
+    public List<PathEntry> Paths => _paths ??= FsmPaths.Read(FsmPayload);
+
+    private void WritePaths()
+    {
+        if (_paths is null) return;
+        var old = FsmPayload;
+        var now = FsmPaths.Write(old, _paths);
+        if (now.AsSpan().SequenceEqual(old)) return;
+        if (Tree.Subs("ADEF", "FSM\0").Select(s => s.Node).FirstOrDefault() is { } node) { node.Payload = now; return; }
+        // no script chunk at all (every stock file has one, empty in a melee map): one goes into ADEF before its EXIT
+        var adef = Tree.Chunks.FirstOrDefault(c => c.Tag == "ADEF" && c.Children is not null) ?? throw new InvalidOperationException("the map has no ADEF chunk to keep its paths in");
+        int exit = adef.Children!.FindIndex(c => c.Tag == "EXIT");
+        adef.Children.Insert(exit < 0 ? adef.Children.Count : exit, new BwdNode("FSM\0", now));
+    }
 
     // ---- placed-object helpers ----
 

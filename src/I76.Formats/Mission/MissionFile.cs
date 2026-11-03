@@ -195,9 +195,16 @@ public sealed class MissionFile
         return o;
     }
 
+    /// <summary>
+    /// The script's payload in place of the file's own, for the map editor: its edited nav paths reach the world the game builds
+    /// (a playtest, the plants kept off the paths) without being written. Null: the file's.
+    /// </summary>
+    public byte[]? FsmOverride { get; set; }
+
     /// <summary>The ADEF/FSM payload; empty for missions without scripting.</summary>
     public byte[] FsmPayload()
     {
+        if (FsmOverride is { } ov) return ov;
         foreach (var (sc, b) in Subs("ADEF"))
             if (sc.Tag == "FSM\0") return b;
         return [];

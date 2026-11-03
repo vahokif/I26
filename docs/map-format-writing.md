@@ -15,14 +15,24 @@ The model is read, edit some fields, write: everything a field does not name is 
 | `RDEF` = `RREV`, `RSEG` roads (kind, count, 24-byte points), `EXIT` x4 | | `Roads` |
 | `ODEF` = `OREV`, `OBJ` placements (100 bytes), `EXIT` | | `Objects` |
 | `LDEF` = `LREV`, `OBJ` polylines (0x64 header, count, xyz points), `EXIT` | | `Lines` |
-| `ADEF` = `AREV`, `FSM` (the mission script), `EXIT` | | opaque, never touched (`FsmPayload` reads it) |
+| `ADEF` = `AREV`, `FSM` (the mission script), `EXIT` | | `Paths` (the script's nav-path table, `FsmPaths`); the rest of the script opaque, never touched (`FsmPayload` reads it) |
 | `.ter` | tiles of 128x128 little-endian u16 samples (0x8000 bytes): height in bits 0-11 (x 0.1 m), surface nibble in 12-15 | `TerrainTiles` |
 | `.npt` (mission text), `.hzd` (horizon), `.act`, `.lum`, `.tbl`, `.pcf` (preload), `.map` | text, palettes, textures the WRLD names | not written: a map names the stock ones, or ships them loose beside it |
 
 Spawns, regen pads, race checkpoints and CTF flags are not separate chunks: they are ODEF placements the object loader
 recognises by name and type. `MapObject.Role` classifies them: `spawn` / `#spawnN`
 (type 1; N is the CTF team), `regen`, `checkN` (N 1-98, `check99` the finish), `a1flagN` (type 2 or 3; N the team). Laps and
-capture limits are the game setup's (the lobby's), not the map's. The FSM is opaque; melee, race and CTF maps carry an empty one.
+capture limits are the game setup's (the lobby's), not the map's. The FSM is opaque but for its nav paths; melee, race and CTF maps carry an empty one.
+
+**Nav paths.** The script's paths are a table inside the FSM payload, after the prototype, actor and sound tables: a u32 count,
+then per path a 40-byte NUL-padded label, a u32 point count and that many float x, y, z (world frame; every stock point has y 0,
+the game takes the ground's height). The script names a path by its index in the table, never by its label; the script compiler
+wrote one copy of a path for each place that names it (P18 has `bridgenav` four times, every copy the same). `MapDocument.Paths`
+reads the table; `ToBytes` writes it back into the payload, everything before and after it byte for byte, and only when it changed
+(the stock files come back identical). A map with no script (an empty payload) that gets paths is given empty prototype, actor,
+sound, thread, data and code tables around them: the game reads an empty payload as those tables with no entries, so the map plays
+as before. `FsmPathUse` reads from the bytecode which entries the orders and tests name (goto, race, evade, teleport, the
+isWithinNav tests, the cut-scene cameras) where the index is an immediate or a thread parameter, followed through calls.
 
 ## What is parsed, what is preserved
 
@@ -46,7 +56,7 @@ kept. Typed views sit over copies of the payloads and are merged back slot for s
 - **World**: `ArenaName` (16 bytes at WRLD +0x13b, +0x12e in WREV 8), `Hour`, `CdTrack`, `Look` (a `MapLook`: the 13-byte names of the palette, sky, ground and horizon (WREV 9) and the hour; only fields that differ are written, names are checked for fit and extension, a ground's level digit is 1), `TerrainName` (the ZONE; 1-12 characters, no
   folder). Names are validated: the lists and the ZONE field are fixed-size.
 
-Not understood and therefore never changed: the WRLD light table and the other WRLD fields (the `.lum`, `.tbl`, text, scrounge, overview), the FSM script, the object bytes at
+Not understood and therefore never changed: the WRLD light table and the other WRLD fields (the `.lum`, `.tbl`, text, scrounge, overview), the FSM script (but its path table), the object bytes at
 0x38-0x5b and 0x64+ (none exist in the stock maps), the second `EXIT`s and the chunk revisions.
 
 ## The API
@@ -66,7 +76,7 @@ var blank = MapProject.CreateBlank("flat1", "Flat One", ".cbt", tilesWide: 2, ti
 
 `MapProject` (mission + terrain as a set: `Name`, `Extension`, `Mission`, `Terrain`, `ToFiles`, `SaveTo`, `SaveToAddon`, `CloneAs`,
 `CreateBlank`, `HeightAt`, `WorldBounds`), `MapDocument` (`Objects`, `Roads`, `Lines`, `Zmap`, `TileCount`, `ArenaName`, `Hour`,
-`CdTrack`, `TerrainName`, `WorldPayload`, `FsmPayload`, `Spawns`, `Regens`, `Checkpoints`, `Flags`, `ClearContent`, `ToBytes`),
+`CdTrack`, `TerrainName`, `WorldPayload`, `FsmPayload`, `Paths`, `Spawns`, `Regens`, `Checkpoints`, `Flags`, `ClearContent`, `ToBytes`),
 `MapObject` / `MapRole`, `RoadEdit` / `RoadEditPoint`, `LineEdit`, `TerrainTiles` (writers above), `BwdTree` / `BwdNode` (the raw
 tree, for anything else).
 

@@ -30,6 +30,8 @@ public static class MapSaver
         // the object layer writes every object it holds, then the roads write theirs and (RoadStore.Pieces) the intersection pieces over the layer's copies
         if (doc is TerrainDocument { Layer: { } layer }) layer.ApplyTo(project.Mission);
         if (roads is { Dirty: true }) roads.WriteTo(project.Mission);
+        // the script's path table, only when it was edited (the rest of the script is written as it was)
+        if (doc is TerrainDocument { Paths: { Dirty: true } paths }) paths.WriteTo(project.Mission);
         // the map style: written only where the editor changed them (a map saved as it was stays byte for byte)
         if (doc is TerrainDocument { Look: { } look } && !look.Equals(project.Mission.Look)) project.Mission.Look = look;
         bool inPlace = SameFolder(Path.GetDirectoryName(Path.GetFullPath(sourcePath))!, saveDir);

@@ -42,6 +42,7 @@ the modern look is the one it is built for.
 
 **Music.** The game's soundtrack plays while you edit: the CD tracks of the install the editor was opened from (Interstate '76's or the Nitro Pack's, whichever the map belongs to), a random one after another and never the one just played, at the Music level of Audio Control (nothing plays at level 0 or 1, or with no tracks in the install). The top bar's **MUSIC** button switches it off and on; the choice is kept with the player's settings (`editor_music` in the `[port]` section, written only when off). A playtest (F5) fades the music out for the mission's own and the editor starts a track again on the way back; leaving the editor ends it for the menu's music. `I76_EDITOR_MUSIC_SEEK=SECONDS` starts each track that far in (capture scripts: `music` presses the button, `key:F12` sends a key).
 | `M` `P` | the object tools: select, build (the palette). `J` `R` `Y` `Z` arm a spawn point, regen pad, CTF flag, race checkpoint (the rest of their keys are in "Building" below) |
+| `-` `=` | the path tool: edit paths, draw a new path (see Paths) |
 
 The status bar shows the tool, radius, strength, falloff, the ground's height and position under the cursor, and the frame rate.
 
@@ -255,7 +256,7 @@ about 11 ms a frame (88 fps), the largest brush (400 m) about 22 ms (45 fps), th
 
 ## Undo and redo
 
-A stroke is one command (`StrokeCommand`): for each tile it touched, the indices of the samples it changed with their raw values
+Roads, objects, paths and the map style have commands of their own on the same stack. A stroke is one command (`StrokeCommand`): for each tile it touched, the indices of the samples it changed with their raw values
 before and after. `UndoStack` keeps them (6 million samples at most; the oldest go first). A new stroke drops what was undone.
 A tile the ZMAP grid shows in more than one cell is one set of samples, so an edit there shows in every cell, and is stored once.
 
@@ -403,6 +404,66 @@ decals near a new road, the reachability the terrain surface computes at load.
 as it does a stock one: `EditorRoadTests` makes a road with the tool, saves it, and sends an AI car along it (start and goal within 10.5 of
 the road): the route has one waypoint per road point, 2.45 inside the edge, and the car drives it to the end staying within 3 of the centre
 line (all 458 ticks on the road).
+
+## Paths
+
+The **path tool** (`-` and `=`, or the PATHS group at the bottom of the tool column; `game/Scripts/Editor/Paths`, the table and
+its edits in `src/I76.Editor/Paths`) edits the **nav paths** of the map's mission script: the routes and spots its orders and
+tests name. `goto`, `race` and `evade` send a car along one, `teleport` puts a car at its first point, `isWithinNav` and
+`isWithinSqNav` test a car against its first point (a circle, a square), and the cut-scene cameras stand on or travel along one.
+They are the original mission builder's path layer (Arsenal, shipped for I'76 Gold and the Nitro Pack: a Path Layer toggle and a
+Path Toolbox with four tool buttons, new path, move point, delete path and insert point, and a "Path Label" field).
+
+**What a path is.** A label (up to 39 characters) and points in the ground's plane, in the order a car drives them. They live in the
+script's payload (`ADEF`/`FSM`, docs/map-format-writing.md, "Nav paths"); every stock point is at height 0, the game takes the
+ground's height wherever it needs one (a teleport, a camera) and the AI drives them in x and z, so the editor draws a path on the
+ground and writes its points at height 0 as the stock files have them. The script names a path by its place in the table, not its
+label: the original's script compiler wrote one copy of a path for every place that names it (`bridgenav` four times in P18,
+`panpath` three in T01). The editor shows the copies as one path and every edit changes them all.
+
+**The layer.** Each path is a line draped on the ground with an arrow on each leg (the way it is driven), a ball at each point (the
+first one white and larger) and its label by the first point; the selected path is amber and its points are handles (the selected
+one orange, the one under the cursor yellow). It is drawn over everything and unshaded, the same in both looks. It shows while the
+path tool is on, and with every tool when SHOW PATHS (the palette, or the panel's SHOW PATHS WITH EVERY TOOL) is on.
+
+**The tools** (the original's four buttons):
+
+| Mode | Key | Does |
+|---|---|---|
+| EDIT PATHS | `-` | click a path (its line or a point) to select it; drag a point to move it; a double click on the selected path's line, or `Insert` with the cursor near it, puts a point there; `Delete` or `Backspace` removes the selected point, or with no point selected asks to delete the path; `Esc` deselects |
+| NEW PATH | `=` | click the points on the ground in driving order; `Enter`, a right click or a double click finishes (a right click otherwise orbits as ever); `Backspace` takes the last point back, `Esc` cancels. The path is labelled `path1`, `path2`... and selected for its label |
+| INSERT POINT | | click on a path's line: a point goes there, and holding the button drags it into place |
+| DELETE | | click a point to remove it (a path keeps at least one: the tests read its first); click a line to delete its path, after "Delete the path NAME?" (YES / CANCEL) |
+
+Picking takes the nearest point within a few metres (more as the camera pulls back), else the nearest line.
+
+**The panel** (at the right, in place of the brush's): PATH LABEL (Enter or leaving the field renames the selected path; a label
+another path has, an empty one or one with characters the file cannot hold is refused, with the reason in red), the point count
+and length, how many copies the table holds, where the script names it (`goto (3)`, `isWithinSqNav (1)`...), DELETE POINT and
+DELETE PATH, and the list of the map's paths (a click selects one and brings the camera to its first point; `*` marks one the
+script names).
+
+**What the script names** is read from its bytecode (`FsmPathUse`, I76.Formats): an order's or test's path argument traced to an
+immediate or a thread parameter (a data cell), through calls. A script that keeps a path in a local variable and sets it as it runs
+is not followed, so a stock path the analysis finds nowhere ("Not found in the script's orders") may still be used: about three
+quarters of the stock maps' path entries are found.
+
+**What cannot be done.** I26 has no script compiler: the editor edits the compiled script's table, which the script indexes. So a
+path the map's script came with can be moved, reshaped and renamed but not deleted (it would move every later entry; DELETE PATH
+says why), and a new path goes at the end of the table and is saved with the map, where no compiled script names it. On a map
+with no script (every melee, race and CTF map) any path can be deleted. docs/deviations.md has the difference from the original
+mission builder, which compiled the script from its own workspace (its paths by label).
+
+**Undo, playtest, saving.** Every edit is one undo step (`PathCommand` over the `PathStore`, the table in file order; `Ctrl+Z`,
+`Ctrl+Y`), and the store and its history cross a playtest like the roads. The world a playtest builds reads the edited table
+(`MissionFile.FsmOverride`, set by `EditorSession.Prepare`: "editor: the world reads the edited paths" in the log), so a script
+that runs there, the plants the modern look keeps off the paths and the drivable-ground seeds all see the new points; the playtest
+itself runs the map as a melee, without its script. Run as a mission, the script's orders follow the edited points:
+`EditorPathTests` (tests/I76.Sim.Tests) moves every path of S04 a metre, builds the mission from the override and checks that the
+paths its intro drives the cars along are the edited ones. Save writes the table into the script's payload when it changed (the
+rest of the script byte for byte); a map with no script that gets paths is given empty script tables around them, which the game
+reads as no script. Saved as a copy, a story mission becomes a melee map (`.lvl`, `.cbt`) as before, so its script does not run in
+the copy; the paths are in the file.
 
 ## Geographic maps
 
@@ -584,6 +645,12 @@ a spawn in the middle.
   the fit), `Junctions` (detect, cut, settle after edits), `PieceStore`, `JunctionCommand`; `StructureAttach` (the ends of a deck or ramp, shared with the object tool); `Objects/`: `ObjectCatalogue`, `ObjectLayer` and `ObjectCommands`, `Footprint` and `PlaceRules`, `Snapping`, `RoadGeometry`, `RoadSplit`, `MapChecks`. Tests: `tests/I76.Editor.Tests` (brush maths, strokes, undo, saving through the real writers in a scratch folder,
   and that a refreshed `TerrainSurface` draws where a fresh one does; `RoadTests.cs`: curve sampling, snapping, grade limiting, the RSEG
   conventions against the stock roads, extension and loops, edits, conforming, undo, saving). `tests/I76.Sim.Tests/EditorRoadTests.cs`: the AI on a made road, the stock bridges and ramps against the structure ends.
+- Paths: `src/I76.Editor/Paths` (`PathStore`: the table, its copies grouped, what may be deleted, labels; `PathEdits` and `PathCommand`:
+  move, insert, delete a point, add, rename, delete a path, picking), `src/I76.Formats/Mission/Edit/FsmPaths.cs` (the table in the
+  payload), `src/I76.Formats/Fsm/FsmPathUse.cs` (what the script names); `game/Scripts/Editor/Paths`: `PathTool` (input, modes),
+  `PathToolUi` (palette group, panel, the `path:` script commands), `PathVisuals` (the layer). Tests: `PathTests.cs` (I76.Editor.Tests),
+  `MapPathTests.cs` (I76.Formats.Tests: every stock table written back byte for byte, an edited path saved and read back with the
+  script around it unchanged, paths in a map without a script, the analysis over the stock scripts), `EditorPathTests.cs` (I76.Sim.Tests).
 - `src/I76.Editor/ViewStash.cs` and `game/Scripts/Boot/MainStash.cs`: the editor's scene kept aside for its playtest (tests: `ViewStashTests` in `EditorTests.cs`, `RevisionCountsEveryEditAndNeverGoesDown`).
 - `src/I76.Sim/Terrain/PlaytestSpawn.cs`: the cursor ray to the playtest's spawn point and its refusals (tests: `PlaytestSpawnTests.cs`).
 - `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `FitScroll` (the columns that scroll), `EditorSession`, `MapLookPanel` (the map style window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.

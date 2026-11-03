@@ -35,6 +35,8 @@ public static class EditorSession
     public static UndoStack? Undo { get; private set; }
     /// <summary>The roads being edited across a scene reload (the undo stack's road commands hold this instance).</summary>
     public static RoadStore? Roads { get; private set; }
+    /// <summary>The script's nav paths being edited across a scene reload (the undo stack's path commands hold this instance).</summary>
+    public static I76.Editor.Paths.PathStore? Paths { get; private set; }
     /// <summary>The editor camera's last pose: pivot (game x, y, z), yaw, pitch, distance.</summary>
     public static float[]? Pose { get; set; }
     public static bool EnvTaken { get; set; }
@@ -68,7 +70,7 @@ public static class EditorSession
     public static void End()
     {
         Active = Playtest = Modified = false;
-        PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Layer = null; Look = null; StyleTab = -1;
+        PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Paths = null; Layer = null; Look = null; StyleTab = -1;
         I76.Game.Editor.Intersections.IntersectionSession.End();
         I76.Game.Boot.Main.Stash.Drop();
         I76.Formats.Vfs.SessionStore.End();
@@ -87,8 +89,16 @@ public static class EditorSession
         Roads ??= RoadStore.FromMission(world.Mission.Data);
         I76.Game.Editor.Intersections.IntersectionSession.Prepare(world, Roads);   // the pieces beside the roads
         if (Roads.Dirty) world.Mission.RoadOverride = Roads.ToSegments();   // the world (the sim's road routes, the painted roads) has the edited roads
+        // the script's paths: a playtest's world, its script and the plants kept off the paths read the edited ones
+        Paths ??= I76.Editor.Paths.PathStore.FromMission(world.Mission.Data);
+        if (Paths.Dirty)
+        {
+            world.Mission.FsmOverride = Paths.Payload();
+            GD.Print($"editor: the world reads the edited paths ({Paths.Count} table entries{(Playtest ? ", playtest" : "")})");
+        }
         var doc = new TerrainDocument(world.Terrain, world.Mission.Name, string.IsNullOrEmpty(listed) ? world.Mission.Name : listed, world.Mission.Path, Install?.AddonDir, Install, Roads);
         doc.InitLook(fileLook, Look);
+        doc.Paths = Paths;
         doc.HorizonEditable = world.Mission.WorldRevision() != 8;
         if (Samples is { } s)
         {

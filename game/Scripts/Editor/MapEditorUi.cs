@@ -115,6 +115,7 @@ public partial class MapEditor
         }
         RoadsTool.BuildPalette(tools, s);
         Objects.BuildUi(_root, tools, group, s);
+        PathsTool.BuildPalette(tools, s);
         tools.AddChild(new HSeparator());
         var undoRow = new HBoxContainer();
         undoRow.AddThemeConstantOverride("separation", (int)(6 * s));
@@ -215,6 +216,7 @@ public partial class MapEditor
         bx.AddChild(sh); _surfaceOnly.Add(sh);
 
         RoadsTool.BuildPanel(_root, s, side);
+        PathsTool.BuildPanel(_root, s, side);
 
         // ---- the status bar
         var sb = new PanelContainer { Name = "Status" };
@@ -242,10 +244,13 @@ public partial class MapEditor
     }
 
     /// <summary>The road tool changed mode: the widgets follow.</summary>
-    public void RoadToolChanged() { if (RoadsTool.Active) Objects.Deactivate(); SyncUi(); }
+    public void RoadToolChanged() { if (RoadsTool.Active) { Objects.Deactivate(); PathsTool.Deactivate(); } SyncUi(); }
 
-    /// <summary>An object tool came on or off: the road tool gives way, the widgets follow.</summary>
-    public void ObjectToolChanged() { if (Objects.Active) RoadsTool.Deactivate(); SyncUi(); }
+    /// <summary>An object tool came on or off: the road and path tools give way, the widgets follow.</summary>
+    public void ObjectToolChanged() { if (Objects.Active) { RoadsTool.Deactivate(); PathsTool.Deactivate(); } SyncUi(); }
+
+    /// <summary>The path tool came on or off: the road and object tools give way, the widgets follow.</summary>
+    public void PathToolChanged() { if (PathsTool.Active) { RoadsTool.Deactivate(); Objects.Deactivate(); } SyncUi(); }
 
     private MapLookPanel? _style;
 
@@ -287,9 +292,10 @@ public partial class MapEditor
         _strength.SetValueNoSignal(Brush.Strength * 100);
         _radiusLabel.Text = $"RADIUS   {Brush.Radius:0} m     [ ]";
         _strengthLabel.Text = $"STRENGTH   {Brush.Strength * 100:0}%     Shift+[ ]";
-        foreach (var (k, b) in _toolButtons) b.SetPressedNoSignal(k == Brush.Kind && !RoadsTool.Active && !Objects.Active);
+        foreach (var (k, b) in _toolButtons) b.SetPressedNoSignal(k == Brush.Kind && !RoadsTool.Active && !Objects.Active && !PathsTool.Active);
         RoadsTool.SyncPanel();
         Objects.KeepBrushPanelAway();
+        PathsTool.SyncPanel();
         foreach (var (f, b) in _falloffButtons) b.SetPressedNoSignal(f == Brush.Falloff);
         bool surface = Brush.Kind == BrushKind.Surface;
         foreach (var c in _heightOnly) c.Visible = !surface;
@@ -329,6 +335,8 @@ public partial class MapEditor
         string ground = _hit is { } h ? $"{h.Y:0.0} m   at {h.X:0}, {h.Z:0}" : "no ground";
         if (RoadsTool.Active)
             _status.Text = $"ROAD {RoadsTool.Mode.ToString().ToUpperInvariant()}    {RoadsTool.Hint}    |    ground {ground}    |    {Engine.GetFramesPerSecond()} fps";
+        else if (PathsTool.Active)
+            _status.Text = PathsTool.StatusText(_hit) + $"    |    {Engine.GetFramesPerSecond()} fps";
         else
         {
         var tool = Tools.First(t => t.Kind == Brush.Kind).Name;
@@ -421,7 +429,8 @@ public partial class MapEditor
         _modal = true;
     }
 
-    private void Confirm(string text, Action yes)
+    /// <summary>A question over the editor with YES and CANCEL (a deletion asks first).</summary>
+    public void Confirm(string text, Action yes)
     {
         CloseModal();
         float s = _s;
@@ -469,6 +478,8 @@ public partial class MapEditor
         ("Drag, Alt+drag", "Objects: move the selection; copy it"),
         ("Del  Ctrl+C  Ctrl+V", "Objects: bulldoze; copy; paste"),
         ("N   L   T", "Objects: snap (roads, grid, off; Alt: off while held); level the ground under a building; team or finish line"),
+        ("-   =", "Path tool: edit paths (select, drag points); draw a new path (click its points; Enter, a right click or a double click finishes)"),
+        ("Paths, edit", "Double-click a path's line or Insert adds a point, Delete removes the selected point (or asks to delete the path), Esc deselects"),
         ("Ctrl+Z", "Undo a stroke, a road or an object edit"),
         ("Ctrl+Y, Ctrl+Shift+Z", "Redo"),
         ("Ctrl+S", "Save (a stock map asks for a new name: it is copied to addon)"),

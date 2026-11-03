@@ -4,6 +4,7 @@ using I76.Game.Editor.Objects;
 using I76.Formats.Assembly;
 using I76.Game.Sim;
 using I76.Game.Editor.RoadTools;
+using I76.Game.Editor.PathTools;
 using I76.Game.World;
 
 namespace I76.Game.Editor;
@@ -35,6 +36,8 @@ public partial class MapEditor : Node
     public ObjectEditor Objects { get; private set; } = null!;
     /// <summary>The road tool (game/Scripts/Editor/Roads).</summary>
     public RoadTool RoadsTool { get; private set; } = null!;
+    /// <summary>The path tool (game/Scripts/Editor/Paths).</summary>
+    public PathTool PathsTool { get; private set; } = null!;
     /// <summary>The ground under the cursor (game frame), or null.</summary>
     public System.Numerics.Vector3? Hit => _hit;
     private MissionWorld World => Builder.World!;
@@ -84,6 +87,8 @@ public partial class MapEditor : Node
         if (EditorSession.SwitchedAtMs != 0) { GD.Print($"editor: back from the playtest in {Time.GetTicksMsec() - EditorSession.SwitchedAtMs} ms"); }
         RoadsTool = new RoadTool { Name = "RoadTool", Ed = this };
         AddChild(RoadsTool);
+        PathsTool = new PathTool { Name = "PathTool", Ed = this };
+        AddChild(PathsTool);
         Objects = new ObjectEditor { Name = "Objects", Ed = this, Builder = Builder, Cam = Cam, Doc = Doc, Undo = Undo, Layer = Doc.Layer!, Origin = Origin, PickGround = PickGround };
         AddChild(Objects);
         _musicOn = I76.Game.Shell.ShellSettings.Load().EditorMusic;
@@ -138,6 +143,9 @@ public partial class MapEditor : Node
 
     private double GroundH(double x, double z) => World.BilinearHeight(x, z);
 
+    /// <summary>The ground's height at a point (game frame), as the editor draws it.</summary>
+    public float GroundAt(double x, double z) => (float)World.BilinearHeight(x, z);
+
     /// <summary>Marches the camera's ray through the mouse until it passes under the ground; the point where it does, game frame.</summary>
     public System.Numerics.Vector3? PickGround(Vector2 screen)
     {
@@ -190,6 +198,7 @@ public partial class MapEditor : Node
         if (_stroke is not null && _hit is { } h) StrokeStep(h, _hookCursor ? 1 / 30.0 : Math.Min(delta, 0.05));
         PumpRedraw(delta);
         RoadsTool.Process(delta);
+        PathsTool.Process(delta);
         UpdateStatus();
     }
 
@@ -197,7 +206,7 @@ public partial class MapEditor : Node
 
     private void UpdateBrushUniform()
     {
-        if (_hit is { } h && _brushOn && !_modal && !RoadsTool.Active && !Objects.Active)
+        if (_hit is { } h && _brushOn && !_modal && !RoadsTool.Active && !Objects.Active && !PathsTool.Active)
         {
             RenderingServer.GlobalShaderParameterSet("i76_brush", new Vector4(h.X, h.Z, Brush.Radius, 1));
             var c = BrushColour(Brush.Kind);
@@ -207,7 +216,7 @@ public partial class MapEditor : Node
     }
 
     /// <summary>The Surface tool is the one in use.</summary>
-    public bool SurfaceToolOn => Brush.Kind == BrushKind.Surface && !RoadsTool.Active && !Objects.Active;
+    public bool SurfaceToolOn => Brush.Kind == BrushKind.Surface && !RoadsTool.Active && !Objects.Active && !PathsTool.Active;
 
     private void UpdateSurfaceOverlay()
     {
@@ -333,6 +342,7 @@ public partial class MapEditor : Node
     {
         RoadsTool.Deactivate();
         Objects.Deactivate();
+        PathsTool.Deactivate();
         Brush.Kind = k;
         SyncUi();
     }
@@ -520,6 +530,11 @@ public partial class MapEditor : Node
                 if (RoadsTool.HandleMouse(mb)) GetViewport().SetInputAsHandled();
                 return;
             }
+            if (PathsTool.Active)
+            {
+                if (PathsTool.HandleMouse(mb)) { GetViewport().SetInputAsHandled(); return; }
+                if (mb.ButtonIndex == MouseButton.Left) return;
+            }
             if (Objects.HandleMouse(mb)) { GetViewport().SetInputAsHandled(); return; }
             if (mb.ButtonIndex == MouseButton.Left)
             {
@@ -552,6 +567,7 @@ public partial class MapEditor : Node
             if (key.Keycode == Key.F1 && !key.Echo) { ToggleHelp(); GetViewport().SetInputAsHandled(); }
             return;
         }
+        if (PathsTool.HandleKey(key)) { GetViewport().SetInputAsHandled(); return; }
         if (RoadsTool.HandleKey(key)) { GetViewport().SetInputAsHandled(); return; }
         if (Objects.HandleKey(key)) { GetViewport().SetInputAsHandled(); return; }
         bool handled = true;
@@ -734,6 +750,7 @@ public partial class MapEditor : Node
                 case "pick": OpenPicker(); break;
                 case "save": Save(); break;
                 case "road": RoadsTool.Script(a.Length > 1 ? a[1] : ""); break;
+                case "path": PathsTool.Script(a.Length > 1 ? a[1] : ""); break;
                 default: Objects.Script(a[0], args); break;
             }
         }

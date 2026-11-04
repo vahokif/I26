@@ -347,8 +347,9 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
   is 30 s past its last regen goes to the nearest pad, shooting what is in its way. The tactic table, the avoidance, the escapes
   are the original's.
 - **Race.** `AiOrder.Race` along the checkpoints from the one the car's `RaceTracker` wants next, two laps' worth in the order list (the AI loops
-  it), through the planner (`PlanPath`: the road route where the car and the point are on one road, else the A*). The tracker counts at 30 m and the
-  AI moves on at 40: a bot that is a point ahead of the tracker for 2.5 s is sent back for the one it missed. It fires at whatever is ahead and near, as
+  it), through the planner (`PlanPath`: the road route where the car and the point are on one road, else the A*). The tracker counts in a 30 m sphere and
+  a racing bot's AI moves on at 25 m across the ground (`Entity.NavReach`; the AI's own 40 would turn it for the next checkpoint before it was in
+  this one); a bot that is still a point ahead of the tracker for 2.5 s (a checkpoint well above or below the car) is sent back for the one it missed. It fires at whatever is ahead and near, as
   a human may (weapons are as free in a race as in combat). A new order starts at its first point (the AI's racer scan, would otherwise pick the nearest).
 - **Capture the flag.** Roles by seat order in the team's bots: raider, defender, raider, escort, defender, and again. A carrier goes for the stand
   of its colour. A raider goes to the nearest enemy flag at its stand (`CtfGame` has no dropped flag: a carried flag goes home when its carrier is
@@ -359,6 +360,9 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
 **What is the port's own** (each is in docs/deviations.md as one line):
 - *Road routes are not taken the long way round* (`Entity.DetourLimit`, a bot's 2.5 times the straight line plus 100 m; `RoadRoute.TryRoute` and
   `ExpandRoadPairs`'s `detour`). Nitro's race roads are open at the start line, and a goal across the seam is the whole road away; the A* takes it. The original's AI has no limit.
+- *A racer drives into a checkpoint before it turns for the next* (`Entity.NavReach`, 25 m across the ground in a race, the AI's 40 m otherwise):
+  with the AI's 40 m, a checkpoint less than about 50 m from the one before it and off the line was left before its 30 m sphere took the car, and
+  the bot went back and forth between the two.
 - *The collision test is off in a race* (`Entity.Avoid`, the speculative test of `Candidate`, which slows a fast car at every bump) until the
   car has hardly moved for 4 s, when it is on for 10 s to back out (`StuckCheck`).
 - *A goto that is not getting nearer is given the grid's route* (`Ai.GridRoute`; `MeleeGame.Go`): the AI's A* has a pool of 1000 nodes, so a goal

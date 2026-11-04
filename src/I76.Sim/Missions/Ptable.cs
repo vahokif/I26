@@ -426,7 +426,7 @@ public sealed partial class Ptable
         return Vector2.Dot(Vector2.Normalize(u), Vector2.Normalize(w));
     }
 
-    /// <summary>Along the waypoints; within 40 of the nav point, on to the next; the last one sets Arrived. Nothing once the planned path's end is reached.</summary>
+    /// <summary>Along the waypoints; within 40 of the nav point (Entity.NavReach), on to the next; the last one sets Arrived. Nothing once the planned path's end is reached.</summary>
     private void Advance(Entity e)
     {
         if (e.ReachedEnd) return;
@@ -456,7 +456,7 @@ public sealed partial class Ptable
         if (e.PlanState != 1 && e.NavPath is { Count: > 0 } path && e.NavIndex < path.Count)
         {
             int n = e.NavIndex;
-            if (new Vector2(path[n].X - p.X, path[n].Z - p.Z).LengthSquared() < 1600)
+            if (new Vector2(path[n].X - p.X, path[n].Z - p.Z).LengthSquared() < e.NavReach * e.NavReach)
             {
                 e.ReachedLeg = true;
                 e.NavIndex = n + 1;

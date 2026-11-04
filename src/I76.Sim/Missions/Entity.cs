@@ -164,6 +164,14 @@ public sealed partial class Entity(string name, byte[] id, uint type, uint objec
     /// </summary>
     public float DetourLimit;
 
+    /// <summary>
+    /// How near (across the ground) a path follow comes to a point of its path before it moves on to the next: 40 m, the original's.
+    /// The port's own: a network race's bots set it lower every frame, so that a bot drives into a checkpoint's 30 m sphere before it
+    /// turns for the next one (docs/multiplayer.md "Bots").
+    /// </summary>
+    public float NavReach = DefaultNavReach;
+    public const float DefaultNavReach = 40f;
+
     /// <summary>The path a network melee gave this entity (a bot's route or goal): <see cref="Path"/> and <see cref="NavPath"/> may be this very list, which a savestate then names by the entity.</summary>
     public List<Vector3>? OwnPath;
 

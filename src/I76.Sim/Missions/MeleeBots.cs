@@ -159,6 +159,7 @@ public sealed partial class MeleeGame
             if (!p.IsBot) continue;
             var b = p.Brain ??= new BotBrain { MovedAt = Host.Now };
             p.Entity.DetourLimit = BotDetour;
+            p.Entity.NavReach = Rules.Kind == MeleeKind.Race ? RaceReach : Entity.DefaultNavReach;
             if (p.Destroyed || Damage.DamageModel.IsDead(p.Car))
             {
                 // RAISE_DEAD once the 5 s are up and a moment more (the key press of a person): refused until then, so it is asked on time
@@ -396,7 +397,7 @@ public sealed partial class MeleeGame
         bool issue = b.Plan != PlanRace || b.Path is null || b.Before is null || b.Owner is null;
         if (!issue)
         {
-            // where the AI is in its route against where the tracker is: the AI moves on a point at 40 m, the tracker counts at 30
+            // where the AI is in its route against where the tracker is: the AI moves on a point at RaceReach across the ground, the tracker counts at 30 in 3-D (a checkpoint high above or below)
             int j = System.Math.Clamp(e.NavIndex, 0, b.Owner!.Length - 1);
             int k = b.Owner[j], cur = tr.Current;
             if (k >= b.Before!.Length - 2) issue = true;
@@ -440,6 +441,12 @@ public sealed partial class MeleeGame
     }
 
     private const float RaceHop = 100000f;
+    /// <summary>
+    /// How near a racer comes to a checkpoint before the AI turns for the next one. The AI's own 40 m is wider than the checkpoint's
+    /// 30 m sphere: with the next checkpoint close and off to the side, it turned away before it was in, went back for it and turned
+    /// away again. Across the ground, so a checkpoint up to 16 m above or below the car still counts.
+    /// </summary>
+    private const float RaceReach = 25f;
     /// <summary>A racer that passes no checkpoint in this long is lost (it goes round and round, or in and out of a dead end): it blows itself up and starts again.</summary>
     private const float NoProgressSeconds = 90f;
 

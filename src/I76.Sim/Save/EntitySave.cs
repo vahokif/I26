@@ -12,7 +12,7 @@ public sealed partial class Entity
         const string placement = "the placement it stands for; a melee's entities are made again from the snapshot's entity table";
         a.For<Entity>()
             .Structural(placement, nameof(Name), nameof(Id), nameof(Type), nameof(ObjectFlags), nameof(Vehicle), nameof(Static))
-            .Structural("set on a bot's entity every frame by its game", nameof(DetourLimit))
+            .Structural("set on a bot's entity every frame by its game", nameof(DetourLimit), nameof(NavReach))
             .Saved(nameof(OwnPath))
             .Saved(nameof(StaticPosition), nameof(StaticRot), nameof(_dead), nameof(Removed),
                 nameof(ShotTick), nameof(RammedTick), nameof(AttackedTick), nameof(LastRammer), nameof(LastShooter), nameof(LastAttacker), nameof(KilledByPlayer),

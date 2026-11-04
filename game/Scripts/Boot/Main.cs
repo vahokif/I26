@@ -657,16 +657,9 @@ public partial class Main : Node3D
         // Modern Physics, flipped from Play Options as by F7 (EnableModern keeps a network session on the original's)
         if (_modernSetup is not null && s.ModernPhysics != (_modern?.Enabled == true)) EnableModern(s.ModernPhysics);
         // the cheats (Unlim. Ammo / Armor / Chas. Rein.) are for the player and never in a network session, as the original's
-        // tests; Unlim. Wiper Fluid (0x20) has no reader in either game
-        if (_sim?.Combat is { } c)
-        {
-            c.UnlimitedAmmo = (s.PlayOptions & 4) != 0 && !c.NetSession;
-            if (c.Damage is I76.Sim.Damage.DamageModel dm)
-            {
-                dm.UnlimitedArmour = (s.PlayOptions & 8) != 0;
-                dm.UnlimitedChassis = (s.PlayOptions & 0x10) != 0;
-            }
-        }
+        // tests, and so is the difficulty's factor on the player's rounds and flame; Unlim. Wiper Fluid (0x20) has no reader in
+        // either game
+        if (_sim?.Combat is { } c) s.ApplyTo(c);
         if (_sim?.World.Player is { } p)
             p.Flags = (s.PlayOptions & 1) != 0 ? p.Flags | I76.Sim.Vehicles.VehicleFlags.LoadBasedCornering : p.Flags & ~I76.Sim.Vehicles.VehicleFlags.LoadBasedCornering;
     }

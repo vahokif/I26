@@ -22,7 +22,7 @@ public sealed partial class SimWorld(IGround ground, CrtRand rand)
     /// <summary>
     /// The other human-driven cars (a network melee's players): each takes the
     /// player's rules as the original's own machine gave them to its car --
-    /// the player's step, the difficulty's round damage, no wreck.
+    /// the player's step, the weapon click, no wreck.
     /// </summary>
     public List<Vehicle> Humans { get; } = [];
 

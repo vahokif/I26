@@ -1210,6 +1210,23 @@ public sealed class ShellSettings
     /// <summary>The music level as a volume: off below 2, else −8 dB at 8 and 2 dB a step either side.</summary>
     public float MusicDb => Audio[0] < 2 ? -80f : -8f + (Audio[0] - 8) * 2f;
 
+    /// <summary>
+    /// The Play Options the simulation reads, onto a mission's combat: Unlim. Ammo (0x04), Unlim. Armor (0x08) and
+    /// Unlim. Chas. Rein. (0x10), and the difficulty, the factor on the player's own rounds and flame. Ammo and the
+    /// difficulty stay out of a network game, as the original keeps them (a network game plays Champion's ×1).
+    /// The mission runs it at its start, on resuming from the pad and over a restored checkpoint's copies.
+    /// </summary>
+    public void ApplyTo(I76.Sim.Weapons.Combat c)
+    {
+        c.UnlimitedAmmo = (PlayOptions & 4) != 0 && !c.NetSession;
+        if (c.Damage is I76.Sim.Damage.DamageModel dm)
+        {
+            dm.UnlimitedArmour = (PlayOptions & 8) != 0;
+            dm.UnlimitedChassis = (PlayOptions & 0x10) != 0;
+        }
+        c.Difficulty = c.NetworkGame ? 1 : Math.Clamp(Difficulty, 0, 2);
+    }
+
     public static ShellSettings Load()
     {
         var s = new ShellSettings();

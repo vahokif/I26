@@ -91,9 +91,12 @@ and measures near and far from the humans.
 `IsHuman(v)` gives these cars the player's rules, as each original machine
 gave them to its own car:
 - the player's vehicle step;
-- the difficulty's round-damage factor;
 - the weapon click;
 - no wreck 10 s after death.
+
+The difficulty's factor on the player's rounds and flame (Wimp ×2, Champion ×1, Badass ×0.75) is not one of them:
+the original applies it outside a network session only, so every network game, melee or co-op, plays ×1 for
+everyone (`Combat.NetworkGame`), whatever each player's Play Options say.
 
 `Combat.UnlimitedAmmo` stays with `World.Player` alone. It is a play option.
 

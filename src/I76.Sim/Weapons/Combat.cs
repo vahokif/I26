@@ -101,8 +101,23 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         if (RadarTarget.GetValueOrDefault(me) is null) return;
         if (!RadarCamera.Remove(me)) RadarCamera.Add(me);
     }
-    /// <summary>Read as the difficulty: the player's round damage ×2.0 / ×1.0 / ×0.75.</summary>
+    /// <summary>
+    /// The difficulty (Play Options' Difficulty Level: 0 Wimp, 1 Champion, 2 Badass), the factor on the player's own rounds
+    /// and flame (<see cref="DifficultyFactor"/>). The game sets it from the settings at the mission's start, on resuming from
+    /// the pad and over a checkpoint's copy.
+    /// </summary>
     public int Difficulty { get; set; } = 1;
+
+    /// <summary>A network game, melee or co-op, server or client: the difficulty's factor is 1 there.</summary>
+    public bool NetworkGame => NetSession || RemoteSim || World.Coop;
+
+    /// <summary>
+    /// The factor on a round's or a flame's damage by its shooter: a human's ×2.0 at Wimp, ×1.0 at Champion, ×0.75 at
+    /// Badass; anyone else's, and everyone's in a <see cref="NetworkGame"/> (the original applies it outside a network
+    /// session only), ×1.
+    /// </summary>
+    public float DifficultyFactor(Vehicle shooter) =>
+        NetworkGame || !World.IsHuman(shooter) ? 1f : Difficulty switch { 0 => 2f, 2 => 0.75f, _ => 1f };
     public bool UnlimitedAmmo { get; set; }
     /// <summary>
     /// The Nitro Pack's rules where its weapon code differs from the base game's: the Chemical Mortar kills the driver
@@ -1364,7 +1379,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         _ => 1,
     };
 
-    private float PlayerMult(Round r) => !World.IsHuman(r.Shooter) || r.Kind == 0x12 ? 1f : Difficulty switch { 0 => 2f, 2 => 0.75f, _ => 1f };
+    private float PlayerMult(Round r) => r.Kind == 0x12 ? 1f : DifficultyFactor(r.Shooter);
 
     /// <summary>Trunc(damage·mult) split by integer division over the set channels.</summary>
     public DamagePacket RoundPacket(Round r)

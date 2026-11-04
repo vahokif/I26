@@ -189,7 +189,7 @@ public sealed partial class Combat
     {
         var d = p - start;
         if (d.LengthSquared() < 1e-12f) return false;
-        float mult = !World.IsHuman(f.Owner) ? 1f : Difficulty switch { 0 => 2f, 2 => 0.75f, _ => 1f };
+        float mult = DifficultyFactor(f.Owner);
         int ch = (int)(f.Damage * mult * dt);
         if (ch == 0) ch = 1;
         bool any = false;

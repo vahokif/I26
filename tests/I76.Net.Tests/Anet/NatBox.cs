@@ -15,7 +15,7 @@ namespace I76.Net.Tests.Anet;
 /// loopback address (127.0.0.N): one per inside machine
 /// (<see cref="Mapping.EndpointIndependent"/>, the "party line" NATs anet's
 /// README2 asks for) or one per inside machine and destination
-/// (<see cref="Mapping.Symmetric"/>, at ports the OS picks; <see cref="Mapping.SymmetricSequential"/>, at
+/// (<see cref="Mapping.Symmetric"/>, at random ports; <see cref="Mapping.SymmetricSequential"/>, at
 /// consecutive ports, as many home and carrier NATs hand them out). Filtering is address- and
 /// port-dependent: a public socket takes a datagram only from an address it
 /// has sent to (the strictest cone). Inside machines have private addresses
@@ -115,11 +115,22 @@ public sealed class NatBox : IDisposable
 
     private UdpClient Bind()
     {
-        if (_mapping != Mapping.SymmetricSequential) return new UdpClient(new IPEndPoint(_public, 0));
-        // the next free port up (one taken by something else is skipped, as a NAT's other traffic would)
+        if (_mapping == Mapping.EndpointIndependent) return new UdpClient(new IPEndPoint(_public, 0));
         while (true)
         {
-            int p = Interlocked.Increment(ref _nextPort);
+            int p;
+            if (_mapping == Mapping.SymmetricSequential)
+                // the next free port up (one taken by something else is skipped, as a NAT's other traffic would)
+                p = Interlocked.Increment(ref _nextPort);
+            else
+            {
+                // a port at random, as a NAT that randomises its mappings picks it. Not the OS's pick: Windows hands those
+                // out in sequence, which made this box a sequential one there, and the host's probes around the port the
+                // server saw found the joiner's mapping toward the host. Kept well away from the box's other mappings, so
+                // the prediction never hits one by chance either.
+                p = 20000 + Random.Shared.Next(40000);
+                if (_pubs.Values.Any(x => Math.Abs(((IPEndPoint)x.Sock.Client.LocalEndPoint!).Port - p) <= 4 * AnetHost.PredictSpan)) continue;
+            }
             try { return new UdpClient(new IPEndPoint(_public, p)); }
             catch (SocketException) { }
         }

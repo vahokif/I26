@@ -40,12 +40,24 @@ public sealed class SubtitleTrack
         if (text.Length <= maxChars) return text;
         var pages = new List<string>();
         var rest = text;
+
+        string prefix = "";
+        int colon = text.IndexOf(':');
+        if (colon > 0 && colon <= 20 && colon + 2 < text.Length && text[colon + 1] == ' ')
+        {
+            prefix = text[..(colon + 2)];
+        }
+
         while (rest.Length > maxChars)
         {
             int cut = rest.LastIndexOf(' ', maxChars);
             if (cut <= 0) cut = maxChars;
             pages.Add(rest[..cut].TrimEnd());
             rest = rest[cut..].TrimStart();
+            if (prefix.Length > 0 && rest.Length > 0 && !rest.StartsWith(prefix))
+            {
+                rest = prefix + rest;
+            }
         }
         if (rest.Length > 0) pages.Add(rest);
         if (length <= 0) length = text.Length / 15.0;      // no known length: about 15 characters a second

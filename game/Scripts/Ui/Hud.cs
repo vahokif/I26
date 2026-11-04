@@ -107,7 +107,9 @@ public partial class Hud : CanvasLayer
             if (string.IsNullOrEmpty(text))
             {
                 var soundTrack = I76.Formats.Subtitles.SubtitleLoader.Load(cur.Name);
-                text = soundTrack?.BySound(cur.Name) ?? soundTrack?.Cues.FirstOrDefault()?.Text;
+                text = soundTrack?.BySound(cur.Name);
+                if (string.IsNullOrEmpty(text) && soundTrack?.Cues.Count == 1)
+                    text = soundTrack.Cues[0].Text;
             }
             if (!string.IsNullOrEmpty(text))
             {

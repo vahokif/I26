@@ -42,7 +42,7 @@ public static class Program
     // Speaker tables for character attribution
     private static readonly Dictionary<string, string> I76Speakers = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["ta"] = "Taurus", ["sta"] = "Taurus", ["po"] = "Taurus",
+        ["ta"] = "Stampede", ["sta"] = "Stampede", ["po"] = "Stampede",
         ["gc"] = "Groove",
         ["sk"] = "Skeeter",
         ["ir"] = "Radio",
@@ -70,7 +70,7 @@ public static class Program
 
     private static readonly Dictionary<string, string> NitroSpeakers = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["tau"] = "Taurus", ["sta"] = "Taurus",
+        ["tau"] = "Stampede", ["sta"] = "Stampede",
         ["jad"] = "Jade",
         ["ske"] = "Skeeter",
         ["nat"] = "Natty Dread", ["mnd"] = "Natty Dread",
@@ -168,7 +168,7 @@ public static class Program
         string? i76Install = null;
         string? nitroInstall = null;
         string? outDir = null;
-        string modelName = "base.en";
+        string modelName = "small.en";
         string? modelPath = null;
         string? filter = null;
         bool cutscenesOnly = false;
@@ -290,7 +290,7 @@ public static class Program
         Console.WriteLine("  --i76-install <path>        Path to Interstate '76 install folder");
         Console.WriteLine("  --nitro-install <path>      Path to Interstate '76 Nitro Pack install folder");
         Console.WriteLine("  --out <dir>                 Output root directory for subtitles (default: dist/i26-0.11.0/subtitles)");
-        Console.WriteLine("  --model <name>              Whisper model (tiny, tiny.en, base, base.en, small, small.en)");
+        Console.WriteLine("  --model <name>              Whisper model (tiny, base, small, medium; default: small.en)");
         Console.WriteLine("  --model-path <path>         Direct path to custom ggml model file (.bin)");
         Console.WriteLine("  --filter <pattern>          Only process files containing pattern in name");
         Console.WriteLine("  --threads <n>               Number of CPU threads for Whisper (default: half CPU cores)");
@@ -683,7 +683,7 @@ public static class Program
                 var m = Regex.Match(stem, @"^(\d{2})[a-z]{3}\d{2}$");
                 if (m.Success)
                 {
-                    string mKey = $"p{int.Parse(m.Groups[1].Value):02d}";
+                    string mKey = $"p{int.Parse(m.Groups[1].Value):D2}";
                     if (!missions.TryGetValue(mKey, out var dict)) missions[mKey] = dict = [];
                     dict[stem] = line;
                 }
@@ -705,13 +705,13 @@ public static class Program
                 var sMatch = Regex.Match(stem, @"^s(\d)s");
                 if (mMatch.Success)
                 {
-                    string mKey = $"t{int.Parse(mMatch.Groups[1].Value):02d}";
+                    string mKey = $"t{int.Parse(mMatch.Groups[1].Value):D2}";
                     if (!missions.TryGetValue(mKey, out var dict)) missions[mKey] = dict = [];
                     dict[stem] = line;
                 }
                 else if (sMatch.Success)
                 {
-                    string sKey = $"s{int.Parse(sMatch.Groups[1].Value):02d}";
+                    string sKey = $"s{int.Parse(sMatch.Groups[1].Value):D2}";
                     if (!missions.TryGetValue(sKey, out var dict)) missions[sKey] = dict = [];
                     dict[stem] = line;
                 }
@@ -858,7 +858,7 @@ public static class Program
         {
             if (s.StartsWith("posta", StringComparison.OrdinalIgnoreCase) ||
                 s.StartsWith("pos", StringComparison.OrdinalIgnoreCase))
-                return "Taurus";
+                return "Stampede";
 
             var m = Regex.Match(s, @"(?:^\d\ds|^gds|^s\ds|^tms?)([a-z]{2})");
             if (m.Success)

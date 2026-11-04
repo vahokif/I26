@@ -128,6 +128,18 @@ public class SubtitleTests
     }
 
     [Fact]
+    public void PagesLongCuesPreservesSpeakerPrefixOnContinuationPages()
+    {
+        string text = "Stampede: " + string.Join(" ", Enumerable.Range(0, 40).Select(i => "word" + i));
+        string first = SubtitleTrack.Page(text, 0, 20);
+        string last = SubtitleTrack.Page(text, 19.9, 20);
+        Assert.StartsWith("Stampede: ", first);
+        Assert.StartsWith("Stampede: ", last);
+        Assert.True(first.Length <= SubtitleTrack.PageChars);
+        Assert.True(last.Length <= SubtitleTrack.PageChars);
+    }
+
+    [Fact]
     public void ResamplesPcmAudioTo16KhzMonoWav()
     {
         // 1 second of 11025Hz 8-bit mono audio

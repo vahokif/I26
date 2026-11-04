@@ -112,7 +112,7 @@ dotnet run --project tools/I76.Subtitles -- --filter int08
 | `--i76-install <dir>` | Path to Interstate '76 files | Auto-detected / `$I76_INSTALL` |
 | `--nitro-install <dir>` | Path to Nitro Pack files | Auto-detected / `$I76_NITRO_INSTALL` |
 | `--out <dir>` | Root output folder | `subtitles/` |
-| `--model <name>` | Whisper GGML model (`tiny.en`, `base.en`, `small.en`) | `base.en` |
+| `--model <name>` | Whisper GGML model (`tiny.en`, `base.en`, `small.en`, `medium.en`) | `small.en` |
 | `--model-path <path>` | Path to custom `.bin` model file | Auto-download |
 | `--filter <pattern>` | Filter cutscenes or missions by pattern | All |
 | `--threads <n>` | CPU threads for Whisper inference | Half CPU cores |
@@ -144,7 +144,7 @@ Thanks.
 JSON object mapping sound stems to character-attributed dialogue strings:
 ```json
 {
-  "01sta09": "Taurus: Okay baby, here's the scoop...",
+  "01sta09": "Stampede: Okay baby, here's the scoop...",
   "01sgc06": "Groove: Yeah, I got it.",
   "02dri08": "Drinky: You can't kill me! I'm Drinky, the stunt-driving clown!"
 }

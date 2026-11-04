@@ -47,10 +47,30 @@ public static class Program
         ["Malachio"] = "Malochio"
     };
 
+    // Canonical Interstate '76 trip poems recited by Taurus
+    private static readonly Dictionary<string, string> KnownPoemTexts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["posta01"] = "Taurus: I'm silver smooth. Bathed ten times a second in an aerosol fire. Five thousand degrees in here. I course with electricity from my feet to my tongue, where I vomit a torque-delivering spark.",
+        ["posta02"] = "Taurus: I'm a storm torrent across a slate-gray sea. I rush and bellow reflections of fast, fast, dark sky over an Edinburgh's metal's wet. I bolt white high through snowfall cold. I am lightning in the night. I sprint like fire across a match head and leap across lakes of dream stuff. Over ancient walls, past armies, vast as fast is. Faster than quicksilver can fall into the sun. I, bounding, prance unstoppable to you. My all, my everything dream.",
+        ["posta03"] = "Taurus: It's a high-pitched sound. Hot rubber eternally pressing against a blackened pavement. A wheel is forever. A car is infinity times four.",
+        ["posta04"] = "Taurus: From where I lie, the oceans are deep and dry. Empty. The sky is black smoke bearing winter's frozen gifts. It will snow in this land for a thousand years, and I will sleep under it. Forever.",
+        ["posta05"] = "Taurus: My dream. It takes place in the white room in back. The plaster walls echo sounds. The brown wood floor is cold and solid beneath my brown bare feet. This place was a nursery before. Now it is empty. Save the hollow sound of my voice.",
+        ["posta06"] = "Taurus: This window above the Charles, wire embedded in cold frames the world. Across white space to the frozen shore, I see through curls and eddies the falling snow, the once green field, and a birthday on the grass. A party for three in the Boston sun. All now covered with snow.",
+        ["posta07"] = "Taurus: Copley brought me to a monument, quiet before the crunch of solitary footfall through ice. An obelisk stands in the winter city. Its relief tells of a death and justification, the precipitation of war, and my own memories.",
+        ["posta08"] = "Taurus: Looking out the window of your room onto a wet, rainy day. Main street under a slate-gray afternoon sky. The light on your face is soft and dim under the lace curtain and the streets are empty. In the distance, there is a flash and a rumble. Clouds sail the sky like giant wooden ships on a blackened evergreen sea capped with foam.",
+        ["posta09"] = "Taurus: It's nicked at the edges and leans backwards, almost reclining. Grass grows in tufts near where it enters the earth. Its words are worn with time, and its stained face is drawn long with wear.",
+        ["posta10"] = "Taurus: It's malleable, my design. Things just bolt on here and there. Real clean, scraped face. A new gasket fitted and... tightened and... I'm done.",
+        ["posta11"] = "Taurus: She is my girl, pearl white, slick and sexy. Never complains, always faithful. She cuts the air like a charging buffalo. In her arms it's quiet, her engine whispers to me, \"It's gonna be just fine.\"",
+        ["posta12"] = "Taurus: They twist like quad-coiled vipers feeding on combustion's waste. Black as ink and hot as Hades they join below, eternally in shadow unless of course I roll. They belt a rumbling and vibrate fear into the bones of my foe.",
+        ["posta13"] = "Taurus: It's not a happy place between the dusk and the dawn. Deep below the well-lit and open spaces, I wait under the under. For them to come and rip me a thunder, tearing my core until morning.",
+        ["posta14"] = "Taurus: Glass, flat and forever. It stretches out and never stops. Unless it finds the hills whose lines rise to mountain peaks, far as far can be.",
+        ["posta15"] = "Taurus: There is a breeze out here that filters through the scrub, over hills and down through long, dry riverbeds across the Texas blacktop. It cools the skin and brings the most subtle song in the world to the ears of those who listen."
+    };
+
     // Speaker tables for character attribution
     private static readonly Dictionary<string, string> I76Speakers = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["ta"] = "Stampede", ["sta"] = "Stampede", ["po"] = "Stampede",
+        ["ta"] = "Taurus", ["sta"] = "Taurus", ["po"] = "Taurus",
         ["gc"] = "Groove",
         ["sk"] = "Skeeter",
         ["ir"] = "Radio",
@@ -78,7 +98,7 @@ public static class Program
 
     private static readonly Dictionary<string, string> NitroSpeakers = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["tau"] = "Stampede", ["sta"] = "Stampede",
+        ["tau"] = "Taurus", ["sta"] = "Taurus",
         ["jad"] = "Jade",
         ["ske"] = "Skeeter",
         ["nat"] = "Natty Dread", ["mnd"] = "Natty Dread",
@@ -657,7 +677,6 @@ public static class Program
         await using var processor = factory.CreateBuilder()
             .WithLanguage("en")
             .WithThreads(threads)
-            .WithPrompt("Interstate '76: Groove Champion, Taurus, Stampede, Skeeter, Jade Champion, Antonio Malochio.")
             .WithoutSuppressBlank()
             .Build();
 
@@ -668,6 +687,14 @@ public static class Program
         foreach (var (stem, rawWav) in dialogueStreams.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
         {
             count++;
+
+            // Known canonical poems recited by Taurus: 100% accurate, skip speech model mishearings
+            if (KnownPoemTexts.TryGetValue(stem, out string? knownPoem))
+            {
+                results[stem] = knownPoem;
+                continue;
+            }
+
             using var pcmStream = ConvertWavBytesTo16Khz(rawWav);
             if (pcmStream == null || pcmStream.Length < 100) continue;
 
@@ -776,9 +803,46 @@ public static class Program
         }
 
         string sharedPath = Path.Combine(outDir, "dialogue.json");
+        if (File.Exists(sharedPath))
+        {
+            try
+            {
+                var existing = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(sharedPath));
+                if (existing != null)
+                {
+                    foreach (var (k, v) in existing)
+                    {
+                        if (!allCues.ContainsKey(k)) allCues[k] = v;
+                    }
+                }
+            }
+            catch { }
+        }
         string sharedJson = JsonSerializer.Serialize(allCues, jsonOpts);
         File.WriteAllText(sharedPath, sharedJson, Encoding.UTF8);
-        if (userOutDir != null) File.WriteAllText(Path.Combine(userOutDir, "dialogue.json"), sharedJson, Encoding.UTF8);
+
+        if (userOutDir != null)
+        {
+            string userSharedPath = Path.Combine(userOutDir, "dialogue.json");
+            var userCues = new Dictionary<string, string>(allCues, StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(userSharedPath))
+            {
+                try
+                {
+                    var existingUser = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(userSharedPath));
+                    if (existingUser != null)
+                    {
+                        foreach (var (k, v) in existingUser)
+                        {
+                            if (!userCues.ContainsKey(k)) userCues[k] = v;
+                        }
+                    }
+                }
+                catch { }
+            }
+            string userSharedJson = JsonSerializer.Serialize(userCues, jsonOpts);
+            File.WriteAllText(userSharedPath, userSharedJson, Encoding.UTF8);
+        }
 
         Console.WriteLine($"Saved {missions.Count} mission JSON files and dialogue.json ({allCues.Count} cues) in {sw.Elapsed.TotalSeconds:F1}s");
     }
@@ -889,7 +953,7 @@ public static class Program
         {
             if (s.StartsWith("posta", StringComparison.OrdinalIgnoreCase) ||
                 s.StartsWith("pos", StringComparison.OrdinalIgnoreCase))
-                return "Stampede";
+                return "Taurus";
 
             var m = Regex.Match(s, @"(?:^\d\ds|^gds|^s\ds|^tms?)([a-z]{2})");
             if (m.Success)

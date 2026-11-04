@@ -43,7 +43,7 @@ public partial class Hud : CanvasLayer
     /// <summary>True while the debug text shows (Ctrl+F3): the port's CB line rides with it.</summary>
     public Func<bool>? Debug { get; set; }
     private Label _banner = null!, _cb = null!, _subtitle = null!;
-    private I76.Formats.Subtitles.SubtitleTrack? _subtitles;
+    private I76.Formats.Subtitles.SubtitleTrack? _subtitles, _sharedSubtitles;
     /// <summary>A file from the game's data by name (the binoculars' masks), or null.</summary>
     public Func<string, byte[]?>? ReadFile { get; set; }
     private ColorRect? _binoMask;
@@ -104,6 +104,11 @@ public partial class Hud : CanvasLayer
         if (I76.Game.Shell.ShellSettings.Load().Subtitles && h.Cb.Current is { } cur)
         {
             string? text = _subtitles?.BySound(cur.Name);
+            if (string.IsNullOrEmpty(text))
+            {
+                _sharedSubtitles ??= I76.Formats.Subtitles.SubtitleLoader.Load("dialogue");
+                text = _sharedSubtitles?.BySound(cur.Name);
+            }
             if (string.IsNullOrEmpty(text))
             {
                 var soundTrack = I76.Formats.Subtitles.SubtitleLoader.Load(cur.Name);

@@ -154,6 +154,17 @@ public class SubtitleTests
     }
 
     [Fact]
+    public void PoemSpeakerIsTaurus()
+    {
+        var cb = new I76.Sim.Missions.CbRadio(_ => 10f, _ => false);
+        var poetry = new I76.Sim.Missions.Poetry("taurus", 1);
+        poetry.Request(cb, "player");
+        Assert.Equal(3, cb.Queue.Count);
+        Assert.StartsWith("POSTA", cb.Queue[1].Name);
+        Assert.Equal("taurus", cb.Queue[1].Speaker);
+    }
+
+    [Fact]
     public void ResamplesPcmAudioTo16KhzMonoWav()
     {
         // 1 second of 11025Hz 8-bit mono audio

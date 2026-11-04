@@ -89,6 +89,12 @@ public static class SubtitleLoader
         }
 
         // 2. Check for shared dialogue.json or subtitles.json
+        string dialogueCacheKey = $"{primaryGame}:dialogue";
+        if (Cache.TryGetValue(dialogueCacheKey, out var sharedCached))
+        {
+            return Cache[cacheKey] = sharedCached;
+        }
+
         foreach (var dir in dirs)
         {
             if (!System.IO.Directory.Exists(dir)) continue;
@@ -96,12 +102,14 @@ public static class SubtitleLoader
             if (System.IO.File.Exists(dialoguePath))
             {
                 var track = SubtitleTrack.ParseJson(System.IO.File.ReadAllText(dialoguePath));
+                Cache[dialogueCacheKey] = track;
                 return Cache[cacheKey] = track;
             }
             string subPath = System.IO.Path.Combine(dir, "subtitles.json");
             if (System.IO.File.Exists(subPath))
             {
                 var track = SubtitleTrack.ParseJson(System.IO.File.ReadAllText(subPath));
+                Cache[dialogueCacheKey] = track;
                 return Cache[cacheKey] = track;
             }
         }

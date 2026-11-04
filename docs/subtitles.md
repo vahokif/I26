@@ -144,7 +144,7 @@ Thanks.
 JSON object mapping sound stems to character-attributed dialogue strings:
 ```json
 {
-  "01sta09": "Stampede: Okay baby, here's the scoop...",
+  "01sta09": "Taurus: Okay baby, here's the scoop...",
   "01sgc06": "Groove: Yeah, I got it.",
   "02dri08": "Drinky: You can't kill me! I'm Drinky, the stunt-driving clown!"
 }

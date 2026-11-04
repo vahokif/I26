@@ -111,7 +111,7 @@ public partial class StaticFire : Node3D
         arrays[(int)Mesh.ArrayType.Color] = col;
         arrays[(int)Mesh.ArrayType.Index] = idx;
         var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         mesh.SurfaceSetMaterial(0, _mat);
         return Meshes[(h, w)] = mesh;
     }

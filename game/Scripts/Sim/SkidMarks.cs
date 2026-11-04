@@ -318,7 +318,7 @@ public partial class SkidMarks : Node3D
         arrays[(int)Mesh.ArrayType.Color] = cs.ToArray();
         arrays[(int)Mesh.ArrayType.TexUV] = uv.ToArray();
         arrays[(int)Mesh.ArrayType.Index] = idx.ToArray();
-        s.Mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        s.Mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         s.Node.Visible = true;
     }
 }

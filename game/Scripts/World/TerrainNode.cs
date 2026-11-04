@@ -340,7 +340,7 @@ public partial class TerrainNode : Node3D
 
     private void AddChunk(int x0, int z0, (Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I) a)
     {
-        var arrays = new Godot.Collections.Array();
+        using var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = a.V;
         arrays[(int)Mesh.ArrayType.Normal] = a.N;
@@ -349,7 +349,7 @@ public partial class TerrainNode : Node3D
         arrays[(int)Mesh.ArrayType.Index] = a.I;
         var origin = new Vector3(x0 * SampleSize, 0, -z0 * SampleSize);
         var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         var modern = Deferred ? null : ModernFor!(x0, z0);
         var mi = new MeshInstance3D { Mesh = mesh, Position = origin, MaterialOverride = modern, Name = $"chunk_{x0}_{z0}", Layers = TerrainLayer };
         AddChild(mi);
@@ -458,7 +458,12 @@ public partial class TerrainNode : Node3D
         {
             if (c.X0 > sx1 + 1 || c.X0 + Chunk < sx0 - 1 || c.Z0 > sz1 + 1 || c.Z0 + Chunk < sz0 - 1) continue;
             if (c.Modern is ShaderMaterial m && m.GetShaderParameter("has_cavity").AsBool())
-                m.SetShaderParameter("cavity_tex", ImageTexture.CreateFromImage(TerrainMaterials.Cavity(world, c.X0, c.Z0)));
+            {
+                // the image held past the call that copies it (an argument's wrapper is the caller's to keep: see MeshArrays)
+                var img = TerrainMaterials.Cavity(world, c.X0, c.Z0);
+                m.SetShaderParameter("cavity_tex", ImageTexture.CreateFromImage(img));
+                GC.KeepAlive(img);
+            }
         }
     }
 
@@ -471,6 +476,7 @@ public partial class TerrainNode : Node3D
     private void PumpEdits()
     {
         if (_world is null) return;
+        MainThread.Check("terrain edits");
         PumpRefresh();
         int stale = _refreshing is not null || _toRefresh is not null ? 1 : 0;
         if (_modern && Surface is { } surf)
@@ -520,12 +526,12 @@ public partial class TerrainNode : Node3D
             for (int i = 0; i < todo.Length; i++)
             {
                 var a = arrays[i];
-                var ar = new Godot.Collections.Array();
+                using var ar = new Godot.Collections.Array();
                 ar.Resize((int)Mesh.ArrayType.Max);
                 ar[(int)Mesh.ArrayType.Vertex] = a.V; ar[(int)Mesh.ArrayType.Normal] = a.N; ar[(int)Mesh.ArrayType.TexUV] = a.Uv;
                 ar[(int)Mesh.ArrayType.TexUV2] = a.Uv2; ar[(int)Mesh.ArrayType.Index] = a.I;
                 todo[i].FaithfulMesh.ClearSurfaces();
-                todo[i].FaithfulMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, ar);
+                todo[i].FaithfulMesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, ar);
                 todo[i].FaithfulStale = false;
             }
             stale += _chunks.Count(c => c.FaithfulStale);

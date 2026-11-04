@@ -95,6 +95,7 @@ public sealed class RoadPainter(MissionBuilder builder, RoadStore store)
             var mt = m is null ? null : ImageTexture.CreateFromImage(m);
             var ft = f is null ? null : ReferenceEquals(f, m) ? mt : ImageTexture.CreateFromImage(f);
             terrain.SetRoadLayer(o.Item1, o.Item2, mt, ft, lightY);
+            GC.KeepAlive(f);   // held past the call that copies it (see MeshArrays)
         }
         LastChunks = layers.Count; LastMs = _clock?.Elapsed.TotalMilliseconds ?? 0;
         GD.Print($"editor roads: {layers.Count} chunks painted anew in {LastMs:0} ms");

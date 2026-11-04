@@ -572,7 +572,7 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
                 arrays[(int)Mesh.ArrayType.Custom2] = c2;
                 flags = ((ulong)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom0Shift) | ((ulong)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom1Shift) | ((ulong)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom2Shift);
             }
-            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays, null, null, (Mesh.ArrayFormat)flags);
+            mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays, (Mesh.ArrayFormat)flags);
             mesh.SurfaceSetMaterial(mesh.GetSurfaceCount() - 1, mat);
         }
         return mesh;

@@ -541,7 +541,7 @@ public partial class HorizonTerrain : Node3D
             var (name, arrays) = _pending[0];
             _pending.RemoveAt(0);
             var mesh = new ArrayMesh();
-            mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+            mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
             AddChild(new MeshInstance3D
             {
                 Mesh = mesh, MaterialOverride = Material, Name = name, Layers = TerrainNode.TerrainLayer,

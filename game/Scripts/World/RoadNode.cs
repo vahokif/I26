@@ -79,7 +79,7 @@ public partial class RoadNode : Node3D
                 arrays[(int)Mesh.ArrayType.Vertex] = s.V.ToArray();
                 arrays[(int)Mesh.ArrayType.TexUV] = s.UV.ToArray();
                 arrays[(int)Mesh.ArrayType.Normal] = s.N.ToArray();
-                mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+                mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
                 mesh.SurfaceSetMaterial(mesh.GetSurfaceCount() - 1, mat);
             }
             AddChild(new MeshInstance3D { Mesh = mesh, Position = origin, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });

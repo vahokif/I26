@@ -328,6 +328,7 @@ public partial class SmokeLayer : Node3D
             Tex(3, _sampler, depth),
         };
         var set = rd.UniformSetCreate(uniforms, _shader, 0);
+        GC.KeepAlive(uniforms);   // held past the call (see MeshArrays)
         var dl = rd.DrawListBegin(_fb, RenderingDevice.DrawFlags.ClearColorAll, [new Color(0, 0, 0, 0), new Color(0, 0, 0, 0)]);
         if (count > 0)
         {

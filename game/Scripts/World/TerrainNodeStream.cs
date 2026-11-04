@@ -209,7 +209,7 @@ public partial class TerrainNode
         arrays[(int)Mesh.ArrayType.TexUV2] = a.Uv2;
         arrays[(int)Mesh.ArrayType.Index] = a.I;
         var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         var modern = ModernFor!(x0, z0);
         var mi = new MeshInstance3D { Mesh = mesh, Position = new Vector3(x0 * SampleSize, 0, -z0 * SampleSize), MaterialOverride = modern, Name = $"chunk_{x0}_{z0}", Layers = TerrainLayer };
         AddChild(mi);

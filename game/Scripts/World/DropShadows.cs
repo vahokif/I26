@@ -232,7 +232,7 @@ public partial class DropShadows : Node3D
             cut[(int)Mesh.ArrayType.Vertex] = pv.ToArray();
             cut[(int)Mesh.ArrayType.Normal] = pn.ToArray();
             cut[(int)Mesh.ArrayType.Custom0] = pc.ToArray();
-            result.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, cut, null, null, (Mesh.ArrayFormat)((uint)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom0Shift));
+            result.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, cut, (Mesh.ArrayFormat)((uint)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom0Shift));
         }
         var r = result.GetSurfaceCount() > 0 ? result : null;
         _draped[key] = r;

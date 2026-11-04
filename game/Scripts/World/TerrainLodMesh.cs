@@ -143,9 +143,11 @@ public sealed class TerrainLodMesh
         return mesh;
     }
 
+    /// <summary>The Godot mesh (main thread; the native arrays are freed here, not left to the finaliser).</summary>
     public ArrayMesh ToMesh()
     {
-        var arrays = new Godot.Collections.Array();
+        MainThread.Check("terrain mesh upload");
+        using var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = Vertices;
         arrays[(int)Mesh.ArrayType.Normal] = Normals;
@@ -158,7 +160,7 @@ public sealed class TerrainLodMesh
                                      | ((long)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom1Shift)
                                      | ((long)Mesh.ArrayCustomFormat.RgFloat << (int)Mesh.ArrayFormat.FormatCustom2Shift));
         var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays, flags: flags);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays, flags: flags);
         return mesh;
     }
 }

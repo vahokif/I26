@@ -172,7 +172,7 @@ public sealed partial class PathVisuals : Node3D
         arrays.Resize((int)Godot.Mesh.ArrayType.Max);
         arrays[(int)Godot.Mesh.ArrayType.Vertex] = v.ToArray();
         arrays[(int)Godot.Mesh.ArrayType.Color] = c.ToArray();
-        mesh.AddSurfaceFromArrays(Godot.Mesh.PrimitiveType.Triangles, arrays);
+        mesh.AddSurfaceArrays(Godot.Mesh.PrimitiveType.Triangles, arrays);
         return mesh;
     }
 }

@@ -204,6 +204,8 @@ public partial class Main : Node3D
     {
         I76.Game.Editor.SwitchTimer.Mark("scene ready");
         HeapTrim.Configure();
+        GcStress.Install();
+        MainThread.Mark();
         if (!I76.Game.Editor.EditorSession.Active) Stash.Drop();   // no editor session: nothing to wait for
         LogFile.InstallForced();
         VramWatch.Install(GetTree());   // --log / I76_LOG=1: the log file even where the setting is off

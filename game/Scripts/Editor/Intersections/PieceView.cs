@@ -56,7 +56,7 @@ public sealed partial class PieceView : Node3D
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = v.ToArray();
         arrays[(int)Mesh.ArrayType.Color] = c.ToArray();
-        mesh.AddSurfaceFromArrays(type, arrays);
+        mesh.AddSurfaceArrays(type, arrays);
         return mesh;
     }
 }

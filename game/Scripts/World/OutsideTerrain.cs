@@ -313,7 +313,7 @@ public partial class OutsideTerrain : Node3D
 
     private void Show((int X, int Z) key, Piece p, Arrays a, int level)
     {
-        var arrays = new Godot.Collections.Array();
+        using var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = a.V;
         arrays[(int)Mesh.ArrayType.Normal] = a.N;
@@ -322,7 +322,7 @@ public partial class OutsideTerrain : Node3D
         arrays[(int)Mesh.ArrayType.TexUV2] = a.Uv2;
         arrays[(int)Mesh.ArrayType.Index] = a.I;
         var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         if (level >= 0)
         {
             // the box takes in the ring's heights too, which the far chunks ease onto in the shader

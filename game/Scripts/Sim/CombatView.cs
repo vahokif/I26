@@ -291,7 +291,7 @@ public partial class CombatView : Node3D
         arrays[(int)Mesh.ArrayType.TexUV] = uv.ToArray();
         arrays[(int)Mesh.ArrayType.Index] = idx.ToArray();
         var m = new ArrayMesh();
-        m.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        m.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         return m;
     }
 
@@ -423,7 +423,7 @@ public partial class CombatView : Node3D
         for (int i = 0; i < verts.Length; i++) verts[i] += shift;
         a[(int)Mesh.ArrayType.Vertex] = verts;
         mesh.ClearSurfaces();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, a);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, a);
         _draped[r] = (mesh, r.Pos);
         return mesh;
     }

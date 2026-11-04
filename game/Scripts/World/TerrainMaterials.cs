@@ -370,10 +370,15 @@ public static class TerrainMaterials
         if (packed.Any(ok => !ok))
             foreach (var im in albedo.Concat(normal))
                 if (im.IsCompressed()) im.Decompress();
+        // the image lists held past the calls (the bindings keep no hold on an argument: see MeshArrays)
+        var albedoList = new Godot.Collections.Array<Image>(albedo);
+        var normalList = new Godot.Collections.Array<Image>(normal);
         var at = new Texture2DArray();
-        at.CreateFromImages(new Godot.Collections.Array<Image>(albedo));
+        at.CreateFromImages(albedoList);
         var nt = new Texture2DArray();
-        nt.CreateFromImages(new Godot.Collections.Array<Image>(normal));
+        nt.CreateFromImages(normalList);
+        System.GC.KeepAlive(albedoList);
+        System.GC.KeepAlive(normalList);
         return new Pack(at, nt, mean, lumMean, lumSpread);
     }
 

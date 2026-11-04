@@ -375,6 +375,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             {
                 Horizon = new Texture2DArray();
                 Horizon.CreateFromImages(imgs);
+                GC.KeepAlive(imgs);   // held past the call (see MeshArrays)
                 if (defer) HorizonImages = [.. imgs];
                 else if (EarlyHorizon && !huge) panels = [.. imgs.Select(im => (Image)im.Duplicate())];
             }

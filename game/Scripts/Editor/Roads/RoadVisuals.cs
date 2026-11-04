@@ -109,7 +109,7 @@ public sealed partial class RoadVisuals : Node3D
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = v.ToArray();
         arrays[(int)Mesh.ArrayType.Color] = c.ToArray();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         return mesh;
     }
 

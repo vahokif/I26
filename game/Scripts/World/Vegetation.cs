@@ -405,7 +405,7 @@ public partial class VegetationNode : Node3D
             flags |= (Mesh.ArrayFormat)((long)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom0Shift);
         }
         var m = new ArrayMesh();
-        if (p.VertexCount > 0) m.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays, flags: flags);
+        if (p.VertexCount > 0) m.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays, flags: flags);
         return m;
     }
 
@@ -419,7 +419,7 @@ public partial class VegetationNode : Node3D
         arrays[(int)Mesh.ArrayType.TexUV] = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1) };
         arrays[(int)Mesh.ArrayType.Index] = new[] { 0, 1, 2, 0, 2, 3 };
         var m = new ArrayMesh();
-        m.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        m.AddSurfaceArrays(Mesh.PrimitiveType.Triangles, arrays);
         return m;
     }
 

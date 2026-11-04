@@ -9,15 +9,16 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
-      # the library, CLI, server and test projects need no Godot and no game install
-      - run: dotnet test tests/I76.Sim.Tests
-      - run: dotnet test tests/I76.Net.Tests
-      - run: dotnet test tests/I76.Formats.Tests
-      - run: dotnet test tests/I76.Editor.Tests
+      # the library, CLI, server and test projects need no Godot and no game install. The wall-clock tests (trait
+      # Load=Sensitive) are left to the release check on a quiet machine: a shared runner is not one.
+      - run: dotnet test tests/I76.Sim.Tests --filter "Load!=Sensitive"
+      - run: dotnet test tests/I76.Net.Tests --filter "Load!=Sensitive"
+      - run: dotnet test tests/I76.Formats.Tests --filter "Load!=Sensitive"
+      - run: dotnet test tests/I76.Editor.Tests --filter "Load!=Sensitive"
       # the game project builds without a Godot install (Godot.NET.Sdk comes from NuGet)
       - run: dotnet build game/I76.Game.csproj
-      - run: dotnet test tests/I76.Game.Tests
+      - run: dotnet test tests/I76.Game.Tests --filter "Load!=Sensitive"

@@ -305,6 +305,13 @@ public sealed class Vehicle
     /// <summary>The COLP box: ascending x0..x3, y0..y3, z0..z3.</summary>
     public float[] BoxX = [-0.9f, -0.5f, 0.5f, 0.9f], BoxY = [0f, 0.3f, 1.0f, 1.4f], BoxZ = [-2.1f, -1f, 0.5f, 2f];
 
+    /// <summary>
+    /// An aircraft's (class 9) collider sphere in its own frame, set when it is built (<see cref="VehicleFactory.ModelSphere"/>):
+    /// the middle of its assembled model's bounds, rotors and weapons included, and the farthest model point from there or
+    /// the farthest COLP corner + 0.1, whichever is larger. Null: the COLP box's sphere (<see cref="Weapons.Combat.Collider"/>).
+    /// </summary>
+    public (Vector3 Centre, float Radius)? ModelSphere;
+
     /// <summary>The four horizontal box corners at mid-height (y1+y2)/2, for the terrain sweep.</summary>
     public Vector3[] Corners => [new(BoxX[0], Ym, BoxZ[0]), new(BoxX[3], Ym, BoxZ[0]), new(BoxX[3], Ym, BoxZ[3]), new(BoxX[0], Ym, BoxZ[3])];
     private float Ym => (BoxY[1] + BoxY[2]) * 0.5f;

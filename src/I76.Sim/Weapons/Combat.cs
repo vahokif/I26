@@ -1330,9 +1330,13 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         return (enter, v.Rot.ToWorld(n));
     }
 
-    /// <summary>The collider record's sphere: the box's middle, radius the farthest corner of {x0,x3}×{y1,y3}×{z0,z3} + 0.1.</summary>
+    /// <summary>
+    /// The collider record's sphere: an aircraft's from its model (<see cref="Vehicle.ModelSphere"/>); else the box's
+    /// middle, radius the farthest corner of {x0,x3}×{y1,y3}×{z0,z3} + 0.1.
+    /// </summary>
     public static (Vector3 Centre, float Radius) Collider(Vehicle v)
     {
+        if (v.ModelSphere is { } m) return (v.Pos.ToVector3() + v.Rot.ToWorld(m.Centre), m.Radius);
         var mid = ColliderMid(v);
         float r = 0;
         // the eight corners (no arrays: this runs for every round against every car each frame)
@@ -1341,7 +1345,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         return (v.Pos.ToVector3() + v.Rot.ToWorld(mid), r + 0.1f);
     }
 
-    private static Vector3 ColliderMid(Vehicle v) => new((v.BoxX[0] + v.BoxX[3]) / 2, (v.BoxY[1] + v.BoxY[3]) / 2, (v.BoxZ[0] + v.BoxZ[3]) / 2);
+    private static Vector3 ColliderMid(Vehicle v) =>
+        v.ModelSphere?.Centre ?? new((v.BoxX[0] + v.BoxX[3]) / 2, (v.BoxY[1] + v.BoxY[3]) / 2, (v.BoxZ[0] + v.BoxZ[3]) / 2);
 
     /// <summary>The collider's centre alone (<see cref="Collider"/>'s, without the radius).</summary>
     public static Vector3 ColliderCentre(Vehicle v) => v.Pos.ToVector3() + v.Rot.ToWorld(ColliderMid(v));

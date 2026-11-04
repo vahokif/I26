@@ -23,8 +23,8 @@ namespace I76.Game.Ui;
 /// from about 35–40 m out, so at range the box is a fixed 26x34 (2·0.6S
 /// wide, 2·0.4S + 16 high), and it only grows when the car is close (square
 /// at S = 40, about 20 m). The port's R and centre are the sim's
-/// (Combat.Collider: the COLP box's middle and farthest corner + 0.1), not
-/// the whole hierarchy's that the record also takes in.
+/// (Combat.Collider: an aircraft's from its whole model, a car's the COLP box's
+/// middle and farthest corner + 0.1).
 /// </summary>
 public sealed class TargetIndicator1997
 {

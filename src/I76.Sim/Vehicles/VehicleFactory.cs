@@ -12,6 +12,24 @@ namespace I76.Sim.Vehicles;
 /// </summary>
 public static class VehicleFactory
 {
+    /// <summary>
+    /// An aircraft's collider sphere in its own frame, as the original makes its record: the middle of the assembled
+    /// model's bounds (every part of the .vcf, its weapons' gizmos and rotors included), the radius the farthest model
+    /// point from there, raised to the farthest COLP corner {x0,x3}×{y1,y3}×{z0,z3} + 0.1 if that is larger. Measured in
+    /// the original game: the Huey (0, 2.882, −3.397) r 9.868, the Cobra (0, 2.017, −1.127) r 8.414.
+    /// </summary>
+    public static (Vector3 Centre, float Radius)? ModelSphere(AssetVfs vfs, string vcfName, Vehicle v)
+    {
+        if (new I76.Formats.Assembly.ModelAssembler(vfs).Assemble(vcfName) is not { } m) return null;
+        var pts = m.Parts.SelectMany(p => p.Mesh.Vertices.Select(p.ToModel.Apply)).ToList();
+        if (pts.Count == 0) return null;
+        var c = (pts.Aggregate(Vector3.Min) + pts.Aggregate(Vector3.Max)) * 0.5f;
+        float r = pts.Max(x => Vector3.Distance(x, c));
+        for (int i = 0; i < 8; i++)
+            r = MathF.Max(r, Vector3.Distance(c, new Vector3(v.BoxX[(i & 4) != 0 ? 3 : 0], v.BoxY[(i & 2) != 0 ? 3 : 1], v.BoxZ[(i & 1) != 0 ? 3 : 0])) + 0.1f);
+        return (c, r);
+    }
+
     /// <summary>A compnent.cdf record: A, B and C are its three values, Hp the hit points.</summary>
     public sealed record Component(float A, float B, float C, int Hp);
 
@@ -72,6 +90,7 @@ public static class VehicleFactory
             v.BoxY = [C(11), C(10), C(9), C(8)];
             v.P.RideOffset = v.BoxY[3];          // the roof, for the ground query when upside down
         }
+        if (v.ObjectClass == 9) v.ModelSphere = ModelSphere(vfs, vcfName, v);
 
         // wheels: WLOC slot k → the wheel object (0 FR, 1 FL, 2/3 middle, 4 RR, 5 RL)
         var wloc = vdf.Locations().Where(l => l.Tag == "WLOC").Select(l => new Vector3(l.Transform.Translation[0], l.Transform.Translation[1], l.Transform.Translation[2])).ToArray();

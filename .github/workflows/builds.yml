@@ -67,12 +67,12 @@ jobs:
           nix develop .#release -c bash -c 'command -v dotnet godot-mono && dotnet --info && dotnet restore game/I76.Game.csproj'
       - name: Build the zips (tools/release.sh)
         env:
-          VERSION: ${{ steps.v.outputs.version }}
+          I26_BUILD_VERSION: ${{ steps.v.outputs.version }}
           SHA: ${{ steps.v.outputs.sha }}
         run: |
-          nix develop .#release -c tools/release.sh "$VERSION"
+          nix develop .#release -c tools/release.sh "$I26_BUILD_VERSION"
           # the artifacts are named after the commit too: i26-ci-RUN-COMMIT-windows.zip and so on
-          for p in windows linux linux-arm64 macos; do mv "dist/i26-$VERSION-$p.zip" "dist/i26-$VERSION-$SHA-$p.zip"; done
+          for p in windows linux linux-arm64 macos; do mv "dist/i26-$I26_BUILD_VERSION-$p.zip" "dist/i26-$I26_BUILD_VERSION-$SHA-$p.zip"; done
           ls -l dist
           df -h /
       # tools/release.sh's step logs (the Godot imports, the dev builds, the server publishes), when it failed
@@ -114,7 +114,7 @@ jobs:
           if-no-files-found: error
       - name: Summary
         env:
-          VERSION: ${{ steps.v.outputs.version }}
+          I26_BUILD_VERSION: ${{ steps.v.outputs.version }}
           SHA: ${{ steps.v.outputs.sha }}
           WINDOWS: ${{ steps.windows.outputs.artifact-url }}
           LINUX: ${{ steps.linux.outputs.artifact-url }}
@@ -122,7 +122,7 @@ jobs:
           MACOS: ${{ steps.macos.outputs.artifact-url }}
         run: |
           {
-            echo "### I26 $VERSION ($SHA)"
+            echo "### I26 $I26_BUILD_VERSION ($SHA)"
             echo
             echo "Unpack into the Interstate '76 folder, as a release. Kept for 14 days; downloading needs a GitHub login."
             echo

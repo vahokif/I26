@@ -36,6 +36,9 @@
 # The GitHub builds (.github/workflows/builds.yml) run it for every push to master as VERSION ci-RUN: a version the update
 # check cannot read (UpdateCheck.Parse), so those builds never ask; the Windows file version is then 0.0.0.0. It needs no game install.
 set -euo pipefail
+# MSBuild reads every environment variable as a property: a VERSION (or Version) in the environment would become the
+# projects' NuGet version, which must be numeric (a CI build named ci-N failed its restore so)
+unset VERSION Version
 ver=${1:?usage: tools/release.sh VERSION}
 [[ $ver =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]] || { echo "bad version: $ver" >&2; exit 2; }
 here=$(cd "$(dirname "$0")/.." && pwd)

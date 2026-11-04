@@ -39,6 +39,14 @@ public static class Program
 
     private static readonly Regex NoiseRegex = new(@"^\s*[\(\*\[][a-zA-Z0-9\s,\-_'""\.]+[\)\*\]]\s*$", RegexOptions.Compiled);
 
+    private static readonly Dictionary<string, string> CutsceneReplacements = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Blueberry."] = "Root beer.",
+        ["Blueberry"] = "Root beer",
+        ["Malogio"] = "Malochio",
+        ["Malachio"] = "Malochio"
+    };
+
     // Speaker tables for character attribution
     private static readonly Dictionary<string, string> I76Speakers = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -500,6 +508,7 @@ public static class Program
         await using var processor = factory.CreateBuilder()
             .WithLanguage("en")
             .WithThreads(threads)
+            .WithPrompt("Interstate '76: Groove Champion, Taurus, Stampede, Skeeter, Jade Champion, Antonio Malochio. Root beer.")
             .WithTokenTimestamps()
             .Build();
 
@@ -539,6 +548,11 @@ public static class Program
                 string text = seg.Text?.Trim() ?? "";
                 if (string.IsNullOrEmpty(text) || IsSfx(text)) continue;
 
+                foreach (var (from, to) in CutsceneReplacements)
+                {
+                    text = Regex.Replace(text, $@"\b{Regex.Escape(from)}\b", to, RegexOptions.IgnoreCase);
+                }
+
                 double startSec = seg.Start.TotalSeconds;
                 double endSec = Math.Max(startSec + 0.8, seg.End.TotalSeconds);
 
@@ -552,12 +566,28 @@ public static class Program
                     {
                         double tokStart = cleanTokens[0].Start * 0.01;
                         double tokEnd = cleanTokens[^1].End * 0.01;
+
+                        // Token 0 can stretch over preceding silence; clamp to at most 1.2s before token 0 end
+                        double tok0Dur = (cleanTokens[0].End - cleanTokens[0].Start) * 0.01;
+                        if (tok0Dur > 1.2)
+                        {
+                            tokStart = Math.Max(tokStart, cleanTokens[0].End * 0.01 - 1.0);
+                        }
+
                         if (tokEnd > tokStart)
                         {
                             startSec = tokStart;
                             endSec = Math.Max(startSec + 0.8, tokEnd);
                         }
                     }
+                }
+
+                // If cue is unreasonably long for its text (e.g. single word over 15s of silence), clamp start
+                int wordCount = text.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                double maxAllowedDur = Math.Max(2.2, wordCount * 0.85 + 0.8);
+                if (endSec - startSec > maxAllowedDur)
+                {
+                    startSec = Math.Max(startSec, endSec - maxAllowedDur);
                 }
 
                 cues.Add($"{idx}\n{FormatTimestamp(startSec)} --> {FormatTimestamp(endSec)}\n{text}");
@@ -627,6 +657,7 @@ public static class Program
         await using var processor = factory.CreateBuilder()
             .WithLanguage("en")
             .WithThreads(threads)
+            .WithPrompt("Interstate '76: Groove Champion, Taurus, Stampede, Skeeter, Jade Champion, Antonio Malochio.")
             .WithoutSuppressBlank()
             .Build();
 

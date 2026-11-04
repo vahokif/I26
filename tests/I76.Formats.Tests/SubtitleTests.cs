@@ -140,6 +140,20 @@ public class SubtitleTests
     }
 
     [Fact]
+    public void PagesLongCuesProportionalDisplayTiming()
+    {
+        string text = "Stampede: The wheels in the desert spin across the asphalt under the blazing sun. And the night falls quiet over the valley of the shadow of death.";
+        string pageAtStart = SubtitleTrack.Page(text, 0, 10);
+        string pageAtEnd = SubtitleTrack.Page(text, 9.8, 10);
+
+        Assert.StartsWith("Stampede: ", pageAtStart);
+        Assert.StartsWith("Stampede: ", pageAtEnd);
+        Assert.NotEqual(pageAtStart, pageAtEnd);
+        Assert.True(pageAtStart.Length <= SubtitleTrack.PageChars);
+        Assert.True(pageAtEnd.Length <= SubtitleTrack.PageChars);
+    }
+
+    [Fact]
     public void ResamplesPcmAudioTo16KhzMonoWav()
     {
         // 1 second of 11025Hz 8-bit mono audio

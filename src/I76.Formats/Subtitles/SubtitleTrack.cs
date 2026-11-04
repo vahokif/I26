@@ -27,16 +27,16 @@ public sealed class SubtitleTrack
     }
 
     /// <summary>Longest page of a subtitle shown at once, in characters.</summary>
-    public const int PageChars = 100;
+    public const int PageChars = 140;
 
     /// <summary>
-    /// Splits a long cue into pages of at most <paramref name="maxChars"/> characters (cut at word
-    /// boundaries) and returns the page for <paramref name="elapsed"/> seconds into a cue of
-    /// <paramref name="length"/> seconds; each page lasts in proportion to its characters.
+    /// Splits a long cue into pages of at most <paramref name="maxChars"/> characters (cut at sentence
+    /// or word boundaries) and returns the page for <paramref name="elapsed"/> seconds into a cue of
+    /// <paramref name="length"/> seconds; each page lasts in proportion to its spoken characters.
     /// </summary>
     public static string Page(string text, double elapsed, double length, int maxChars = PageChars)
     {
-        text = text.Replace("\r", "").Replace('\n', ' ');
+        text = text.Replace("\r", "").Replace('\n', ' ').Trim();
         if (text.Length <= maxChars) return text;
         var pages = new List<string>();
         var rest = text;
@@ -50,8 +50,20 @@ public sealed class SubtitleTrack
 
         while (rest.Length > maxChars)
         {
-            int cut = rest.LastIndexOf(' ', maxChars);
+            // Prefer cutting at sentence or clause boundaries in the second half of maxChars
+            int cut = -1;
+            int half = maxChars / 2;
+            for (int j = maxChars - 1; j >= half; j--)
+            {
+                if ((rest[j] is '.' or '!' or '?' or ';' or ',') && j + 1 < rest.Length && rest[j + 1] == ' ')
+                {
+                    cut = j + 1;
+                    break;
+                }
+            }
+            if (cut <= 0) cut = rest.LastIndexOf(' ', maxChars);
             if (cut <= 0) cut = maxChars;
+
             pages.Add(rest[..cut].TrimEnd());
             rest = rest[cut..].TrimStart();
             if (prefix.Length > 0 && rest.Length > 0 && !rest.StartsWith(prefix))
@@ -60,11 +72,25 @@ public sealed class SubtitleTrack
             }
         }
         if (rest.Length > 0) pages.Add(rest);
-        if (length <= 0) length = text.Length / 15.0;      // no known length: about 15 characters a second
-        double pos = Math.Clamp(elapsed / length, 0, 0.9999) * text.Length, acc = 0;
+        if (pages.Count == 0) return text;
+        if (pages.Count == 1) return pages[0];
+
+        if (length <= 0) length = text.Length / 15.0; // no known length: about 15 characters a second
+
+        // Weight each page by its actual spoken character count (excluding repeated continuation prefix)
+        double totalWeight = 0;
+        var weights = new double[pages.Count];
         for (int i = 0; i < pages.Count; i++)
         {
-            acc += pages[i].Length + 1;
+            weights[i] = Math.Max(1, pages[i].Length - (i > 0 ? prefix.Length : 0));
+            totalWeight += weights[i];
+        }
+
+        double pos = Math.Clamp(elapsed / length, 0, 0.9999) * totalWeight;
+        double acc = 0;
+        for (int i = 0; i < pages.Count; i++)
+        {
+            acc += weights[i];
             if (pos < acc) return pages[i];
         }
         return pages[^1];

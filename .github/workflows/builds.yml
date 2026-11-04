@@ -59,6 +59,12 @@ jobs:
         run: |
           echo "version=ci-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      # the toolchain and the game's NuGet packages on their own, before tools/release.sh (which keeps the dev build's output
+      # in a log and shows only its tail): a broken .NET or a failed restore is shown here in full
+      - name: Toolchain and NuGet restore
+        run: |
+          env | grep -E '^(DOTNET|NUGET|MSBUILD)' | sort || true
+          nix develop .#release -c bash -c 'command -v dotnet godot-mono && dotnet --info && dotnet restore game/I76.Game.csproj'
       - name: Build the zips (tools/release.sh)
         env:
           VERSION: ${{ steps.v.outputs.version }}
@@ -69,6 +75,14 @@ jobs:
           for p in windows linux linux-arm64 macos; do mv "dist/i26-$VERSION-$p.zip" "dist/i26-$VERSION-$SHA-$p.zip"; done
           ls -l dist
           df -h /
+      # tools/release.sh's step logs (the Godot imports, the dev builds, the server publishes), when it failed
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-logs
+          path: ~/.cache/i26-release/*.log
+          retention-days: 14
+          if-no-files-found: ignore
       # one artifact per zip, uploaded as the zip itself (not zipped again)
       - id: windows
         uses: actions/upload-artifact@v7

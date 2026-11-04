@@ -329,7 +329,6 @@ public sealed partial class MeleeHost : IModeHost
             foreach (var so in hs.World.Objects) _structureSerial[so] = so.NetId & 0xffffff;
         _spawned.Clear();     // the AI fill is in the roster every join gets
         Mode.Opened();
-        if (Mode is MeleeMode { BotLimit: > 0 } mm) mm.Game.PrepareJumps(Session.TickSeconds);   // the ramps the bots can use, flown behind the loading card
         _spawned.Clear();     // and so are the bots
     }
 

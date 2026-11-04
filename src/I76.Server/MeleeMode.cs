@@ -58,7 +58,6 @@ public sealed class MeleeMode : IHostMode
         Game.Removed += v => { host.Removed(v); };
         Game.PlayerRenewed += v => _renewed.Add((v, _destroyed.Contains(v)));
         Setup.Damage.KilledBy += (victim, attacker) => _kills.Add((victim, attacker));
-        Game.Landed += (p, l) => host.Log($"bot: {p.Name} jumped the ramp at ({l.Foot.X:0}, {l.Foot.Z:0}) and landed at ({p.Car.Pos.X:0}, {p.Car.Pos.Z:0})");
         Game.Message += text => { host.Emit(new ChatEvent(-1, text)); host.Log(text); };
         Game.Start();
     }

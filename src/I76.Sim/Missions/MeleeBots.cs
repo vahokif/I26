@@ -42,14 +42,6 @@ internal sealed class BotBrain
     /// <summary>A goto: the nearest the car has been to its goal, when it last got 30 m nearer, and whether it is on the grid's route (<see cref="Ai.GridRoute"/>) since it stopped getting nearer.</summary>
     public float BestDist, BestAt;
     public bool Gridded;
-    /// <summary>
-    /// A ramp plan (<see cref="MeleeGame.BotJump"/>): the link, the phase (0 none, 1 on the way to the line-up point, 2 lining up,
-    /// 3 on the run, 4 in the air), the speed to hit it at and the window of speeds that land well, the goal it was planned for, when
-    /// it began, when the bot last looked at ramps, the ramp it should not try again for a while, and when it left the ground.
-    /// </summary>
-    public int JumpLink = -1, JumpPhase, BanLink = -1;
-    public float JumpSpeed, JumpLo, JumpHi, JumpSince, JumpPlanAt, BanUntil, JumpTouched, JumpAirAt;
-    public Vector3 JumpGoal;
 
     internal void Save(SaveWriter w)
     {
@@ -72,15 +64,10 @@ internal sealed class BotBrain
         return b;
     }
 
-    internal static void AuditFields(SaveAudit a)
-    {
+    internal static void AuditFields(SaveAudit a) =>
         a.For<BotBrain>().Saved(nameof(Target), nameof(RetargetAt), nameof(Path), nameof(Dest), nameof(Plan), nameof(MovedAt), nameof(Before), nameof(Owner),
             nameof(AheadSince), nameof(RaiseAt), nameof(PatrolAt), nameof(Phase), nameof(SampleAt), nameof(AvoidUntil), nameof(SamplePos), nameof(StillSeconds),
             nameof(CarefulRace), nameof(LastCur), nameof(ProgressAt), nameof(BestDist), nameof(BestAt), nameof(Gridded));
-        a.For<BotBrain>().Transient("a ramp plan is made again after a restore (the savestate format and the protocol stay as they were): a bot that was on its way to a ramp drives on by its saved path, one in the air or on the run is the AI's again",
-            nameof(JumpLink), nameof(JumpPhase), nameof(BanLink), nameof(JumpSpeed), nameof(JumpLo), nameof(JumpHi), nameof(JumpSince), nameof(JumpPlanAt), nameof(BanUntil),
-            nameof(JumpTouched), nameof(JumpAirAt), nameof(JumpGoal));
-    }
 }
 
 /// <summary>
@@ -167,7 +154,6 @@ public sealed partial class MeleeGame
     /// <summary>The bots' frame: a dead one asks to come back, a live one gets the order its mode calls for.</summary>
     private void BotsFrame()
     {
-        _plansThisFrame = 0;
         foreach (var p in Players)
         {
             if (!p.IsBot) continue;
@@ -182,7 +168,6 @@ public sealed partial class MeleeGame
                     if (Host.Now >= b.RaiseAt) RequestRespawn(p);
                 }
                 b.Plan = PlanNone; b.Path = null; b.Target = null; b.AheadSince = -1;
-                b.JumpPhase = 0; b.JumpLink = -1;
                 p.Entity.Depth = -1;
                 p.Entity.Search = null;
                 continue;
@@ -193,10 +178,7 @@ public sealed partial class MeleeGame
                 b.RaiseAt = null; b.Plan = PlanNone; b.MovedAt = Host.Now;
                 p.Entity.Depth = -1; p.Entity.Search = null;
             }
-            if (Ended) { Order(p, PlanSit, null, null, 0); b.JumpPhase = 0; continue; }
-            // a ramp plan that the mode's logic did not carry on this frame (the bot's goal changed under it) is dropped
-            if (b.JumpPhase == 1 && Host.Now - b.JumpTouched > 0.5f) EndJump(p, b);
-            if (b.JumpPhase >= 2 && DriveJump(p, b, Jumps, b.JumpGoal)) continue;
+            if (Ended) { Order(p, PlanSit, null, null, 0); continue; }
             if (System.MathF.Abs(p.Car.Speed) > 2f) b.MovedAt = Host.Now;
             StuckCheck(p, b);
             switch (Rules.Kind)
@@ -310,7 +292,6 @@ public sealed partial class MeleeGame
     private void Go(MeleePlayer p, Vector3 dest, float? speed = null)
     {
         var b = p.Brain!;
-        if (BotJump(p, b, dest)) return;
         float d = System.MathF.Sqrt(Dist2(p.Entity.Position, dest));
         if (b.Plan != PlanGoto || b.Path is null || Vector3.DistanceSquared(b.Dest, dest) > 20f * 20f)
         {
@@ -389,11 +370,7 @@ public sealed partial class MeleeGame
             if (near is not null && (b.Target is null || Dist2(near, p.Entity) < 0.6f * Dist2(b.Target, p.Entity))) b.Target = near;
             b.RetargetAt = Host.Now + 1.5f;
         }
-        if (b.Target is { } target)
-        {
-            if (BotJump(p, b, target.Position)) return;
-            Order(p, PlanAttack, target, null, 0);
-        }
+        if (b.Target is { } target) Order(p, PlanAttack, target, null, 0);
         else Wander(p, b);
     }
 

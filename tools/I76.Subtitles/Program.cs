@@ -44,7 +44,10 @@ public static class Program
         ["Blueberry."] = "Root beer.",
         ["Blueberry"] = "Root beer",
         ["Malogio"] = "Malochio",
-        ["Malachio"] = "Malochio"
+        ["Malachio"] = "Malochio",
+        ["Our copy is Stampede"] = "I copy you, Stampede",
+        ["How you going down, Eddie?"] = "How you doing down there?",
+        ["All of nothing"] = "All or nothing"
     };
 
     // Canonical Interstate '76 trip poems recited by Taurus
@@ -66,11 +69,12 @@ public static class Program
         ["posta14"] = "Taurus: Glass, flat and forever. It stretches out and never stops. Unless it finds the hills whose lines rise to mountain peaks, far as far can be.",
         ["posta15"] = "Taurus: There is a breeze out here that filters through the scrub, over hills and down through long, dry riverbeds across the Texas blacktop. It cools the skin and brings the most subtle song in the world to the ears of those who listen.",
         ["gdsgc40"] = "Groove: Hey Stampede, how about a poem?",
+        ["gdsgc41"] = "Groove: Huh. Must be out of range.",
         ["gdsgc42"] = "Groove: Man, that's heavy.",
-        ["gdsgc43"] = "Groove: Far out.",
-        ["gdsgc44"] = "Groove: Out of sight.",
-        ["gdsgc45"] = "Groove: Groovy.",
-        ["gdsgc46"] = "Groove: Right on."
+        ["gdsgc43"] = "Groove: Wow.",
+        ["gdsgc44"] = "Groove: Maybe you should get some help, man.",
+        ["gdsgc45"] = "Groove: Yeah, I like that, man.",
+        ["gdsgc46"] = "Groove: Thank you, Stampede."
     };
 
     // Speaker tables for character attribution

@@ -106,9 +106,10 @@ public partial class Hud : CanvasLayer
             string? text = _subtitles?.BySound(cur.Name);
             if (string.IsNullOrEmpty(text))
             {
-                bool isNitro = !string.IsNullOrEmpty(Mission) &&
-                    (Mission.StartsWith("p", StringComparison.OrdinalIgnoreCase) ||
-                     Mission.StartsWith("b01", StringComparison.OrdinalIgnoreCase));
+                bool isNitro = I76.Formats.Subtitles.SubtitleLoader.IsNitro ||
+                    (!string.IsNullOrEmpty(Mission) &&
+                     (Mission.StartsWith("p", StringComparison.OrdinalIgnoreCase) ||
+                      Mission.StartsWith("b01", StringComparison.OrdinalIgnoreCase)));
                 _sharedSubtitles ??= I76.Formats.Subtitles.SubtitleLoader.LoadDialogue(isNitro);
                 text = _sharedSubtitles?.BySound(cur.Name);
             }

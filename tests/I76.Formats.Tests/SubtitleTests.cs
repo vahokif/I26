@@ -172,6 +172,12 @@ public class SubtitleTests
             Assert.NotNull(text);
             Assert.StartsWith("Groove:", text);
             Assert.DoesNotContain("Jade", text);
+
+            string? signoff46 = track.BySound("GDSGC46.WAV");
+            if (signoff46 != null)
+            {
+                Assert.Equal("Groove: Thank you, Stampede.", signoff46);
+            }
         }
     }
 

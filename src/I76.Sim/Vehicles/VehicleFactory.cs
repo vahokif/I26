@@ -43,7 +43,9 @@ public static class VehicleFactory
     /// sounded like a V-10 and the police car had no siren (docs/deviations.md).
     /// </summary>
     /// <param name="meleeBrakes">An Auto Melee or a network game: the brake is scaled by the car's BRAK part (1.0 / 1.3 / 1.6 / 2.0). A mission ignores the part.</param>
-    public static Vehicle Create(AssetVfs vfs, string vcfName, bool meleeBrakes = false, bool bodySound = false)
+    /// <param name="specials">False for an Auto Melee's opponents: the game writes their cars with three empty SPEC slots,
+    /// so they have no specials and none of the specials' load-time effects (the blower among them).</param>
+    public static Vehicle Create(AssetVfs vfs, string vcfName, bool meleeBrakes = false, bool bodySound = false, bool specials = true)
     {
         var vcf = new Bwd2File(vfs.Read(vcfName));
         var vcfc = vcf.First("VCFC") ?? throw new InvalidDataException($"{vcfName}: no VCFC");
@@ -128,15 +130,14 @@ public static class VehicleFactory
         v.Flags |= VehicleFlags.EngineOn | VehicleFlags.CommandedYaw;   // |= 0x1001
         foreach (var w in v.Wheels.Concat(v.MiddleWheels)) w.InitSuspension();
         // damage: The VCFC armour and chassis reinforcement (front, left, right, rear), component HP, specials
-        var specials = vcf.All("SPEC").Select(c => (int)Bin.U32(vcf.Data, c.PayloadOffset)).Take(3).ToList();
+        var spec = specials ? vcf.All("SPEC").Select(c => (int)Bin.U32(vcf.Data, c.PayloadOffset)).Take(3).ToList() : [];
+        // the specials that act once, at the post-load: the blower, Heated Seats, Nitro's Dashboard Mary and Tire Covers
+        Specials.AtLoad(v, spec, vfs.Install.IsNitro, wheelHp);
         v.Build = new Damage.VehicleBuild(
             [.. Enumerable.Range(0, 4).Select(z => Bin.I32(d, p + 0x5d + 4 * z))],
             [.. Enumerable.Range(0, 4).Select(z => Bin.I32(d, p + 0x6d + 4 * z))],
-            wheelHp, eng.Hp, brak.Hp, susp.Hp, (100f - susp.B) * 0.01f, specials);
-        v.Loadout = new Loadout(wdfNames, engId, suspId, brakeId, [.. specials]);
-        // SPEC type 3 (blower) → engine scale 1.25
-        foreach (var c in vcf.All("SPEC"))
-            if (Bin.U32(vcf.Data, c.PayloadOffset) == 3) v.P.EngineScale = 1.25f;
+            wheelHp, eng.Hp, brak.Hp, susp.Hp, (100f - susp.B) * 0.01f, spec);
+        v.Loadout = new Loadout(wdfNames, engId, suspId, brakeId, [.. spec]);
         return v;
     }
 

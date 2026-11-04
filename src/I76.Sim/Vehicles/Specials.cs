@@ -6,7 +6,8 @@ namespace I76.Sim.Vehicles;
 /// <summary>
 /// The keyed specials: the key dispatch, the radar jammer
 /// (the radar jammer's activation, the jamming test) and nitro (the nitro's activation). The
-/// passive ones are in <see cref="VehicleDamage"/>, the blower in the vehicle factory.
+/// passive ones are in <see cref="VehicleDamage"/>; the ones that act once, as the car is loaded (the blower, Heated
+/// Seats, the Nitro Pack's Dashboard Mary and Tire Covers), in <see cref="AtLoad"/>.
 /// </summary>
 public static class Specials
 {
@@ -54,6 +55,47 @@ public static class Specials
         }
         return null;
     }
+
+    /// <summary>
+    /// The vehicle post-load's walk of the three special slots, in slot order. It looks only at each slot's type, not at
+    /// the special's HP or whether it is on, and a type in two slots applies twice. Whatever is applied stays when the
+    /// special is later destroyed.
+    /// <list type="bullet">
+    /// <item>3, the blower: the engine scale 1.25.</item>
+    /// <item>8, Heated Seats (every build): each mounted weapon's rounds × 1.1, rounded down (<see cref="PlusTenth"/>).</item>
+    /// <item>10, Dashboard Mary (the Nitro Pack only; the base game has the plate and nothing else): each mounted weapon's
+    /// damage per shot × 1.1, rounded down. Every round it fires carries it.</item>
+    /// <item>11, Tire Covers (the Nitro Pack only): every wheel's HP and maximum × 2 (<paramref name="wheelHp"/>, the wheel
+    /// files' HP by axle, which the damage state is built from). The caltrop rule comes on top of it.</item>
+    /// </list>
+    /// It runs before the player's rescale, and after a trip's carried state has been read (<see cref="Trip.CarState.Apply"/>
+    /// gives carried rounds the same bonus). The driver's handguns are fitted later and are left alone.
+    /// </summary>
+    public static void AtLoad(Vehicle v, IReadOnlyList<int> specials, bool nitro, int[] wheelHp)
+    {
+        var weapons = v.Armory?.LoadOrder ?? [];
+        foreach (int type in specials)
+            switch (type)
+            {
+                case 3: v.P.EngineScale = 1.25f; break;
+                case 8: foreach (var w in weapons) w.Ammo = PlusTenth(w.Ammo); break;
+                case 10 when nitro: foreach (var w in weapons) w.Damage = PlusTenth(w.Damage); break;
+                case 11 when nitro: for (int k = 0; k < wheelHp.Length; k++) wheelHp[k] *= 2; break;
+            }
+    }
+
+    /// <summary>Heated Seats' bonus on a weapon's rounds, once per Heated Seats slot (a trip's carried rounds get it at load too).</summary>
+    public static int HeatedSeatsAmmo(int ammo, IEnumerable<int> specials)
+    {
+        foreach (int type in specials) if (type == 8) ammo = PlusTenth(ammo);
+        return ammo;
+    }
+
+    /// <summary>
+    /// x × 1.1, rounded toward zero: the single-precision 1.1 widened and multiplied in double precision, as the original
+    /// does. So 250 → 275, 40 → 44, 15 → 16, 25 → 27, while 3, 5 and 8 stay as they are.
+    /// </summary>
+    public static int PlusTenth(int x) => (int)(x * (double)1.1f);
 
     /// <summary>
     /// The jamming test, with its side effects: the one place a jam ends. <paramref name="trustFlag"/> is a

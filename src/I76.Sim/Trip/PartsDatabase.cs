@@ -30,7 +30,9 @@ public sealed class PartsDatabase
 
     /// <summary>
     /// The specials' names (the string table keys), for spc01..spc11. The base shell's catalogue stops at the ninth;
-    /// the Nitro Pack's loop has eleven, adding Dashboard Mary and Tire Covers (types 10 and 11, which do nothing).
+    /// the Nitro Pack's loop has eleven, adding Dashboard Mary and Tire Covers (types 10 and 11: in the Nitro Pack, damage
+    /// per shot × 1.1 and wheel HP × 2 at load, see <see cref="Vehicles.Specials.AtLoad"/>; the base game's engine does
+    /// nothing with them).
     /// </summary>
     public static readonly string[] SpecialNames =
         ["Radar Jammer", "NitrousOxide", "Blower", "X-Aust Brake", "Structo Bmpr", "Curb Feelers", "Mud Flaps", "Heated Seats", "Cup Holders", "Dashboard Mary", "Tire Covers"];

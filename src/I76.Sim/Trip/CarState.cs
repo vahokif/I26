@@ -31,7 +31,8 @@ public sealed record CarState(int EngineHp, int BrakeHp, int SuspensionHp, int[]
     /// The engine's VCST/WLST/WPST handlers at load (trip games
     /// only), before the player's ×4: the current HP of engine, brakes,
     /// suspension and each wheel (the maxima stay the car's own), each
-    /// weapon's HP by hardpoint and its rounds unless −1.
+    /// weapon's HP by hardpoint and its rounds unless −1. The post-load comes after these, so carried rounds get the
+    /// Heated Seats bonus too (the shell writes −1, so a trip mission starts with the loaded rounds and that bonus).
     /// </summary>
     public void Apply(Vehicle v)
     {
@@ -45,7 +46,7 @@ public sealed record CarState(int EngineHp, int BrakeHp, int SuspensionHp, int[]
             if (v.Armory?.LoadOrder.FirstOrDefault(w => w.Hardpoint.Id == hp) is { } weapon)
             {
                 weapon.Hp = System.Math.Min(wHp, weapon.MaxHp);
-                if (ammo != -1) weapon.Ammo = ammo;
+                if (ammo != -1) weapon.Ammo = Specials.HeatedSeatsAmmo(ammo, v.Build?.Specials ?? []);
             }
     }
 }

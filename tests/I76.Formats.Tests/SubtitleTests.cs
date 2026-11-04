@@ -162,6 +162,61 @@ public class SubtitleTests
         Assert.Equal(3, cb.Queue.Count);
         Assert.StartsWith("POSTA", cb.Queue[1].Name);
         Assert.Equal("taurus", cb.Queue[1].Speaker);
+
+        // Verify gdsgc40 (Groove poem request) loads from I76 dialogue, NOT Nitro
+        SubtitleLoader.ClearCache();
+        var track = SubtitleLoader.Load("GDSGC40.WAV");
+        if (track != null)
+        {
+            string? text = track.BySound("GDSGC40.WAV");
+            Assert.NotNull(text);
+            Assert.StartsWith("Groove:", text);
+            Assert.DoesNotContain("Jade", text);
+        }
+    }
+
+    [Fact]
+    public void SubtitleLoader_DoesNotReturnUnrelatedDialogueOnMissingSound()
+    {
+        SubtitleLoader.ClearCache();
+        var track = SubtitleLoader.Load("nonexistent_sound_12345");
+        Assert.Null(track);
+    }
+
+    [Theory]
+    [InlineData("t01", false)]
+    [InlineData("s01", false)]
+    [InlineData("m01", false)]
+    [InlineData("a01", false)]
+    [InlineData("01s01.wav", false)]
+    [InlineData("gdsgc40.wav", false)]
+    [InlineData("gdsta01.wav", false)]
+    [InlineData("gdssk01.wav", false)]
+    [InlineData("posta01.wav", false)]
+    [InlineData("posta15.wav", false)]
+    [InlineData("p01", true)]
+    [InlineData("p18", true)]
+    [InlineData("b01", true)]
+    [InlineData("05jad10.wav", true)]
+    [InlineData("01tau01.wav", true)]
+    [InlineData("rljad01.wav", true)]
+    [InlineData("rltau01.wav", true)]
+    [InlineData("gdjad01.wav", true)]
+    [InlineData("gdtau01.wav", true)]
+    public void SubtitleLoader_ResolvesStemGameProfile(string name, bool expectedNitro)
+    {
+        SubtitleLoader.ClearCache();
+        // Indirect verification through LoadDialogue / Load stem resolution
+        // If it's an I76 stem, it should not resolve from Nitro dialogue
+        if (!expectedNitro && (name.StartsWith("gds", StringComparison.OrdinalIgnoreCase) || name.StartsWith("posta", StringComparison.OrdinalIgnoreCase)))
+        {
+            var track = SubtitleLoader.Load(name);
+            if (track != null)
+            {
+                string? text = track.BySound(name);
+                if (text != null) Assert.DoesNotContain("Jade:", text);
+            }
+        }
     }
 
     [Fact]

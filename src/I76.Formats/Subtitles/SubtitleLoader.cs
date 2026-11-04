@@ -53,7 +53,37 @@ public static class SubtitleLoader
     }
 
     /// <summary>
-    /// Loads a subtitle track for the given movie or mission name (e.g. "introf01", "t01", "p01").
+    /// Loads the shared dialogue subtitle track (dialogue.json or subtitles.json) for the specified game profile.
+    /// </summary>
+    public static SubtitleTrack? LoadDialogue(bool isNitro = false, string? installDir = null)
+    {
+        string primaryGame = isNitro ? "nitro" : "i76";
+        string dialogueCacheKey = $"{primaryGame}:dialogue";
+        if (Cache.TryGetValue(dialogueCacheKey, out var sharedCached))
+            return sharedCached;
+
+        var dirs = GetSearchDirs(installDir, primaryGame);
+        foreach (var dir in dirs)
+        {
+            if (!System.IO.Directory.Exists(dir)) continue;
+            string dialoguePath = System.IO.Path.Combine(dir, "dialogue.json");
+            if (System.IO.File.Exists(dialoguePath))
+            {
+                var track = SubtitleTrack.ParseJson(System.IO.File.ReadAllText(dialoguePath));
+                return Cache[dialogueCacheKey] = track;
+            }
+            string subPath = System.IO.Path.Combine(dir, "subtitles.json");
+            if (System.IO.File.Exists(subPath))
+            {
+                var track = SubtitleTrack.ParseJson(System.IO.File.ReadAllText(subPath));
+                return Cache[dialogueCacheKey] = track;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Loads a subtitle track for the given movie or mission name (e.g. "introf01", "t01", "p01") or sound stem.
     /// Checks for .srt and .json files matching the name, as well as shared dialogue.json.
     /// </summary>
     public static SubtitleTrack? Load(string name, string? installDir = null)
@@ -88,30 +118,26 @@ public static class SubtitleLoader
             }
         }
 
-        // 2. Check for shared dialogue.json or subtitles.json
-        string dialogueCacheKey = $"{primaryGame}:dialogue";
-        if (Cache.TryGetValue(dialogueCacheKey, out var sharedCached))
+        // 2. Check for shared dialogue if explicitly requested or if stem is contained in dialogue.json
+        if (stem is "dialogue" or "subtitles")
         {
-            return Cache[cacheKey] = sharedCached;
+            var diag = LoadDialogue(isNitro, installDir);
+            if (diag != null) return Cache[cacheKey] = diag;
+            return null;
         }
 
-        foreach (var dir in dirs)
+        // Check if stem exists in primary game's dialogue track
+        var primaryDiag = LoadDialogue(isNitro, installDir);
+        if (primaryDiag != null && (primaryDiag.ByKey.ContainsKey(stem) || primaryDiag.ByKey.ContainsKey(name)))
         {
-            if (!System.IO.Directory.Exists(dir)) continue;
-            string dialoguePath = System.IO.Path.Combine(dir, "dialogue.json");
-            if (System.IO.File.Exists(dialoguePath))
-            {
-                var track = SubtitleTrack.ParseJson(System.IO.File.ReadAllText(dialoguePath));
-                Cache[dialogueCacheKey] = track;
-                return Cache[cacheKey] = track;
-            }
-            string subPath = System.IO.Path.Combine(dir, "subtitles.json");
-            if (System.IO.File.Exists(subPath))
-            {
-                var track = SubtitleTrack.ParseJson(System.IO.File.ReadAllText(subPath));
-                Cache[dialogueCacheKey] = track;
-                return Cache[cacheKey] = track;
-            }
+            return Cache[cacheKey] = primaryDiag;
+        }
+
+        // Check if stem exists in alternate game's dialogue track (e.g. Nitro using I76 companion lines)
+        var secondaryDiag = LoadDialogue(!isNitro, installDir);
+        if (secondaryDiag != null && (secondaryDiag.ByKey.ContainsKey(stem) || secondaryDiag.ByKey.ContainsKey(name)))
+        {
+            return Cache[cacheKey] = secondaryDiag;
         }
 
         return null;
@@ -128,10 +154,23 @@ public static class SubtitleLoader
             return false;
 
         string stem = System.IO.Path.GetFileNameWithoutExtension(norm);
-        if (System.Text.RegularExpressions.Regex.IsMatch(stem, @"^(?:p\d{2}|b01|\d{2}[a-z]{3}\d{2}|(?:gd|rl|tm)[a-z]{3}\d{2})"))
-            return true;
-        if (System.Text.RegularExpressions.Regex.IsMatch(stem, @"^(?:t\d{2}|s\d{2}|m\d{2}|a01)"))
+
+        // Interstate '76 prefixes:
+        // - Missions: t01..t17, s01..s08, m01..m05, a01
+        // - General dialogue: gdsgc, gdsta, gdssk, gdsge (starts with gds)
+        // - Poems: posta01..posta15 (posta*)
+        // - Mission dialogue: 01s..17s, s1s..s8s, 01a, tms
+        if (System.Text.RegularExpressions.Regex.IsMatch(stem, @"^(?:t\d{2}|s\d{2}|m\d{2}|a01|gds|posta|\d{2}s|s\ds|01a|tms)"))
             return false;
+
+        // Nitro Pack prefixes:
+        // - Missions: p01..p19, b01
+        // - General dialogue: gdtau, gdjad, gdske, gdnat
+        // - Driver lines: rltau, rljad, rlske, rlnat
+        // - Chatter: tmtau, tmjad, etc.
+        // - Mission dialogue: 01tau01, etc. (\d{2}[a-z]{3}\d{2})
+        if (System.Text.RegularExpressions.Regex.IsMatch(stem, @"^(?:p\d{2}|b01|\d{2}[a-z]{3}\d{2}|(?:rl|tm)[a-z]{3}\d{2}|gd(?:tau|jad|ske|nat)\d{2})"))
+            return true;
 
         return IsNitro;
     }

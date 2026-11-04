@@ -106,15 +106,16 @@ public partial class Hud : CanvasLayer
             string? text = _subtitles?.BySound(cur.Name);
             if (string.IsNullOrEmpty(text))
             {
-                _sharedSubtitles ??= I76.Formats.Subtitles.SubtitleLoader.Load("dialogue");
+                bool isNitro = !string.IsNullOrEmpty(Mission) &&
+                    (Mission.StartsWith("p", StringComparison.OrdinalIgnoreCase) ||
+                     Mission.StartsWith("b01", StringComparison.OrdinalIgnoreCase));
+                _sharedSubtitles ??= I76.Formats.Subtitles.SubtitleLoader.LoadDialogue(isNitro);
                 text = _sharedSubtitles?.BySound(cur.Name);
             }
             if (string.IsNullOrEmpty(text))
             {
                 var soundTrack = I76.Formats.Subtitles.SubtitleLoader.Load(cur.Name);
                 text = soundTrack?.BySound(cur.Name);
-                if (string.IsNullOrEmpty(text) && soundTrack?.Cues.Count == 1)
-                    text = soundTrack.Cues[0].Text;
             }
             if (!string.IsNullOrEmpty(text))
             {

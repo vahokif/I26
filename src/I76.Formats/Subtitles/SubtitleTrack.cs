@@ -47,6 +47,7 @@ public sealed class SubtitleTrack
         {
             prefix = text[..(colon + 2)];
         }
+        maxChars = Math.Max(maxChars, prefix.Length + 10);
 
         while (rest.Length > maxChars)
         {

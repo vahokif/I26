@@ -64,7 +64,13 @@ public static class Program
         ["posta12"] = "Taurus: They twist like quad-coiled vipers feeding on combustion's waste. Black as ink and hot as Hades they join below, eternally in shadow unless of course I roll. They belt a rumbling and vibrate fear into the bones of my foe.",
         ["posta13"] = "Taurus: It's not a happy place between the dusk and the dawn. Deep below the well-lit and open spaces, I wait under the under. For them to come and rip me a thunder, tearing my core until morning.",
         ["posta14"] = "Taurus: Glass, flat and forever. It stretches out and never stops. Unless it finds the hills whose lines rise to mountain peaks, far as far can be.",
-        ["posta15"] = "Taurus: There is a breeze out here that filters through the scrub, over hills and down through long, dry riverbeds across the Texas blacktop. It cools the skin and brings the most subtle song in the world to the ears of those who listen."
+        ["posta15"] = "Taurus: There is a breeze out here that filters through the scrub, over hills and down through long, dry riverbeds across the Texas blacktop. It cools the skin and brings the most subtle song in the world to the ears of those who listen.",
+        ["gdsgc40"] = "Groove: Hey Stampede, how about a poem?",
+        ["gdsgc42"] = "Groove: Man, that's heavy.",
+        ["gdsgc43"] = "Groove: Far out.",
+        ["gdsgc44"] = "Groove: Out of sight.",
+        ["gdsgc45"] = "Groove: Groovy.",
+        ["gdsgc46"] = "Groove: Right on."
     };
 
     // Speaker tables for character attribution

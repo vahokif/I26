@@ -23,6 +23,7 @@ public class UpdateCheckTests
     [InlineData("")]
     [InlineData("  ")]
     [InlineData("nightly")]
+    [InlineData("ci-57 (3e3e5b5)")]   // the GitHub builds of master (.github/workflows/builds.yml)
     public void ASourceBuildNeitherAsksNorNags(string running)
     {
         Assert.False(UpdateCheck.HasVersion(running));

@@ -15,28 +15,38 @@
     in {
       # The mono export templates of the same Godot as the devShell's editor (tools/release.sh exports with them).
       packages.${system}.export-templates = pkgs.godotPackages.export-templates-mono-bin;
-      devShells.${system}.default = pkgs.mkShell {
-        packages = [
-          pkgs.dotnet-sdk_8
-          pkgs.godot_4-mono
-          pkgs.python3
-          pkgs.jq
-          # tools/shot.sh renders on the GPU in a private headless Weston
-          pkgs.weston
-          pkgs.git
-          pkgs.unzip
-          # the comparison sheets (contact sheets)
-          pkgs.imagemagick
-          # runs an unpacked release zip as a player's machine would (tools/release.sh's output)
-          pkgs.steam-run
-          # signs the macOS bundle again (tools/release.sh): Godot's own signer writes entitlements macOS rejects
-          pkgs.rcodesign
-        ];
-        shellHook = ''
-          export DOTNET_CLI_TELEMETRY_OPTOUT=1
-          export DOTNET_NOLOGO=1
-          export DOTNET_ROOT=${pkgs.dotnet-sdk_8}/share/dotnet
-        '';
+      devShells.${system} = rec {
+        # the tools tools/release.sh needs and no more (it runs its steps in this shell; the GitHub builds enter it too):
+        # everything here comes from the NixOS binary cache, so a fresh machine downloads it and builds nothing
+        release = pkgs.mkShell {
+          packages = [
+            pkgs.dotnet-sdk_8
+            pkgs.godot_4-mono
+            pkgs.python3
+            pkgs.git
+            # signs the macOS bundle again (tools/release.sh): Godot's own signer writes entitlements macOS rejects
+            pkgs.rcodesign
+          ];
+          shellHook = ''
+            export DOTNET_CLI_TELEMETRY_OPTOUT=1
+            export DOTNET_NOLOGO=1
+            export DOTNET_ROOT=${pkgs.dotnet-sdk_8}/share/dotnet
+          '';
+        };
+        default = pkgs.mkShell {
+          inputsFrom = [ release ];
+          packages = [
+            pkgs.jq
+            # tools/shot.sh renders on the GPU in a private headless Weston
+            pkgs.weston
+            pkgs.unzip
+            # the comparison sheets (contact sheets)
+            pkgs.imagemagick
+            # runs an unpacked release zip as a player's machine would (tools/release.sh's output)
+            pkgs.steam-run
+          ];
+          inherit (release) shellHook;
+        };
       };
     };
 }

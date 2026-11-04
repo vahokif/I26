@@ -33,6 +33,8 @@
 # The boot splash is res://Assets/boot_splash.png (ours: black, a line of text);
 # nothing under user:// may be packed, which is checked by listing the .pck.
 # The version is written into project.godot only for the export (restored on exit).
+# The GitHub builds (.github/workflows/builds.yml) run it for every push to master as VERSION ci-RUN: a version the update
+# check cannot read (UpdateCheck.Parse), so those builds never ask; the Windows file version is then 0.0.0.0. It needs no game install.
 set -euo pipefail
 ver=${1:?usage: tools/release.sh VERSION}
 [[ $ver =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]] || { echo "bad version: $ver" >&2; exit 2; }
@@ -84,7 +86,9 @@ sed -i -e "s|^application/short_version=.*|application/short_version=\"$macver\"
 out=$here/dist/build
 rm -rf "$out"
 mkdir -p "$out/win" "$out/linux" "$out/macos" "$out/linux-arm64"
-run() { "${nixf[@]}" develop "$here" -c "$@"; }
+# the steps run in the flake's lean release shell (the default one adds the capture tools, steam-run among them, which no
+# binary cache has: a fresh machine would build it)
+run() { "${nixf[@]}" develop "$here#release" -c "$@"; }
 run godot-mono --headless --path game --import >/dev/null 2>&1 || true
 # the terrain's material pack, compressed here because an export's engine has no texture compressor (it would fall back to RGBA8,
 # four times the video memory): game/ground/pack.bin, BPTC and ASTC, packed by the include_filter of the presets (World/TerrainMaterials.cs)

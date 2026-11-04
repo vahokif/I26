@@ -1,0 +1,119 @@
+# The release zips of every push to master (and of any branch on demand: Actions > builds > Run workflow), as workflow
+# artifacts for testers. tools/release.sh builds them, as for a release, with the version "ci-RUN" (the run's number; the
+# game shows "ci-RUN (commit)"): a version the update check cannot read, so these builds never ask for or offer an update.
+# Nothing is published or pushed; releases stay manual.
+name: builds
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+# a newer push cancels the build still running for an older one
+concurrency:
+  group: builds-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  zips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      # the runner's preinstalled SDKs we do not use (Nix brings .NET and Godot): room for the Nix store, the export
+      # templates and the four exports
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h /
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      # NuGet: the Godot SDK and the per-platform .NET runtime packs the self-contained exports take
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json', 'NuGet.config', 'tools/release.sh') }}
+          restore-keys: nuget-
+      # the free CC0 assets the fetch scripts download (the scripts skip what is there); saved before release.sh adds
+      # game/ground/pack.bin, which it bakes on every run
+      - id: assets
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            game/vfx
+            game/ground
+          key: assets-${{ hashFiles('tools/fetch-vfx.sh', 'tools/fetch-ground.sh') }}
+      - name: Fetch the free assets
+        run: tools/fetch-vfx.sh && tools/fetch-ground.sh
+      - if: steps.assets.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            game/vfx
+            game/ground
+          key: ${{ steps.assets.outputs.cache-primary-key }}
+      - name: Version
+        id: v
+        run: |
+          echo "version=ci-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build the zips (tools/release.sh)
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          SHA: ${{ steps.v.outputs.sha }}
+        run: |
+          nix develop .#release -c tools/release.sh "$VERSION"
+          # the artifacts are named after the commit too: i26-ci-RUN-COMMIT-windows.zip and so on
+          for p in windows linux linux-arm64 macos; do mv "dist/i26-$VERSION-$p.zip" "dist/i26-$VERSION-$SHA-$p.zip"; done
+          ls -l dist
+          df -h /
+      # one artifact per zip, uploaded as the zip itself (not zipped again)
+      - id: windows
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/i26-${{ steps.v.outputs.version }}-${{ steps.v.outputs.sha }}-windows.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - id: linux
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/i26-${{ steps.v.outputs.version }}-${{ steps.v.outputs.sha }}-linux.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - id: linux-arm64
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/i26-${{ steps.v.outputs.version }}-${{ steps.v.outputs.sha }}-linux-arm64.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - id: macos
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/i26-${{ steps.v.outputs.version }}-${{ steps.v.outputs.sha }}-macos.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Summary
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          SHA: ${{ steps.v.outputs.sha }}
+          WINDOWS: ${{ steps.windows.outputs.artifact-url }}
+          LINUX: ${{ steps.linux.outputs.artifact-url }}
+          ARM64: ${{ steps.linux-arm64.outputs.artifact-url }}
+          MACOS: ${{ steps.macos.outputs.artifact-url }}
+        run: |
+          {
+            echo "### I26 $VERSION ($SHA)"
+            echo
+            echo "Unpack into the Interstate '76 folder, as a release. Kept for 14 days; downloading needs a GitHub login."
+            echo
+            echo "- [Windows x64]($WINDOWS)"
+            echo "- [Linux x86_64]($LINUX)"
+            echo "- [Linux arm64]($ARM64)"
+            echo "- [macOS (universal, untested)]($MACOS)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -4,8 +4,9 @@ namespace I76.Formats.Imaging;
 /// A BC3 (DXT5) encoder for what Godot's own compressor cannot reach: export templates have no texture compressors, so a
 /// texture made at run time (the road layers) would stay RGBA8, four times the video memory. Each 4x4 block gets an alpha
 /// block (the block's extremes and 8 levels between) and a colour block (the principal axis of its colours, quantised to
-/// 565, each texel to its nearest of four). Plain and quick (about 30 ms for a 1024 px texture with mipmaps), a little
-/// below a good offline encoder, which is no matter for masks and road paint.
+/// 565, each texel to its nearest of four). Plain and quick (about 30 ms for a 1024 px texture with mipmaps, half that for a
+/// road layer, whose clear ground is blocks of one colour), a little below a good offline encoder, which is no matter for masks
+/// and road paint.
 /// </summary>
 public static class Dxt5Encoder
 {
@@ -41,7 +42,27 @@ public static class Dxt5Encoder
         return all;
     }
 
-    private static void Block(ReadOnlySpan<int> px, Span<byte> dst)
+    /// <summary>One 4x4 block (<paramref name="px"/>: 16 texels of R, G, B, A) to its 16 bytes. <paramref name="shortcut"/> false always takes the general path (for the tests).</summary>
+    internal static void Block(ReadOnlySpan<int> px, Span<byte> dst, bool shortcut = true)
+    {
+        // one colour all over (most of a road layer: the clear ground between the roads) is the block the general path makes of
+        // it, without its search: both alpha ends that alpha, every index 0, both colour ends that colour
+        bool flat = shortcut;
+        for (int i = 1; i < 16 && flat; i++)
+            flat = px[i * 4] == px[0] && px[i * 4 + 1] == px[1] && px[i * 4 + 2] == px[2] && px[i * 4 + 3] == px[3];
+        if (flat)
+        {
+            dst[0] = dst[1] = (byte)px[3];
+            dst[2..8].Clear();
+            int c = Pack565(px[0], px[1], px[2]);
+            dst[8] = dst[10] = (byte)c; dst[9] = dst[11] = (byte)(c >> 8);
+            dst[12..16].Clear();
+            return;
+        }
+        General(px, dst);
+    }
+
+    private static void General(ReadOnlySpan<int> px, Span<byte> dst)
     {
         // alpha: a0 > a1 selects the 8-level mode
         int amin = 255, amax = 0;

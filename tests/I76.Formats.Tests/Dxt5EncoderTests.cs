@@ -74,4 +74,21 @@ public class Dxt5EncoderTests
         // 8x8, 4x4, 2x2, 1x1: 4 + 1 + 1 + 1 blocks
         Assert.Equal(7 * 16, Dxt5Encoder.EncodeChain(big, 8, 8, Off, 4).Length);
     }
+
+    [Fact]
+    public void ABlockOfOneColourTakesTheShortcutToTheBytesTheGeneralPathMakes()
+    {
+        var rnd = new Random(26);
+        var px = new int[64];
+        for (int t = 0; t < 2000; t++)
+        {
+            // the clear ground's (0, 0, 0, 0) and the ends of every channel among them
+            int r = t == 0 ? 0 : t % 7 == 0 ? 255 : rnd.Next(256), g = t == 0 ? 0 : t % 5 == 0 ? 255 : rnd.Next(256), b = t == 0 ? 0 : rnd.Next(256), a = t < 2 ? 0 : t % 3 == 0 ? 255 : rnd.Next(256);
+            for (int i = 0; i < 16; i++) { px[i * 4] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = a; }
+            var quick = new byte[16]; var general = new byte[16];
+            Dxt5Encoder.Block(px, quick);
+            Dxt5Encoder.Block(px, general, shortcut: false);
+            Assert.True(quick.AsSpan().SequenceEqual(general), $"({r}, {g}, {b}, {a}): {Convert.ToHexString(quick)} against {Convert.ToHexString(general)}");
+        }
+    }
 }

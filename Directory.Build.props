@@ -8,4 +8,11 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <!-- A Godot export builds the game as ExportRelease and every library it references with that configuration too. MSBuild optimises
+       only a configuration named Release, so without this the libraries (the formats, the simulation, the editor, the network code)
+       shipped as unoptimised debug code, several times slower in their tight loops (an export's road layers took most of a big
+       map's minute-long build). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'ExportRelease'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
 </Project>

@@ -13,6 +13,7 @@ using I76.Formats.Vfs;
 //   i76 [--install DIR] dump NAME                 a parsed asset as JSON
 //   i76 [--install DIR] mission NAME              a mission summary as JSON
 //   i76 [--install DIR] fsm-disasm NAME           the mission script's bytecode
+//   i76 [--install DIR] export-obj --out DIR [--nitro-install DIR] [--no-cars|--no-objects|--no-terrain] [--only a,b]   every car and scenery model as OBJ/MTL/PNG, and the terrains (original data: keep it out of the repository)
 //   i76 [--install DIR] car-table survey|sheet   the car material table: a model's textures per paint scheme, and each beside its false-colour material map
 //   i76 [--install DIR] car-tex DEF OUT [ACT] [--maps]  a model's textures as PPMs (and the modern look's material maps)
 //   i76 [--install DIR] tex NAME OUT [ACT]        a texture, or each one a .tmt names, as PPMs
@@ -32,6 +33,7 @@ int ii = argv.IndexOf("--install");
 if (ii >= 0) { installDir = argv[ii + 1]; argv.RemoveRange(ii, 2); }
 if (argv.Count > 0 && argv[0] == "geomap") return I76.Cli.GeoMapCommand.Run(argv, installDir);
 if (argv.Count > 0 && argv[0] == "gallery") return I76.Cli.GalleryCommand.Run(argv, installDir);
+if (argv.Count > 0 && argv[0] == "export-obj") return I76.Cli.ExportObjCommand.Run(argv, installDir);
 if (argv.Count > 0 && argv[0] == "car-table") return I76.Cli.CarTableCommand.Run(argv, installDir);
 if (argv.Count > 0 && (argv[0] == "car-views" || argv[0] == "car-project" || argv[0] == "car-glass")) return I76.Cli.CarSamCommand.Run(argv, installDir);
 if (argv.Count > 0 && argv[0] == "respray-preview") return I76.Cli.ResprayCommand.Run(argv, installDir);

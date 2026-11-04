@@ -565,6 +565,25 @@ public class ObjectTests
         Assert.Contains(dup, x => x.Severity == Severity.Warning && x.Subject == 1);
     }
 
+    /// <summary>
+    /// Checkpoints so close that one place is inside all of their 30 m spheres let a car count a lap every other frame without moving (the
+    /// race's rule takes the next checkpoint whenever the car is in its sphere): two 45 m apart, three on a triangle of 45 m sides. Three in a
+    /// line 45 m apart, or a finish away from the rest, are fine.
+    /// </summary>
+    [Fact]
+    public void ARaceWhoseCheckpointsAllOverlapIsAWarning()
+    {
+        var spawns = new[] { MapObject.Spawn(default), MapObject.Spawn(default) };
+        static bool AllAtOnce(List<Issue> i) => i.Any(x => x.Severity == Severity.Warning && x.Message.Contains("every checkpoint"));
+        Assert.True(AllAtOnce(MapChecks.Validate([.. spawns, MapObject.Checkpoint(1, new(0, 0, 0)), MapObject.Checkpoint(2, new(0, 0, 45))], ".rac")));
+        Assert.True(AllAtOnce(MapChecks.Validate([.. spawns, MapObject.Checkpoint(1, new(0, 0, 0)), MapObject.Checkpoint(2, new(0, 0, 45)), MapObject.Checkpoint(3, new(39, 0, 22.5f))], ".rac")));
+        Assert.False(AllAtOnce(MapChecks.Validate([.. spawns, MapObject.Checkpoint(1, new(0, 0, 0)), MapObject.Checkpoint(2, new(0, 0, 45)), MapObject.Checkpoint(3, new(0, 0, 90))], ".rac")));
+        Assert.False(AllAtOnce(MapChecks.Validate([.. spawns, MapObject.Checkpoint(1, new(0, 0, 0)), MapObject.Checkpoint(2, new(0, 0, 61))], ".rac")));
+        // with a finish the round is check2 .. N and the finish
+        Assert.False(AllAtOnce(MapChecks.Validate([.. spawns, MapObject.Checkpoint(1, new(0, 0, 0)), MapObject.Checkpoint(2, new(0, 0, 45)), MapObject.Checkpoint(99, new(0, 0, 200))], ".rac")));
+        Assert.InRange(MapChecks.EnclosingRadius([new(0, 0, 0), new(0, 0, 45), new(39, 0, 22.5f)]), 25.9f, 26.2f);
+    }
+
     [Fact]
     public void TheModeComesFromTheExtension()
     {

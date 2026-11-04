@@ -67,6 +67,12 @@ public static class MapChecks
                     float d = Vector2.Distance(new(ordered[i - 1].Position.X, ordered[i - 1].Position.Z), new(ordered[i].Position.X, ordered[i].Position.Z));
                     if (d < CheckpointRadius) issues.Add(new(Severity.Warning, $"Checkpoints {ordered[i - 1].Number} and {ordered[i].Number} are {d:0} m apart: their {CheckpointRadius:0} m spheres overlap.", ordered[i].Number));
                 }
+                // the lap's round: check1..N, or with a finish check2..N and the finish (the finish stands in for check1 after the first lap)
+                bool finish = ordered.Any(c => c.Number == 99);
+                var round = ordered.Where(c => c.Number < 99 && (!finish || c.Number > 1)).GroupBy(c => c.Number).Select(g => g.First().Position).ToList();
+                if (finish) round.Add(ordered.First(c => c.Number == 99).Position);
+                if (round.Count >= 2 && EnclosingRadius(round) < CheckpointRadius)
+                    issues.Add(new(Severity.Warning, $"A car can stand inside every checkpoint's {CheckpointRadius:0} m sphere at once and count a lap every other frame: set them further apart."));
             }
         }
         else if (checks.Count > 0) issues.Add(new(Severity.Info, "Checkpoints only count in a race map (.rac)."));
@@ -86,6 +92,22 @@ public static class MapChecks
         }
         else if (flags.Count > 0) issues.Add(new(Severity.Info, "Flags only count in a CTF map (.cf2, .cf3, .cf4)."));
         return issues;
+    }
+
+    /// <summary>The radius of the smallest sphere holding the points, to within a few centimetres for a race's spacing (the Badoiu-Clarkson walk).</summary>
+    public static float EnclosingRadius(IReadOnlyList<Vector3> pts)
+    {
+        var c = pts[0];
+        float r = 0;
+        for (int i = 1; i <= 4000; i++)
+        {
+            var far = pts[0]; r = 0;
+            foreach (var q in pts) { float d = Vector3.Distance(c, q); if (d > r) { r = d; far = q; } }
+            c += (far - c) / (i + 1);
+        }
+        r = 0;
+        foreach (var q in pts) r = MathF.Max(r, Vector3.Distance(c, q));
+        return r;
     }
 
     public static Severity Worst(IEnumerable<Issue> issues) => issues.Select(i => i.Severity).DefaultIfEmpty(Severity.Info).Max();

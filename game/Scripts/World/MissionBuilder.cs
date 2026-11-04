@@ -65,7 +65,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public sealed record SkyPalette(Color Sky, Color Cloud, Color Shade, float SkyLum, float CloudLum);
 
     /// <summary>
-    /// The upward faces of every road-piece placement (types 0x50–0x5f), and
+    /// The upward faces of every painted road-piece placement (types 0x50–0x5f, flat models: RoadPieceObjects), and
     /// the ground-level faces of grounded scenery (GroundDecals), in the game
     /// frame's XZ, with their UVs and textures (a flat colour as a 1×1
     /// texture), for RoadRaster to paint into the terrain layer. The original
@@ -86,10 +86,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
         var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in world.Placements.Concat(world.LinePlacements))
         {
-            bool piece = ScenerySpawner.IsRoadPiece(p.Object.ObjectType);
-            bool decals = !piece && GroundDecals.Applies(p);
-            if (!piece && !decals || p.Definition is null || asm.Assemble(p.Definition) is not { } model) continue;
-            if (!lowestOf.TryGetValue(p.Definition, out float lowest)) lowestOf[p.Definition] = lowest = GroundDecals.LowestY(model);
+            bool decals = GroundDecals.Applies(p);
+            if (!decals && !ScenerySpawner.IsRoadPiece(p.Object.ObjectType) || p.Definition is null || asm.Assemble(p.Definition) is not { } model) continue;
+            // a road piece is painted only where the paint is its whole look (RoadPieceObjects): a ramp given the type is drawn
+            if (!decals && !RoadPieceObjects.IsFlat(model = RoadPieceObjects.Drawn(model))) continue;
+            float lowest = 0;
+            if (decals && !lowestOf.TryGetValue(p.Definition, out lowest)) lowestOf[p.Definition] = lowest = GroundDecals.LowestY(model);
             var place = I76.Formats.Assembly.Affine.FromEngine(p.Object.Rotation, world.GroundedPosition(p));
             foreach (var part in model.Parts)
                 foreach (var f in part.Mesh.Faces)

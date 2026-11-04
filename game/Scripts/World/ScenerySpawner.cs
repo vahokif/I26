@@ -194,7 +194,7 @@ public partial class ScenerySpawner : Node3D
         if (names is null)
         {
             var mi = new MeshInstance3D { Mesh = m.Mesh, Transform = xf, Name = def };
-            (IsRoadPiece(p.Object.ObjectType) ? RoadPieces : this).AddChild(mi);
+            (RoadPieceObjects.Painted(p.Object.ObjectType, m.Model) ? RoadPieces : this).AddChild(mi);
             _where[p] = (mi, 0, xf);
             return true;
         }
@@ -296,8 +296,9 @@ public partial class ScenerySpawner : Node3D
         Clutter.Load(world, asm, builder);
         var placements = world.Placements.Concat(world.LinePlacements);
         if (skipVehicles) placements = placements.Where(p => p.Definition?.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) != true);
-        // a definition's grounded placements share a mesh without its ground faces (painted into the terrain, GroundDecals)
-        var groups = placements.GroupBy(p => (p.Definition ?? "") + (GroundDecals.Applies(p) ? "|ground" : ""), StringComparer.OrdinalIgnoreCase);
+        // a definition's grounded placements share a mesh without its ground faces (painted into the terrain, GroundDecals);
+        // its road pieces go apart from its other placements, by each placement's own type (SceneryGroup)
+        var groups = placements.GroupBy(SceneryGroup.Key, StringComparer.OrdinalIgnoreCase);
         foreach (var g in groups)
         {
             if (g.Key.Length == 0)
@@ -310,13 +311,18 @@ public partial class ScenerySpawner : Node3D
                 }
                 continue;
             }
-            bool grounded = g.Key.EndsWith("|ground", StringComparison.Ordinal);
-            var def = grounded ? g.Key[..^7] : g.Key;
+            bool grounded = g.Key.EndsWith(SceneryGroup.Ground, StringComparison.Ordinal);
+            bool roadPiece = g.Key.EndsWith(SceneryGroup.Piece, StringComparison.Ordinal);
+            var def = grounded ? g.Key[..^SceneryGroup.Ground.Length] : roadPiece ? g.Key[..^SceneryGroup.Piece.Length] : g.Key;
             var model = asm.Assemble(def);
+            // a road piece shows one node of its model and is no object of the world (no spinners, no gates: RoadPieceObjects);
+            // a flat one is painted into the terrain, any other drawn
+            if (roadPiece && model is not null) model = RoadPieceObjects.Drawn(model);
+            bool painted = roadPiece && model is not null && RoadPieceObjects.IsFlat(model);
             float lowest = model is null ? 0 : GroundDecals.LowestY(model);
             Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip = grounded ? (part, f) => GroundDecals.IsGroundFace(part, f, lowest) : null;
-            var spinners = model is null ? null : SpinnersOf(asm.Vfs, def, model);
-            var gates = model is null ? null : GatesOf(asm.Vfs, def);
+            var spinners = model is null || roadPiece ? null : SpinnersOf(asm.Vfs, def, model);
+            var gates = model is null || roadPiece ? null : GatesOf(asm.Vfs, def);
             // the camera-facing cards are drawn on their own
             var cardNames = model is null ? null : CardNamesOf(def);
             Func<ModelPart, bool>? include = spinners is null && gates is null && cardNames is null ? null
@@ -329,6 +335,11 @@ public partial class ScenerySpawner : Node3D
                 var xfo = only.Select(p => Coords.ToGodot(p.Object.Rotation, world.GroundedPosition(p))).ToList();
                 AddGates(gates, model!, builder, skip, only, xfo, this);
                 Loaded += only.Count;
+                continue;
+            }
+            if (mesh is null && cardNames is null && roadPiece && model is not null)
+            {
+                Loaded += g.Count();   // a road piece whose node has nothing to draw (a bridge's marker): the original shows nothing either
                 continue;
             }
             if (mesh is null && cardNames is null)
@@ -353,9 +364,8 @@ public partial class ScenerySpawner : Node3D
             // a tree's card gives way to a real tree in the modern look (docs/modern-vegetation.md, Placed trees)
             bool tree = cardNames is not null && Trees.Has(def, model!, cardNames);
             var cards = cardNames is null ? null : CardMeshes(model!, cardNames, skip, modernDrops, tree);
-            bool roadPiece = IsRoadPiece(list[0].Object.ObjectType);
-            Node parent = roadPiece ? RoadPieces : this;
-            if (roadPiece && RoadPieces.GetParent() is null) AddChild(RoadPieces);
+            Node parent = painted ? RoadPieces : this;
+            if (painted && RoadPieces.GetParent() is null) AddChild(RoadPieces);
             var xf = list.Select(p => Coords.ToGodot(p.Object.Rotation, world.GroundedPosition(p))).ToList();
             var anchor = xf.Aggregate(Vector3.Zero, (a, t) => a + t.Origin) / xf.Count;
             Node3D Place(ArrayMesh m)
@@ -676,14 +686,10 @@ public partial class ScenerySpawner : Node3D
         }
     }
 
-    /// <summary>
-    /// Road pieces: intersections, junctions, runway ends. The same pieces
-    /// ship as ODEF type 0x50, 0x52 or 0x53 (m04's ita21_1 is both 0x50 and
-    /// 0x52, igd27_1 both 0x52 and 0x53), so the whole 0x50 row counts.
-    /// </summary>
-    public static bool IsRoadPiece(uint type) => (type & 0xf0) == 0x50;
+    /// <summary>Road pieces: intersections, junctions, runway ends (ODEF types 0x50-0x5f, <see cref="RoadPieceObjects"/>).</summary>
+    public static bool IsRoadPiece(uint type) => RoadPieceObjects.IsRoadPiece(type);
 
-    /// <summary>The road-piece placements: painted into the terrain in both looks; their meshes are not drawn.</summary>
+    /// <summary>The painted road-piece placements (flat models, <see cref="RoadPieceObjects.Painted"/>): painted into the terrain in both looks; their meshes are not drawn.</summary>
     public Node3D RoadPieces { get; } = new() { Name = "RoadPieces" };
 
     /// <summary>The keyword placements' debug markers (spawn points, regen points): shown in the flyover, hidden in play.</summary>

@@ -14,6 +14,10 @@ public sealed class AssembledModel
     public List<ModelPart> Parts { get; } = [];
     /// <summary>Scene-graph nodes whose .GEO is not in the data.</summary>
     public List<string> MissingGeo { get; } = [];
+    /// <summary>The scene graph's top-level nodes (parented to WORLD) of the variant taken, in the file's order, with or without geometry.</summary>
+    public List<string> TopNodes { get; } = [];
+    /// <summary>Each part's top-level node (its own name for a top-level part), by part name.</summary>
+    public Dictionary<string, string> TopOf { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>For vehicles: the texture set's .TMT names, which faces' slots resolve against.</summary>
     public List<string> TmtNames { get; } = [];
     /// <summary>For vehicles: the .map names the texture set lists directly (the body texture among them).</summary>
@@ -323,12 +327,20 @@ public sealed class ModelAssembler(AssetVfs vfs)
             variantOk = n => wreck.Contains(n) || !gone.Contains(n) && alive(n);
         }
         if (tmts is not null) m.TmtNames.AddRange(tmts);
+        string Top(SceneNode n)
+        {
+            for (int depth = 0; depth <= 16 && !n.IsRoot && first.TryGetValue(n.Parent, out var p) && !ReferenceEquals(p, n); depth++) n = p;
+            return n.Name;
+        }
         foreach (var n in unique)
         {
             if (!variantOk(n.Name)) continue;
+            var top = Top(n);
+            if (top.Equals(n.Name, StringComparison.OrdinalIgnoreCase)) m.TopNodes.Add(n.Name);
             var g = Geo(n.Name);
             if (g is null) { m.MissingGeo.Add(n.Name); continue; }
             m.Parts.Add(new ModelPart(n.Name, g, World(n, 0)));
+            m.TopOf.TryAdd(n.Name, top);
         }
         if (kind == "vcf") MountSeating.Seat(m);
         return m;

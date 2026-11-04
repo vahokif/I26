@@ -166,7 +166,11 @@ piece's 0xc / 0xe, and clears bit 12; a bulldozed or moved road leaves the commo
 **What the stock game does with them.** Nothing found beyond drawing them and the surface above. The AI reads the RSEG list only (a route is
 a walk along one road), the terrain's flag 0x1000, and the ground's surface type under a car (special-cased for a few types in the
 back-away test). The pieces are objects of a type none of the sim's lists (damageable 2, 3, 0xb, 0xc, 0x5c), the AI or the collision code
-takes. So an intersection is a painted square and a different grip: an AI route never crosses from one road to another, and the editor keeps its hint
+takes: the loader keeps the last top-level node of a placement of type 0x50, 0x52 or 0x53 (with the nodes under it), draws it over the
+ground and makes no world object of it, so it has no collider and no hit points whatever its model (a ramp given the type is drawn and
+cars pass through it; a bridge shows nothing, its last node being its marker). The port paints the tops of a flat one
+(`RoadPieceObjects.Painted`: every face up, every vertex within 0.1 m of the origin's height, true of all the stock pieces) and draws
+the node of any other, by each placement's own type. So an intersection is a painted square and a different grip: an AI route never crosses from one road to another, and the editor keeps its hint
 ("AI cars drive one road at a time"). Not established: whether the extra surface rows matter to the AI's driving beyond grip.
 
 **Rules the editor uses** (`I76.Editor.Intersections`): where a road ends on another road's middle (within 1.5 m of its centre line, at

@@ -30,5 +30,18 @@ public static class GroundDecals
 
     /// <summary>Whether a placement's ground faces are painted rather than drawn: scenery (not vehicles, road pieces or drive-on structures). The loader stands every placement on the terrain (MissionWorld.GroundedPosition).</summary>
     public static bool Applies(Placement p) =>
-        p.Definition is { } d && !d.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) && !ScenerySpawner.IsRoadPiece(p.Object.ObjectType) && p.Object.ObjectType is not (0xb or 0xc or 0xd);   // drive-on structures keep their decks
+        p.Definition is { } d && !d.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) && !RoadPieceObjects.IsRoadPiece(p.Object.ObjectType) && p.Object.ObjectType is not (0xb or 0xc or 0xd);   // drive-on structures keep their decks
+}
+
+/// <summary>
+/// How the scenery's placements share meshes (<see cref="ScenerySpawner"/>): by definition, the road pieces apart (each
+/// placement by its own type: a model can be a piece in one placement and a ramp in another), then the grounded scenery apart
+/// (its mesh without the ground faces, <see cref="GroundDecals"/>).
+/// </summary>
+public static class SceneryGroup
+{
+    public const string Piece = "|piece", Ground = "|ground";
+
+    public static string Key(Placement p) =>
+        (p.Definition ?? "") + (RoadPieceObjects.IsRoadPiece(p.Object.ObjectType) ? Piece : GroundDecals.Applies(p) ? Ground : "");
 }

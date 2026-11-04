@@ -39,7 +39,7 @@ public sealed class InstallAndMigrationTests : IDisposable
         Assert.Equal(nitro, games.Single(g => g.Game == GogGame.Nitro).InstallDir);
     }
 
-    [Fact]
+    [UnixFact]
     public void App_folder_is_the_one_holding_the_mac_bundle()
     {
         Assert.Equal("/Users/p/Games/i26-1", ExtractionPlaces.AppFolder("/Users/p/Games/i26-1/I26.app/Contents/MacOS/I26"));

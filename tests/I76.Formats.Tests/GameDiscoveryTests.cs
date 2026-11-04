@@ -51,7 +51,7 @@ public class GameDiscoveryTests : IDisposable
     {
         var dir = Dir("rel");
         var exe = Path.Combine(dir, "i26-server");
-        var i76 = Install("rel/i76", false);
+        var i76 = Install(Path.Combine("rel", "i76"), false);
         var (installs, folders) = GameDiscovery.Places(exe, Path.Combine(_root, "local"));
         var g = Assert.Single(GameDiscovery.Discover(installs, folders));
         Assert.Equal(GogGame.I76, g.Game);

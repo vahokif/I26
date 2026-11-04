@@ -34,7 +34,7 @@ public sealed class GogLibraryTests : IDisposable
         Assert.Equal(["/mnt/windows", "/mnt/my disk", "/data"], m);
     }
 
-    [Fact]
+    [UnixFact]
     public void Drive_letters_map_across_two_roots_with_case_insensitive_walk()
     {
         var c = Dir("mnt", "windows");   // C:, Galaxy's config in odd case

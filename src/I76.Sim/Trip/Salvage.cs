@@ -104,8 +104,10 @@ public sealed class SalvagePool
 
     /// <summary>
     /// A dead non-player car's parts whose health is above 0 —
-    /// the six wheels (their pair's .wdf), engine, suspension, brakes, the
-    /// weapons (their .gdf) and the specials — at their current health.
+    /// the six wheels (their pair's .wdf), engine, suspension, brakes and the
+    /// weapons (their .gdf) — at their current health, and every special it
+    /// carries at health 1: the original writes a special's presence, not its
+    /// HP, so one shot to 0 HP is salvaged too.
     /// </summary>
     public void AddDeadCar(Vehicle v)
     {
@@ -119,7 +121,7 @@ public sealed class SalvagePool
         for (int k = 10; k <= 16; k++)
             if (d.Slots[k] is WeaponPart wp && wp.Hp > 0) Add(wp.Weapon.Def.File, wp.Hp, false);
         for (int k = 17; k <= 19; k++)
-            if (d.Slots[k] is SpecialPart sp && sp.Hp > 0) Add($"spc{sp.Type:00}", sp.Hp, false);
+            if (d.Slots[k] is SpecialPart sp) Add($"spc{sp.Type:00}", 1, false);
     }
 
     /// <summary>

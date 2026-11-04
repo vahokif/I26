@@ -226,6 +226,10 @@ public sealed class VehicleDamage
     /// sides the cheated pool never shrinks and its channels are zeroed, the
     /// armour cheat zeroing all four (fire and an impact's remainder too); the
     /// top (zone 4) ignores both.
+    /// <para>The multipliers are single-precision values (Structo 2, Mud Flaps
+    /// +0.1, Curb Feelers 1.1), but the original multiplies and divides by them
+    /// in double precision before truncating, with the channels taken as
+    /// unsigned: so with Curb Feelers 11 wears 9 (11 / 1.100000024), not 10.</para>
     /// </summary>
     public int ArmourStep(int zone, DamagePacket p, bool unlimArmour = false, bool unlimChassis = false)
     {
@@ -238,18 +242,18 @@ public sealed class VehicleDamage
         {
             if ((p.Mask & 8) != 0 && !unlimChassis)
             {
-                int cap = (int)(Chassis[zone] * mc);
+                int cap = Cap(Chassis[zone], mc);
                 if ((uint)p.Ch[3] > (uint)cap) { p.Ch[3] -= cap; Chassis[zone] = 0; ChassisMirror[zone] = 0; }
-                else { int d = (int)((uint)p.Ch[3] / mc); Chassis[zone] -= d; ChassisMirror[zone] -= d; p.Ch[3] = 0; }
+                else { int d = Wear(p.Ch[3], mc); Chassis[zone] -= d; ChassisMirror[zone] -= d; p.Ch[3] = 0; }
             }
             else if (unlimChassis) p.Ch[3] = 0;
             for (int i = 0; i < 4; i++)
             {
                 if ((p.Mask & 3) != 0 && !unlimArmour)
                 {
-                    int cap = (int)(Armour[zone] * ma);
-                    if (p.Ch[i] > cap) { p.Ch[i] -= cap; Armour[zone] = 0; ArmourMirror[zone] = 0; }
-                    else { int d = (int)(p.Ch[i] / ma); Armour[zone] -= d; ArmourMirror[zone] -= d; p.Ch[i] = 0; }
+                    int cap = Cap(Armour[zone], ma);
+                    if ((uint)p.Ch[i] > (uint)cap) { p.Ch[i] -= cap; Armour[zone] = 0; ArmourMirror[zone] = 0; }
+                    else { int d = Wear(p.Ch[i], ma); Armour[zone] -= d; ArmourMirror[zone] -= d; p.Ch[i] = 0; }
                 }
                 else if (unlimArmour) p.Ch[i] = 0;
             }
@@ -257,17 +261,26 @@ public sealed class VehicleDamage
         }
         if ((p.Mask & 8) != 0)
         {
-            if (p.Ch[3] > (int)(ChassisMirror[4] * mc)) ChassisMirror[4] = 0;
-            else ChassisMirror[4] -= (int)(p.Ch[3] / mc);
+            if ((uint)p.Ch[3] > (uint)Cap(ChassisMirror[4], mc)) ChassisMirror[4] = 0;
+            else ChassisMirror[4] -= Wear(p.Ch[3], mc);
         }
         for (int i = 0; i < 4; i++)
         {
             if ((p.Mask & 3) == 0) break;
-            if (p.Ch[i] > (int)(ArmourMirror[4] * ma)) ArmourMirror[4] = 0;
-            else ArmourMirror[4] -= (int)(p.Ch[i] / ma);
+            if ((uint)p.Ch[i] > (uint)Cap(ArmourMirror[4], ma)) ArmourMirror[4] = 0;
+            else ArmourMirror[4] -= Wear(p.Ch[i], ma);
         }
         return Remaining(p);
     }
+
+    /// <summary>The most a pool absorbs: trunc(pool × m), in double precision.</summary>
+    public static int Cap(int pool, float m) => Trunc(pool * (double)m);
+
+    /// <summary>What a channel wears off a pool: trunc(ch / m), the channel unsigned, in double precision.</summary>
+    public static int Wear(int ch, float m) => Trunc((uint)ch / (double)m);
+
+    /// <summary>Truncation toward zero to 64 bits, keeping the low 32 (as the original's conversion does).</summary>
+    private static int Trunc(double x) => (int)(long)x;
 
     /// <summary>
     /// Pick a component from the sub-zone's row (re-rolling
@@ -316,7 +329,7 @@ public sealed class VehicleDamage
                 int r100 = rand.Next() % 100;
                 float x = (float)((double)sumHp / sumMax * r100);
                 int rem = Remaining(p);
-                if (rem * k > x)
+                if (rem * (double)k > x)   // the product in double precision, as the original compares it
                 {
                     killed = true;
                     driverKilled = idx == 6;

@@ -80,6 +80,8 @@ public sealed partial class EscapeMenu : Control
     public Action? CheatsOff { get; init; }
     /// <summary>The port's Checkpoints: a checkpoint is kept, so the end menu after a failure and the Abort pad offer "Retry from Checkpoint".</summary>
     public bool CanRetry { get; init; }
+    /// <summary>Save the current checkpoint as a trip bookmark.</summary>
+    public Func<bool>? SaveBookmark { get; init; }
 
     public ShellSettings Settings { get; private set; } = null!;
     private ShellSettings _snap = null!;
@@ -202,7 +204,24 @@ public sealed partial class EscapeMenu : Control
         _abort.Items.Add(Action("Abort Mission", four ? 3 : 5, () => AskExit(_abort, MenuOutcome.Abort)));
         _abort.Items.Add(Action("Exit Game", four ? 5 : 7, () => AskExit(_abort, MenuOutcome.Exit)));
         // the port's own: the checkpoint on the next free line under Exit Game
-        if (CanRetry) _abort.Items.Add(Action("Retry from Checkpoint", four ? 7 : 9, () => Close(MenuOutcome.RetryCheckpoint)));
+        if (CanRetry)
+        {
+            _abort.Items.Add(Action("Retry from Checkpoint", four ? 7 : 9, () => Close(MenuOutcome.RetryCheckpoint)));
+            if (SaveBookmark is not null)
+            {
+                Item? saveItem = null;
+                saveItem = Action("Save Bookmark", four ? 9 : 11, () =>
+                {
+                    if (SaveBookmark())
+                    {
+                        saveItem!.Label = "Bookmark Saved";
+                        saveItem.Cb = null;
+                        QueueRedraw();
+                    }
+                });
+                _abort.Items.Add(saveItem);
+            }
+        }
         _abort.Items.Add(CancelButton());
 
         _exit.Items = [

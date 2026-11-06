@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **In-Mission Checkpoint Bookmarks**: With Checkpoints enabled, the in-game Escape menu (under Abort Mission) offers **Save Bookmark** whenever a checkpoint is active. Saving serializes the full simulation snapshot, car inventory, salvage pool, camera view, and music position to disk (`user://saves/bookmark_saveNNN.snap`). Loading a checkpoint bookmark from the shell's Load Bookmark screen immediately resumes the mission at that exact checkpoint.
+
+### Fixed
+- **Bookmark Screen Selection & Keyboard Loading**: Selecting a bookmark in the Save and Load Bookmark notepad screens now draws the red pencil pointer arrow and underline under the row text. Opening the Load Bookmark screen defaults selection to the first available bookmark, pressing Enter / NumPad Enter activates the selected bookmark immediately, and double-clicking any row loads it directly.
+
 ## 0.12.1 (10 November 2026)
 
 Network games use protocol 24: 0.12.1 does not play with 0.12.0 or earlier, so everyone in a game needs 0.12.1.

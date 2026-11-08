@@ -2255,7 +2255,7 @@ public partial class Main : Node3D
 
     /// <summary>
     /// Mouse Camera: the mouse is the chase view's while a mission runs in it, with no menu, pause, cut-scene or picture up and the window
-    /// focused. The cursor is captured (hidden) only then, and let go for the menus and when the window loses focus; the buttons still reach the
+    /// focused. The cursor is captured (hidden) only then, and let go for the menus (kept in the window with Mouse In Window on) and when the window loses focus; the buttons still reach the
     /// key bindings. Runs every frame, paused or not.
     /// </summary>
     private void UpdateMouseCapture()
@@ -2305,6 +2305,7 @@ public partial class Main : Node3D
         {
             CursorMode.Captured => Input.MouseModeEnum.Captured,
             CursorMode.ConfinedHidden => Input.MouseModeEnum.ConfinedHidden,
+            CursorMode.Confined => Input.MouseModeEnum.Confined,
             CursorMode.Hidden => Input.MouseModeEnum.Hidden,
             _ => Input.MouseModeEnum.Visible,
         };

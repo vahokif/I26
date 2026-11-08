@@ -20,7 +20,7 @@ public static class MouseCamera
     public static bool WheelCycleWeapon;
     /// <summary>The camera eases back behind the car (or forward in the cockpit) after the mouse or stick rests (Camera Return); off, it stays where it was left.</summary>
     public static bool ReturnBehind = true;
-    /// <summary>Keep the mouse in the window: in a mission the hidden cursor is confined to it (shell.cfg [port] keep_mouse_in_window).</summary>
+    /// <summary>Keep the mouse in the window: the cursor is confined to it, hidden in a mission and shown in the menus (shell.cfg [port] keep_mouse_in_window).</summary>
     public static bool Confine;
     private static float _dx, _dy;
 

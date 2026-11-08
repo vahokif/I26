@@ -6,11 +6,18 @@ namespace I76.Sim.Tests;
 public class CursorPolicyTests
 {
     [Theory]
-    [InlineData(true, true, true)]
+    [InlineData(true, false, true)]
     [InlineData(false, true, false)]
     [InlineData(false, false, true)]
     public void MenusShowTheCursor(bool chase, bool focused, bool confine) =>
         Assert.Equal(CursorMode.Visible, CursorPolicy.For(false, chase, MouseLook.Normal, focused, confine));
+
+    /// <summary>#147: Mouse In Window kept the pointer in only while a mission hid it; in the menus it walked off to another monitor.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void MouseInWindowKeepsTheMenusPointerInTheWindow(bool chase) =>
+        Assert.Equal(CursorMode.Confined, CursorPolicy.For(false, chase, MouseLook.Normal, true, true));
 
     [Fact]
     public void ChaseViewWithMouseCameraCaptures() =>

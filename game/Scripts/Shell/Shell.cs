@@ -248,6 +248,7 @@ public partial class Shell : CanvasLayer
     {
         Settings = ShellSettings.Load();
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(Settings.CarInteriors);
+        I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
         ApplyMusicLevel();
         I76.Game.Boot.Main.ApplyAudio(Settings);   // the SFX and voice levels Audio Control set live go back too
     }
@@ -305,6 +306,8 @@ public partial class Shell : CanvasLayer
         ShellSettings.Nitro = Install.IsNitro;
         Settings = ShellSettings.Load();
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(Settings.CarInteriors);
+        // the menus keep the pointer in the window too (Main's cursor state reads it every frame)
+        I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
         AddChild(new ColorRect { Color = Colors.Black, AnchorRight = 1, AnchorBottom = 1, MouseFilter = Control.MouseFilterEnum.Ignore });
         _view = new TextureRect
         {

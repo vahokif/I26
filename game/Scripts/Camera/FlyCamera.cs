@@ -20,12 +20,21 @@ public partial class FlyCamera : Camera3D
 
     protected void ApplyRotation() => Basis = Basis.FromEuler(new Vector3(_pitch, _yaw, 0), EulerOrder.Yxz);
 
+    /// <summary>
+    /// The pointer a right button press or release asks for, or null to leave it. Only the camera on screen looks with the mouse: Main keeps
+    /// one for the whole mission and a network game is never paused, so a right click on the Control Configuration over it captured the
+    /// pointer, and the click's row was lost (#106).
+    /// </summary>
+    public static Input.MouseModeEnum? LookMode(bool current, MouseButton button, bool pressed) =>
+        !current || button != MouseButton.Right ? null : pressed ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
+
     public override void _UnhandledInput(InputEvent e)
     {
+        if (!Current) return;
         if (e is InputEventMouseButton mb)
         {
-            if (mb.ButtonIndex == MouseButton.Right)
-                Input.MouseMode = mb.Pressed ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
+            if (LookMode(Current, mb.ButtonIndex, mb.Pressed) is { } look)
+                Input.MouseMode = look;
             else if (mb.Pressed && mb.ButtonIndex == MouseButton.WheelUp) Speed *= 1.25f;
             else if (mb.Pressed && mb.ButtonIndex == MouseButton.WheelDown) Speed /= 1.25f;
         }

@@ -306,6 +306,25 @@ public static class Controls
 
     private static bool IsModifier(string name) => ModifierNames.Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Every input event, first: a Shift, Control or Alt the engine still holds while the event's own flags (the system's, of the
+    /// moment) say it is up has lost its release (Control+F2 on macOS opens the menu bar, which keeps it); it is let go, or every
+    /// binding with "- Shift" / "- Control" would act on its press only (<see cref="StaleModifiers"/>).
+    /// </summary>
+    public static void Observe(InputEvent e)
+    {
+        if (e is not InputEventWithModifiers m) return;
+        bool own = e is InputEventKey k && (k.Keycode is Key.Shift or Key.Ctrl or Key.Alt or Key.Meta || k.PhysicalKeycode is Key.Shift or Key.Ctrl or Key.Alt or Key.Meta);
+        var held = (Godot.Input.IsKeyPressed(Key.Shift) ? StaleModifiers.Mods.Shift : 0) | (Godot.Input.IsKeyPressed(Key.Ctrl) ? StaleModifiers.Mods.Control : 0)
+            | (Godot.Input.IsKeyPressed(Key.Alt) ? StaleModifiers.Mods.Alt : 0);
+        var flags = (m.ShiftPressed ? StaleModifiers.Mods.Shift : 0) | (m.CtrlPressed ? StaleModifiers.Mods.Control : 0) | (m.AltPressed ? StaleModifiers.Mods.Alt : 0);
+        var stale = StaleModifiers.Stale(held, flags, own);
+        if (stale == StaleModifiers.Mods.None) return;
+        GD.Print($"[controls] {stale} was still down in the engine with its release lost: let go");
+        foreach (var (mod, key) in new[] { (StaleModifiers.Mods.Shift, Key.Shift), (StaleModifiers.Mods.Control, Key.Ctrl), (StaleModifiers.Mods.Alt, Key.Alt) })
+            if (stale.HasFlag(mod)) Godot.Input.ParseInputEvent(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
+    }
+
     /// <summary>A keyboard or mouse term's input is held now (by position only: with NumLock off the numpad's 8 is a logical Up, which must not glance as well as drive).</summary>
     private static bool TermDown(InputTerm t)
     {

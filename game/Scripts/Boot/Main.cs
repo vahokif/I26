@@ -2355,6 +2355,7 @@ public partial class Main : Node3D
     /// <summary>Alt+Enter (the port's fullscreen), and the gates of a cut-scene: runs before every node's own input, so a swallowed key reaches the sim's commands no more than the views.</summary>
     public override void _Input(InputEvent e)
     {
+        Controls.Observe(e);
         if (e is InputEventKey { Pressed: true, AltPressed: true, Keycode: Key.Enter or Key.KpEnter } ak)
         {
             if (!ak.Echo) ToggleFullscreen();
@@ -2866,7 +2867,9 @@ public partial class Main : Node3D
         }
 
         private static void Post(Key k, int mods, bool pressed) =>
-            Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, KeyLabel = k, Pressed = pressed, CtrlPressed = (mods & 1) != 0, AltPressed = (mods & 2) != 0, ShiftPressed = (mods & 4) != 0 });
+            // a scripted modifier held (shift@40-90) is in the flags of the keys pressed under it, as a real one is
+            Input.ParseInputEvent(new InputEventKey { Keycode = k, PhysicalKeycode = k, KeyLabel = k, Pressed = pressed, CtrlPressed = (mods & 1) != 0 || Input.IsKeyPressed(Key.Ctrl),
+                AltPressed = (mods & 2) != 0 || Input.IsKeyPressed(Key.Alt), ShiftPressed = (mods & 4) != 0 || Input.IsKeyPressed(Key.Shift) });
 
         public override void _Ready()
         {

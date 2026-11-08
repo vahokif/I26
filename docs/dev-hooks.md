@@ -236,9 +236,22 @@ or Esc closes it. The game stays paused while it is open.
 | status | tick, rate, the next tick's frame delta and its vehicle substeps, sim time, fps, the car's place, heading, speed and health |
 | Scene | a mission the install offers (the F9 list's: the mission folder's files, so the Nitro Pack's in that game) and a car (this car's file, the mission's own, or any .vcf the install and the addon folder have); Start leaves this mission and starts that one as `--mission X --drive car` would, through the escape menu's Replay path (the F9 list's way: no shell launch, the mission's script; a Nitro melee file runs as an auto melee). The car holds for that mission's replays until a shell launch or the F9 list. The panel stays on |
 | Teleport | the mission's own places (each script path's first point, heading along its first leg; each named car the script knows, 20 m behind it), or x, z, heading in game units and degrees from +Z toward +X; Here fills in the car's own. The car lands on the bare terrain there, upright and at rest (`UprightReset`'s placement, as the script's teleport) |
+| Teleport | the places of the mission, in this order: the user's kept ones ("kept: ..."); the generated landmarks (below); the script's own (each path's first point, heading along its first leg; each named car the script knows, 20 m behind it). Or x, z, heading in game units and degrees from +Z toward +X; Here fills in the car's own. The car lands on the bare terrain there, upright and at rest (`UprightReset`'s placement, as the script's teleport). A name and **Keep** keep the car's place for this mission in `user://dev-places.cfg` (section the mission, `places` a list of `name\|x\|z\|heading`), listed first from then on, the newest at the top; **Forget** drops the kept place selected |
 | Car | Repair & refill: armour, chassis, every part and what its damage lowered, the tyres, every weapon (handguns too) and its ammunition, the specials' charges, with no rand() drawn. God mode: Play Options' Unlim. Ammo, Armor and Chas. Rein. together, kept over the options. Bring nearest car: the nearest other living car 30 m ahead, facing the player, its AI and orders kept |
 | State | Store: the whole session's snapshot (docs/savestate.md), kept in memory for the run (a Replay of the same mission can still restore it). Restore: written back into the running session; the views re-sync as a checkpoint's retry does (car nodes made or dropped, every car's damage look, the trip's salvage). A structure destroyed after the store stays drawn destroyed although the sim's is whole again |
 | Time | Freeze (no ticks; the cameras still move, Ctrl+F5 flies), Step 1 / Step 10 ticks, and a speed x0.1 to x4 (the ticks are the same at any speed; only their pace against the clock changes) |
+
+The generated landmarks (`src/I76.Sim/Session/DevLandmarks.cs`, read from the mission's terrain and structures when the
+panel first opens; nothing of a map is written down): **start** (where the player's car was placed), **highest ground**
+facing downhill, **lowest ground** facing up the slope, **map centre** (the reached sample nearest the middle of the map's
+tiles), and each structure the mission places (ODEF types 0xb to 0xd: ramps, bridges, water towers, by the placement's
+name) seen from reached ground just outside it at about its own height. Reached ground is the heightfield flooded from the
+start over samples without the impassable flag (0x1000, which the AI's routes keep off) and no step between neighbours
+steeper than 4.2 units in 5. Highest and lowest are taken from its open part: at least 100 units from an impassable
+sample or the map's edge, and no steeper than 15 degrees. The canyon walls carry the flag along their crests, so their
+flanks, higher than anything inside (T05's walls reach 195, its hill 124), drop out; if what is left within half a tile
+of the map's edge is still higher than the inside, that outer ring is dropped too. T05's highest ground is the top of the
+lone hill east of the river, and a car put there stands on it (`DevLandmarksTests`).
 
 The sim's side is `src/I76.Sim/Session/DevTools.cs` (tests: `DevToolsTests`, the in-place restore replaying the stored
 run tick for tick). Any action but Store marks the attempt a cheater's, as the Play Options cheats do; the end menu's

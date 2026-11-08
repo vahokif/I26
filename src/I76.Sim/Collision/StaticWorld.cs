@@ -645,4 +645,6 @@ public sealed class WorldGround(TerrainGround terrain, StaticWorld world) : IGro
     public float BareHeight(double x, double z) => terrain.Height(x, z);
     public Vector3 BareNormal(double x, double z) => terrain.Normal(x, z);
     public StaticWorld World => world;
+    /// <summary>The heightfield under the structures.</summary>
+    public TerrainGround Terrain => terrain;
 }

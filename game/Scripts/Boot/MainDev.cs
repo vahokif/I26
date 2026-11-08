@@ -64,7 +64,66 @@ public partial class Main : IDevHost
             + $"\nsim time {s.World.Time:0.00} s  {Engine.GetFramesPerSecond():0} fps{(_sim.DevFrozen ? "  FROZEN" : "")}{(_sim.DevTimeScale != 1 ? $"  x{_sim.DevTimeScale:0.##}" : "")}{(I76.Game.Shell.CheatMarker.Set ? "  (cheater)" : "")}" + car;
     }
 
-    public System.Collections.Generic.IReadOnlyList<DevPoint> DevPoints() => _sim?.Session is { } s ? DevTools.Points(s) : [];
+    /// <summary>Where the player's car was placed at the mission's start (the panel's "start").</summary>
+    private (double X, double Z, float Heading)? _devStart;
+    /// <summary>The mission's generated places, read from its terrain once (DevLandmarks).</summary>
+    private System.Collections.Generic.IReadOnlyList<DevPoint>? _devLandmarks;
+
+    /// <summary>The user's own places, under the mission's key: Keep and Forget in the panel.</summary>
+    private const string DevPlacesPath = "user://dev-places.cfg";
+    private const string KeptPrefix = "kept: ";
+
+    private string DevPlacesKey => (_opt.Mission ?? "").ToLowerInvariant();
+
+    private static System.Collections.Generic.List<string> DevPlacesOf(ConfigFile cfg, string key) =>
+        cfg.HasSectionKey(key, "places") ? [.. (string[])cfg.GetValue(key, "places")] : [];
+
+    private System.Collections.Generic.List<DevPoint> DevKept()
+    {
+        var cfg = new ConfigFile();
+        if (cfg.Load(DevPlacesPath) != Error.Ok) return [];
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var list = new System.Collections.Generic.List<DevPoint>();
+        foreach (var e in DevPlacesOf(cfg, DevPlacesKey))
+            if (e.Split('|') is [var name, var x, var z, var h] && double.TryParse(x, inv, out double px) && double.TryParse(z, inv, out double pz) && float.TryParse(h, inv, out float ph))
+                list.Add(new DevPoint(KeptPrefix + name, px, pz, ph));
+        return list;
+    }
+
+    /// <summary>The user's kept places first, then the generated landmarks, then the script's paths and cars.</summary>
+    public System.Collections.Generic.IReadOnlyList<DevPoint> DevPoints()
+    {
+        if (_sim?.Session is not { } s) return [];
+        _devLandmarks ??= DevLandmarks.Of(s, _devStart);
+        return [.. DevKept(), .. _devLandmarks, .. DevTools.Points(s)];
+    }
+
+    public string DevKeep(string name)
+    {
+        if (_car?.Sim is not { } v) return "no car";
+        name = name.Replace("|", " ").Trim();
+        if (name.Length == 0) name = $"place {DevKept().Count + 1}";
+        var cfg = new ConfigFile();
+        cfg.Load(DevPlacesPath);   // a missing file is a new one
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var list = DevPlacesOf(cfg, DevPlacesKey);
+        list.RemoveAll(e => e.Split('|')[0] == name);
+        list.Insert(0, string.Join('|', name, v.Pos.X.ToString("0.0", inv), v.Pos.Z.ToString("0.0", inv), DevTools.HeadingOf(v.Rot.Forward).ToString("0", inv)));
+        cfg.SetValue(DevPlacesKey, "places", list.ToArray());
+        return cfg.Save(DevPlacesPath) == Error.Ok ? $"kept \"{name}\" for {DevPlacesKey}" : "could not write the places file";
+    }
+
+    public string DevForget(string pointName)
+    {
+        if (!pointName.StartsWith(KeptPrefix)) return "only a kept place can be forgotten";
+        var name = pointName[KeptPrefix.Length..];
+        var cfg = new ConfigFile();
+        if (cfg.Load(DevPlacesPath) != Error.Ok) return "nothing kept";
+        var list = DevPlacesOf(cfg, DevPlacesKey);
+        if (list.RemoveAll(e => e.Split('|')[0] == name) == 0) return $"\"{name}\" is not kept";
+        if (list.Count == 0) cfg.EraseSectionKey(DevPlacesKey, "places"); else cfg.SetValue(DevPlacesKey, "places", list.ToArray());
+        return cfg.Save(DevPlacesPath) == Error.Ok ? $"forgot \"{name}\"" : "could not write the places file";
+    }
 
     public (double X, double Z, float Heading)? DevHere() =>
         _car?.Sim is { } v ? (v.Pos.X, v.Pos.Z, DevTools.HeadingOf(v.Rot.Forward)) : null;

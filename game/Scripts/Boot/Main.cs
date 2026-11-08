@@ -872,6 +872,7 @@ public partial class Main : Node3D
             seed: unchecked((int)randSeed));
         MissionBuilder.Trace("spawn: sim world set up");
         var world = setup.World;
+        _devStart = world.Player is { } startCar ? (startCar.Pos.X, startCar.Pos.Z, I76.Sim.Session.DevTools.HeadingOf(startCar.Rot.Forward)) : null;
         var session = new I76.Sim.Session.SimSession(setup, I76.Sim.Session.SessionOptions.SinglePlayer,
             // the setting applies from this mission start; a checkpoint's retry runs at the checkpoint's rate
             _retry is { } retryOf ? I76.Sim.Save.SnapshotHeader.Read(retryOf.Snapshot).Rate : I76.Sim.Session.SimRate.FromLabel(I76.Game.Shell.ShellSettings.Load().SimRate))

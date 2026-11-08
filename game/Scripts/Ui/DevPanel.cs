@@ -8,7 +8,12 @@ public interface IDevHost
 {
     /// <summary>The live line: tick, rate, substeps, sim time, fps, the car's place.</summary>
     string DevStatus();
+    /// <summary>The places to go: the user's kept ones (named "kept: ..."), the generated landmarks, the script's paths and cars.</summary>
     IReadOnlyList<DevPoint> DevPoints();
+    /// <summary>Keeps the car's place under that name for this mission (user://dev-places.cfg).</summary>
+    string DevKeep(string name);
+    /// <summary>Forgets a kept place (by its listed name).</summary>
+    string DevForget(string pointName);
     /// <summary>The player's car's (x, z) and heading, or null without one.</summary>
     (double X, double Z, float Heading)? DevHere();
     string DevTeleport(double x, double z, float heading);
@@ -50,7 +55,7 @@ public partial class DevPanel : Control
     private OptionButton _points = null!, _scale = null!, _missions = null!, _cars = null!;
     private IReadOnlyList<(string Id, string Label)> _missionList = [];
     private readonly List<string> _carFiles = [];
-    private LineEdit _x = null!, _z = null!, _heading = null!;
+    private LineEdit _x = null!, _z = null!, _heading = null!, _keepName = null!;
     private CheckBox _god = null!, _freeze = null!;
     private IReadOnlyList<DevPoint> _pointList = [];
     private static readonly double[] Scales = [0.1, 0.25, 0.5, 1, 2, 4];
@@ -95,12 +100,11 @@ public partial class DevPanel : Control
         col.AddChild(Row(_missions, _cars, Button("Start", StartMission)));
 
         col.AddChild(Heading("Teleport"));
-        _pointList = Host.DevPoints();
         _points = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, FitToLongestItem = false };
-        foreach (var p in _pointList) _points.AddItem($"{p.Name}  ({p.X:0}, {p.Z:0})");
-        if (_pointList.Count == 0) { _points.AddItem("(the mission names no places)"); _points.Disabled = true; }
-        else _points.Selected = System.Math.Clamp(_lastPoint, 0, _pointList.Count - 1);
+        FillPoints(_lastPoint);
         col.AddChild(Row(_points, Button("Go", GoPoint)));
+        _keepName = new LineEdit { PlaceholderText = "name for this place", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        col.AddChild(Row(_keepName, Button("Keep", Keep), Button("Forget", Forget)));
         _x = Field("x"); _z = Field("z"); _heading = Field("heading");
         col.AddChild(Row(_x, _z, _heading, Button("Go", GoCoords), Button("Here", FillHere)));
         FillHere();
@@ -155,6 +159,30 @@ public partial class DevPanel : Control
     {
         if (_missionList.Count == 0) return;
         Say(Host.DevStart(_missionList[_missions.Selected].Id, _carFiles[_cars.Selected]));
+    }
+
+    private void FillPoints(int select)
+    {
+        _pointList = Host.DevPoints();
+        _points.Clear();
+        foreach (var p in _pointList) _points.AddItem($"{p.Name}  ({p.X:0}, {p.Z:0})");
+        _points.Disabled = _pointList.Count == 0;
+        if (_pointList.Count == 0) _points.AddItem("(no places)");
+        else _points.Selected = System.Math.Clamp(select, 0, _pointList.Count - 1);
+    }
+
+    private void Keep()
+    {
+        Say(Host.DevKeep(_keepName.Text));
+        _keepName.Text = "";
+        FillPoints(0);   // the kept places come first, the newest at the top
+    }
+
+    private void Forget()
+    {
+        if (_pointList.Count == 0) return;
+        Say(Host.DevForget(_pointList[_points.Selected].Name));
+        FillPoints(_points.Selected);
     }
 
     private void GoCoords()

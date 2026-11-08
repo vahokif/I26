@@ -73,11 +73,16 @@ public sealed partial class SimWorld(IGround ground, CrtRand rand)
         foreach (var (v, (ai, target)) in Ai)
             if (target(v) is { } t) Sim.Ai.AiDriver.DriveTo(v, ai, Ground, t, ai.CommandSpeed, frameDelta, traction: m => Step.TractionLimit(v, m, IsFar(v)));
             else { v.Throttle = -1; v.Steer = 0; }
-        // the pre-test: a still body meets no scenery (a helicopter on its pad; cars keep the port's sweep as it was)
-        foreach (var v in Vehicles) if (!v.Wreck && !Crashed(v) && !v.IsEmplacement && !(v.IsHeli && Still(v))) Step.StaticContacts(v, frameDelta, signsOnly: External?.Invoke(v) == true);
+        // the original's pass: each mover against every later mover, then against the statics. A car's record is the
+        // last one written, so a scenery contact in the same pass overwrites a car-car one: the wall wins.
         for (int i = 0; i < Vehicles.Count; i++)
+        {
+            var v = Vehicles[i];
             for (int j = i + 1; j < Vehicles.Count; j++)
-                if (!Vehicles[i].Wreck && !Vehicles[j].Wreck && !Crashed(Vehicles[i]) && !Crashed(Vehicles[j]) && !Vehicles[i].IsEmplacement && !Vehicles[j].IsEmplacement) PairContacts(Vehicles[i], Vehicles[j], frameDelta);
+                if (!v.Wreck && !Vehicles[j].Wreck && !Crashed(v) && !Crashed(Vehicles[j]) && !v.IsEmplacement && !Vehicles[j].IsEmplacement) PairContacts(v, Vehicles[j], frameDelta);
+            // the pre-test: a still body meets no scenery (a helicopter on its pad; cars keep the port's sweep as it was)
+            if (!v.Wreck && !Crashed(v) && !v.IsEmplacement && !(v.IsHeli && Still(v))) Step.StaticContacts(v, frameDelta, signsOnly: External?.Invoke(v) == true);
+        }
         foreach (var v in Vehicles)
         {
             if (v.Wreck) continue;
@@ -100,15 +105,14 @@ public sealed partial class SimWorld(IGround ground, CrtRand rand)
     }
 
     /// <summary>
-    /// <see cref="Frame"/> for one car alone (a network client's prediction of its own car): its scenery contacts, its
-    /// pairs with the others in <paramref name="cars"/> (the server's list order, <paramref name="v"/> among them) with
-    /// only <paramref name="v"/>'s record written and no collide callback, then its step. The others are not stepped.
+    /// <see cref="Frame"/> for one car alone (a network client's prediction of its own car): its pairs with the others
+    /// in <paramref name="cars"/> (the server's list order, <paramref name="v"/> among them) with only
+    /// <paramref name="v"/>'s record written and no collide callback, then its scenery contacts, then its step. The others are not stepped.
     /// The gates, the AI and the clock are left alone.
     /// </summary>
     public void FrameOne(Vehicle v, float frameDelta, IReadOnlyList<Vehicle> cars)
     {
         if (v.Wreck || Crashed(v) || v.IsEmplacement) return;
-        if (!(v.IsHeli && Still(v))) Step.StaticContacts(v, frameDelta, signsOnly: External?.Invoke(v) == true);
         bool past = false;
         foreach (var o in cars)
         {
@@ -118,6 +122,8 @@ public sealed partial class SimWorld(IGround ground, CrtRand rand)
             if (past) PairContacts(v, o, frameDelta, oneSided: v);
             else PairContacts(o, v, frameDelta, oneSided: v);
         }
+        // its statics last, as the server's pass
+        if (!(v.IsHeli && Still(v))) Step.StaticContacts(v, frameDelta, signsOnly: External?.Invoke(v) == true);
         if (External?.Invoke(v) == true) { ExternalFrame?.Invoke(v, frameDelta); return; }
         if (v.Heli is { } heli)
         {

@@ -54,6 +54,8 @@ public partial class SimDriver : Node
     public bool HoldFire { get; set; }
     /// <summary>How far the display is between the last two ticks (what the cars are drawn at).</summary>
     public float Alpha { get; private set; }
+    /// <summary>After each tick (a network client's: after a frame's ticks): the combat events and the index of the first of this tick's.</summary>
+    public event System.Action<IReadOnlyList<I76.Sim.Weapons.CombatEvent>?, int>? TickRan;
 
     /// <summary>
     /// The cars set down again against the origin as it now stands. The sim places them first in the frame (before Main), so
@@ -175,6 +177,8 @@ public partial class SimDriver : Node
     {
         // the pad's force feedback (presentation only; none in a headless run)
         if (DisplayServer.GetName() != "headless") AddChild(new ForceFeedback { Name = "ForceFeedback", Player = () => Player?.Sim });
+        // the telemetry feed (I76_TELEMETRY_UDP, [port] telemetry): off unless set
+        if (TelemetryOut.Configured() is { } telemetry) AddChild(telemetry);
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -383,6 +387,7 @@ public partial class SimDriver : Node
             Alpha = remote.Advance(delta, (float)(_acc / Tick));
             // the force feedback a tick at a time; the server's hits do not reach a client, its shots and car state do
             for (int i = 0; i < ticks; i++) ForceFeedback.Tick(i == 0 ? Combat?.Events : null, shots, Tick);
+            if (ticks > 0) TickRan?.Invoke(Combat?.Events, shots);
             var ro = Origin();
             foreach (var c in Cars) c.Place(Alpha, ro);
             TyreSounds();
@@ -412,6 +417,7 @@ public partial class SimDriver : Node
         var sampled = Sample();
         using (Hitch.Time(Hitch.Phase.Sim)) Session.Tick([sampled]);
         ForceFeedback.Tick(Combat?.Events, shots, Tick);   // the block the original filled at the frame's end
+        TickRan?.Invoke(Combat?.Events, shots);
         if (_debugPlayer)
             foreach (var (_, hn, ht, hnorm, hs) in World.Step.ObjectHits) GD.Print($"  hit {hn} type {ht} n {hnorm.X:0.00},{hnorm.Y:0.00},{hnorm.Z:0.00} at speed {hs:0.0}");
         foreach (var (car, _) in Session.Misfires) if (car == Player?.Sim) Player.OneShotSingle("wmiss.wav", Audio?.Get("wmiss.wav"));

@@ -920,6 +920,19 @@ public partial class CarNode : Node3D
 
     public System.Numerics.Vector3 GamePosition => _pos.ToVector3();
 
+    /// <summary>The attitudes of the last two ticks (the two poses drawn between).</summary>
+    public (Rows Prev, Rows Cur) TickRows => (_prevRot, _rot);
+
+    /// <summary>The pose drawn at alpha (Modern Physics' own when it has one), in game coordinates: for the telemetry feed.</summary>
+    public (Rows Rot, Double3 Pos) PoseAt(float alpha)
+    {
+        if (LivePose?.Invoke() is { } live) return live;
+        double Lerp(double a, double b) => a + (b - a) * alpha;
+        var rows = new Rows(System.Numerics.Vector3.Lerp(_prevRot.Right, _rot.Right, alpha), System.Numerics.Vector3.Lerp(_prevRot.Up, _rot.Up, alpha),
+            System.Numerics.Vector3.Lerp(_prevRot.Forward, _rot.Forward, alpha)).Orthonormalized();
+        return (rows, new Double3(Lerp(_prevPos.X, _pos.X), Lerp(_prevPos.Y, _pos.Y), Lerp(_prevPos.Z, _pos.Z)));
+    }
+
     /// <summary>For far cars on the original's flat model: the drawn height comes from the ground (display only).</summary>
     public Func<double, double, double>? GroundForDisplay { get; set; }
 

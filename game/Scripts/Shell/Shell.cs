@@ -1247,6 +1247,9 @@ public sealed class ShellSettings
     public bool EditorMusic { get; set; } = true;
     /// <summary>The port's own, kept out of the menus: [port] seed fixes every mission's rand seed, as --seed does (absent: the clock's, as the original).</summary>
     public uint? Seed { get; set; }
+    /// <summary>The port's own, kept out of the menus: [port] telemetry, the telemetry feed's targets as I76_TELEMETRY_UDP takes them, and [port] telemetry_format (docs/dev-hooks.md). Absent: no feed.</summary>
+    public string? Telemetry { get; set; }
+    public string? TelemetryFormat { get; set; }
 
     /// <summary>The music level as a volume: off below 2, else −8 dB at 8 and 2 dB a step either side.</summary>
     public float MusicDb => Audio[0] < 2 ? -80f : -8f + (Audio[0] - 8) * 2f;
@@ -1327,6 +1330,8 @@ public sealed class ShellSettings
         s.VSync = (bool)c.GetValue("port", "vsync", true);
         s.KeepMouseInWindow = (bool)c.GetValue("port", "keep_mouse_in_window", false);
         if (c.HasSectionKey("port", "seed")) s.Seed = unchecked((uint)(long)c.GetValue("port", "seed"));
+        if (c.HasSectionKey("port", "telemetry")) s.Telemetry = (string)c.GetValue("port", "telemetry");
+        if (c.HasSectionKey("port", "telemetry_format")) s.TelemetryFormat = (string)c.GetValue("port", "telemetry_format");
         // no version step either: absent, a host's map is asked about and a hosted one shared, as before the keys
         s.MapDownloads = Math.Clamp((int)c.GetValue("port", "map_downloads", 0), 0, 2);
         s.ShareMaps = (bool)c.GetValue("port", "share_maps", true);
@@ -1405,6 +1410,8 @@ public sealed class ShellSettings
         c.SetValue(mine, "difficulty", Difficulty);
         if (ModernPhysics) c.SetValue("port", "modern_physics", true);
         if (Seed is { } seed) c.SetValue("port", "seed", (long)seed);
+        if (Telemetry is { Length: > 0 } telemetry) c.SetValue("port", "telemetry", telemetry);
+        if (TelemetryFormat is { Length: > 0 } telemetryFormat) c.SetValue("port", "telemetry_format", telemetryFormat);
         if (MapDownloads != 0) c.SetValue("port", "map_downloads", MapDownloads);
         if (!ShareMaps) c.SetValue("port", "share_maps", false);
         if (!CarReset) c.SetValue("port", "car_reset", false);

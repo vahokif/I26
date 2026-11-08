@@ -577,7 +577,7 @@ public partial class Main : Node3D
         };
         layer.AddChild(view);
         if (kind == MissionPicture.Kind.Map && _sim?.Audio is { } bank)
-            foreach (var (snd, bus) in new[] { ("cmap2.wav", "SFX"), ("gdsgc26.wav", "Voice") })
+            foreach (var (snd, bus) in new[] { ("cmap2.wav", "SFX"), ("gdsgc26.wav", "SFX") })
                 if (bank.Get(snd) is { } st) layer.AddChild(new AudioStreamPlayer { Stream = st, Bus = bus, Autoplay = true, ProcessMode = ProcessModeEnum.Always });
         _picture = layer;
         AddChild(layer);

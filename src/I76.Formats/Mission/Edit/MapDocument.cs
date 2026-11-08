@@ -165,6 +165,12 @@ public sealed class MapDocument
     {
         if (_paths is null) return;
         var old = FsmPayload;
+        // a script chunk the table cannot be found in read as no paths: with none added the chunk is kept as it is
+        if (!FsmPaths.CanHold(old))
+        {
+            if (_paths.Count == 0) return;
+            throw new InvalidOperationException("this map's script cannot hold paths (its chunk does not parse up to the path table)");
+        }
         var now = FsmPaths.Write(old, _paths);
         if (now.AsSpan().SequenceEqual(old)) return;
         if (Tree.Subs("ADEF", "FSM\0").Select(s => s.Node).FirstOrDefault() is { } node) { node.Payload = now; return; }

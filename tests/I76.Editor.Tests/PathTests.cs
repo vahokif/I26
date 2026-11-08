@@ -168,6 +168,32 @@ public class PathTests : IDisposable
     }
 
     /// <summary>A mission file of nothing but an ADEF holding the script.</summary>
+    [Fact]
+    public void AScriptChunkWithoutAPathTableRefusesPathEditsAndSavesAsItWas()
+    {
+        // a truncated chunk: 5 prototypes of 40 bytes claimed, 4 bytes there; the table cannot be found
+        byte[] fsm = [5, 0, 0, 0, 1, 2, 3, 4];
+        Assert.Null(FsmPaths.Locate(fsm));
+        Assert.False(FsmPaths.CanHold(fsm));
+        Assert.True(FsmPaths.CanHold([]));
+        var bytes = Mission(fsm);
+        var store = PathStore.FromMission(bytes);
+        Assert.Equal(PathStore.CannotHold, store.WhyNotEdit);
+        Assert.Equal(fsm, store.Payload());   // the playtest's world reads the file's script, not a throw inside the Changed event
+        Assert.Throws<InvalidOperationException>(() => PathEdits.Add(store, store.FreeLabel(), [new(0, 0), new(10, 0)]).Apply());
+        Assert.Empty(store.Entries);
+        Assert.False(store.Dirty);
+
+        // saving: the map's paths (none read) written back leave the chunk as it was
+        var doc = MapDocument.Parse(bytes);
+        store.WriteTo(doc);
+        var saved = doc.ToBytes();
+        Assert.Equal(fsm, MapDocument.Parse(saved).FsmPayload);
+        // a path put into such a map by hand is refused with the reason
+        doc.Paths.Add(new PathEntry("p", [new(0, 0, 0)]));
+        Assert.Contains("cannot hold paths", Assert.Throws<InvalidOperationException>(() => doc.ToBytes()).Message);
+    }
+
     private static byte[] Mission(byte[] fsm)
     {
         var tree = new BwdTree([new BwdNode("BWD2", new byte[4]), new BwdNode("ADEF", [new BwdNode("AREV", [4, 0, 0, 0]), new BwdNode("FSM\0", fsm), new BwdNode("EXIT", Array.Empty<byte>())]), new BwdNode("EXIT", Array.Empty<byte>())]);

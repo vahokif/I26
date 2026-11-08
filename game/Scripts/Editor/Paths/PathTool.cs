@@ -75,6 +75,7 @@ public sealed partial class PathTool : Node
 
     public void SetMode(PathMode m)
     {
+        if (Store.WhyNotEdit is { } why) { Ed.Toast($"Paths: {why}", true); return; }
         Cancel();
         Mode = m;
         Active = true;
@@ -230,6 +231,7 @@ public sealed partial class PathTool : Node
 
     private void Do(PathCommand c)
     {
+        if (Store.WhyNotEdit is { } why) { Ed.Toast($"Paths: {why}", true); return; }
         Ed.Undo.Push(c.Apply());
         _panelDirty = true;
     }

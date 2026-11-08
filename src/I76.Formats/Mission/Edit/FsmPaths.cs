@@ -63,6 +63,12 @@ public static class FsmPaths
         return (start, (int)off);
     }
 
+    /// <summary>
+    /// Whether <see cref="Write"/> can put a path table into the payload: it is empty (a map with no script) or parses up to the
+    /// end of its table. A truncated or non-standard script chunk cannot hold paths; the editor leaves its paths alone.
+    /// </summary>
+    public static bool CanHold(byte[] payload) => payload.Length == 0 || Locate(payload) is not null;
+
     public static List<PathEntry> Read(byte[] payload)
     {
         var o = new List<PathEntry>();
@@ -85,7 +91,7 @@ public static class FsmPaths
 
     /// <summary>
     /// The payload with its path table replaced by <paramref name="paths"/>. An empty payload with no paths stays empty. Throws
-    /// when a non-empty payload does not parse (it is not a script the editor can put paths into).
+    /// when a non-empty payload does not parse (it is not a script the editor can put paths into: <see cref="CanHold"/>).
     /// </summary>
     public static byte[] Write(byte[] payload, IReadOnlyList<PathEntry> paths)
     {

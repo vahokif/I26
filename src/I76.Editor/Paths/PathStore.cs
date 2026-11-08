@@ -42,7 +42,10 @@ public sealed class PathStore
     public static PathStore FromMission(byte[] missionBytes)
     {
         var doc = MapDocument.Parse(missionBytes);
-        var program = new MissionFile("", missionBytes).ReadFsmProgram();
+        FsmProgram? program;
+        // a script chunk cut short reads as a script whose uses are unknown: its entries stay where they are
+        try { program = new MissionFile("", missionBytes).ReadFsmProgram(); }
+        catch (ArgumentOutOfRangeException) { return new PathStore(doc.Paths, null, doc.FsmPayload.Length > 0, doc.FsmPayload); }
         bool script = program is { Code.Length: > 0 };
         return new PathStore(doc.Paths, script ? FsmPathUse.Of(program!) : null, script, doc.FsmPayload);
     }
@@ -64,8 +67,13 @@ public sealed class PathStore
     public void MarkSaved() => _saved = Version;
     public event Action<PathChange>? Changed;
 
+    /// <summary>Why the paths cannot be edited (null: they can): the map's script chunk does not parse up to its path table.</summary>
+    public string? WhyNotEdit => FsmPaths.CanHold(FilePayload) ? null : CannotHold;
+    public const string CannotHold = "this map's script cannot hold paths (its chunk does not parse up to the path table)";
+
     public void Insert(int index, PathEntry p)
     {
+        Editable();
         if (index < Fixed) throw new InvalidOperationException("a path goes after the script's own");
         _paths.Insert(index, p);
         Touch(index, Bounds(p.Points));
@@ -73,6 +81,7 @@ public sealed class PathStore
 
     public void RemoveAt(int index)
     {
+        Editable();
         if (index < Fixed) throw new InvalidOperationException("the script names its paths by their place: one of them is not removed");
         var old = _paths[index];
         _paths.RemoveAt(index);
@@ -81,10 +90,13 @@ public sealed class PathStore
 
     public void Replace(int index, PathEntry p)
     {
+        Editable();
         var b = Merge(Bounds(_paths[index].Points), Bounds(p.Points));
         _paths[index] = p;
         Touch(index, b);
     }
+
+    private void Editable() { if (WhyNotEdit is { } why) throw new InvalidOperationException(why); }
 
     private void Touch(int i, Vector4 b) { Version++; Changed?.Invoke(new PathChange(i, b)); }
 
@@ -131,8 +143,11 @@ public sealed class PathStore
             if (!_paths.Any(p => string.Equals(p.Name, stem + n, StringComparison.OrdinalIgnoreCase))) return stem + n;
     }
 
-    /// <summary>The paths as the script's loader reads them (<see cref="MissionFile.FsmOverride"/>: the file's payload with this table in it).</summary>
-    public byte[] Payload() => FsmPaths.Write(FilePayload, _paths);
+    /// <summary>
+    /// The paths as the script's loader reads them (<see cref="MissionFile.FsmOverride"/>: the file's payload with this table in it);
+    /// the file's payload as it is when it cannot hold paths (<see cref="WhyNotEdit"/>: no edit reached the table).
+    /// </summary>
+    public byte[] Payload() => WhyNotEdit is null ? FsmPaths.Write(FilePayload, _paths) : FilePayload;
 
     /// <summary>Puts these paths into a project's mission in place of the ones it was read with (Save).</summary>
     public void WriteTo(MapDocument doc)

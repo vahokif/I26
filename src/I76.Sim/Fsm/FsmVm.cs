@@ -439,7 +439,7 @@ public sealed partial class FsmVm
             case "inc": if (!Counted(t, x => x + 1)) W(t, 0, V(t, 0) + 1); break;
             case "dec": if (!Counted(t, x => x - 1)) W(t, 0, V(t, 0) - 1); break;
             case "rand": { int m = V(t, 1); W(t, 0, m == 0 ? 0 : _rand.Next() % m); break; }
-            case "starttimer": W(t, 0, (int)h.Now); break;
+            case "starttimer": W(t, 0, (int)(h.Now + 0.5f)); break; // whole seconds, rounded to the nearest
             case "true": t.Cond = true; break;
             case "false": t.Cond = false; break;
             case "isequal": t.Cond = V(t, 0) == V(t, 1); break;

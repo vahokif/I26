@@ -142,6 +142,27 @@ public class FsmVmTests
         host.Now = 13.6f; vm.Tick();    // (int)13.6 + 0.5 > 10 + 3
         Assert.Contains("success 0", host.Calls);
     }
+
+    [Fact]
+    public void StartTimerRoundsTheClockToTheNearestSecond()
+    {
+        // startTimer at 2.6 s stores 3; timeGreater(.., 4) then needs 7 whole seconds, not 6.
+        string[] p = ["startTimer", "timeGreater", "success"];
+        (uint, uint)[] code =
+        [
+            (6, 1), (4, 1), (13, 0),
+            (1, 4), (4, 1), (4, 2), (13, 1), (7, 1),
+            (9, 10), (13, 2),
+            (10, 3),
+        ];
+        var host = new RecordingHost { Now = 2.6f };
+        var vm = new FsmVm(Program([.. p], code, 0, [], []), host, new CrtRand());
+        vm.Tick();
+        host.Now = 6.9f; vm.Tick();
+        Assert.Empty(host.Calls);
+        host.Now = 7.1f; vm.Tick();
+        Assert.Contains("success 0", host.Calls);
+    }
 }
 
 public class FsmScriptTests(Xunit.Abstractions.ITestOutputHelper log)

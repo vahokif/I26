@@ -213,11 +213,13 @@ public sealed partial class Combat
             foreach (var o in hs.World.Objects)
             {
                 if (!o.Solid || o.Destroyed || o.Vehicle == f.Owner) continue;
-                if ((p - o.Centre).LengthSquared() >= (o.Radius + 1f) * (o.Radius + 1f)) continue;
+                float reach = MathF.Max(o.Radius, o.SphereRadius);
+                if ((p - o.Centre).LengthSquared() >= (reach + 1f) * (reach + 1f)) continue;
                 var (tm, poly) = StaticWorld.RayMesh(o.Polys, p, d, 1f);
                 float tt = poly is not null ? tm : 2f;
                 int node = poly?.Node ?? -1;
                 if (StaticWorld.RayBoxes(o.Boxes, p, d, 1f) is { } bh && bh.T < tt) { tt = bh.T; node = bh.Box.Node; }
+                if (o.Type == 4 && RaySign(o, p, d) is { } sh && sh.T < tt) { tt = sh.T; node = -1; }
                 if (tt > 1f) continue;
                 any = true;
                 Sink?.Apply(o, Packet(), Local(o, p + d * tt), node);
@@ -331,10 +333,12 @@ public sealed partial class Combat
             foreach (var o in hs.World.Objects)
             {
                 if (!o.Solid || (o.Vehicle is { } ov && ov == r.Shooter && ShooterExcluded(r))) continue;
-                if ((p0 - o.Centre).LengthSquared() > (o.Radius + 1f) * (o.Radius + 1f)) continue;
+                float reach = MathF.Max(o.Radius, o.SphereRadius);
+                if ((p0 - o.Centre).LengthSquared() > (reach + 1f) * (reach + 1f)) continue;
                 var (t, poly) = StaticWorld.RayMesh(o.Polys, p0, d, 1f);
                 if (poly is not null && t < best) { best = t; victim = o; node = poly.Node; }
                 if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; node = bh.Box.Node; }
+                if (o.Type == 4 && RaySign(o, p0, d) is { } sh && sh.T < best) { best = sh.T; victim = o; node = -1; }
             }
         return victim is null ? null : (victim, p0 + d * best, victim is StaticObject ? node : -1);
     }

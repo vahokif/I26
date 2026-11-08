@@ -560,6 +560,22 @@ public sealed class StaticWorld
     }
 
     /// <summary>
+    /// For a segment p + v·t, t in [0, maxT], against a sphere (type 4's): the entry and its normal. A segment that
+    /// starts inside meets nothing, as with the boxes.
+    /// </summary>
+    public static (float T, Vector3 N)? RaySphere(Vector3 c, float r, Vector3 p, Vector3 v, float maxT)
+    {
+        var m = p - c;
+        float a = Vector3.Dot(v, v), b = Vector3.Dot(m, v), k = Vector3.Dot(m, m) - r * r;
+        if (r <= 0 || a < 1e-12f || k <= 0 || b >= 0) return null;
+        float disc = b * b - a * k;
+        if (disc < 0) return null;
+        float t = (-b - MathF.Sqrt(disc)) / a;
+        if (t > maxT) return null;
+        return (t, Vector3.Normalize(m + v * t));
+    }
+
+    /// <summary>
     /// The earliest polygon a point moving at v meets within dt.
     /// Polygons facing the motion (n·v ≤ −1e-4) with the point in front of them.
     /// </summary>

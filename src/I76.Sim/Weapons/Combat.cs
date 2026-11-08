@@ -671,6 +671,19 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         return Vector3.Distance(m + wv * t, tpos + tvel * t);
     }
 
+    /// <summary>
+    /// A type-4 placement (a sign, a post) against a round's segment: each part's sphere (0.75 x its SGEO radius), else
+    /// the whole placement's for one made without parts. A segment that starts inside one meets nothing.
+    /// </summary>
+    internal static (float T, Vector3 N)? RaySign(StaticObject o, Vector3 p, Vector3 d)
+    {
+        if (o.Spheres.Count == 0) return StaticWorld.RaySphere(o.Centre, o.SphereRadius, p, d, 1f);
+        (float T, Vector3 N)? best = null;
+        foreach (var s in o.Spheres)
+            if (StaticWorld.RaySphere(s.Centre, s.Radius, p, d, 1f) is { } h && (best is null || h.T < best.Value.T)) best = h;
+        return best;
+    }
+
     /// <summary>A terrain line of sight (the original also tests non-vehicle objects; not here).</summary>
     public bool LineOfSight(Vector3 a, Vector3 b)
     {
@@ -1313,13 +1326,15 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             foreach (var o in hs.World.Objects)
             {
                 if (!o.Solid || (o.Vehicle is { } ov && ov == r.Shooter && ShooterExcluded(r))) continue;
-                if (o.Centre.X + o.Radius < minX || o.Centre.X - o.Radius > maxX || o.Centre.Z + o.Radius < minZ || o.Centre.Z - o.Radius > maxZ) continue;
+                float reach = MathF.Max(o.Radius, o.SphereRadius);
+                if (o.Centre.X + reach < minX || o.Centre.X - reach > maxX || o.Centre.Z + reach < minZ || o.Centre.Z - reach > maxZ) continue;
                 // Names the node it met: the round's packet goes to that node (measured in the original game)
                 var (t, poly) = StaticWorld.RayMesh(o.Polys, p0, d, 1f);
                 if (poly is not null && t < best) { best = t; victim = o; normal = poly.N; node = poly.Node; }
                 if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; normal = bh.N; node = bh.Box.Node; }
-                // a breakable's part spheres are its car contact's (rounds pass a sign)
                 if (o.Type != 4 && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sh && sh.T < best) { best = sh.T; victim = o; normal = sh.N; node = sh.Sphere.Node; }
+                // a sign or post stops the round on one of its parts' spheres; its own slot knocks it off for an explosive one
+                if (o.Type == 4 && RaySign(o, p0, d) is { } sg && sg.T < best) { best = sg.T; victim = o; normal = sg.N; node = -1; }
             }
         }
         Vector3 at;

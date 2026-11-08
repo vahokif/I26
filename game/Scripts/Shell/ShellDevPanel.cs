@@ -1,4 +1,5 @@
 using Godot;
+using I76.Game.Ui;
 
 namespace I76.Game.Shell;
 
@@ -10,6 +11,7 @@ namespace I76.Game.Shell;
 /// </summary>
 public partial class ShellDevPanel : Control
 {
+    private System.Action _rescale = null!;
     public required Shell Shell { get; init; }
     public required System.Action Close { get; init; }
 
@@ -18,16 +20,12 @@ public partial class ShellDevPanel : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;   // the menu underneath takes no clicks while the panel is up
         var theme = new Theme { DefaultFontSize = 15 };
-        var panel = new PanelContainer { Theme = theme, Position = new Vector2(16, 16), CustomMinimumSize = new Vector2(430, 0) };
         var bg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.09f, 0.1f, 0.92f), BorderColor = new Color(0.85f, 0.6f, 0.2f) };
-        bg.SetBorderWidthAll(2);
-        bg.SetContentMarginAll(12);
-        bg.SetCornerRadiusAll(4);
-        panel.AddThemeStyleboxOverride("panel", bg);
+        var (panel, scroll, col) = DevScale.Frame(theme, bg);
         AddChild(panel);
-        var col = new VBoxContainer();
-        col.AddThemeConstantOverride("separation", 6);
-        panel.AddChild(col);
+        _rescale = () => DevScale.Apply(panel, scroll, col, theme, bg, DevScale.Factor(GetViewportRect().Size.Y));
+        GetViewport().SizeChanged += _rescale;
+        TreeExiting += () => GetViewport().SizeChanged -= _rescale;
 
         col.AddChild(Heading("Developer  (Ctrl+F2, Ctrl+` or Esc closes)"));
         col.AddChild(Heading("Saves"));
@@ -36,6 +34,7 @@ public partial class ShellDevPanel : Control
         col.AddChild(Row(Button("All Scenes", AllScenes, trip), Note("a bookmark for every scene of the trip, in its own car")));
         if (!trip) col.AddChild(Note("(the Nitro Pack has no trip)"));
         col.AddChild(Row(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill }, Button("Close", Close, true)));
+        _rescale();
     }
 
     public override void _Input(InputEvent e)
@@ -91,15 +90,15 @@ public partial class ShellDevPanel : Control
 
     private static Button Button(string text, System.Action pressed, bool enabled)
     {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, Disabled = !enabled, CustomMinimumSize = new Vector2(120, 0) };
+        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, Disabled = !enabled, };
+        DevScale.Min(b, 120);
         b.Pressed += pressed;
         return b;
     }
 
     private static HBoxContainer Row(params Control[] items)
     {
-        var r = new HBoxContainer();
-        r.AddThemeConstantOverride("separation", 8);
+        var r = DevScale.Sep(new HBoxContainer(), 8);
         foreach (var c in items) r.AddChild(c);
         return r;
     }

@@ -60,6 +60,7 @@ public partial class DevPanel : Control
 {
     public required IDevHost Host { get; init; }
 
+    private System.Action _rescale = null!;
     private Label _status = null!, _message = null!, _stored = null!;
     private OptionButton _points = null!, _scale = null!, _missions = null!, _cars = null!;
     private IReadOnlyList<(string Id, string Label)> _missionList = [];
@@ -78,16 +79,12 @@ public partial class DevPanel : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
         var theme = new Theme { DefaultFontSize = 15 };
-        var panel = new PanelContainer { Theme = theme, Position = new Vector2(16, 16), CustomMinimumSize = new Vector2(430, 0) };
         var bg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.09f, 0.1f, 0.92f), BorderColor = new Color(0.85f, 0.6f, 0.2f) };
-        bg.SetBorderWidthAll(2);
-        bg.SetContentMarginAll(12);
-        bg.SetCornerRadiusAll(4);
-        panel.AddThemeStyleboxOverride("panel", bg);
+        var (panel, scroll, col) = DevScale.Frame(theme, bg);
         AddChild(panel);
-        var col = new VBoxContainer();
-        col.AddThemeConstantOverride("separation", 6);
-        panel.AddChild(col);
+        _rescale = () => DevScale.Apply(panel, scroll, col, theme, bg, DevScale.Factor(GetViewportRect().Size.Y));
+        GetViewport().SizeChanged += _rescale;
+        TreeExiting += () => GetViewport().SizeChanged -= _rescale;
 
         col.AddChild(Heading("Developer  (Ctrl+F2, Ctrl+` or Esc closes)"));
         _status = new Label { AutowrapMode = TextServer.AutowrapMode.Off };
@@ -134,7 +131,7 @@ public partial class DevPanel : Control
                 if (m.Options[i].File.Equals(m.Current, System.StringComparison.OrdinalIgnoreCase)) pick.Selected = i;
             }
             _mounts.Add((m, pick));
-            col.AddChild(Row(new Label { Text = m.Label, CustomMinimumSize = new Vector2(110, 0) }, pick));
+            col.AddChild(Row(DevScale.Min(new Label { Text = m.Label }, 110), pick));
         }
         if (_mounts.Count == 0) col.AddChild(new Label { Text = "(the car has no weapons)" });
         col.AddChild(Row(Button("Apply", ApplyLoadout), Button("Refill ammo & specials", () => Say(Host.DevRefill()))));
@@ -153,10 +150,11 @@ public partial class DevPanel : Control
         _scale.ItemSelected += i => { Host.DevScale = Scales[i]; Say($"time scale x{Scales[i]:0.##} (the ticks are the same; only their pace changes)"); };
         col.AddChild(Row(_freeze, Button("Step 1 tick", () => Say(Host.DevStep(1))), Button("Step 10", () => Say(Host.DevStep(10))), new Label { Text = "speed" }, _scale));
 
-        _message = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
+        _message = DevScale.Min(new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }, 400);
         _message.AddThemeColorOverride("font_color", new Color(1f, 0.85f, 0.5f));
         col.AddChild(_message);
         col.AddChild(Row(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill }, Button("Close", Host.DevClose)));
+        _rescale();
     }
 
     public override void _Process(double delta) => _status.Text = Host.DevStatus();
@@ -264,12 +262,11 @@ public partial class DevPanel : Control
         return b;
     }
 
-    private static LineEdit Field(string hint) => new() { PlaceholderText = hint, CustomMinimumSize = new Vector2(76, 0) };
+    private static LineEdit Field(string hint) => DevScale.Min(new LineEdit { PlaceholderText = hint }, 76);
 
     private static HBoxContainer Row(params Control[] items)
     {
-        var r = new HBoxContainer();
-        r.AddThemeConstantOverride("separation", 6);
+        var r = DevScale.Sep(new HBoxContainer(), 6);
         foreach (var c in items) r.AddChild(c);
         return r;
     }

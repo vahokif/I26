@@ -806,6 +806,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         }
         if (dt <= w.WaitA || dt <= w.WaitB)
         {
+            // a fresh press while the interval or burst cooldown still runs gives the player the dry click, once per press
+            if (w.Trigger && !w.WasFiring && World.IsHuman(v) && !_cosmetic) Events.Add(new WeaponClick(v, "wclick.wav"));
             if (w.WaitA > 0) w.WaitA -= dt;
             if (w.WaitB > 0) w.WaitB -= dt;
         }

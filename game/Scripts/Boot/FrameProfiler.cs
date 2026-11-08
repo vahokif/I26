@@ -37,7 +37,7 @@ public partial class FrameProfiler : Node
     private readonly List<string> _order = [];
     private ulong _lastCaptured;
     private readonly List<string> _hide = (System.Environment.GetEnvironmentVariable("I76_HIDE") ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-    private int _frames;
+    private int _frames, _gc0;
     private bool _sawTimestamps;
     private Probe? _simStart;
     private double _simMs, _nodesMs, _start, _lastWall;
@@ -99,7 +99,8 @@ public partial class FrameProfiler : Node
         var vp = GetViewport().GetViewportRid();
         _frame.Clear();
         double gpuTotal = ReadTimestamps();
-        if (_frames <= _skip) { _simMs = 0; return; }
+        if (_frames <= _skip) { _simMs = 0; _gc0 = GC.CollectionCount(0); return; }
+        int n0 = _frames - _skip - 1;   // frames measured before this one: the collections so far, per 100 frames
         foreach (var p in Passes) Add("gpu." + p, _frame.GetValueOrDefault(p));
         foreach (var (k, v) in _frame) if (k.StartsWith("vp")) Add("gpu." + k, v);
         Add("gpu.total", gpuTotal);
@@ -112,6 +113,7 @@ public partial class FrameProfiler : Node
         Add("cpu.sim", _simMs);
         Add("cpu.terrain", TerrainUpdateMs);
         Add("prims_k", Performance.GetMonitor(Performance.Monitor.RenderTotalPrimitivesInFrame) / 1000);
+        Add("gc0_per_100", (GC.CollectionCount(0) - _gc0) * 100.0 / (n0 + 1));
         Add("draws", Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame));
         _simMs = 0;
         int n = _series["gpu.total"].Count;

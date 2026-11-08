@@ -103,7 +103,7 @@ public partial class SmokeLayer : Node3D
     {
         using var _view = Hitch.Time(Hitch.Phase.Views);
         var cam = GetViewport().GetCamera3D();
-        if (cam is not null) cam.CullMask &= ~MirrorLayer;   // the mirror's own puffs (MirrorDraw) are for the mirror's camera alone
+        if (cam is not null && (cam.CullMask & MirrorLayer) != 0) cam.CullMask &= ~MirrorLayer;   // the mirror's own puffs (MirrorDraw) are for the mirror's camera alone
         if (_off || _failed || _quad is null)
         {
             // no layer (the Compatibility renderer, or I76_SMOKE_LAYER=0): the smokes draw themselves, lit by these lights
@@ -123,7 +123,7 @@ public partial class SmokeLayer : Node3D
         int total;
         lock (Lock) { total = 0; foreach (var s in Slots.Values) total += s.Count; }
         _hasPuffs = total > 0;
-        RenderingServer.GlobalShaderParameterSet("i76_smoke_cap", _ready && total > 0 ? Cap : 0f);
+        RenderingServer.GlobalShaderParameterSet(SmokeCapName, _ready && total > 0 ? Cap : 0f);
         _quad.Visible = _ready && total > 0;
         _sun ??= GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>().FirstOrDefault();
         var toSun = _sun is null ? new Vector3(0.3f, 0.8f, 0.5f) : _sun.GlobalTransform.Basis.Z;
@@ -253,7 +253,6 @@ public partial class SmokeLayer : Node3D
     private static long _fbFormat = -1;
     private static readonly float[] Ubo = new float[UboFloats];
     private static float[] _flat = new float[Capacity * Floats];
-    private static byte[] _bytes = new byte[Capacity * Floats * 4];
     private static bool _cleared = true;
 
     private sealed partial class SmokeEffect : CompositorEffect
@@ -311,35 +310,43 @@ public partial class SmokeLayer : Node3D
         lock (Lock) { Ubo[92] = _lightCount; Array.Copy(_lights, 0, Ubo, 96, _lightCount * 12); }
         Ubo[87] = SceneLight;
         Ubo[88] = 1f / size.X; Ubo[89] = 1f / size.Y;
-        System.Buffer.BlockCopy(Ubo, 0, _bytes, 0, UboFloats * 4);
-        rd.BufferUpdate(_ubo, 0, UboFloats * 4, _bytes.AsSpan(0, UboFloats * 4).ToArray());
+        System.Buffer.BlockCopy(Ubo, 0, _uboBytes, 0, UboFloats * 4);
+        rd.BufferUpdate(_ubo, 0, UboFloats * 4, _uboBytes);
         if (count > 0)
         {
-            System.Buffer.BlockCopy(_flat, 0, _bytes, 0, count * Floats * 4);
-            rd.BufferUpdate(_ssbo, 0, (uint)(count * Floats * 4), _bytes.AsSpan(0, count * Floats * 4).ToArray());
+            if (_puffBytes.Length != count * Floats * 4) _puffBytes = new byte[count * Floats * 4];
+            System.Buffer.BlockCopy(_flat, 0, _puffBytes, 0, count * Floats * 4);
+            rd.BufferUpdate(_ssbo, 0, (uint)(count * Floats * 4), _puffBytes);
         }
 
+        // the uniform set is kept from frame to frame (it was made and freed every frame, four engine objects with
+        // it) until the scene's depth texture or the noise is another, or the engine has dropped it with a texture it read
         var noise = RenderingServer.TextureGetRdTexture(DamageSmoke.Noise.GetRid());
-        var uniforms = new Godot.Collections.Array<RDUniform>
+        if (!_set.IsValid || depth != _setDepth || noise != _setNoise || !rd.UniformSetIsValid(_set))
         {
-            Buf(0, RenderingDevice.UniformType.UniformBuffer, _ubo),
-            Buf(1, RenderingDevice.UniformType.StorageBuffer, _ssbo),
-            Tex(2, _noiseSampler, noise),
-            Tex(3, _sampler, depth),
-        };
-        var set = rd.UniformSetCreate(uniforms, _shader, 0);
-        GC.KeepAlive(uniforms);   // held past the call (see MeshArrays)
-        var dl = rd.DrawListBegin(_fb, RenderingDevice.DrawFlags.ClearColorAll, [new Color(0, 0, 0, 0), new Color(0, 0, 0, 0)]);
+            if (_set.IsValid && rd.UniformSetIsValid(_set)) rd.FreeRid(_set);
+            _setDepth = depth; _setNoise = noise;
+            _setUniforms ??= [Buf(0, RenderingDevice.UniformType.UniformBuffer, _ubo), Buf(1, RenderingDevice.UniformType.StorageBuffer, _ssbo), Tex(2, _noiseSampler, noise), Tex(3, _sampler, depth)];
+            _setUniforms[2].ClearIds(); _setUniforms[2].AddId(_noiseSampler); _setUniforms[2].AddId(noise);
+            _setUniforms[3].ClearIds(); _setUniforms[3].AddId(_sampler); _setUniforms[3].AddId(depth);
+            _set = rd.UniformSetCreate(_setUniforms, _shader, 0);
+        }
+        var dl = rd.DrawListBegin(_fb, RenderingDevice.DrawFlags.ClearColorAll, ClearColors);
         if (count > 0)
         {
             rd.DrawListBindRenderPipeline(dl, _pipeline);
-            rd.DrawListBindUniformSet(dl, set, 0);
+            rd.DrawListBindUniformSet(dl, _set, 0);
             rd.DrawListDraw(dl, false, (uint)count, 4);
         }
         rd.DrawListEnd();
-        rd.FreeRid(set);
         _cleared = count == 0;
     }
+
+    private static readonly byte[] _uboBytes = new byte[UboFloats * 4];
+    private static byte[] _puffBytes = [];
+    private static Rid _set, _setDepth, _setNoise;
+    private static Godot.Collections.Array<RDUniform>? _setUniforms;
+    private static readonly Color[] ClearColors = [new Color(0, 0, 0, 0), new Color(0, 0, 0, 0)];
 
     private static RDUniform Buf(int binding, RenderingDevice.UniformType type, Rid id)
     {
@@ -413,8 +420,9 @@ public partial class SmokeLayer : Node3D
     /// <summary>Hands the nearest lamps to a smoke material (damage_smoke_modern.gdshader) for it to light its own puffs.</summary>
     public static void Lights(ShaderMaterial m)
     {
-        lock (Lock) { m.SetShaderParameter("lights", LightVec); m.SetShaderParameter("light_count", _lightCount); }
+        lock (Lock) { m.SetShaderParameter(LightsName, LightVec); m.SetShaderParameter(LightCountName, _lightCount); }
     }
+    private static readonly StringName LightsName = "lights", LightCountName = "light_count", SmokeCapName = "i76_smoke_cap";
 
     /// <summary>
     /// Without the layer's cap, the opacity of overlapping puffs is guessed instead: the puffs (far to near, in the buffer

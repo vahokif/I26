@@ -35,6 +35,9 @@ public partial class DropShadows : Node3D
 
     private const int Layers = 10;
     private const float Spread = 0.09f;
+    // the parameter names once: a string literal makes a new engine name every call
+    private static readonly StringName LayerAlpha = "layer_alpha", Jitter = "jitter", SpreadName = "spread", FadeFrom = "fade_from", FadeTo = "fade_to",
+        UseGround = "use_ground", AllFaces = "all_faces", PlaneName = "plane", CasterLight = "caster_light";
     private bool _soft;
     private ShaderMaterial? _soft0;
     private readonly ShaderMaterial[] _softMats = new ShaderMaterial[Layers];
@@ -43,15 +46,33 @@ public partial class DropShadows : Node3D
     public bool Soft
     {
         get => _soft;
-        set { _soft = value; foreach (var mi in _pool) mi.MaterialOverride = _soft ? _soft0 : _mat; }
+        set { _soft = value; for (int i = 0; i < _pool.Count; i++) _pool[i].MaterialOverride = _slots[i].Mat = _soft ? _soft0 : _mat; }
     }
 
+    private float _strengthSet = float.NaN;
     private void SetStrength(float s)
     {
+        _strengthSet = s;
         float a = 1f - Mathf.Pow(1f - Mathf.Clamp(s, 0f, 0.95f), 1f / Layers);
-        foreach (var m in _softMats) m.SetShaderParameter("layer_alpha", a);
-        _far.SetShaderParameter("layer_alpha", Mathf.Clamp(s, 0f, 0.95f));
+        foreach (var m in _softMats) m.SetShaderParameter(LayerAlpha, a);
+        _far.SetShaderParameter(LayerAlpha, Mathf.Clamp(s, 0f, 0.95f));
     }
+
+    /// <summary>
+    /// What a pool slot's node was last given, so that a frame sets only what changed: a static caster's mesh, transform,
+    /// plane and flags are the same frame after frame, and each set is an engine call (an instance parameter's a lookup
+    /// and a buffer write besides).
+    /// </summary>
+    private sealed class Slot
+    {
+        public Material? Mat;
+        public Mesh? Mesh;
+        public Transform3D Xf;
+        public Vector4 Plane, Light;
+        public float UseGround = -1, AllFaces = -1;
+        public bool Visible, LightSet;
+    }
+    private readonly List<Slot> _slots = [];
 
     private const float Reach = 50f;
     /// <summary>How far the modern look casts (m): Shadow Detail Low a moderate distance, High far; never past the camera's far plane. Shadows beyond <see cref="FeatherReach"/> are one flat layer and small casters drop out (<see cref="MinAngle"/>).</summary>
@@ -78,8 +99,8 @@ public partial class DropShadows : Node3D
             float r = Mathf.Sqrt((i + 0.5f) / Layers), a = i * 2.39996f;
             // the stencil reference is a literal in the shader, so one shader per layer
             var m = new ShaderMaterial { Shader = _layerShaders[i] ??= new Shader { Code = code.Replace("compare_not_equal, 1;", $"compare_not_equal, {i + 1};") } };
-            m.SetShaderParameter("jitter", new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
-            m.SetShaderParameter("spread", Spread);
+            m.SetShaderParameter(Jitter, new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
+            m.SetShaderParameter(SpreadName, Spread);
             // the layer's own stencil reference: one pixel is covered once per layer
             // layer-major draw order across all casters (priority first), so one layer's stencil value covers a pixel once for every part
             m.RenderPriority = -100 + i;
@@ -87,8 +108,8 @@ public partial class DropShadows : Node3D
             _softMats[i] = m;
         }
         _far = new ShaderMaterial { Shader = _farShader };   // one layer, with the first one's stencil reference
-        _far.SetShaderParameter("jitter", Vector2.Zero);
-        _far.SetShaderParameter("spread", Spread);
+        _far.SetShaderParameter(Jitter, Vector2.Zero);
+        _far.SetShaderParameter(SpreadName, Spread);
         _far.RenderPriority = -100;
         _soft0 = _softMats[0];
         SetStrength(Strength);
@@ -107,7 +128,7 @@ public partial class DropShadows : Node3D
         var origin = Origin();
         var light = Light().Normalized();
         if (origin != _drapedOrigin || light.DistanceTo(_drapedLight) > 0.002f) { _draped.Clear(); _drapedOrigin = origin; _drapedLight = light; }   // the floating origin or the light moved
-        if (_soft) SetStrength(Strength);
+        if (_soft && Strength != _strengthSet) SetStrength(Strength);
         if (Visible && GetViewport().GetCamera3D() is { } cam)
         {
             var eye = cam.GlobalPosition;
@@ -144,21 +165,29 @@ public partial class DropShadows : Node3D
                     var mi = new MeshInstance3D { MaterialOverride = _soft ? _soft0 : _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
                     AddChild(mi);
                     _pool.Add(mi);
+                    _slots.Add(new Slot { Mat = mi.MaterialOverride, Visible = true });
                 }
-                var s = _pool[used++];
+                var s = _pool[used];
+                var last = _slots[used++];
                 var draped = isStatic && cl == l ? Draped(mesh, xf, l) : null;   // under a car's own light at night the sun's drape would be wrong: the plane
                 var want = !_soft ? _mat : far ? _far : _soft0;
-                if (s.MaterialOverride != want) s.MaterialOverride = want;
-                s.Mesh = draped ?? mesh;
-                s.SetInstanceShaderParameter("use_ground", draped is null ? 0f : 1f);
-                s.SetInstanceShaderParameter("all_faces", isStatic ? 0f : 1f);
-                s.GlobalTransform = xf;
-                s.SetInstanceShaderParameter("plane", plane);
-                if (!_soft) s.SetInstanceShaderParameter("caster_light", new Vector4(cl.X, cl.Y, cl.Z, 1f));
-                s.Visible = true;
+                if (last.Mat != want) s.MaterialOverride = last.Mat = want;
+                var shown = draped ?? mesh;
+                if (last.Mesh != shown) s.Mesh = last.Mesh = shown;
+                float useGround = draped is null ? 0f : 1f, allFaces = isStatic ? 0f : 1f;
+                if (last.UseGround != useGround) s.SetInstanceShaderParameter(UseGround, last.UseGround = useGround);
+                if (last.AllFaces != allFaces) s.SetInstanceShaderParameter(AllFaces, last.AllFaces = allFaces);
+                if (last.Xf != xf) s.GlobalTransform = last.Xf = xf;
+                if (last.Plane != plane) s.SetInstanceShaderParameter(PlaneName, last.Plane = plane);
+                if (!_soft)
+                {
+                    var cl4 = new Vector4(cl.X, cl.Y, cl.Z, 1f);
+                    if (!last.LightSet || last.Light != cl4) { s.SetInstanceShaderParameter(CasterLight, cl4); last.Light = cl4; last.LightSet = true; }
+                }
+                if (!last.Visible) s.Visible = last.Visible = true;
             }
         }
-        for (int i = used; i < _pool.Count; i++) _pool[i].Visible = false;
+        for (int i = used; i < _pool.Count; i++) if (_slots[i].Visible) _pool[i].Visible = _slots[i].Visible = false;
     }
 
     private const int MaxBuilds = 3;
@@ -166,8 +195,8 @@ public partial class DropShadows : Node3D
 
     private void SetFade(float reach)
     {
-        foreach (var m in _softMats) { m.SetShaderParameter("fade_from", reach * 0.7f); m.SetShaderParameter("fade_to", reach); }
-        _far.SetShaderParameter("fade_from", reach * 0.7f); _far.SetShaderParameter("fade_to", reach);
+        foreach (var m in _softMats) { m.SetShaderParameter(FadeFrom, reach * 0.7f); m.SetShaderParameter(FadeTo, reach); }
+        _far.SetShaderParameter(FadeFrom, reach * 0.7f); _far.SetShaderParameter(FadeTo, reach);
     }
 
     private bool DrapedReady(Mesh mesh, Transform3D xf)

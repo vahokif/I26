@@ -2112,6 +2112,7 @@ public partial class Main : Node3D
         _drops.Visible = _mode1997 || (_shadowDetail > 0 && !mapShadows);
         _dropsOffMap = !mapShadows;
         _sceneryAt = -1;
+        _carCastersSeen = -1;
         if (_builder?.Light is { } l) _drops.Strength = 0.9f * Mathf.Sqrt(Mathf.Clamp(l.Intensity, 0f, 1f));
     }
 
@@ -2147,14 +2148,18 @@ public partial class Main : Node3D
         }
         foreach (var x in _sceneryCasters) yield return x;
         if (_sim is null) yield break;
+        // the cars' parts are kept off the shadow map once per list (CarNode.DropCasters finds them again when a mesh enters or leaves a car)
+        bool fresh = _carCastersSeen != CarNode.PartsVersion;
+        _carCastersSeen = CarNode.PartsVersion;
         foreach (var car in _sim.Cars)
-            foreach (var mi in car.FindChildren("*", nameof(MeshInstance3D), true, false).OfType<MeshInstance3D>())
+            foreach (var mi in car.DropCasters)
             {
-                if (_dropsOffMap && mi.CastShadow == GeometryInstance3D.ShadowCastingSetting.On) mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
-                if (mi.IsVisibleInTree() && mi.Mesh is ArrayMesh m && (mi.Layers & CarNode.CockpitLayer) == 0 && !CarNode.IsLightPool(mi))
+                if (fresh && _dropsOffMap && mi.CastShadow == GeometryInstance3D.ShadowCastingSetting.On) mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                if (mi.IsVisibleInTree() && mi.Mesh is ArrayMesh m)
                     yield return (m, mi.GlobalTransform, false);
             }
     }
+    private int _carCastersSeen = -1;
 
     /// <summary>The mission's light ramp (LumaTable), or null without its palette or .lum.</summary>
     private byte[]? LumaBytes() =>

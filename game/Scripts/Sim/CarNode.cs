@@ -139,8 +139,32 @@ public partial class CarNode : Node3D
     public override void _EnterTree()
     {
         // one tree-wide hook: whatever is added under a car later (a swapped wheel, a weapon, the lamps) joins the layer too
-        if (!_layerHook) { _layerHook = true; GetTree().NodeAdded += MarkVehicle; }
+        if (!_layerHook) { _layerHook = true; GetTree().NodeAdded += MarkVehicle; GetTree().NodeRemoved += n => { if (n is MeshInstance3D) PartsVersion++; }; }
         MarkTree(this);
+    }
+
+    /// <summary>Bumped when a mesh enters or leaves any car: the cars' caster lists are found again (DropCasters).</summary>
+    public static int PartsVersion { get; private set; }
+    private List<MeshInstance3D>? _casters;
+    private int _castersVersion = -1;
+
+    /// <summary>
+    /// The meshes that cast the car's drop shadows (Main.Casters): every mesh under it but the interior's and the light
+    /// pool, searched for once and kept until a mesh enters or leaves a car (PartsVersion), not every frame: the search
+    /// walked the tree and made an engine array a car a frame. Their visibility and mesh are still read each frame.
+    /// </summary>
+    public IReadOnlyList<MeshInstance3D> DropCasters
+    {
+        get
+        {
+            if (_casters is null || _castersVersion != PartsVersion)
+            {
+                _castersVersion = PartsVersion;
+                _casters = FindChildren("*", nameof(MeshInstance3D), true, false).OfType<MeshInstance3D>()
+                    .Where(mi => (mi.Layers & CockpitLayer) == 0 && !IsLightPool(mi)).ToList();
+            }
+            return _casters;
+        }
     }
 
     private static void MarkTree(Node n)
@@ -153,7 +177,7 @@ public partial class CarNode : Node3D
     {
         if (n is not VisualInstance3D v || (v.Layers & CockpitLayer) != 0) return;
         for (var p = n.GetParent(); p is not null; p = p.GetParent())
-            if (p is CarNode) { v.Layers |= VehicleLayer; return; }
+            if (p is CarNode) { v.Layers |= VehicleLayer; if (n is MeshInstance3D) PartsVersion++; return; }
     }
     public MeshInstance3D? Rtc1 { get; private set; }
     public MeshInstance3D? Rtc6 { get; private set; }

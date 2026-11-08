@@ -21,7 +21,7 @@ public class SimRateTests
     [Fact]
     public void TheOfferedTicksAreTheSpecsAndTwentyIsTheDefault()
     {
-        Assert.Equal([20, 25, 28, 30, 40, 60], SimRate.Offered.Select(r => r.Label));
+        Assert.Equal([20, 24, 25, 28, 30, 40, 60], SimRate.Offered.Select(r => r.Label));
         Assert.Equal(SimRate.R20, SimRate.Default);
         Assert.Equal(102f / 2048f, SimRate.R20.TickSeconds);
         Assert.Equal(0.036f, SimRate.R28.TickSeconds);
@@ -87,6 +87,22 @@ public class SimRateTests
             foreach (int k in Enumerable.Range(0, 60)) Assert.Equal(r.TickSeconds, r.FrameDelta(k));
         Assert.Equal(0.05f, new SimRate(20, 0.05f).FrameDelta(2));   // an off-grid tick is its own frame
     }
+
+    /// <summary>
+    /// 24 Hz is the step the original takes under a 20 fps cap on Windows NT, where GetTickCount advances in 15.6 ms: frames
+    /// of 46.9 and 62.5 ms, the 62.5s run as two steps, so steps of 46.9 and 31.25 ms, about 24 a second (docs/frame-rate.md §7.1). The tick is 85/2048 s, the
+    /// grid's nearest to 1/24 (the clock's own 85, 85, 86 would take one substep each as well), one vehicle substep a tick.
+    /// </summary>
+    [Fact]
+    public void TwentyFourHzIsOneSubstepOnTheGridNearestATwentyFourthOfASecond()
+    {
+        Assert.Equal(85f / 2048f, SimRate.R24.TickSeconds);
+        Assert.Equal(SimRate.R24, SimRate.FromLabel(24));
+        Assert.Equal(1, VehicleStep.Substeps(SimRate.R24.TickSeconds).Count);
+        Assert.Equal(1, VehicleStep.Substeps(86f / 2048f).Count);
+        Assert.InRange(1f / SimRate.R24.TickSeconds, 24f, 24.1f);
+        Assert.True(SimRate.R20.TickSeconds > SimRate.R24.TickSeconds && SimRate.R24.TickSeconds > SimRate.R25.TickSeconds);
+    }
 }
 
 /// <summary>Weapons and the flame stream at each tick (docs/frame-rate.md §6.3), from the Piranha's guns.</summary>
@@ -139,6 +155,7 @@ public class SimRateCombatTests
 
     [Theory]
     [InlineData(20, "111111111111")]
+    [InlineData(24, "111101111011")]
     [InlineData(25, "111101111011")]
     [InlineData(28, "110110110110")]
     [InlineData(30, "110110110110")]
@@ -175,9 +192,10 @@ public class SimRateCombatTests
         return string.Join(",", counts);
     }
 
-    /// <summary>With the flame-hold deviation off, the original's stream: full at 20 Hz, about half at 25, a stub from 28.</summary>
+    /// <summary>With the flame-hold deviation off, the original's stream: full at 20 Hz, about half at 24 and 25 (it builds up over some 40 ticks), a stub from 28.</summary>
     [Theory]
     [InlineData(20, 19, 19, 19)]
+    [InlineData(24, 9, 13, 19)]
     [InlineData(25, 9, 13, 19)]
     [InlineData(28, 2, 3, 3)]
     [InlineData(30, 2, 3, 3)]
@@ -188,7 +206,7 @@ public class SimRateCombatTests
         if (InstallDir is null) return;
         var counts = Stream(SimRate.FromLabel(hz).TickSeconds, hold: false).Split(',').Select(int.Parse).ToList();
         if (hz == 20) Assert.Equal(19, counts.Max());
-        else if (hz == 25) { Assert.InRange(counts.Skip(8).Average(), lo - 3, hi + 1); Assert.True(counts.Max() < 19, string.Join(",", counts)); }
+        else if (hz is 24 or 25) { Assert.InRange(counts.Skip(8).Average(), lo - 3, hi + 1); Assert.True(counts.Max() < 19, string.Join(",", counts)); }
         else Assert.True(counts.Max() <= hi, string.Join(",", counts));
     }
 
@@ -198,13 +216,14 @@ public class SimRateCombatTests
         if (InstallDir is null) return;
         Assert.Equal(Stream(SimRate.R20.TickSeconds, hold: false), Stream(SimRate.R20.TickSeconds, hold: true));
         Assert.True(Stream(SimRate.R20.TickSeconds, hold: true).Split(',').Select(int.Parse).Max() == 19);
-        foreach (var r in new[] { SimRate.R28, SimRate.R30, SimRate.R40, SimRate.R60 })
+        foreach (var r in new[] { SimRate.R24, SimRate.R28, SimRate.R30, SimRate.R40, SimRate.R60 })
             Assert.Equal(19, Stream(r.TickSeconds, hold: true, 40).Split(',').Select(int.Parse).Max());
     }
 
     /// <summary>The original's packet: max(1, ftol(45 · dt)) per touching point per tick: 2 at the 20 Hz tick, 1 at 28.</summary>
     [Theory]
     [InlineData(20, 2)]
+    [InlineData(24, 1)]
     [InlineData(28, 1)]
     [InlineData(60, 1)]
     public void TheNapalmBurnPerPointPerTickFollowsTheTick(int hz, int expected)

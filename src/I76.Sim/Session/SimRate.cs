@@ -4,17 +4,20 @@ namespace I76.Sim.Session;
 /// The simulation's tick, as a setting (docs/frame-rate.md). The original stepped once per rendered frame, so
 /// its frame rate was its simulation rate; the port's tick at 1/V plays the original at V fps. The ticks sit on
 /// the original's own k/2048 s clock grid, and never at exactly 0.05 s, where the original's weapon loop and
-/// substep rule both change (the 20 Hz label is 102/2048 s). 28 keeps the reference machine's 0.036 s.
+/// substep rule both change (the 20 Hz label is 102/2048 s). 28 keeps the reference machine's 0.036 s. 24 is the step
+/// the original takes under a 20 fps cap on Windows NT, where GetTickCount advances in 15.6 ms: its frames measure 46.9
+/// or 62.5 ms and the substep rule runs a 62.5 as two, so the car steps 46.9 / 31.25 ms, about 24 a second (docs/frame-rate.md §7.1).
 /// </summary>
 public readonly record struct SimRate(int Label, float TickSeconds)
 {
     public static readonly SimRate R20 = new(20, 102f / 2048f);
+    public static readonly SimRate R24 = new(24, 85f / 2048f);
     public static readonly SimRate R25 = new(25, 82f / 2048f);
     public static readonly SimRate R28 = new(28, 0.036f);
     public static readonly SimRate R30 = new(30, 68f / 2048f);
     public static readonly SimRate R40 = new(40, 51f / 2048f);
     public static readonly SimRate R60 = new(60, 34f / 2048f);
-    public static readonly SimRate[] Offered = [R20, R25, R28, R30, R40, R60];
+    public static readonly SimRate[] Offered = [R20, R24, R25, R28, R30, R40, R60];
     public static readonly SimRate Default = R20;
 
     public static SimRate FromLabel(int hz) => Offered.FirstOrDefault(r => r.Label == hz, Default);

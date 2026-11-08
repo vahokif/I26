@@ -22,11 +22,12 @@ public sealed record ModernRateTuning(int Rate, float DriveScale, float BrakeSca
     /// The fitted values, one row per offered rate (<see cref="SimRate.Offered"/>). DriveScale: the original's engine
     /// force scaled to reach 26 u/s in the original's time at that rate (4.37 s at 20 Hz … 4.63 s at 60, a quadratic in
     /// the rate). BrakeScale: the brake scaled to stop from 25 u/s in the original's distance (31.2 m at 20 Hz … 27.3 m
-    /// at 60, linear in the rate). Both from the Piranha on m05.
+    /// at 60, linear in the rate). Both from the Piranha on m05; the 24 row is interpolated.
     /// </summary>
     public static readonly ModernRateTuning[] Table =
     [
         new(20, 0.968f, 0.805f),
+        new(24, 0.963f, 0.811f),   // interpolated between the 20 and 25 rows on the targets' trends (4.386 s, 30.8 u), not fitted on the body
         new(25, 0.962f, 0.813f),
         new(28, 0.957f, 0.817f),
         new(30, 0.954f, 0.821f),

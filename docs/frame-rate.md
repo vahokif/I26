@@ -263,7 +263,7 @@ to everyone.
 | `I76.Net/InputQueue.cs:101` | ring of 64 | fine |
 | `I76.Server/NetMeleeServer.cs:173` | scores every `Round(1/Tick)` ticks | from the rate (already a formula) |
 | `I76.Server/NetMeleeServer.cs:215` | `next += Protocol.TickSeconds` | the session's rate |
-| `I76.Server` host options | — | a `--rate 20|25|28|30|40|60` option, default 20; shown in the lobby |
+| `I76.Server` host options | — | a `--rate 20|24|25|28|30|40|60` option, default 20; shown in the lobby |
 
 Snapshot bandwidth scales with the rate: one snapshot per tick, so
 −28 % at 20 Hz against 28, and +116 % at 60.
@@ -561,13 +561,34 @@ original measured at V fps within tolerance.**
 
 ### 7.1 Values and default
 
-- **Offer 20, 25, 28, 30, 40, 60**, with the §2 tick values. Label the
+- **Offer 20, 24, 25, 28, 30, 40, 60**, with the §2 tick values. Label the
   setting "Frame rate (original)" or "Simulation rate". The help line
   says it reproduces the original capped at that rate; drawing stays
   smooth at any rate.
 - **Default 20.** This is what the community plays and what the user
   asked for. It is also the rate at which the original's flamers work as
   intended (§5.3).
+  - 24 is the step the original takes when it is capped at 20 fps on
+    Windows NT and its successors. The original reads its frame time from
+    `GetTickCount`, which advances in 15.6 ms steps there, so a 20 fps cap
+    measures its frames as 46.9 or 62.5 ms; the substep rule (§1) runs a
+    62.5 ms frame as two steps of 31.25 ms. The car is stepped at 46.9 ms
+    (about 80 % of steps) and 31.25 ms, about 24 steps a second, where the
+    reference clock's 20 fps (§2) gives 28. Anyone can check it: log the
+    GOG exe's frame times at its 20 fps cap on Windows 10, or compare a
+    1 m drop's bounce tempo there with this port's at 20 Hz. The
+    measurements in §5 were made under Wine, whose `GetTickCount` counts
+    whole milliseconds, with the step forced, so they do not show this
+    split. The tick is 85/2048 s (41.50 ms, 24.09 Hz), the grid's nearest to 1/24;
+    the clock's own 85, 85, 86 sequence would also take one substep a
+    frame, so the world keeps the tick. Against 20 Hz (102.4/2048 s mean,
+    28 vehicle steps a second, §2): 20/s guns keep 20.1/s (`111101111011`);
+    without FlameHold the flame stream builds up as at 25 (17-19
+    cross-sections after about 40 ticks, 1.7 s; 20 Hz is full in 18);
+    Napalm 1 per point per tick, 24/s (above the 22.5 Hz edge; 40/s at 20);
+    the Fire-Dropper 361/s; radar missiles, the AI's per-frame cadences and the
+    scripted camera's glide 20 % faster in time; full throttle from the
+    key in 3 ticks (0.125 s).
   - 28 stays available as the 1997 reference machine's rate, which every
     earlier port measurement used.
   - 60 is for players who want the original at 60, quirks included:

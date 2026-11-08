@@ -1464,7 +1464,7 @@ compact:
 ### The simulation rate
 
 The server's rate applies to everyone (docs/frame-rate.md §7.2). The host chooses it (`ServerOptions.Rate`; the
-listen server's is the host form's choice, the dedicated one's `--rate 20|25|28|30|40|60`, default 20), and
+listen server's is the host form's choice, the dedicated one's `--rate 20|24|25|28|30|40|60`, default 20), and
 `JoinAccept` carries it as `RateHz` (protocol 7). The client builds its session, input history and `ClientWorld`
 from it and refuses a rate it does not offer; its own setting is ignored while connected (the session's rate is built into the client's session; Play Options' `[port] sim_rate`, which its
 single-player games use, is neither read nor written by a network game).

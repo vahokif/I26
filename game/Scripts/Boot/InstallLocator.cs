@@ -11,7 +11,7 @@ namespace I76.Game.Boot;
 ///   --drive [car.vcf]  --hold-throttle
 ///   --skip-movies   --movie NAME.smk
 ///   --connect HOST:PORT [--name N] [--car X.vcf] [--team T]   (a network melee)
-///   --host-listen [--arena m05] [--port 7676] [--rate 20|25|28|30|40|60] [--fill N] [--bots-ai N] [--bot-skill easy|normal|hard] [--teams] [--max-score S] [--time-limit SECONDS] [--anet HOST[:PORT]]
+///   --host-listen [--arena m05] [--port 7676] [--rate 20|24|25|28|30|40|60] [--fill N] [--bots-ai N] [--bot-skill easy|normal|hard] [--teams] [--max-score S] [--time-limit SECONDS] [--anet HOST[:PORT]]
 ///   --host-listen --coop MISSION [--max-players 8] [--port 7676]   (a co-op story mission for up to eight instead of a melee: t01, s03, p05, ...)
 ///   --password WORD   (with --host-listen: the game needs it; with --connect or --join-anet: the one to join with; never saved)
 ///   --restrict a,b,c   (with --host-listen: WEAPON RESTRICTIONS, as i26-server's: all, slugs, mortars, missiles, flames, droppers, a .gdf, class:tier)
@@ -93,7 +93,7 @@ public sealed class LaunchOptions
     public I76.Sim.Missions.BotSkill BotSkill { get; set; } = I76.Sim.Missions.BotSkill.Normal;
     /// <summary>--bot-car N=MODEL[:VARIANT] (repeatable, N from 1): the car of bot seat N (docs/multiplayer.md "Bots"); empty: random.</summary>
     public List<string> BotCars { get; set; } = [];
-    /// <summary>--rate HZ: the listen server's simulation rate (20, 25, 28, 30, 40, 60), the game's for everyone in it; 0: the Play Options' setting.</summary>
+    /// <summary>--rate HZ: the listen server's simulation rate (20, 24, 25, 28, 30, 40, 60), the game's for everyone in it; 0: the Play Options' setting.</summary>
     public int Rate { get; set; }
     public bool Teams { get; set; }
     public int MaxScore { get; set; }

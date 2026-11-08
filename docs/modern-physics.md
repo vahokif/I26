@@ -313,12 +313,15 @@ The rest is fitted per rate, from the targets as smooth functions of the rate
 (fitted to the six measurements), through the body's measured response to the
 parameter:
 
-| rate (Hz) | 20 | 25 | 28 | 30 | 40 | 60 |
-|---|---|---|---|---|---|---|
-| target 0–26 u/s (s), quadratic in the rate | 4.37 | 4.39 | 4.40 | 4.41 | 4.47 | 4.63 |
-| `DriveScale` | 0.968 | 0.962 | 0.957 | 0.954 | 0.939 | 0.900 |
-| target stop from 25 u/s (u), linear in the rate | 31.2 | 30.7 | 30.4 | 30.2 | 29.3 | 27.3 |
-| `BrakeScale` (× 25 760 N) | 0.805 | 0.813 | 0.817 | 0.821 | 0.838 | 0.877 |
+| rate (Hz) | 20 | 24 | 25 | 28 | 30 | 40 | 60 |
+|---|---|---|---|---|---|---|---|
+| target 0–26 u/s (s), quadratic in the rate | 4.37 | 4.386 | 4.39 | 4.40 | 4.41 | 4.47 | 4.63 |
+| `DriveScale` | 0.968 | 0.963 | 0.962 | 0.957 | 0.954 | 0.939 | 0.900 |
+| target stop from 25 u/s (u), linear in the rate | 31.2 | 30.8 | 30.7 | 30.4 | 30.2 | 29.3 | 27.3 |
+| `BrakeScale` (× 25 760 N) | 0.805 | 0.811 | 0.813 | 0.817 | 0.821 | 0.838 | 0.877 |
+
+The 24 Hz column is interpolated between the 20 and 25 fits on the
+targets' trends, not fitted on the body.
 
 None of the slide parameters needed a rate: the sliding model is reached only
 by the handbrake, a landing or a knock, and its numbers are the original's

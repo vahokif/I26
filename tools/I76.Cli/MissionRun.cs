@@ -36,7 +36,7 @@ public static class MissionRun
         var setup = MissionSetup.Build(vfs, w, asm, car, melee: roster, rand: sdi >= 0 ? new I76.Sim.Rng.CrtRand(uint.Parse(args[sdi + 1])) : null);
         setup.Melee?.Start();
         if (setup.Script is not { } script) { Console.WriteLine("no script"); return 1; }
-        int ri = args.IndexOf("--rate");   // --rate HZ: 20 (default), 25, 28, 30, 40 or 60
+        int ri = args.IndexOf("--rate");   // --rate HZ: 20 (default), 24, 25, 28, 30, 40 or 60
         var session = new SimSession(setup, rate: ri >= 0 ? SimRate.FromLabel(int.Parse(args[ri + 1])) : null);
         float Tick = session.TickSeconds;
         // --player-at X,Z[,YAW][@S][;X,Z,YAW@S...]: the player's car moved there before the first tick, or at mission second S

@@ -5,22 +5,21 @@ namespace I76.Sim.Views;
 /// While overview_zoom_plus (grey PgDn) is held, a ramp grows by 3·ftol(182·dt)·16 a frame up to 0x5555 and sets the
 /// axis position; overview_zoom_delta = (pos·32) >> 16 (a whole number, -32..32); the handler then scales the height by
 /// 1 + 0.01·delta each frame (overview_zoom_minus, grey PgUp, runs the ramp the other way). Releasing a key zeroes
-/// the ramp. The original does this once per displayed frame; here it runs at its 60 Hz frame (dt = 1/60, so
-/// ftol(182·dt) = 3), whatever the render rate.
+/// the ramp. The original does this once per displayed frame, with dt the frame's time; per-frame rules run per sim tick here,
+/// so the caller steps it once a tick with dt = the tick (ftol(182*dt) = 9 at 20 Hz), whatever the render rate.
 /// </summary>
 public sealed class OverviewZoom
 {
-    public const float Step = 1f / 60f;
     private int _ramp;
 
     public float Height = 100f;
 
     public void Reset() { Height = 100f; _ramp = 0; }
 
-    /// <summary>One 1/60 s frame with the keys' state: the delta the original's axis reads (for tests), and the new height.</summary>
-    public int Frame(bool plus, bool minus, float radius, float far)
+    /// <summary>One frame (a sim tick of <paramref name="tick"/> seconds) with the keys' state: the delta the original's axis reads (for tests), and the new height.</summary>
+    public int Frame(bool plus, bool minus, float radius, float far, float tick)
     {
-        int d = (int)(182f * Step);
+        int d = (int)(182f * tick);
         int pos = 0;
         if (plus)
         {

@@ -99,8 +99,9 @@ public partial class PresetCamera : Camera3D
             {
                 float far = Far;
                 bool plus = Controls.Down("overview_zoom_plus"), minus = Controls.Down("overview_zoom_minus");
-                _zoomAcc = MathF.Min(_zoomAcc + dt, 8 * I76.Sim.Views.OverviewZoom.Step);
-                for (; _zoomAcc >= I76.Sim.Views.OverviewZoom.Step; _zoomAcc -= I76.Sim.Views.OverviewZoom.Step) _zoom.Frame(plus, minus, Radius, far);
+                float tick = I76.Game.Sim.SimClock.Tick;
+                _zoomAcc = MathF.Min(_zoomAcc + dt, 8 * tick);
+                for (; _zoomAcc >= tick; _zoomAcc -= tick) _zoom.Frame(plus, minus, Radius, far, tick);
                 var p = t.Origin;
                 float ground = Ground?.Invoke(p.X, -p.Z) ?? p.Y;
                 // looking down with north (game +Z, Godot -Z) up the screen

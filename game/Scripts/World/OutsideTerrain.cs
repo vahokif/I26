@@ -122,7 +122,7 @@ public partial class OutsideTerrain : Node3D
     }
     private readonly Dictionary<(int X, int Z), Piece> _pieces = [];
     private readonly List<(int X, int Z)> _drop = [];
-    private int _jobs;
+    private readonly ChunkJobs _jobs = new(MaxJobs);
 
     /// <summary>A chunk's arrays: chunk-local vertices for the 1997 look (the node stands at the chunk's corner), centre-relative for the modern look (at the ring's centre).</summary>
     public sealed record Arrays(Vector3[] V, Vector3[] N, Color[]? C, Vector2[] Uv, Vector2[] Uv2, int[] I);
@@ -255,7 +255,7 @@ public partial class OutsideTerrain : Node3D
         {
             if (p.Job is not { IsCompleted: true } job) continue;
             if (uploads >= MaxUploads) break;
-            p.Job = null; _jobs--;
+            p.Job = null; _jobs.Finished();
             if (job.IsFaulted) { GD.PrintErr($"outside ground chunk {key}: {job.Exception?.GetBaseException()}"); continue; }
             if (p.JobLevel != p.Want || p.Distance == float.MaxValue) continue;   // wanted otherwise meanwhile
             Show(key, p, job.Result, p.JobLevel);
@@ -264,9 +264,9 @@ public partial class OutsideTerrain : Node3D
         // new jobs, nearest first
         bool work = false;
         foreach (var p in _pieces.Values) if (p.Distance < float.MaxValue && (p.Level != p.Want || p.Stale) && p.Job is null) { work = true; break; }
-        if (work && _jobs < MaxJobs)
+        if (work && _jobs.Free > 0)
             foreach (var (key, p) in _pieces.Where(kv => kv.Value.Distance < float.MaxValue && (kv.Value.Level != kv.Value.Want || kv.Value.Stale) && kv.Value.Job is null)
-                         .OrderBy(kv => kv.Value.Distance).Take(MaxJobs - _jobs).ToList())
+                         .OrderBy(kv => kv.Value.Distance).Take(_jobs.Free).ToList())
             {
                 int level = p.Want;
                 var (x0, z0) = (key.X * Chunk, key.Z * Chunk);
@@ -274,7 +274,7 @@ public partial class OutsideTerrain : Node3D
                 p.JobLevel = level;
                 p.Stale = false;
                 p.Job = Task.Run(() => level < 0 ? Faithful(world, x0, z0) : ModernArrays(ground, x0, z0, level, ring is null ? null : ring.Visibility, ring is null ? null : ring.RingHeight));
-                _jobs++;
+                _jobs.Started();
             }
         // gone out of reach (with a margin, so a chunk at the edge does not come and go)
         _drop.Clear();
@@ -288,7 +288,7 @@ public partial class OutsideTerrain : Node3D
         }
         UpdateMask(modern || open);
         if (Debug && Engine.GetProcessFrames() % 30 == 0)
-            GD.Print($"outside: {(modern ? "modern" : open ? "1997 (editor)" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_jobs} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
+            GD.Print($"outside: {(modern ? "modern" : open ? "1997 (editor)" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_jobs.Busy} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
     }
 
     private void Clear()
@@ -296,7 +296,7 @@ public partial class OutsideTerrain : Node3D
         foreach (var p in _pieces.Values)
         {
             p.Mi?.QueueFree();
-            if (p.Job is not null) _jobs--;   // left to finish on its own, unread
+            if (p.Job is not null) _jobs.Orphan(p.Job);   // left to finish on its own, unread: it still holds its place until it does
         }
         if (_pieces.Count > 0) _maskDirty = true;
         _pieces.Clear();
@@ -488,4 +488,32 @@ public partial class OutsideTerrain : Node3D
         }
         return new Arrays(v, nr, col, uv, uv2, [.. idx]);
     }
+}
+
+/// <summary>
+/// The chunk jobs running (<see cref="OutsideTerrain"/>): the ones a chunk waits for, and the ones a <c>Clear</c> (a look toggle, the
+/// editor's view) left to finish unread, which still take a worker until they do, so no more than the cap run at once.
+/// </summary>
+public sealed class ChunkJobs(int max)
+{
+    private readonly List<Task> _orphans = [];
+    private int _owned;
+
+    /// <summary>A job started for a chunk.</summary>
+    public void Started() => _owned++;
+    /// <summary>A chunk's job finished and was read.</summary>
+    public void Finished() => _owned--;
+    /// <summary>A chunk's job left to finish on its own: it counts until it completes.</summary>
+    public void Orphan(Task job)
+    {
+        _owned--;
+        if (!job.IsCompleted) _orphans.Add(job);
+    }
+    /// <summary>The jobs not yet finished.</summary>
+    public int Busy
+    {
+        get { _orphans.RemoveAll(t => t.IsCompleted); return _owned + _orphans.Count; }
+    }
+    /// <summary>How many more may start.</summary>
+    public int Free => Math.Max(0, max - Busy);
 }

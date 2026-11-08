@@ -26,16 +26,21 @@ namespace I76.Game.Shell;
 /// in their title, and two in their check boxes: one without its own upscale
 /// borrows record 6's, the frame kept opaque where the two originals differ
 /// (Shell.Kept), so only the title is the original's pixels.
+///
+/// The port's own changes to a background (ShellFrame.Edits: the host form's rules box, Play Options' copied check boxes)
+/// are made to the upscale too, the same patches at its scale, since the frame is see-through over them.
 /// </summary>
 public partial class ShellBackdrop : Control
 {
     private sealed record Entry(string Path, float Ax, float Bx, float Ay, float By);
 
     private readonly Dictionary<int, Entry> _entries = [];
-    private readonly List<(int Record, ImageTexture Texture)> _loaded = [];
+    private readonly List<(int Record, long Edits, ImageTexture Texture)> _loaded = [];
     private const int Keep = 4;
     private Entry? _entry;
     private ImageTexture? _texture;
+    private int _editsVersion = -1;
+    private long _editsKey, _shownKey;
 
     public override void _Ready()
     {
@@ -104,20 +109,39 @@ public partial class ShellBackdrop : Control
     /// <summary>Whether there is an upscale for this background record.</summary>
     public bool Has(int record, int native = 0) => Source(record, native) != 0;
 
-    /// <summary>Shows the record's upscale (or the one it borrows), or nothing (0, or none there).</summary>
-    public void Show(int record, int native = 0)
+    /// <summary>
+    /// Shows the record's upscale (or the one it borrows) with the frame's edits to its background made to it (<paramref name="version"/>
+    /// changes with them), or nothing (0, or none there).
+    /// </summary>
+    public void Show(int record, int native = 0, IReadOnlyList<ShellFrame.BackgroundEdit>? edits = null, int version = 0)
     {
         record = Source(record, native);
         var e = _entries.GetValueOrDefault(record);
-        if (e == _entry) return;
+        if (version != _editsVersion) { _editsVersion = version; _editsKey = Key(edits); }
+        long key = e is null ? 0 : _editsKey;
+        if (e == _entry && key == _shownKey) return;
         _entry = e;
-        _texture = e is null ? null : Load(record, e);
+        _shownKey = key;
+        _texture = e is null ? null : Load(record, e, key, edits);
         QueueRedraw();
     }
 
-    private ImageTexture? Load(int record, Entry e)
+    /// <summary>A key for the edits (0 for none), to keep an edited upscale apart from the plain one.</summary>
+    private static long Key(IReadOnlyList<ShellFrame.BackgroundEdit>? edits)
     {
-        int i = _loaded.FindIndex(l => l.Record == record);
+        if (edits is not { Count: > 0 }) return 0;
+        var h = new HashCode();
+        foreach (var d in edits)
+        {
+            h.Add(d.From); h.Add(d.Sx); h.Add(d.Sy); h.Add(d.W); h.Add(d.H); h.Add(d.Dx); h.Add(d.Dy);
+            if (d.Mask is { } m) foreach (bool b in m) h.Add(b);
+        }
+        return (long)edits.Count << 32 | (uint)h.ToHashCode();
+    }
+
+    private ImageTexture? Load(int record, Entry e, long key, IReadOnlyList<ShellFrame.BackgroundEdit>? edits)
+    {
+        int i = _loaded.FindIndex(l => l.Record == record && l.Edits == key);
         if (i >= 0)
         {
             var hit = _loaded[i];
@@ -127,11 +151,60 @@ public partial class ShellBackdrop : Control
         }
         var img = HdAssets.LoadImage(e.Path);
         if (img is null || img.IsEmpty()) { GD.PushWarning($"shell backgrounds: {e.Path} unreadable"); _entries.Remove(record); return null; }
+        if (key != 0 && edits is not null) Edit(img, Fit(e, new Vector2(img.GetWidth(), img.GetHeight())), edits);
         img.GenerateMipmaps();
         var tex = ImageTexture.CreateFromImage(img);
-        _loaded.Add((record, tex));
+        _loaded.Add((record, key, tex));
         if (_loaded.Count > Keep) _loaded.RemoveAt(0);
         return tex;
+    }
+
+    /// <summary>The entry's affine for a picture of this size: its own, or the picture's height the frame's, centred.</summary>
+    private static (float Ax, float Bx, float Ay, float By) Fit(Entry e, Vector2 tsz) =>
+        float.IsNaN(e.Ax) ? (tsz.Y / ShellFrame.H, (tsz.X - ShellFrame.W * tsz.Y / ShellFrame.H) / 2, tsz.Y / ShellFrame.H, 0) : (e.Ax, e.Bx, e.Ay, e.By);
+
+    /// <summary>
+    /// The frame's edits to its background made to the upscale: each patch's texels laid at the same place in the picture,
+    /// row by row from the top as the frame copies, masked by the frame pixel each texel falls in.
+    /// </summary>
+    private static void Edit(Image img, (float Ax, float Bx, float Ay, float By) f, IReadOnlyList<ShellFrame.BackgroundEdit> edits)
+    {
+        if (img.GetFormat() != Image.Format.Rgba8) img.Convert(Image.Format.Rgba8);
+        int iw = img.GetWidth(), ih = img.GetHeight();
+        var px = img.GetData();
+        Edit(px, iw, ih, f, edits);
+        img.SetData(iw, ih, false, Image.Format.Rgba8, px);
+    }
+
+    /// <summary>The same on a picture's RGBA8 texels, rows from the top.</summary>
+    public static void Edit(byte[] px, int iw, int ih, (float Ax, float Bx, float Ay, float By) f, IReadOnlyList<ShellFrame.BackgroundEdit> edits)
+    {
+        var copies = new Dictionary<int, byte[]>();
+        var wanted = edits.Where(d => d.From >= 0).Select(d => Math.Min(d.From, edits.Count)).ToHashSet();
+        int X(float x) => (int)MathF.Round(f.Ax * x + f.Bx);
+        int Y(float y) => (int)MathF.Round(f.Ay * y + f.By);
+        for (int i = 0; i < edits.Count; i++)
+        {
+            if (wanted.Contains(i) && !copies.ContainsKey(i)) copies[i] = (byte[])px.Clone();
+            var d = edits[i];
+            var from = d.From < 0 ? px : copies[Math.Min(d.From, i)];
+            int x0 = X(d.Dx), x1 = X(d.Dx + d.W), y0 = Y(d.Dy), y1 = Y(d.Dy + d.H);
+            int ox = X(d.Sx) - x0, oy = Y(d.Sy) - y0;
+            for (int ty = Math.Max(0, y0); ty < Math.Min(ih, y1); ty++)
+            {
+                int sy = ty + oy;
+                if (sy < 0 || sy >= ih) continue;
+                int r = Math.Clamp((int)MathF.Floor((ty + 0.5f - f.By) / f.Ay) - d.Dy, 0, d.H - 1);
+                for (int tx = Math.Max(0, x0); tx < Math.Min(iw, x1); tx++)
+                {
+                    int sx = tx + ox;
+                    if (sx < 0 || sx >= iw) continue;
+                    if (d.Mask is { } m && !m[r * d.W + Math.Clamp((int)MathF.Floor((tx + 0.5f - f.Bx) / f.Ax) - d.Dx, 0, d.W - 1)]) continue;
+                    int s4 = (sy * iw + sx) * 4, t4 = (ty * iw + tx) * 4;
+                    px[t4] = from[s4]; px[t4 + 1] = from[s4 + 1]; px[t4 + 2] = from[s4 + 2]; px[t4 + 3] = from[s4 + 3];
+                }
+            }
+        }
     }
 
     public override void _Draw()
@@ -141,14 +214,7 @@ public partial class ShellBackdrop : Control
         float s = Mathf.Min(size.X / ShellFrame.W, size.Y / ShellFrame.H);
         var off = (size - new Vector2(ShellFrame.W, ShellFrame.H) * s) / 2;
         var tsz = _texture.GetSize();
-        float ax = e.Ax, bx = e.Bx, ay = e.Ay, by = e.By;
-        if (float.IsNaN(ax))
-        {
-            // no fit: the picture's height is the frame's, centred on it
-            ax = ay = tsz.Y / ShellFrame.H;
-            bx = (tsz.X - ShellFrame.W * ax) / 2;
-            by = 0;
-        }
+        var (ax, bx, ay, by) = Fit(e, tsz);
         // the picture's own rectangle on screen
         var p0 = off + new Vector2(-bx / ax, -by / ay) * s;
         var p1 = off + new Vector2((tsz.X - bx) / ax, (tsz.Y - by) / ay) * s;

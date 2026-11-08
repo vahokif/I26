@@ -42,6 +42,8 @@ public sealed class ShellFrame
         Palette = p.Palette;
         Record = record;
         Native = native;
+        _edits.Clear();
+        EditsVersion++;
         ForgetText();
         _dirty = true;
         _black = black;
@@ -63,9 +65,36 @@ public sealed class ShellFrame
         _dirty = true;
     }
 
+    /// <summary>
+    /// A change the port made to the background itself: the patch (Sx, Sy, W, H) laid at (Dx, Dy), only where Mask (W x H, by
+    /// row) is true when given. From is -1 for the background as it is when the edit is made, else the background as it was
+    /// after the first From edits. Kept so an upscale drawn under the frame can be changed the same way (ShellBackdrop): the
+    /// frame is see-through where it is still the background, edited or not.
+    /// </summary>
+    public sealed record BackgroundEdit(int From, int Sx, int Sy, int W, int H, int Dx, int Dy, bool[]? Mask);
+
+    private readonly List<BackgroundEdit> _edits = [];
+    /// <summary>The edits made to the background since it was loaded, in order (those that changed none of its pixels left out).</summary>
+    public IReadOnlyList<BackgroundEdit> Edits => _edits;
+    /// <summary>Changes whenever <see cref="Edits"/> does (and on every background load).</summary>
+    public int EditsVersion { get; private set; }
+
     /// <summary>Copies a patch of the background onto another place of it (the port's: a printed check box onto a line that has none).</summary>
     public void CopyBackground(int sx, int sy, int w, int h, int dx, int dy)
     {
+        bool changed = false;
+        for (int r = 0; r < h; r++)
+            if (sy + r is >= 0 and < H && dy + r is >= 0 and < H && sx >= 0 && dx >= 0 && sx + w <= W && dx + w <= W
+                && !_clean.AsSpan((sy + r) * W + sx, w).SequenceEqual(_clean.AsSpan((dy + r) * W + dx, w)))
+            {
+                changed = true;
+                break;
+            }
+        if (changed)
+        {
+            _edits.Add(new BackgroundEdit(-1, sx, sy, w, h, dx, dy, null));
+            EditsVersion++;
+        }
         for (int r = 0; r < h; r++)
             if (sy + r is >= 0 and < H && dy + r is >= 0 and < H && sx >= 0 && dx >= 0 && sx + w <= W && dx + w <= W)
                 Array.Copy(_clean, (sy + r) * W + sx, _clean, (dy + r) * W + dx, w);

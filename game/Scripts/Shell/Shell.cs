@@ -862,7 +862,7 @@ public partial class Shell : CanvasLayer
             if (_tex is null) { _tex = ImageTexture.CreateFromImage(img); _view.Texture = _tex; }
             else _tex.Update(img);
             // the black present after a background load hides the upscale and the text too, beside the frame as on it
-            _backdrop?.Show(Frame.ShowingBlack ? 0 : Frame.Record, Frame.ShowingBlack ? 0 : Frame.Native);
+            _backdrop?.Show(Frame.ShowingBlack ? 0 : Frame.Record, Frame.ShowingBlack ? 0 : Frame.Native, Frame.Edits, Frame.EditsVersion);
             if (_text is not null) _text.Visible = !Frame.ShowingBlack;
         }
     }

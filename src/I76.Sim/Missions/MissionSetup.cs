@@ -128,17 +128,21 @@ public sealed partial class MissionSetup
         }
         if (f.First("SDFC") is { } c && c.PayloadSize >= 0x2c + 8)
         {
-            if (marker is not null)
-            {
-                var n = Formats.Bin.CStr(f.Data, c.PayloadOffset + 0x2c, 13);
-                if (n.IndexOf('.') is >= 0 and var dot) n = n[..dot];
-                fx = n.Length == 0 || n.Equals("null", StringComparison.OrdinalIgnoreCase) ? "x1_bldx1" : n + ".xdf";
-            }
+            if (marker is not null) fx = SdfcExplosion(f) ?? "x1_bldx1";
             if (c.PayloadSize >= 0x39 + 1 && Formats.Bin.CStr(f.Data, c.PayloadOffset + 0x39, System.Math.Min(13, c.PayloadSize - 0x39)) is { Length: > 0 } snd
                 && !snd.Equals("null", StringComparison.OrdinalIgnoreCase)) sound = snd;
         }
         else if (marker is not null) fx = "x1_bldx1";
         return new StructureDef(fx, sound, [.. nodes], marker);
+    }
+
+    /// <summary>The .xdf an SDFC names (+0x2c), or null for none or 'null'.</summary>
+    private static string? SdfcExplosion(Formats.Bwd2.Bwd2File f)
+    {
+        if (f.First("SDFC") is not { } c || c.PayloadSize < 0x2c + 8) return null;
+        var n = Formats.Bin.CStr(f.Data, c.PayloadOffset + 0x2c, 13);
+        if (n.IndexOf('.') is >= 0 and var dot) n = n[..dot];
+        return n.Length == 0 || n.Equals("null", StringComparison.OrdinalIgnoreCase) ? null : n + ".xdf";
     }
 
     /// <summary>Each SGEO node's own collision class, by name; 0 where it leaves the type's default.</summary>
@@ -403,12 +407,19 @@ public sealed partial class MissionSetup
             }
             ms = new MissionScript(program, host, rand, seed, nitroDriver, i76Lines);
         }
-        var effects = new Dictionary<string, Formats.Bwd2.EffectDef?>(StringComparer.OrdinalIgnoreCase);
-        var combat = new Weapons.Combat(world, n =>
-        {
-            if (!effects.TryGetValue(n, out var e)) effects[n] = e = vfs.TryRead(n) is { } d ? Formats.Bwd2.EffectDef.Read(n, d) : null;
-            return e;
-        });
+        // the explosion templates in the original's load order (the first file with a key keeps it): the startup three, then
+        // each scenery object's SDFC file in ODEF order, then the LDEF links'. Weapon effects register as first used; no
+        // stock weapon effect shares a key with another file.
+        var effects = new Weapons.EffectTemplates(vfs.TryRead);
+        effects.Register(Weapons.EffectTemplates.Preloaded);
+        var sdfcs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in w.Placements.Concat(w.LinePlacements))
+            if (p.Definition is { } sdf && sdf.EndsWith(".sdf", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!sdfcs.TryGetValue(sdf, out var fx)) sdfcs[sdf] = fx = vfs.TryRead(sdf) is { } d ? SdfcExplosion(new Formats.Bwd2.Bwd2File(d)) : null;
+                if (fx is not null) _ = effects[fx];
+            }
+        var combat = new Weapons.Combat(world, n => effects[n]);
         var teamOf = entities.Where(e => e.Vehicle is not null).ToDictionary(e => e.Vehicle!, e => e.Team);
         combat.MeleeActive = melee is not null;
         combat.NetSession = network;

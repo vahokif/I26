@@ -425,12 +425,12 @@ public sealed class StaticWorld
                 var rot = Frame();
                 var bmin = g.Vertices.Aggregate(Vector3.Min); var bmax = g.Vertices.Aggregate(Vector3.Max);
                 o.Boxes.Add(new NodeBox(rot, place.Apply(part.ToModel.Apply(Vector3.Zero)), bmin, bmax, g.Vertices.Max(v => v.Length())) { Node = node });
-                if (!o.IsStructure) continue;
+                continue;   // a box is solid only, a structure's too (aaramp5's rails): the original walks polygon meshes alone
             }
             if (cls == 0x3000)
                 o.MeshBounds.Add(new NodeBox(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(Vector3.Min), g.Vertices.Aggregate(Vector3.Max), g.Vertices.Max(v => v.Length())) { Node = node });
-            // A bridge's surfaces are its deck nodes' only (not its trusses and spans)
-            bool drive = o.IsStructure && (type != 0xc || nodeType is null || deck);
+            // A bridge's surfaces are its deck nodes' only (not its trusses and spans); only a mesh part's faces are walkable
+            bool drive = cls == 0x3000 && o.IsStructure && (type != 0xc || nodeType is null || deck);
             var mine = new List<Poly>();
             surfaces.Add(mine);
             foreach (var f in g.Faces)

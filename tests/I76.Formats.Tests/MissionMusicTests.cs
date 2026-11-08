@@ -74,19 +74,29 @@ public class MissionMusicTests
     {
         var m = new MissionMusic(17);
         Assert.Equal(MissionMusic.Policy.Disc, m.Mode);
-        Assert.Equal([14, 15, 16, 17, 2, 3], Walk(m, 14, 6));
+        Assert.Equal([13, 14, 2, 3], Walk(m, 13, 4));
         Assert.Equal(0, m.Wait(17, 25));
         Assert.Equal(0, m.Wait(14, 25));
         Assert.Equal([9, 10, 11, 2], Walk(new MissionMusic(11), 9, 4));
     }
 
     [Fact]
-    public void TheDiscPolicyWalksEveryAudioTrackAndWraps()
+    public void TheDiscPolicyPlaysThrough14AndWrapsTo2LikeTheRetailSequence()
     {
         var m = new MissionMusic(17, MissionMusic.Policy.Disc);
-        Assert.Equal([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 2], Walk(m, 5, 14));
-        Assert.Equal(0, m.Wait(17, 37));
+        Assert.Equal([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 2, 3], Walk(m, 5, 12));
+        Assert.Equal(2, m.Next(14));
+        Assert.Equal(0, m.Wait(14, 37));
         Assert.Equal(0, m.Wait(9, 37));
+    }
+
+    [Fact]
+    public void TheDiscPolicyPlaysTrack15AndUpAloneThenFrom2()
+    {
+        var m = new MissionMusic(17, MissionMusic.Policy.Disc);
+        Assert.Equal([15, 2, 3], Walk(m, 15, 3));     // M09's track
+        Assert.Equal([17, 2], Walk(m, 17, 2));
+        Assert.Equal(0, m.Wait(15, 37));
     }
 
     [Theory]

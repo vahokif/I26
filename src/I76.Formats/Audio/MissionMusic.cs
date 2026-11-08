@@ -26,7 +26,7 @@ public sealed class MissionMusic
         Retail1997,
         /// <summary>The 1998 build GOG ships: the mission's track once, then track 2 on and on, each start on a 60 s poll.</summary>
         Gog,
-        /// <summary>The default: a CD deck's, on repeat: on to the next track, back to track 2 after the last, at once.</summary>
+        /// <summary>The default: the 1997 sequence without the poller's wait: on to the next track through track 14, then back to track 2, at once.</summary>
         Disc,
     }
 
@@ -52,8 +52,7 @@ public sealed class MissionMusic
     /// <summary>Whether the track after <paramref name="ended"/> follows at once (the same MCI play, or a deck).</summary>
     public bool Continues(int ended) => Mode switch
     {
-        Policy.Disc => ended >= FallbackTrack && ended < _last,
-        Policy.Retail1997 => ended >= FallbackTrack && ended + 1 < _rangeEnd && ended + 1 <= _last,
+        Policy.Disc or Policy.Retail1997 => ended >= FallbackTrack && ended + 1 < _rangeEnd && ended + 1 <= _last,
         _ => false,
     };
 

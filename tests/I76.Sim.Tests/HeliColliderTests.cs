@@ -45,6 +45,21 @@ public class HeliColliderTests
     }
 
     [Fact]
+    public void AHelicoptersModelIsAssembledOncePerFile()
+    {
+        if (InstallDir is null) return;
+        var vfs = new AssetVfs(new GameInstall(InstallDir));
+        var first = VehicleFactory.Create(vfs, "t05ug01.vcf");
+        Assert.Equal(1, VehicleFactory.ModelAssemblies(vfs));
+        // a respawn, a client's rebuild: the same sphere, the model not assembled again
+        var again = VehicleFactory.Create(vfs, "T05UG01.VCF");
+        Assert.Equal(first.ModelSphere, again.ModelSphere);
+        Assert.Equal(1, VehicleFactory.ModelAssemblies(vfs));
+        Assert.NotNull(VehicleFactory.Create(vfs, "t08uc01.vcf").ModelSphere);
+        Assert.Equal(2, VehicleFactory.ModelAssemblies(vfs));
+    }
+
+    [Fact]
     public void ACarKeepsTheBoxsSphere()
     {
         if (InstallDir is null) return;

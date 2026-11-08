@@ -20,14 +20,32 @@ public static class VehicleFactory
     /// </summary>
     public static (Vector3 Centre, float Radius)? ModelSphere(AssetVfs vfs, string vcfName, Vehicle v)
     {
+        // the model's part depends on the .vcf alone: assembled once per install and file (a respawn, a client's CarInfo rebuild
+        // ask again), from the simulation's thread and the game's
+        var cache = ModelSpheres.GetValue(vfs, _ => new SphereCache());
+        if (cache.Spheres.GetOrAdd(vcfName, name => new Lazy<(Vector3, float)?>(() => { Interlocked.Increment(ref cache.Assembled); return AssembledSphere(vfs, name); })).Value is not var (c, r)) return null;
+        for (int i = 0; i < 8; i++)
+            r = MathF.Max(r, Vector3.Distance(c, new Vector3(v.BoxX[(i & 4) != 0 ? 3 : 0], v.BoxY[(i & 2) != 0 ? 3 : 1], v.BoxZ[(i & 1) != 0 ? 3 : 0])) + 0.1f);
+        return (c, r);
+    }
+
+    private sealed class SphereCache
+    {
+        public readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<(Vector3, float)?>> Spheres = new(StringComparer.OrdinalIgnoreCase);
+        public int Assembled;
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<AssetVfs, SphereCache> ModelSpheres = new();
+    /// <summary>The models <see cref="ModelSphere"/> has assembled from this vfs (each .vcf once).</summary>
+    public static int ModelAssemblies(AssetVfs vfs) => ModelSpheres.TryGetValue(vfs, out var c) ? Volatile.Read(ref c.Assembled) : 0;
+
+    /// <summary>The middle of the assembled model's bounds and the farthest model point from it.</summary>
+    private static (Vector3, float)? AssembledSphere(AssetVfs vfs, string vcfName)
+    {
         if (new I76.Formats.Assembly.ModelAssembler(vfs).Assemble(vcfName) is not { } m) return null;
         var pts = m.Parts.SelectMany(p => p.Mesh.Vertices.Select(p.ToModel.Apply)).ToList();
         if (pts.Count == 0) return null;
         var c = (pts.Aggregate(Vector3.Min) + pts.Aggregate(Vector3.Max)) * 0.5f;
-        float r = pts.Max(x => Vector3.Distance(x, c));
-        for (int i = 0; i < 8; i++)
-            r = MathF.Max(r, Vector3.Distance(c, new Vector3(v.BoxX[(i & 4) != 0 ? 3 : 0], v.BoxY[(i & 2) != 0 ? 3 : 1], v.BoxZ[(i & 1) != 0 ? 3 : 0])) + 0.1f);
-        return (c, r);
+        return (c, pts.Max(x => Vector3.Distance(x, c)));
     }
 
     /// <summary>A compnent.cdf record: A, B and C are its three values, Hp the hit points.</summary>

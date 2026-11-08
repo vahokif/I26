@@ -933,7 +933,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         int batched = 0; float batchDt = 0;
         bool batch = def.Kind is 1 or 0x12;
         // deviation (docs/deviations.md "Flame streams' length"): a flame weapon held with ammo grows its stream every tick
-        bool flameHeld = def.Kind is 9 or 10 or 11 && w.Trigger && w.Hp > 0 && !IsDead(v) && (w.Ammo != 0 || Unlimited(v));
+        bool flameHeld = def.Kind is 9 or 10 or 11 && w.Trigger && w.Hp > 0 && !IsDead(v) && (w.Ammo != 0 || UnlimitedAmmo);
         void FireOne(float pre)
         {
             if (batch) { batched++; batchDt = MathF.Max(batchDt, pre); }
@@ -973,10 +973,12 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 }
                 else if (w.Trigger)
                 {
-                    if (w.Ammo != 0 || Unlimited(v))
+                    // the latch alone lets any car start a burst; only the player's ammo count stays put
+                    if (w.Ammo != 0 || UnlimitedAmmo)
                     {
                         w.BurstLeft = (int)def.Burst - 1;
-                        if (!Unlimited(v) && w.Ammo < w.BurstLeft) w.BurstLeft = w.Ammo;
+                        // nor the burst clamp: under the latch a car at 0 fires full salvos, the AI's too
+                        if (!UnlimitedAmmo && w.Ammo < w.BurstLeft) w.BurstLeft = w.Ammo;
                         w.WaitB = interval;
                         // base game: droppers dribble below 20 u/s; the Nitro Pack has no gate (its rate follows the speed)
                         if (!NitroRules && Dropper(def) && v.Speed < 20f) w.WaitB = 1f + (interval - 1f) * 0.05f * v.Speed;

@@ -391,36 +391,66 @@ public partial class SimDriver : Node
         }
         if (!_hooked) HookScript();
         if (Hold) { Alpha = 1; foreach (var c in Cars) c.Place(1, Origin()); return; }
-        _acc += System.Math.Min(delta, 0.25);
+        // the Developer panel's Freeze: no ticks (Step runs them one at a time); its time scale paces the ticks against the wall clock
+        if (DevFrozen) { Alpha = 1; foreach (var c in Cars) c.Place(1, Origin()); return; }
+        _acc += System.Math.Min(delta, 0.25) * DevTimeScale;
         if (!_started) { _started = true; _acc = System.Math.Max(_acc, Tick); }   // tick 0 runs before the first frame is drawn
         while (_acc >= Tick)
         {
-            int shots = Combat?.Events.Count ?? 0;
-            var sampled = Sample();
-            using (Hitch.Time(Hitch.Phase.Sim)) Session.Tick([sampled]);
-            ForceFeedback.Tick(Combat?.Events, shots, Tick);   // the block the original filled at the frame's end
-            if (_debugPlayer)
-                foreach (var (_, hn, ht, hnorm, hs) in World.Step.ObjectHits) GD.Print($"  hit {hn} type {ht} n {hnorm.X:0.00},{hnorm.Y:0.00},{hnorm.Z:0.00} at speed {hs:0.0}");
-            foreach (var (car, _) in Session.Misfires) if (car == Player?.Sim) Player.OneShotSingle("wmiss.wav", Audio?.Get("wmiss.wav"));
-            // I76_DEBUG_CAM: the scripted camera every 10 ticks, to lay over the original game's track camera
-            if (_debugCam && Ticks % 10 == 0 && Script?.Host.View is { Active: true } view)
-                GD.Print($"camera: tick {Ticks} pos {view.Eye.X:0.00} {view.Eye.Y:0.00} {view.Eye.Z:0.00} op {view.Op}");
-            // sound event 4, vland.wav: the player's touchdowns and settles
-            if (Player?.Sim is { } lp && World.Step.Landings.Contains(lp)) Player.OneShot(Audio?.Get("vland.wav"));
-            if (_debugPlayer && Combat is { } dc && Player?.Sim is { } rp)
-                foreach (var r in dc.Rounds.Where(r => r.Shooter == rp && r.Age < 0.04f).Take(2))
-                    GD.Print($"  round kind {r.Kind} age {r.Age:0.00} fwd {r.Rot.Forward.X:0.00},{r.Rot.Forward.Y:0.00},{r.Rot.Forward.Z:0.00} vel {r.Rot.ToWorld(r.LocalVel).X:0.0},{r.Rot.ToWorld(r.LocalVel).Y:0.0},{r.Rot.ToWorld(r.LocalVel).Z:0.0} car fwd {rp.Rot.Forward.X:0.00},{rp.Rot.Forward.Y:0.00},{rp.Rot.Forward.Z:0.00} up {rp.Rot.Up.X:0.00},{rp.Rot.Up.Y:0.00},{rp.Rot.Up.Z:0.00}");
-            if (_debugPlayer && Player?.Sim is { } dp)
-                GD.Print($"tick {_ticks++} pos {dp.Pos.X:0.00},{dp.Pos.Y:0.00},{dp.Pos.Z:0.00} fwd {dp.Rot.Forward.X:0.000},{dp.Rot.Forward.Y:0.000},{dp.Rot.Forward.Z:0.000} slope {(World.Ground.BareHeight(dp.Pos.X + dp.Rot.Forward.X * 2, dp.Pos.Z + dp.Rot.Forward.Z * 2) - World.Ground.BareHeight(dp.Pos.X - dp.Rot.Forward.X * 2, dp.Pos.Z - dp.Rot.Forward.Z * 2)) / 4:0.000} up {dp.Rot.Up.X:0.000},{dp.Rot.Up.Z:0.000} v {dp.Speed:0.00} steer {dp.Steer:0.000} thr {dp.Throttle:0.000} w {dp.AngVel.X:0.000},{dp.AngVel.Y:0.000},{dp.AngVel.Z:0.000} flags 0x{(uint)dp.Flags:x} far {World.IsFar(dp)} cut {Session.Cutscene}");
-            foreach (var c in Cars) c.Snapshot();
-            PlayImpacts();
-            TyreSounds();
-            _voices.Frame();
+            RunTick();
             _acc -= Tick;
         }
         float alpha = Alpha = (float)(_acc / Tick);
         var o = Origin();
         foreach (var c in Cars) c.Place(alpha, o);
+    }
+
+    /// <summary>One tick of the session and what the game does after each: force feedback, impacts, sounds, the debug lines.</summary>
+    private void RunTick()
+    {
+        int shots = Combat?.Events.Count ?? 0;
+        var sampled = Sample();
+        using (Hitch.Time(Hitch.Phase.Sim)) Session.Tick([sampled]);
+        ForceFeedback.Tick(Combat?.Events, shots, Tick);   // the block the original filled at the frame's end
+        if (_debugPlayer)
+            foreach (var (_, hn, ht, hnorm, hs) in World.Step.ObjectHits) GD.Print($"  hit {hn} type {ht} n {hnorm.X:0.00},{hnorm.Y:0.00},{hnorm.Z:0.00} at speed {hs:0.0}");
+        foreach (var (car, _) in Session.Misfires) if (car == Player?.Sim) Player.OneShotSingle("wmiss.wav", Audio?.Get("wmiss.wav"));
+        // I76_DEBUG_CAM: the scripted camera every 10 ticks, to lay over the original game's track camera
+        if (_debugCam && Ticks % 10 == 0 && Script?.Host.View is { Active: true } view)
+            GD.Print($"camera: tick {Ticks} pos {view.Eye.X:0.00} {view.Eye.Y:0.00} {view.Eye.Z:0.00} op {view.Op}");
+        // sound event 4, vland.wav: the player's touchdowns and settles
+        if (Player?.Sim is { } lp && World.Step.Landings.Contains(lp)) Player.OneShot(Audio?.Get("vland.wav"));
+        if (_debugPlayer && Combat is { } dc && Player?.Sim is { } rp)
+            foreach (var r in dc.Rounds.Where(r => r.Shooter == rp && r.Age < 0.04f).Take(2))
+                GD.Print($"  round kind {r.Kind} age {r.Age:0.00} fwd {r.Rot.Forward.X:0.00},{r.Rot.Forward.Y:0.00},{r.Rot.Forward.Z:0.00} vel {r.Rot.ToWorld(r.LocalVel).X:0.0},{r.Rot.ToWorld(r.LocalVel).Y:0.0},{r.Rot.ToWorld(r.LocalVel).Z:0.0} car fwd {rp.Rot.Forward.X:0.00},{rp.Rot.Forward.Y:0.00},{rp.Rot.Forward.Z:0.00} up {rp.Rot.Up.X:0.00},{rp.Rot.Up.Y:0.00},{rp.Rot.Up.Z:0.00}");
+        if (_debugPlayer && Player?.Sim is { } dp)
+            GD.Print($"tick {_ticks++} pos {dp.Pos.X:0.00},{dp.Pos.Y:0.00},{dp.Pos.Z:0.00} fwd {dp.Rot.Forward.X:0.000},{dp.Rot.Forward.Y:0.000},{dp.Rot.Forward.Z:0.000} slope {(World.Ground.BareHeight(dp.Pos.X + dp.Rot.Forward.X * 2, dp.Pos.Z + dp.Rot.Forward.Z * 2) - World.Ground.BareHeight(dp.Pos.X - dp.Rot.Forward.X * 2, dp.Pos.Z - dp.Rot.Forward.Z * 2)) / 4:0.000} up {dp.Rot.Up.X:0.000},{dp.Rot.Up.Z:0.000} v {dp.Speed:0.00} steer {dp.Steer:0.000} thr {dp.Throttle:0.000} w {dp.AngVel.X:0.000},{dp.AngVel.Y:0.000},{dp.AngVel.Z:0.000} flags 0x{(uint)dp.Flags:x} far {World.IsFar(dp)} cut {Session.Cutscene}");
+        foreach (var c in Cars) c.Snapshot();
+        PlayImpacts();
+        TyreSounds();
+        _voices.Frame();
+    }
+
+    /// <summary>The Developer panel's Freeze (docs/dev-hooks.md): the session runs no ticks until it is cleared or <see cref="DevStep"/> runs one.</summary>
+    public bool DevFrozen { get; set; }
+    /// <summary>The Developer panel's time scale: ticks per wall-clock second over the rate's. The ticks themselves are the same at any scale.</summary>
+    public double DevTimeScale { get; set; } = 1;
+
+    /// <summary>The Developer panel's Step: one tick now (frozen or paused), the cars drawn at its end.</summary>
+    public void DevStep()
+    {
+        if (Remote is not null || !_started) return;
+        RunTick();
+        _acc = 0;
+        Alpha = 1;
+        foreach (var c in Cars) c.Place(1, Origin());
+    }
+
+    /// <summary>After an outside write to the cars (a teleport, a restore): each drawn where it is now, with no slide from where it was.</summary>
+    public void Jumped()
+    {
+        foreach (var c in Cars) c.SetPoses(c.Sim.Rot, c.Sim.Pos, c.Sim.Rot, c.Sim.Pos);
+        foreach (var c in Cars) c.Place(1, Origin());
     }
 
     private readonly Dictionary<string, Voice3D> _tyre = new(StringComparer.OrdinalIgnoreCase);

@@ -15,6 +15,9 @@ public static class CheatMarker
     /// <summary>The Play Options as read back: a cheat bit sets the marker; none leaves it as it was.</summary>
     public static void Read(int playOptions) { if ((playOptions & Bits) != 0) Set = true; }
 
+    /// <summary>A Developer panel tool used in a mission (teleport, repair, God mode...): the port's, set as a cheat bit would.</summary>
+    public static void Mark() => Set = true;
+
     /// <summary>"Turn off Cheater Options", or a fresh process (a game switch).</summary>
     public static void Clear() => Set = false;
 }

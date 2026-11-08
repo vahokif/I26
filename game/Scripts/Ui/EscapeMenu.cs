@@ -6,7 +6,7 @@ using I76.Game.Shell;
 namespace I76.Game.Ui;
 
 /// <summary>What the escape menu leaves behind: the game state it sets.</summary>
-public enum MenuOutcome { Resume, Replay, Reconfigure, Abort, Exit, RetryCheckpoint }
+public enum MenuOutcome { Resume, Replay, Reconfigure, Abort, Exit, RetryCheckpoint, Developer }
 
 /// <summary>
 /// The engine's own 2D menu, the "Spanner's Cafe" order pad:
@@ -80,6 +80,8 @@ public sealed partial class EscapeMenu : Control
     public Action? CheatsOff { get; init; }
     /// <summary>The port's Checkpoints: a checkpoint is kept, so the end menu after a failure and the Abort pad offer "Retry from Checkpoint".</summary>
     public bool CanRetry { get; init; }
+    /// <summary>The port's Developer panel is on (docs/dev-hooks.md): the main pad offers it on the free line under Control Configuration.</summary>
+    public bool Developer { get; init; }
 
     public ShellSettings Settings { get; private set; } = null!;
     private ShellSettings _snap = null!;
@@ -196,6 +198,8 @@ public sealed partial class EscapeMenu : Control
             Action("Mouse Options", 7, OpenMouse, "$6.50"),
             CancelButton("Exit"),
         ];
+        // the port's Developer panel, only when it is on (--dev, I76_DEV=1 or the setting): the next free line, row 8
+        if (Developer && !Net) _main.Items.Insert(_main.Items.Count - 1, Action("Developer", 8, () => Close(MenuOutcome.Developer)));
 
         _abort.Items = [Action("Replay", 1, () => Close(MenuOutcome.Replay))];
         if (!four) _abort.Items.Add(Action("Reconfigure", 3, () => Close(MenuOutcome.Reconfigure)));

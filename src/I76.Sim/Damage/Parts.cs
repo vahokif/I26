@@ -144,7 +144,9 @@ public sealed class SpecialPart(int type) : Part
     public int Type { get; } = type;
     public override int Hp { get; set; } = 10;
     public override int Max { get; set; } = 10;
-    public int Charges = type == 2 ? 3 : type == 1 ? 5 : 1;
+    public int Charges = FullCharges(type);
+    /// <summary>A special's charges as built: 3 for type 2, 5 for type 1, else 1.</summary>
+    public static int FullCharges(int type) => type == 2 ? 3 : type == 1 ? 5 : 1;
     public int Unk_0x10;
     /// <summary>When the jammer went on: the simulation clock, <see cref="SimWorld.Time"/>.</summary>
     public float OnSince;

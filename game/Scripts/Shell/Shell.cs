@@ -1141,6 +1141,8 @@ public sealed class ShellSettings
     public bool Dash3D { get; set; } = true;
     /// <summary>The port's own: Checkpoints (Play Options; off, as the original): a trip mission keeps its state at the start and at each objective done, and a failure can be retried from it (docs/savestate.md).</summary>
     public bool Checkpoints { get; set; }
+    /// <summary>The port's own: the Developer panel in single-player missions (docs/dev-hooks.md). No menu sets it: <c>developer_tools=true</c> under [port] in the file, or --dev / I76_DEV=1 for one run.</summary>
+    public bool DeveloperTools { get; set; }
     /// <summary>The port's own: the 1997 look draws as the original's software renderer did rather than its 3D card (Graphic Detail's 1997 Renderer; SoftwareLook). Off unless set: a file without the key is a 3D card.</summary>
     public bool SoftwareRenderer { get; set; }
     /// <summary>The port's own: the modern look's frame matched to the mission's 8-bit palette (Graphic Detail's Palette Grade; SoftwareLook). Off unless set.</summary>
@@ -1317,6 +1319,8 @@ public sealed class ShellSettings
         s.EditorMusic = (bool)c.GetValue("port", "editor_music", true);
         // no version step: absent, it is off. The override file is what Godot reads; the setting is the player's word for it
         s.LogFile = (bool)c.GetValue("port", "log_file", false);
+        // no version step: absent, it is off (players never see the panel)
+        s.DeveloperTools = (bool)c.GetValue("port", "developer_tools", false);
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
         // no version step: absent, a pack's audio plays
         s.HiFiAudio = (bool)c.GetValue("port", "hd_sounds", true);
@@ -1350,6 +1354,7 @@ public sealed class ShellSettings
         c.SetValue("port", "max_fps", I76.Sim.Views.FrameLimit.Fps(MaxFps));
         c.SetValue("port", "vsync", VSync);
         if (KeepMouseInWindow) c.SetValue("port", "keep_mouse_in_window", true);
+        if (DeveloperTools) c.SetValue("port", "developer_tools", true);
         c.SetValue("port", "hd_menu_art", HdMenuArt);
         if (!HiFiAudio) c.SetValue("port", "hd_sounds", false);
         c.SetValue("shell", "graphics", Graphics);

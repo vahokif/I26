@@ -223,6 +223,27 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_MOVIE_DEBAND`, `I76_MOVIE_DEBLOCK` | tuning | `1` turns on movie debanding; `0` turns the deblock off. |
 | `I76_MODERN_ROLL`, `I76_MODERN_TUNE`, `I76_DEBUG_MODERN` | tuning | Modern Physics: start rolled over by N degrees, set tuning fields by name (`GripScale=0.7,...`), debug output. |
 
+## Developer panel
+
+A plain panel over the paused mission for testing and comparisons, off for players. It is on with `--dev`,
+`I76_DEV=1`, or `developer_tools=true` under `[port]` in the user's `shell.cfg` (no menu sets it), in single player
+only (a network session refuses its actions: `SessionOptions.DebugHooks`). **Ctrl+F2** in a mission, or the escape
+menu's **Developer** row (on the free line under Control Configuration, shown only when it is on), opens it; Ctrl+F2
+or Esc closes it. The game stays paused while it is open.
+
+| Row | What it does |
+|---|---|
+| status | tick, rate, the next tick's frame delta and its vehicle substeps, sim time, fps, the car's place, heading, speed and health |
+| Teleport | the mission's own places (each script path's first point, heading along its first leg; each named car the script knows, 20 m behind it), or x, z, heading in game units and degrees from +Z toward +X; Here fills in the car's own. The car lands on the bare terrain there, upright and at rest (`UprightReset`'s placement, as the script's teleport) |
+| Car | Repair & refill: armour, chassis, every part and what its damage lowered, the tyres, every weapon (handguns too) and its ammunition, the specials' charges, with no rand() drawn. God mode: Play Options' Unlim. Ammo, Armor and Chas. Rein. together, kept over the options. Bring nearest car: the nearest other living car 30 m ahead, facing the player, its AI and orders kept |
+| State | Store: the whole session's snapshot (docs/savestate.md), kept in memory for the run (a Replay of the same mission can still restore it). Restore: written back into the running session; the views re-sync as a checkpoint's retry does (car nodes made or dropped, every car's damage look, the trip's salvage). A structure destroyed after the store stays drawn destroyed although the sim's is whole again |
+| Time | Freeze (no ticks; the cameras still move, Ctrl+F5 flies), Step 1 / Step 10 ticks, and a speed x0.1 to x4 (the ticks are the same at any speed; only their pace against the clock changes) |
+
+The sim's side is `src/I76.Sim/Session/DevTools.cs` (tests: `DevToolsTests`, the in-place restore replaying the stored
+run tick for tick). Any action but Store marks the attempt a cheater's, as the Play Options cheats do; the end menu's
+Turn off Cheater Options clears it. Not there yet: freezing the AI and spawning new cars (a melee's Bot Cars and
+`I76_MELEE_OPPONENTS` make cars; `I76_SPAWN_AI_AT` places them for captures).
+
 ## Debug output
 
 | Variable | Kind | What it does |

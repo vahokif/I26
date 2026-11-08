@@ -588,15 +588,22 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 if (def.Class == 4) tol *= 0.7f;
             }
             if (miss >= tol || !LineOfSight(m, tc)) return false;
+            // the friendly scan: cars of the shooter's team field (team 0 included) within 100 on the ground of the
+            // shooter; the round's closest approach to the car's position, t clamped to 0 and only below 4 s, no jitter
+            var sp = shooter.Pos.ToVector3();
             foreach (var o in World.Vehicles)
             {
-                if (o == shooter || o == target || IsDead(o) || Team(o) == 0 || Team(o) != Team(shooter)) continue;
-                var (oc, _) = Collider(o);
-                float od = Vector3.Distance(oc, m);
-                if (od > 100) continue;
-                float om = Miss(m, oc, o.Vel, wv, 1f, out float ot);
-                if (ot < 0) continue;
-                if ((om < 8 && od >= 8) || om < 2) return false;
+                if (o == shooter || o == target || IsDead(o) || (Team(o) & 7) != (Team(shooter) & 7)) continue;
+                var op = o.Pos.ToVector3();
+                float od2 = (sp.X - op.X) * (sp.X - op.X) + (sp.Z - op.Z) * (sp.Z - op.Z);
+                if (od2 > 10000) continue;
+                var rv = o.Vel - wv;
+                float rr = rv.LengthSquared();
+                float ot = rr < 0.01f ? 1e7f : Vector3.Dot(m - op, rv) / rr;
+                if (ot < 0) ot = 0;
+                if (ot >= 4f) continue;
+                float om = Vector3.Distance(m + wv * ot, op + o.Vel * ot);
+                if ((om < 8 && od2 >= 64) || om < 2) return false;
             }
             return true;
         }

@@ -20,7 +20,7 @@ public class CheckpointTests
         if (SnapshotRig.Install is not { } dir) return;
         var l = new SnapshotRig.Loaded(dir);
         var b = SnapshotRig.BuildOf(dir, "t14");
-        var (s, _) = SnapshotRig.Make(l, b, SimRate.R20, 2);   // a seed whose run gets the first objective done
+        var (s, _) = SnapshotRig.Make(l, b, SimRate.R20, 1);   // a seed whose run gets the first objective done
         var policy = CheckpointPolicy.For(s, enabled: true)!;
         var taken = new List<(string Why, int Tick, byte[] Snap, string Dump)>();
         while (s.Script!.Result is null && s.Ticks < 6000)

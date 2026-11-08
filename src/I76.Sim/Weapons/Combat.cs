@@ -549,7 +549,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
     /// a skill-dependent rejection and an accuracy-dependent timing error,
     /// a tolerance by range, line of sight, and the friendly-fire hold.
     /// Guided missiles: a cone and range test. Mortars: a fixed-time landing
-    /// test. Flame throwers: 20 m and a 0.6 cone. Droppers: the target about to
+    /// test; the EZK a line test at a fixed 500. Flame throwers: 20 m and a 0.6 cone. Droppers: the target about to
     /// drive over the shooter's spot (AiDrop).
     /// </summary>
     public bool AiShouldFire(Vehicle shooter, Vehicle target, Weapon w, float p3, float p4) =>
@@ -611,7 +611,26 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             if (tier is 1 or 0x65 && MathF.Abs(Vector3.Dot(tfwd, f)) <= (d2 < 625 ? 0.7f : 0.75f)) return false;
             return LineOfSight(m, tc);
         }
-        if (def.Class == 3 && tier != 3)
+        if (def.Class == 3 && tier == 3)
+        {
+            // the EZK: two rand()%1000 against 3500 x skill; then the time the target's line passes a line at a fixed 500
+            // from the shooter along its own forward row (flipped only when that row points away from the muzzle's, so a
+            // rear-mounted EZK looks back; it never turns toward the target), kept only within 0..0.2 s, where the target,
+            // put there by the predictor (t + 0.09 s), must be within 20 of the shooter's point at t on the ground plane.
+            // Positions, not collider centres. No sight or friendly test.
+            if (Rand.Next() % 1000 + Rand.Next() % 1000 > p3 * 3500) return false;
+            var sp = shooter.Pos.ToVector3();
+            var sf = shooter.Rot.Forward;
+            var sv = (Vector3.Dot(sf, f) > 0 ? sf : -sf) * 500f;
+            var rv = tvel - sv;
+            float rr = rv.LengthSquared();
+            float t = rr < 0.01f ? 1e7f : Vector3.Dot(sp - tpos, rv) / rr;
+            if (t < 0 || t > 0.2f) return false;
+            var at = tv is null ? tpos : TargetPredictor.Predict(tv, t);
+            var d = sp + sv * t - at;
+            return d.X * d.X + d.Z * d.Z < 400;
+        }
+        if (def.Class == 3)
         {
             float t = tier == 0 ? 0.3f : tier == 2 ? 0.4f : 0.25f;
             // the shooter advances by its velocity x t; the target is predicted t + 0.09 s ahead (TargetPredictor)

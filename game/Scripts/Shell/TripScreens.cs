@@ -12,8 +12,8 @@ public abstract class TripScreen : ShellScreen
     /// <summary>The next mission in its designers' stock car (vppt%02d.vcf), which becomes the trip's car.</summary>
     protected void LaunchStock() => Shell.LaunchTrip(Shell.Trip.StockCar(Shell, $"vppt{Shell.Trip.Mission:00}.vcf"));
 
-    /// <summary>SAVE BOOKMARK: overlay 1.</summary>
-    protected void SaveBookmark() => Shell.Overlay(new SaveBookmarkScreen());
+    /// <summary>SAVE BOOKMARK: overlay 1; its Cancel comes back here.</summary>
+    protected void SaveBookmark() => Shell.Overlay(new SaveBookmarkScreen { Direct = true });
 }
 
 /// <summary>

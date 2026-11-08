@@ -236,7 +236,7 @@ public sealed class MainMenuScreen : ShellScreen
                 Shell.LaunchTrip(Shell.Trip.StockCar(Shell, "vppt01.vcf"));     // the stock car, no garage before T01
                 break;
             case 12: Shell.Launch(new ShellLaunch("a01", GameKind.Trip, "vppa01.vcf")); break;     // TRAINING
-            case 10: Shell.Overlay(new LoadBookmarkScreen { FromMainMenu = true }); break;
+            case 10: Shell.Overlay(new LoadBookmarkScreen { Direct = true }); break;
         }
     }
 

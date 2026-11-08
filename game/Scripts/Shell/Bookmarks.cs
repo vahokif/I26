@@ -79,8 +79,8 @@ public sealed class Bookmarks
 /// </summary>
 public abstract class BookmarkScreen : OverlayScreen
 {
-    /// <summary>Opened from the main menu's LOAD BOOKMARK: Cancel goes straight back to it.</summary>
-    public bool FromMainMenu { get; init; }
+    /// <summary>Opened by a screen's own button (the main menu's LOAD BOOKMARK, the trip screens' SAVE BOOKMARK) rather than the Options Menu: Cancel closes it onto that screen. Escape still goes to the Options Menu.</summary>
+    public bool Direct { get; init; }
     protected Bookmarks Marks = null!;
     protected int Top, Picked = -1;
     protected ShellFont Rows = null!;
@@ -102,7 +102,7 @@ public abstract class BookmarkScreen : OverlayScreen
 
     protected void Cancel()
     {
-        if (FromMainMenu) { Shell.Overlay(null); return; }
+        if (Direct) { Shell.Overlay(null); return; }
         Shell.Overlay(new OptionsScreen());
     }
 

@@ -633,13 +633,20 @@ public sealed partial class Ptable
     private bool SkidChance(Entity e, Entity? t)
     {
         if (e.IsHeli || !IsVehicle(t)) return false;
-        if (Rand() % ((int)((1f - e.Ai.Skill) * 40f) + 8) != 0) return false;
+        if (Rand() % SkidOdds(e.Ai.Skill) != 0) return false;
         var v = e.Vehicle!;
         if (v.Speed < 12f) return false;
         float lat = v.Wheels.Sum(w => w.Grip) * 7.84f, sp = v.Speed, k = v.P.SteerGain;
         float s = k * sp * sp <= lat ? v.Steer * k * sp : v.Steer * lat / sp;
         return MathF.Abs(s * sp) > 13f;
     }
+
+    /// <summary>
+    /// The skid's odds, 8 + trunc(40·(1 − skill)). The original works it out in the x87's extended precision: at the
+    /// default skill 0.4 (the float 0.400000006) that is trunc(23.9999998) = 23, so one in 31, where float arithmetic
+    /// rounds 1 − 0.4 to 0.6 and gives 32.
+    /// </summary>
+    internal static int SkidOdds(float skill) => (int)((1.0 - skill) * 40.0) + 8;
 
     // ---- preconditions ----
 

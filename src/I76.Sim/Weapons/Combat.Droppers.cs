@@ -1,4 +1,5 @@
 using System.Numerics;
+using I76.Sim.Ai;
 using I76.Sim.Collision;
 using I76.Sim.Math;
 using I76.Sim.Vehicles;
@@ -357,7 +358,10 @@ public sealed partial class Combat
     /// the class 6: a vehicle target, a shooter that is not an
     /// emplacement, in a forward gear, on the ground; the target behind the
     /// shooter's motion, reaching the shooter's spot in [−1, 7] s at its speed
-    /// (planar distance / speed, 9.9 when still), and predicted there within 2.5 m.
+    /// (planar distance / speed, 9.9 when still), and predicted there within 2.5 m
+    /// by the target predictor (that time + 0.09 s, along its turning circle when it
+    /// turns): a car coming straight on at more than 2.5 / 0.09 = 27.8 m/s is predicted past the spot, and the
+    /// original (measured with a car coasting at a still dropper) drops on it at 20 m/s but not at 36 or 45.
     /// </summary>
     private static bool AiDrop(Vehicle shooter, Vehicle target)
     {
@@ -368,7 +372,7 @@ public sealed partial class Combat
         float t = target.Speed >= 0.001f ? new Vector2(tp.X - s.X, tp.Z - s.Z).Length() / target.Speed : 9.9f;
         if (t > 7f || t < -1f) return false;
         if (t < 0) t = 0;
-        var at = tp + target.Vel * t;
+        var at = TargetPredictor.Predict(target, t);
         return (s - at).LengthSquared() < 6.25f;
     }
 }

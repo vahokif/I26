@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Formats.Bwd2;
+using I76.Sim.Ai;
 using I76.Sim.Collision;
 using I76.Sim.Math;
 using I76.Sim.Rng;
@@ -613,8 +614,9 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         if (def.Class == 3 && tier != 3)
         {
             float t = tier == 0 ? 0.3f : tier == 2 ? 0.4f : 0.25f;
+            // the shooter advances by its velocity x t; the target is predicted t + 0.09 s ahead (TargetPredictor)
             var land = shooter.Pos.ToVector3() + shooter.Vel * t + f * 80f;
-            var at = tc + tvel * t;
+            var at = tv is not null ? TargetPredictor.Predict(tv, t) : tc;
             float r2 = tier == 2 ? 150 : 400;
             return (land.X - at.X) * (land.X - at.X) + (land.Z - at.Z) * (land.Z - at.Z) < r2;
         }

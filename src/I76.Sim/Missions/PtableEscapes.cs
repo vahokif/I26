@@ -424,60 +424,64 @@ public sealed partial class Ptable
     }
 
     /// <summary>
-    /// The input search: candidate steer/throttle pairs through
-    /// the collision test; the first clear one wins, else the best score
-    /// (largest outVal). Writes the winner; returns its outVal.
+    /// The input search: candidate steer/throttle pairs through the collision test; the first clear one wins.
+    /// Writes the winner; returns the score. When none is clear, as the original's chooser: with the wheel centred
+    /// (+0.25, −0.25, +0.5, −0.5 ... always the positive side first) the highest score, a tie going to the later
+    /// candidate; in the throttle sweep the first throttle (every block reads alike there); in the off-centre steer
+    /// sweep the far end of the side searched first, with the last blocked candidate's score.
     /// </summary>
     private float InputSearch(Entity e, Entity? obstacle)
     {
         var v = e.Vehicle!;
         float L = SteerLimit(e), s0 = v.Steer, speed = v.Speed, cruise = Cruise(e);
         bool inc = Now >= e.EscapeTimer ? s0 < 0 : s0 > 0;
-        float bestVal = float.MinValue, bs = s0, bt = v.Throttle;
-        bool Try(float s, float t)
-        {
-            bool hit = Candidate(e, s, t, out _, out _, out float val, false, true, out _);
-            if (!hit) { bs = s; bt = t; bestVal = val; return true; }
-            if (val > bestVal) { bestVal = val; bs = s; bt = t; }
-            return false;
-        }
-        IEnumerable<float> Steers()
-        {
-            var first = new List<float>(); var second = new List<float>();
-            for (float s = s0 + 0.25f; s <= L + 1e-4f; s += 0.25f) first.Add(MathF.Min(s, L));
-            for (float s = s0 - 0.25f; s >= -L - 1e-4f; s -= 0.25f) second.Add(MathF.Max(s, -L));
-            return inc ? first.Concat(second) : second.Concat(first);
-        }
-        bool done = false;
+        float bs = s0, bt = v.Throttle;
+        bool Hit(float s, float t, out float val) => Candidate(e, s, t, out _, out _, out val, false, true, out _);
         if (MathF.Abs(s0) < 0.05f)
         {
             Throttle(e, 0.1f * cruise + 0.9f * speed);
-            float t = v.Throttle;
-            for (float a = 0.25f; a <= L + 1e-4f && !done; a += 0.25f)
-                done = inc ? Try(MathF.Min(a, L), t) || Try(-MathF.Min(a, L), t) : Try(-MathF.Min(a, L), t) || Try(MathF.Min(a, L), t);
+            float t = v.Throttle, best = float.MinValue;
+            for (float a = 0.25f; a <= L + 1e-4f; a += 0.25f)
+                foreach (float s in new[] { MathF.Min(a, L), -MathF.Min(a, L) })
+                {
+                    if (!Hit(s, t, out float val)) { v.Steer = s; v.Throttle = t; return val; }
+                    if (val >= best) { best = val; bs = s; }
+                }
+            v.Steer = bs; v.Throttle = t;
+            return best == float.MinValue ? 0.5f : best;
+        }
+        bool same = obstacle?.Vehicle is { } ov ? Vector3.Dot(ov.Rot.Forward, v.Rot.Forward) > 0.7f : speed > 15f;
+        var throttles = new List<float>();
+        bool sweep = !(Motion(obstacle).Speed <= 2f || same);
+        if (!sweep)
+        {
+            Throttle(e, speed <= cruise ? 0.9f * cruise + 0.1f * speed : 0.1f * cruise + 0.9f * speed);
+            throttles.Add(v.Throttle);
         }
         else
         {
-            bool same = obstacle?.Vehicle is { } ov ? Vector3.Dot(ov.Rot.Forward, v.Rot.Forward) > 0.7f : speed > 15f;
-            var throttles = new List<float>();
-            if (Motion(obstacle).Speed <= 2f || same)
-            {
-                Throttle(e, speed <= cruise ? 0.9f * cruise + 0.1f * speed : 0.1f * cruise + 0.9f * speed);
-                throttles.Add(v.Throttle);
-            }
-            else
-            {
-                float top = inc ? 1f : Traction(v, 1f);
-                for (float t = 0; t <= top + 1e-4f; t += 0.2f) throttles.Add(t);
-                float bottom = Traction(v, -1f);
-                for (float t = -0.2f; t >= bottom - 1e-4f; t -= 0.2f) throttles.Add(t);
-            }
-            foreach (float t in throttles) if (done = Try(s0, t)) break;
-            float tt = bt;
-            if (!done) foreach (float s in Steers()) if (done = Try(s, tt)) break;
+            float top = inc ? 1f : Traction(v, 1f);
+            for (float t = 0; t <= top + 1e-4f; t += 0.2f) throttles.Add(t);
+            float bottom = Traction(v, -1f);
+            for (float t = -0.2f; t >= bottom - 1e-4f; t -= 0.2f) throttles.Add(t);
         }
-        v.Steer = bs; v.Throttle = bt;
-        return bestVal == float.MinValue ? 0.5f : bestVal;
+        float score = 0.5f;
+        bool kept = false;
+        foreach (float t in throttles)
+        {
+            if (!Hit(s0, t, out float val)) { v.Steer = s0; v.Throttle = t; return val; }
+            if (!kept) { kept = true; bt = t; score = val; }
+        }
+        var first = new List<float>(); var second = new List<float>();
+        for (float s = s0 + 0.25f; s <= L + 1e-4f; s += 0.25f) first.Add(MathF.Min(s, L));
+        for (float s = s0 - 0.25f; s >= -L - 1e-4f; s -= 0.25f) second.Add(MathF.Max(s, -L));
+        foreach (float s in inc ? first.Concat(second) : second.Concat(first))
+        {
+            if (!Hit(s, bt, out float val)) { v.Steer = s; v.Throttle = bt; return val; }
+            score = val;
+        }
+        v.Steer = inc ? L : -L; v.Throttle = bt;
+        return score;
     }
 
     // ---- 16 stop_sliding_backward ----

@@ -23,14 +23,14 @@ public partial class CarNode : Node3D
     private Voice3D? _engine;
 
     /// <summary>
-    /// The engine loop: the car's own engsnd.dat sound. Its pitch follows
-    /// rpm/3000 (clamped 0.5–2.2) as a placeholder until the original's
-    /// engine-sound model is read.
+    /// The engine loop: the car's own engsnd.dat sound. Its pitch follows the
+    /// engine's rpm as the original's (EngineSoundPitch).
     /// </summary>
     public void SetEngineSound(AudioStream? loop, bool player, bool revable = true)
     {
         if (loop is null) return;
         _engineRevable = revable;
+        _engineRate = loop is AudioStreamWav wav && wav.MixRate > 0 ? wav.MixRate : 11025f;
         (_engineLoop, _enginePlayer) = (loop, player);
         // a DirectSound3D voice as the original's (a mode-1 loop, started at any range): min distance 10, held at
         // 400 m, parked past 600 m from the followed car (Voice3D). The player's own sits at the listener in the cockpit
@@ -41,6 +41,7 @@ public partial class CarNode : Node3D
 
     private AudioStream? _engineLoop;
     private bool _engineRevable = true;
+    private float _engineRate = 11025f;
     private bool _enginePlayer;
 
     /// <summary>The engine running again (a car renewed after its death: a network melee's respawn).</summary>
@@ -970,7 +971,7 @@ public partial class CarNode : Node3D
             if (_brakeLight is not null) _brakeLight.Visible = rear >= 1f && (RearHeld(0) || RearHeld(1));
         }
         _siren?.Update(shown, !Wrecked, Modern);
-        if (_engine is not null) _engine.PitchScale = _engineRevable ? Mathf.Clamp(Sim.Engine.Rpm / 3000f, 0.5f, 2.2f) : 1f;
+        if (_engine is not null) _engine.PitchScale = _engineRevable ? EngineSoundPitch.Scale(Sim.Engine.Rpm, _engineRate) : 1f;
         double gx = Lerp(_prevPos.X, _pos.X), gz = Lerp(_prevPos.Z, _pos.Z);
         double gy = far ? GroundForDisplay!(gx, gz) : Lerp(_prevPos.Y, _pos.Y);
         if (live is { } lp) (gx, gy, gz) = (lp.Pos.X, lp.Pos.Y, lp.Pos.Z);

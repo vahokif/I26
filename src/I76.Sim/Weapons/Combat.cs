@@ -1426,14 +1426,20 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         _ => Vector3.Zero,
     };
 
+    /// <summary>The .xdf of an explosion's effect node name (x1_carx1 → xcarx1.xdf; a file name stays as it is).</summary>
+    public static string ExplosionFile(string node) =>
+        node.StartsWith("x1_", StringComparison.OrdinalIgnoreCase) ? "x" + node[3..] + ".xdf" : node.EndsWith(".xdf", StringComparison.OrdinalIgnoreCase) ? node : node + ".xdf";
+
+    /// <summary>The explosions a car's or a structure's end sets off (DamageModel's): a car's blast and its burst, a building's, a car-like structure's.</summary>
+    public static readonly string[] EndExplosions = ["x1_carx1", "x1_cars1", "x1_bldx1"];
+
     /// <summary>
     /// An explosion by its effect node name (x1_carx1 → xcarx1.xdf),
     /// drawn, and its splash applied at once.
     /// </summary>
     public void Explode(string node, Vector3 at, object? owner)
     {
-        var file = node.StartsWith("x1_", StringComparison.OrdinalIgnoreCase) ? "x" + node[3..] + ".xdf" : node.EndsWith(".xdf", StringComparison.OrdinalIgnoreCase) ? node : node + ".xdf";
-        if (effects(file) is not { } e) return;
+        if (effects(ExplosionFile(node)) is not { } e) return;
         Events.Add(new Explosion(e, at));
         if (e.SplashDamage != 0) Splash(at, e.SplashRadius, e.SplashDamage, owner);
     }

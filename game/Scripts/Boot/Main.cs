@@ -1072,6 +1072,7 @@ public partial class Main : Node3D
         var away = cam.GlobalPosition + Vector3.Down * 400f;
         _combatView?.Warm(away);
         _combatView?.WarmImpacts(away);
+        _combatView?.WarmExplosions();
         // the death is rehearsed on a stand-in for the player's car (never in the sim's list, freed after)
         // so the real car is never burnt and restored
         CarNode? stage = null;

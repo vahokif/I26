@@ -589,6 +589,25 @@ public partial class CombatView : Node3D
         _warmSprites.Add(sp);
     }
 
+    /// <summary>
+    /// The sprite looks of the explosions the field's ends can set off (a car's, a building's, each structure's and structure node's own),
+    /// made behind the loading card: the 1997 look draws every explosion from them (the modern one when the flipbooks are missing), and
+    /// the first of each kind cost its decoding, 100 ms in the frame of the first building blown up (Grape Vine's bridge rails).
+    /// </summary>
+    public void WarmExplosions()
+    {
+        if (Sprites is null) return;
+        var names = new HashSet<string>(Combat.EndExplosions, StringComparer.OrdinalIgnoreCase);
+        if (Combat.World.Ground is I76.Sim.Collision.IHasStatics hs)
+            foreach (var o in hs.World.Objects)
+            {
+                if (o.Explosion is { } e) names.Add(e);
+                foreach (var n in o.Nodes) if (n.Explosion is { } ne) names.Add(ne);
+            }
+        foreach (var n in names)
+            if (Combat.Effects(I76.Sim.Weapons.Combat.ExplosionFile(n)) is { } def) Sprites.Get(def);
+    }
+
     public void EndWarm()
     {
         foreach (var sp in _warmSprites) sp.QueueFree();

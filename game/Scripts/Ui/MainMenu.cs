@@ -64,19 +64,15 @@ public partial class MainMenu : CanvasLayer
         catch (Exception ex) { _opError = ex.Message; GD.PrintErr($"debug car: {ex}"); }
         _carChoice = _op is null && _remembered == 0 ? 1 : _remembered;
         ShowCar();
-        var dir = Install.MissionDir;
-        var files = dir is null ? [] : Directory.EnumerateFiles(dir).Where(f => I76.Formats.Vfs.GameInstall.IsMissionFile(f))
-            .Select(f => Path.GetFileNameWithoutExtension(f).ToUpperInvariant()).ToList();
-        int Order(string id) => id[0] switch { 'A' => 0, 'T' => 1, 'P' => 0, 'B' => 1, 'S' => 3, _ => 2 };
         string? section = null;
-        foreach (var id in files.OrderBy(Order).ThenBy(x => x, StringComparer.Ordinal))
+        foreach (var id in MissionIds(Install))
         {
-            var sec = id[0] is 'A' or 'T' or 'P' or 'B' ? "TRIP" : "MELEE";
+            var sec = IsTrip(id) ? "TRIP" : "MELEE";
             if (sec != section) { section = sec; int h = _list.AddItem($"— {sec} —", null, false); _list.SetItemDisabled(h, true); _ids.Add(""); }
             string first = "";
             if (vfs.TryRead(id.ToLowerInvariant() + ".npt") is { } npt)
                 first = ObjectiveText.Parse(System.Text.Encoding.Latin1.GetString(npt)).Objectives.FirstOrDefault().Text ?? "";
-            string? name = sec == "MELEE" ? ArenaName(id) : null;
+            string? name = sec == "MELEE" ? ArenaName(Install, id) : null;
             _list.AddItem(name is null ? $"{id}   {first}" : first.Length > 0 ? $"{id}   {name} — {first}" : $"{id}   {name}");
             _ids.Add(id);
         }
@@ -103,6 +99,7 @@ public partial class MainMenu : CanvasLayer
             if (_op is null) vcf = "vppt17.vcf"; else AssetVfs.Addon[vcf] = _op.ToVcf();
         }
         Boot.Main.DebugCar = vcf;
+        Boot.Main.DevCar = null;
         Boot.Main.NextMission = _ids[i];
         GetTree().ReloadCurrentScene();
     }
@@ -125,8 +122,20 @@ public partial class MainMenu : CanvasLayer
         if (OnBack is { } back) back(); else GetTree().Quit();
     }
 
+    /// <summary>The install's missions (its mission folder's files), upper case without the extension: the trip's (A, T; Nitro's P, B), the melee maps, the scenarios.</summary>
+    internal static List<string> MissionIds(GameInstall install)
+    {
+        var dir = install.MissionDir;
+        var files = dir is null ? [] : Directory.EnumerateFiles(dir).Where(f => I76.Formats.Vfs.GameInstall.IsMissionFile(f))
+            .Select(f => Path.GetFileNameWithoutExtension(f).ToUpperInvariant()).ToList();
+        int Order(string id) => id[0] switch { 'A' => 0, 'T' => 1, 'P' => 0, 'B' => 1, 'S' => 3, _ => 2 };
+        return [.. files.OrderBy(Order).ThenBy(x => x, StringComparer.Ordinal)];
+    }
+
+    internal static bool IsTrip(string id) => id[0] is 'A' or 'T' or 'P' or 'B';
+
     /// <summary>A melee or scenario mission's name: the shell's tables (the arenas, the scenarios), else its WRLD's own name.</summary>
-    private string? ArenaName(string id)
+    internal static string? ArenaName(GameInstall Install, string id)
     {
         foreach (var t in new[] { I76.Game.Shell.MeleeData.Arenas, I76.Game.Shell.MeleeData.Scenarios })
             foreach (var (name, msn) in t)

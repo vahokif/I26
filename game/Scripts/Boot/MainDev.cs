@@ -1,4 +1,5 @@
 using Godot;
+using I76.Formats.Vfs;
 using I76.Game.Ui;
 using I76.Sim.Session;
 
@@ -139,6 +140,38 @@ public partial class Main : IDevHost
         if (_devGod) DevTools.SetGodMode(s, true);
         _sim.Jumped();
         return Cheat($"restored tick {st.Tick}{(r.Created.Count + r.Dropped.Count > 0 ? $" ({r.Created.Count} cars made, {r.Dropped.Count} dropped)" : "")}");
+    }
+
+    public string DevMission => (_opt.Mission ?? "").ToUpperInvariant();
+
+    public System.Collections.Generic.IReadOnlyList<(string Id, string Label)> DevMissions()
+    {
+        if (_opt.Install is null) return [];
+        var install = new GameInstall(_opt.Install);
+        return MainMenu.MissionIds(install).Select(id => (id, MainMenu.IsTrip(id) ? id : MainMenu.ArenaName(install, id) is { } n ? $"{id}  {n}" : id)).ToList();
+    }
+
+    public string? DevCurrentCar => _sim?.World.Player?.Definition;
+
+    public System.Collections.Generic.IReadOnlyList<string> DevCars() => _builder?.Vfs is { } vfs
+        ? vfs.Names.Where(n => n.EndsWith(".vcf", System.StringComparison.OrdinalIgnoreCase)).Select(n => n.ToLowerInvariant()).Distinct()
+            .OrderBy(n => n, System.StringComparer.Ordinal).ToList()
+        : [];
+
+    public string DevStart(string mission, string car)
+    {
+        if (_opt.Install is null || _net is not null) return "no install";
+        GD.Print($"developer: start {mission} in {(car.Length > 0 ? car : "the mission's own car")}");
+        DevClose();
+        // as the escape menu's Replay, into another mission: the F9 list's way (no shell launch), in the chosen car
+        _ended = true;
+        _checkpoint = null;
+        _launch = null;
+        DevCar = car;
+        NextMission = mission;
+        GetTree().Paused = false;
+        GetTree().ReloadCurrentScene();
+        return $"starting {mission}";
     }
 
     public bool DevFrozen

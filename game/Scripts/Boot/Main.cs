@@ -138,6 +138,8 @@ public partial class Main : Node3D
     public static string? NextMission;
     /// <summary>The F9 list's car (an addon .vcf name): the missions it starts, and their replays, are driven in it. A shell launch clears it.</summary>
     public static string? DebugCar;
+    /// <summary>The Developer panel's Scene car (MainDev.cs): over --drive's for the missions it starts and their replays; "" is the mission's own. A shell launch or the F9 list clears it.</summary>
+    public static string? DevCar;
     /// <summary>A mission launched from the shell failed to build: back to the shell (the form it came from), which shows <paramref name="error"/>.</summary>
     private void BackFromLoadFailure(string error)
     {
@@ -186,7 +188,7 @@ public partial class Main : Node3D
     /// <summary>A game switch (<see cref="GameSwitch"/>): everything of the running game that lives in statics, as a fresh process has it.</summary>
     internal static void ResetForGameSwitch()
     {
-        NextMission = null; DebugCar = null;
+        NextMission = null; DebugCar = null; DevCar = null;
         _launch = null; _lastLaunch = null; _lastResult = I76.Game.Shell.MissionResult.FirstEntry;
         _lastTrip = null; _lastMelee = null; _lastNet = null; _lastLoadError = null;
         I76.Game.Shell.CheatMarker.Clear(); _typer = new();
@@ -316,6 +318,8 @@ public partial class Main : Node3D
         if (NextMission is { } next)
         {
             _opt.Mission = next; _opt.MissionGiven = true; _opt.Drive ??= _launch?.Car ?? DebugCar ?? ""; NextMission = null;
+            // a mission from the Developer panel runs as one from the F9 list: its script, in the panel's car
+            if (DevCar is { } devCar) { _opt.Drive = devCar; _opt.Melee = false; }
             // Nitro's melee files (.cbt, .cf2-4, .rac) have no script: they run as an auto melee, as --melee does
             if (_opt.Install is not null && new GameInstall(_opt.Install).FindMission(next) is { } mp && !mp.EndsWith(".msn", System.StringComparison.OrdinalIgnoreCase))
                 _opt.Melee = true;
@@ -336,7 +340,7 @@ public partial class Main : Node3D
             {
                 Install = install, Name = "Shell", Faithful = _opt.Mode1997,
                 LastResult = _lastResult, LastLaunch = _lastLaunch, LastTrip = _lastTrip, LastMelee = _lastMelee, LastNet = lastNet, LoadError = loadError,
-                OnLaunch = l => { GD.Print($"shell: launch {l.Mission} ({l.Kind})"); _launch = l; DebugCar = null; NextMission = l.Mission; GetTree().ReloadCurrentScene(); },
+                OnLaunch = l => { GD.Print($"shell: launch {l.Mission} ({l.Kind})"); _launch = l; DebugCar = null; DevCar = null; NextMission = l.Mission; GetTree().ReloadCurrentScene(); },
                 OnEditor = () =>
                 {
                     GetNodeOrNull("Shell")?.QueueFree();
@@ -350,7 +354,7 @@ public partial class Main : Node3D
                             GD.Print($"shell: map editor on {mission}");
                             I76.Game.Editor.EditorSession.Install = install;
                             I76.Game.Editor.EditorSession.Begin(mission);
-                            _launch = null; DebugCar = null;
+                            _launch = null; DebugCar = null; DevCar = null;
                             GetTree().ReloadCurrentScene();
                         },
                         Cancelled = () => { _backToMenu = true; GetTree().ReloadCurrentScene(); },

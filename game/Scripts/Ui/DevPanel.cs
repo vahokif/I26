@@ -23,6 +23,16 @@ public interface IDevHost
     bool DevFrozen { get; set; }
     string DevStep(int ticks);
     double DevScale { get; set; }
+    /// <summary>The running mission's id, upper case.</summary>
+    string DevMission { get; }
+    /// <summary>Every mission the install offers (the F9 list's), with a label.</summary>
+    IReadOnlyList<(string Id, string Label)> DevMissions();
+    /// <summary>The player's car file, or null.</summary>
+    string? DevCurrentCar { get; }
+    /// <summary>Every .vcf the install (and the addon folder) has.</summary>
+    IReadOnlyList<string> DevCars();
+    /// <summary>Leaves this mission and starts that one in that car ("" = the mission's own), as --mission X --drive [car].</summary>
+    string DevStart(string mission, string car);
     void DevClose();
 }
 
@@ -37,7 +47,9 @@ public partial class DevPanel : Control
     public required IDevHost Host { get; init; }
 
     private Label _status = null!, _message = null!, _stored = null!;
-    private OptionButton _points = null!, _scale = null!;
+    private OptionButton _points = null!, _scale = null!, _missions = null!, _cars = null!;
+    private IReadOnlyList<(string Id, string Label)> _missionList = [];
+    private readonly List<string> _carFiles = [];
     private LineEdit _x = null!, _z = null!, _heading = null!;
     private CheckBox _god = null!, _freeze = null!;
     private IReadOnlyList<DevPoint> _pointList = [];
@@ -66,6 +78,21 @@ public partial class DevPanel : Control
         _status = new Label { AutowrapMode = TextServer.AutowrapMode.Off };
         _status.AddThemeColorOverride("font_color", new Color(0.75f, 0.9f, 0.75f));
         col.AddChild(_status);
+
+        col.AddChild(Heading("Scene"));
+        _missionList = Host.DevMissions();
+        _missions = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, FitToLongestItem = false };
+        foreach (var m in _missionList) _missions.AddItem(m.Label);
+        int here = _missionList.Select(m => m.Id).ToList().IndexOf(Host.DevMission);
+        if (_missionList.Count == 0) { _missions.AddItem("(no missions found)"); _missions.Disabled = true; }
+        else _missions.Selected = System.Math.Max(0, here);
+        // the current car, the mission's own, then every car file
+        _cars = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, FitToLongestItem = false };
+        if (Host.DevCurrentCar is { } current) { _cars.AddItem($"this car ({current})"); _carFiles.Add(current); }
+        _cars.AddItem("the mission's own car"); _carFiles.Add("");
+        foreach (var c in Host.DevCars()) { _cars.AddItem(c); _carFiles.Add(c); }
+        _cars.Selected = 0;
+        col.AddChild(Row(_missions, _cars, Button("Start", StartMission)));
 
         col.AddChild(Heading("Teleport"));
         _pointList = Host.DevPoints();
@@ -122,6 +149,12 @@ public partial class DevPanel : Control
         var p = _pointList[_points.Selected];
         Say(Host.DevTeleport(p.X, p.Z, p.Heading));
         FillHere();
+    }
+
+    private void StartMission()
+    {
+        if (_missionList.Count == 0) return;
+        Say(Host.DevStart(_missionList[_missions.Selected].Id, _carFiles[_cars.Selected]));
     }
 
     private void GoCoords()

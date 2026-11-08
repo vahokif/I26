@@ -217,6 +217,7 @@ public partial class Main : Node3D
             GD.Print(RenderBackend.Describe());
             if (RenderBackend.Compatibility)
                 GD.Print("renderer: Compatibility (OpenGL): SSAO and some finer effects are off (docs/compatibility-renderer.md)");
+            I76.Game.Assets.HdSounds.Probe();
         }
         // release.sh, before the export: the terrain's compressed material pack, for builds that cannot compress (World/TerrainMaterials.WritePrebaked)
         if (OS.GetCmdlineUserArgs() is var cl && Array.IndexOf(cl, "--bake-ground-pack") is var bk and >= 0 && bk + 1 < cl.Length)
@@ -770,6 +771,7 @@ public partial class Main : Node3D
         if (!Enumerable.Range(0, AudioServer.GetBusEffectCount(0)).Any(e => AudioServer.GetBusEffect(0, e) is AudioEffectHardLimiter))
             AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = -1f, PreGainDb = 0f, Release = 0.1f }, 0);
         I76.Game.Net.CbVoice.Active?.ApplyMic(s.CbMic);
+        I76.Game.Assets.HdSounds.Enabled = s.HdSounds;
         Bus("Music", s.Audio[0]);
         Bus("SFX", s.Audio[1]);
         Bus("Voice", s.Audio[2]);

@@ -4,21 +4,35 @@ using I76.Formats.Vfs;
 
 namespace I76.Game.Assets;
 
-/// <summary>Game sounds as Godot streams, cached by name.</summary>
+/// <summary>
+/// Game sounds as Godot streams, cached by name: the original's samples, or a sound pack's in their place
+/// (<see cref="HdSounds"/>) while it is switched on. Everything else about a sound (its header's rules, how it is
+/// pitched, placed and mixed) is the caller's, from the original file, either way.
+/// </summary>
 public sealed class AudioBank(AssetVfs vfs)
 {
     public AssetVfs Vfs => vfs;
 
-    private readonly Dictionary<string, AudioStreamWav?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, AudioStream?> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public AudioStreamWav? Get(string name, bool loop = false)
+    public AudioStream? Get(string name, bool loop = false)
     {
-        var key = name + (loop ? "#loop" : "");
+        bool hd = HdSounds.Enabled && HdSounds.Installed;
+        var key = name + (loop ? "#loop" : "") + (hd ? "#hd" : "");
         if (_cache.TryGetValue(key, out var s)) return s;
-        s = null;
-        if (SoundFiles.Read(vfs, name) is { } pcm) s = ToStream(pcm, loop);
+        var pcm = SoundFiles.Read(vfs, name);
+        // a pack replaces only sounds the game has: one the install lacks stays silent
+        s = pcm is null ? null : (hd ? HdSounds.Load(name, vfs.Install.IsNitro, loop, pcm.Seconds) : null) ?? ToStream(pcm, loop);
         return _cache[key] = s;
     }
+
+    /// <summary>Whether the stream repeats by itself (a sound fetched with loop: true).</summary>
+    public static bool Loops(AudioStream? s) => s switch
+    {
+        AudioStreamWav w => w.LoopMode != AudioStreamWav.LoopModeEnum.Disabled,
+        AudioStreamOggVorbis o => o.Loop,
+        _ => false,
+    };
 
     private readonly Dictionary<string, (int Priority, int MaxVoices)> _limits = new(StringComparer.OrdinalIgnoreCase);
 

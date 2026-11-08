@@ -236,7 +236,7 @@ public partial class Shell : CanvasLayer
     /// <summary>A voice record played async (callback 0x2c), replacing any voice still playing.</summary>
     public void Voice(int record)
     {
-        if (I76.Formats.Audio.SoundFiles.Parse(Db.Wave(record)) is not { } pcm || Assets.AudioBank.ToStream(pcm) is not { } s) return;
+        if (WaveStream(record) is not { } s) return;
         _voice.Stream = s;
         _voice.Play();
     }
@@ -293,7 +293,7 @@ public partial class Shell : CanvasLayer
     }
     private ImageTexture? _tex;
     private ShellScreen? _screen, _overlay, _modal;
-    private readonly Dictionary<int, AudioStreamWav?> _sounds = [];
+    private readonly Dictionary<(int Record, bool Hd), AudioStream?> _sounds = [];
     private AudioStreamPlayer _sfx = null!, _music = null!;
 
     public override void _Ready()
@@ -627,11 +627,17 @@ public partial class Shell : CanvasLayer
     /// <summary>Options' "Switch Game" (offered when the start showed the game chooser): back to the chooser in this window, then the other game (<see cref="I76.Game.Boot.GameSwitch"/>).</summary>
     public void SwitchGame() { Trip.Save(); I76.Game.Boot.GameSwitch.ToChooser(GetTree()); }
 
+    /// <summary>A database wave record as a stream: its samples, or a sound pack's in their place (<see cref="I76.Formats.Audio.SoundPack.ShellName"/>).</summary>
+    private AudioStream? WaveStream(int record) =>
+        I76.Formats.Audio.SoundFiles.Parse(Db.Wave(record)) is { } pcm
+            ? Assets.HdSounds.Load(I76.Formats.Audio.SoundPack.ShellName(record), Install.IsNitro, false, pcm.Seconds) ?? Assets.AudioBank.ToStream(pcm)
+            : null;
+
     /// <summary>A sound record (72–82), fire and forget (the original blocks until a click has played).</summary>
     public void Sound(int record)
     {
-        if (!_sounds.TryGetValue(record, out var s))
-            _sounds[record] = s = I76.Formats.Audio.SoundFiles.Parse(Db.Wave(record)) is { } pcm ? Assets.AudioBank.ToStream(pcm) : null;
+        var key = (record, Assets.HdSounds.Enabled);
+        if (!_sounds.TryGetValue(key, out var s)) _sounds[key] = s = WaveStream(record);
         if (s is null) return;
         _sfx.Stream = s;
         _sfx.Play();
@@ -1116,6 +1122,8 @@ public sealed class ShellSettings
     public bool ModernPhysics { get; set; }
     /// <summary>The port's own: the HD Menu Pack's upscaled art in the modern look (Graphic Detail); on unless the player turned it off.</summary>
     public bool HdMenuArt { get; set; } = true;
+    /// <summary>The port's own: a sound pack's samples in place of the original's (Audio Control, shown only when a pack is installed); on unless the player turned it off.</summary>
+    public bool HdSounds { get; set; } = true;
     /// <summary>The port's own: the brake key on a stopped car shifts into reverse, accelerate on a reversing one into drive (Play Options; off, as the original).</summary>
     public bool AutoReverse { get; set; }
     /// <summary>The port's own: the pad's rumble for the original's force-feedback events (Play Options; on, and without a pad it does nothing; both looks).</summary>
@@ -1307,7 +1315,10 @@ public sealed class ShellSettings
         // no version step: absent, it is off. The override file is what Godot reads; the setting is the player's word for it
         s.LogFile = (bool)c.GetValue("port", "log_file", false);
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
+        // no version step: absent, a pack's sounds play
+        s.HdSounds = (bool)c.GetValue("port", "hd_sounds", true);
         HdAssets.Enabled = s.HdMenuArt;
+        I76.Game.Assets.HdSounds.Enabled = s.HdSounds;
         return s;
     }
 
@@ -1337,6 +1348,7 @@ public sealed class ShellSettings
         c.SetValue("port", "vsync", VSync);
         if (KeepMouseInWindow) c.SetValue("port", "keep_mouse_in_window", true);
         c.SetValue("port", "hd_menu_art", HdMenuArt);
+        if (!HdSounds) c.SetValue("port", "hd_sounds", false);
         c.SetValue("shell", "graphics", Graphics);
         c.SetValue("shell", "audio", Audio);
         // the other game's flags and difficulty stay as the file has them

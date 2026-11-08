@@ -143,7 +143,7 @@ public partial class Voice3D : AudioStreamPlayer3D
     {
         if (Followed?.Invoke() is not { } at || !IsInsideTree()) return;
         bool far = !Ds3d.LoopStarts(GlobalPosition.DistanceTo(at));
-        bool loops = Stream is AudioStreamWav { LoopMode: not AudioStreamWav.LoopModeEnum.Disabled };
+        bool loops = Assets.AudioBank.Loops(Stream);
         if (far && !_parked)
         {
             if (!loops) { _refused = true; CullLog?.Invoke("drop"); Trace($"cull: drop {Name} at {GlobalPosition.DistanceTo(at):0} m"); Stop(); QueueFree(); return; }

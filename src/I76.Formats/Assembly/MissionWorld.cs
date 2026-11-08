@@ -80,13 +80,19 @@ public sealed class MissionWorld
     {
         get
         {
-            if (_outside is null) Interlocked.CompareExchange(ref _outside, new Lazy<OutsideGround?>(() => OutsideGround.For(_vfs, this)), null);
-            return _outside!.Value;
+            // read once: a ForgetOutside on another thread between a second read and .Value would leave it null
+            var o = Volatile.Read(ref _outside);
+            if (o is null)
+            {
+                var made = new Lazy<OutsideGround?>(() => OutsideGround.For(_vfs, this));
+                o = Interlocked.CompareExchange(ref _outside, made, null) ?? made;
+            }
+            return o.Value;
         }
     }
 
-    /// <summary>The terrain was edited: <see cref="Outside"/> is made again from it when next asked for.</summary>
-    public void ForgetOutside() => _outside = null;
+    /// <summary>The terrain was edited: <see cref="Outside"/> is made again from it when next asked for (what holds the old one keeps it).</summary>
+    public void ForgetOutside() => Volatile.Write(ref _outside, null);
 
     private sealed record FootprintSet(long Mark, List<GroundBox> Boxes);
     private FootprintSet? _footprints;

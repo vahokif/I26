@@ -412,6 +412,9 @@ public partial class TerrainNode : Node3D
         }
         if (_refreshing is not null || _toRefresh is not { } r || _world is not { } world) return;
         _toRefresh = null;
+        // the ground past the tiles is made from the tiles' edges: the next to ask for it (a playtest's simulation, a 1997 chunk made
+        // again, the next world built) gets it made from the edited heights; this node's surface keeps the one it was made with
+        world.ForgetOutside();
         if (Surface as TerrainSurface is { } surf)
         {
             _refreshing = Task.Run(() =>

@@ -10,7 +10,10 @@ public sealed partial class Ptable
 {
     // ---- transition predicates ----
 
-    /// <summary>The attacker-slot check: fewer live others hold a slot on the target than its cap.</summary>
+    /// <summary>
+    /// The attacker-slot check: full as soon as the count of live others holding a slot on the target reaches its cap,
+    /// free otherwise, so a cap of 0 with no attacker is free (a cap of 0 or 1 both allow one attacker).
+    /// </summary>
     private bool SlotAvailable(Entity e, Entity? t)
     {
         if (!IsVehicle(t)) return true;
@@ -20,7 +23,7 @@ public sealed partial class Ptable
             if (o.Vehicle is null || o == t || o == e || o.Dead || o.AttackCommit != t) continue;
             if (++n >= t!.MaxAttackers) return false;
         }
-        return n < t!.MaxAttackers;
+        return true;
     }
 
     /// <summary>Tactic on deck: the target is the player (in co-op any human) and its attacker roster is full.</summary>

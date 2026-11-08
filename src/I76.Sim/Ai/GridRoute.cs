@@ -134,7 +134,9 @@ public static class GridRoute
                 route.Add(new Vector3(p.X, g.BareHeight(p.X, p.Y), p.Y));
             }
         }
-        route[^1] = to;
+        // start and goal in the same open cell (two points Nearest() snapped to one cell): the route is the goal alone
+        if (route.Count == 0) route.Add(to);
+        else route[^1] = to;
         return route;
     }
 }

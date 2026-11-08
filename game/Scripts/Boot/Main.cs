@@ -913,6 +913,10 @@ public partial class Main : Node3D
         // the sim ticks before Main reads the script camera, so a cut-scene owns the very first frame
         _sim.ProcessPriority = -1;
         _sim.FlyCameraActive = () => _cam.Current;
+        // the Developer panel's Signals record from the start, so the panel shows the seconds before it opened
+        I76.Game.Ui.DevSignals.Reset();
+        I76.Game.Ui.DevSignals.Watching = DevOn;
+        ShowSignals();
         AddChild(_sim);
         AddChild(new PausedClock { Owner = this, Name = "PausedClock" });
         var playSettings = I76.Game.Shell.ShellSettings.Load();

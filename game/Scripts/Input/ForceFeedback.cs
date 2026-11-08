@@ -22,6 +22,7 @@ public sealed class GodotRumble : IRumbleSink
 
     public void Rumble(float weak, float strong)
     {
+        I76.Game.Ui.DevSignals.Pad(weak, strong);
         if (Tripped) return;
         using var _ = Hitch.Time(Hitch.Phase.Rumble);
         foreach (var d in Input.GetConnectedJoypads().Where(d => Input.IsJoyKnown(d)))
@@ -31,6 +32,7 @@ public sealed class GodotRumble : IRumbleSink
 
     public void Stop()
     {
+        I76.Game.Ui.DevSignals.Pad(0, 0);
         if (Tripped) return;
         using var _ = Hitch.Time(Hitch.Phase.Rumble);
         foreach (var d in Input.GetConnectedJoypads()) Input.StopJoyVibration(d);
@@ -40,6 +42,7 @@ public sealed class GodotRumble : IRumbleSink
     /// <summary>Every pad's motors off at once, past the rate limit (leaving the game, switching the setting off): a stop held back there would never go out.</summary>
     public static void StopNow()
     {
+        I76.Game.Ui.DevSignals.Pad(0, 0);
         if (Tripped) return;
         foreach (var d in Input.GetConnectedJoypads()) Input.StopJoyVibration(d);
     }
@@ -110,7 +113,9 @@ public partial class ForceFeedback : Node
     private Armory? _arm;
     private int _selected = -1, _group;
 
-    private static bool Live => _instance is { _model: not null } i && Enabled && Mode != RumbleMode.Off && !i.GetTree().Paused && Held?.Invoke() != true && Controls.HasPad;
+    private static bool Live => _instance is { _model: not null } i && Enabled && !i.GetTree().Paused && Held?.Invoke() != true && Device;
+    /// <summary>A pad to play on; or the Developer panel's Signals watching, where the effects run with nowhere to go.</summary>
+    private static bool Device => (Controls.HasPad || I76.Game.Ui.DevSignals.Watching) && Mode != RumbleMode.Off;
 
     public override void _Ready()
     {
@@ -148,7 +153,9 @@ public partial class ForceFeedback : Node
     {
         _throttle.Pump();
         // the pause (+0x08 cleared): DISFFC_STOPALL, and the DLL forgets what was playing
-        if (!Enabled || Mode == RumbleMode.Off || GetTree().Paused || Held?.Invoke() == true || !Controls.HasPad) { _model.StopAll(); _hits.Clear(); _enhanced.Reset(); _mix.SetExtra(0, 0); }
+        bool quiet = !Enabled || GetTree().Paused || Held?.Invoke() == true || !Device;
+        if (I76.Game.Ui.DevSignals.Watching && !GetTree().Paused) I76.Game.Ui.DevSignals.Sample(Time.GetTicksUsec() / 1e6);
+        if (quiet) { _model.StopAll(); _hits.Clear(); _enhanced.Reset(); _mix.SetExtra(0, 0); }
     }
 
     /// <summary>

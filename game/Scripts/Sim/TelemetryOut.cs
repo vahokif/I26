@@ -31,6 +31,7 @@ public partial class TelemetryOut : Node
     /// </summary>
     public static TelemetryOut? Configured()
     {
+        I76.Game.Ui.DevSignals.TelemetryTargets = null;
         var settings = I76.Game.Shell.ShellSettings.Load();
         string? spec = System.Environment.GetEnvironmentVariable("I76_TELEMETRY_UDP") is { Length: > 0 } e ? e : settings.Telemetry;
         if (string.IsNullOrWhiteSpace(spec)) return null;
@@ -42,7 +43,8 @@ public partial class TelemetryOut : Node
             else GD.PrintErr($"telemetry: target \"{item}\" not understood ([i26|outsim|outgauge@]host:port, a numeric address or localhost)");
         }
         if (t._targets.Count == 0) { t._socket.Dispose(); t.Free(); return null; }
-        GD.Print($"telemetry: {string.Join(", ", t._targets.Select(x => $"{x.Format.ToString().ToLowerInvariant()} to {x.To}"))}");
+        I76.Game.Ui.DevSignals.TelemetryTargets = string.Join(", ", t._targets.Select(x => $"{x.Format.ToString().ToLowerInvariant()} to {x.To}"));
+        GD.Print($"telemetry: {I76.Game.Ui.DevSignals.TelemetryTargets}");
         return t;
     }
 
@@ -156,6 +158,12 @@ public partial class TelemetryOut : Node
                 if (wheels[i].Blown) f.BlownMask |= (byte)(1 << i);
             }
             if (v.Definition is { Length: > 0 } def) f.Car = System.IO.Path.GetFileNameWithoutExtension(def);
+        }
+        if (I76.Game.Ui.DevSignals.Watching && (f.Status & TelemetryStatus.Present) != 0)
+        {
+            var att = TelemetryPackets.Attitude(f.Rot);
+            I76.Game.Ui.DevSignals.Telemetry(Time.GetTicksUsec() / 1e6, att.Y, att.Z, System.Numerics.Vector3.Dot(f.Accel, f.Rot.Forward),
+                System.Numerics.Vector3.Dot(f.Accel, f.Rot.Right), System.Numerics.Vector3.Dot(f.Accel, f.Rot.Up));
         }
         string weapon = Car?.Armory is { Selected: >= 0 } arm && arm.Selected < arm.Weapons.Count ? arm.Weapons[arm.Selected].Def.Name : "";
         foreach (var (to, format) in _targets)

@@ -21,7 +21,7 @@ public static class DevScale
         return (panel, scroll, col);
     }
 
-    private const string MinKey = "dev_min", SepKey = "dev_sep";
+    private const string MinKey = "dev_min", SepKey = "dev_sep", GridKey = "dev_grid";
 
     /// <summary>max(1, round(height / 720)), at most 3: 720 is 1, 1080 is 2 (1.5 rounds up), 1440 is 2, 2160 is 3.</summary>
     public static int Factor(float windowHeight) => System.Math.Clamp((int)System.Math.Round(windowHeight / 720f, System.MidpointRounding.AwayFromZero), 1, 3);
@@ -42,8 +42,20 @@ public static class DevScale
         return c;
     }
 
-    /// <summary>Sets the panel's theme, frame and every tagged control below it for the factor f.</summary>
-    public static void Apply(PanelContainer panel, ScrollContainer scroll, Control content, Theme theme, StyleBoxFlat bg, int f)
+    /// <summary>A grid's column and row separations at 1x, scaled by <see cref="Apply"/>.</summary>
+    public static GridContainer Grid(GridContainer g, int h, int v)
+    {
+        g.SetMeta(GridKey, new Vector2I(h, v));
+        g.AddThemeConstantOverride("h_separation", h);
+        g.AddThemeConstantOverride("v_separation", v);
+        return g;
+    }
+
+    /// <summary>
+    /// Sets the panel's theme, frame and every tagged control below it for the factor f. <paramref name="at"/>, when given, places
+    /// the panel once it has its size (a second column beside the first, or against the window's right edge); else it is at the top left.
+    /// </summary>
+    public static void Apply(PanelContainer panel, ScrollContainer scroll, Control content, Theme theme, StyleBoxFlat bg, int f, System.Func<Vector2>? at = null)
     {
         theme.DefaultFontSize = 15 * f;
         bg.SetBorderWidthAll(2 * f);
@@ -58,6 +70,7 @@ public static class DevScale
             float avail = panel.GetViewportRect().Size.Y - 2 * 16 * f - 2 * 12 * f - 4 * f;
             scroll.CustomMinimumSize = new Vector2(0, System.Math.Min(content.GetCombinedMinimumSize().Y, avail));
             panel.ResetSize();
+            if (at is not null) panel.Position = at();
         }).CallDeferred();
     }
 
@@ -67,6 +80,12 @@ public static class DevScale
         {
             if (c.HasMeta(MinKey)) c.CustomMinimumSize = c.GetMeta(MinKey).AsVector2() * f;
             if (c.HasMeta(SepKey)) c.AddThemeConstantOverride("separation", c.GetMeta(SepKey).AsInt32() * f);
+            if (c.HasMeta(GridKey))
+            {
+                var g = c.GetMeta(GridKey).AsVector2I();
+                c.AddThemeConstantOverride("h_separation", g.X * f);
+                c.AddThemeConstantOverride("v_separation", g.Y * f);
+            }
         }
         foreach (var k in n.GetChildren()) Walk(k, f);
     }

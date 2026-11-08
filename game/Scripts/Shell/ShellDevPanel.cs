@@ -23,7 +23,14 @@ public partial class ShellDevPanel : Control
         var bg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.09f, 0.1f, 0.92f), BorderColor = new Color(0.85f, 0.6f, 0.2f) };
         var (panel, scroll, col) = DevScale.Frame(theme, bg);
         AddChild(panel);
-        _rescale = () => DevScale.Apply(panel, scroll, col, theme, bg, DevScale.Factor(GetViewportRect().Size.Y));
+        var (panel2, scroll2, col2) = DevScale.Frame(theme, bg);
+        AddChild(panel2);
+        _rescale = () =>
+        {
+            int f = DevScale.Factor(GetViewportRect().Size.Y);
+            DevScale.Apply(panel, scroll, col, theme, bg, f);
+            DevScale.Apply(panel2, scroll2, col2, theme, bg, f, () => new Vector2(panel.GetRect().End.X + 12 * f, 16 * f));
+        };
         GetViewport().SizeChanged += _rescale;
         TreeExiting += () => GetViewport().SizeChanged -= _rescale;
 
@@ -33,6 +40,10 @@ public partial class ShellDevPanel : Control
         col.AddChild(Row(Button("Import Saves", ImportSaves, trip), Note("the original game's bookmarks, car and parts included")));
         col.AddChild(Row(Button("All Scenes", AllScenes, trip), Note("a bookmark for every scene of the trip, in its own car")));
         if (!trip) col.AddChild(Note("(the Nitro Pack has no trip)"));
+        // the settings without a row (docs/playing.md), saved at once, in a second column; the signals are the mission panel's
+        col2.AddChild(Heading("Settings (shell.cfg [port], saved at once)"));
+        DevSettings.Build(col2, Shell.Settings, null);
+        col2.AddChild(Note("Signals (force feedback, rumble, telemetry) are on the mission's panel."));
         col.AddChild(Row(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill }, Button("Close", Close, true)));
         _rescale();
     }

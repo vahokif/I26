@@ -37,6 +37,31 @@ public partial class Main : IDevHost
         _dev = new CanvasLayer { Layer = 45, ProcessMode = ProcessModeEnum.Always, Name = "DevPanel" };
         _dev.AddChild(new DevPanel { Host = this });
         AddChild(_dev);
+        ShowSignals();
+    }
+
+    /// <summary>A key of the Settings section changed: the escape menu's Done path, the drawing's and the play options' (music, rumble, Modern Physics, Unlim. Ordnance).</summary>
+    public void DevSettingChanged(I76.Game.Shell.ShellSettings settings)
+    {
+        ApplyGraphics(settings);
+        ApplyPlayOptions(settings);
+    }
+
+    private CanvasLayer? _signals;
+    /// <summary>The Signals over the game while the panel is closed; on from the start with I76_DEV_SIGNALS=1 (for captures).</summary>
+    private static bool _signalsShown = System.Environment.GetEnvironmentVariable("I76_DEV_SIGNALS") == "1";
+
+    public bool DevSignalsShown { get => _signalsShown; set { _signalsShown = value; ShowSignals(); } }
+
+    /// <summary>The Signals overlay up while it is wanted and the panel is closed.</summary>
+    private void ShowSignals()
+    {
+        bool want = _signalsShown && DevSignals.Watching && _dev is null;
+        if (want == (_signals is not null)) return;
+        if (!want) { _signals!.QueueFree(); _signals = null; return; }
+        _signals = new CanvasLayer { Layer = 44, ProcessMode = ProcessModeEnum.Always, Name = "DevSignals" };
+        _signals.AddChild(new SignalsOverlay());
+        AddChild(_signals);
     }
 
     public void DevClose()
@@ -44,6 +69,7 @@ public partial class Main : IDevHost
         if (_dev is null) return;
         _dev.QueueFree();
         _dev = null;
+        ShowSignals();
         if (_devPausedTree && !_gamePaused) GetTree().Paused = false;
     }
 

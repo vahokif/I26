@@ -47,6 +47,10 @@ public interface IDevHost
     IReadOnlyList<string> DevCars();
     /// <summary>Leaves this mission and starts that one in that car ("" = the mission's own), as --mission X --drive [car].</summary>
     string DevStart(string mission, string car);
+    /// <summary>A setting of the Settings section changed (saved already): the mission applies what it can at once.</summary>
+    void DevSettingChanged(I76.Game.Shell.ShellSettings settings);
+    /// <summary>The Signals shown over the game while the panel is closed.</summary>
+    bool DevSignalsShown { get; set; }
     void DevClose();
 }
 
@@ -82,7 +86,15 @@ public partial class DevPanel : Control
         var bg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.09f, 0.1f, 0.92f), BorderColor = new Color(0.85f, 0.6f, 0.2f) };
         var (panel, scroll, col) = DevScale.Frame(theme, bg);
         AddChild(panel);
-        _rescale = () => DevScale.Apply(panel, scroll, col, theme, bg, DevScale.Factor(GetViewportRect().Size.Y));
+        // a second column beside the first: the settings without a row and the devices' signals
+        var (panel2, scroll2, col2) = DevScale.Frame(theme, bg);
+        AddChild(panel2);
+        _rescale = () =>
+        {
+            int f = DevScale.Factor(GetViewportRect().Size.Y);
+            DevScale.Apply(panel, scroll, col, theme, bg, f);
+            DevScale.Apply(panel2, scroll2, col2, theme, bg, f, () => new Vector2(panel.GetRect().End.X + 12 * f, 16 * f));
+        };
         GetViewport().SizeChanged += _rescale;
         TreeExiting += () => GetViewport().SizeChanged -= _rescale;
 
@@ -149,6 +161,15 @@ public partial class DevPanel : Control
         _scale.Selected = System.Math.Max(0, System.Array.IndexOf(Scales, Host.DevScale));
         _scale.ItemSelected += i => { Host.DevScale = Scales[i]; Say($"time scale x{Scales[i]:0.##} (the ticks are the same; only their pace changes)"); };
         col.AddChild(Row(_freeze, Button("Step 1 tick", () => Say(Host.DevStep(1))), Button("Step 10", () => Say(Host.DevStep(10))), new Label { Text = "speed" }, _scale));
+
+        // the devices' signals over the last seconds before the panel opened, and the settings without a row (docs/playing.md)
+        col2.AddChild(Heading($"Signals (the last {DevSignals.Window:0} s)"));
+        var shown = new CheckBox { Text = "show over the game when this panel is closed", ButtonPressed = Host.DevSignalsShown };
+        shown.Toggled += on => Host.DevSignalsShown = on;
+        col2.AddChild(shown);
+        col2.AddChild(new SignalsView());
+        col2.AddChild(Heading("Settings (shell.cfg [port], saved at once)"));
+        DevSettings.Build(col2, I76.Game.Shell.ShellSettings.Load(), (s, e) => { Host.DevSettingChanged(s); Say(DevSettings.Line(e, s)); });
 
         _message = DevScale.Min(new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }, 400);
         _message.AddThemeColorOverride("font_color", new Color(1f, 0.85f, 0.5f));

@@ -851,6 +851,12 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
     /// <summary>A network session: an upside-down car is never righted, Arcade Phys. or not.</summary>
     public bool NetSession { get; set; }
 
+    /// <summary>
+    /// Whether the script drives this human's car this tick (the original's "AI drove the player" latch, which also
+    /// locks the keys): the blown-front-tyre pull and its rand() are skipped then.
+    /// </summary>
+    public Func<Vehicle, bool>? ScriptDrives { get; set; }
+
     /// <summary>vland.wav: touchdowns and the settle after them (sound event 4).</summary>
     public List<Vehicle> Landings { get; } = [];
 
@@ -949,7 +955,7 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         float maxLatLoad = v.NormalLoad * v.P.ChassisGrip * SurfaceGrip(v) * sumGrip * 0.25f;
         float maxLat = (v.Flags & VehicleFlags.LoadBasedCornering) == 0 ? sumGrip * 7.84f : maxLatLoad;
         float slideLimit = maxLatLoad + maxLatLoad;
-        if (isPlayer)
+        if (isPlayer && ScriptDrives?.Invoke(v) != true)
         {
             bool fr = v.FrontRight.Blown, fl = v.FrontLeft.Blown;
             if (fr && fl) steer += (rand.Next() & 1) == 0 ? -0.3f : 0.3f;

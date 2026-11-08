@@ -20,6 +20,7 @@ namespace I76.Sim
                 .Saved(nameof(VehicleStep.FrameDelta), nameof(VehicleStep.Wrecked))
                 .Structural("the mission build's ground, rand stream and damage model", "ground", "rand", nameof(VehicleStep.Damage), nameof(VehicleStep.ExternalContacts))
                 .Structural("the session's options, set by the build", nameof(VehicleStep.NetSession))
+                .Structural("the session's cut-scene test, set by the session", nameof(VehicleStep.ScriptDrives))
                 .Transient("a per-tick output (sounds, the views), cleared at the next tick", nameof(VehicleStep.ObjectHits), nameof(VehicleStep.Impacts),
                     nameof(VehicleStep.CarHits), nameof(VehicleStep.Landings), nameof(VehicleStep.DriveOns), nameof(VehicleStep.Honks));
         }

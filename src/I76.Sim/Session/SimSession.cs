@@ -86,6 +86,7 @@ public sealed partial class SimSession
         Script = script;
         Options = options ?? SessionOptions.SinglePlayer;
         World.Far = Options.Far;
+        World.Step.ScriptDrives = CutsceneOf;   // the keys' lock is the pull's gate too
         // isKeypress latches the key for the frame: every thread polling it this tick sees it
         if (script is not null) script.Host.SkipKey = () => _skip;
         if (script?.Melee is { } melee) melee.PlayerRenewed += Renewed;

@@ -181,6 +181,48 @@ public partial class CombatEffectsTests(Xunit.Abstractions.ITestOutputHelper out
     }
 
     /// <summary>
+    /// A respawn starts the shot counts again from the server's: the shots of the last life are not counted as taken
+    /// back (the respawn's snapshot was compared before the car's new generation was seen, so every earlier shot was).
+    /// </summary>
+    [Fact]
+    public void ARespawnTakesNoShotsBack()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Seed = 3 });
+        var seat = host.Join("a", "vppirna1.vcf", 0);
+        var c = Connect(host, seat, HostTests.Mirror("m01"));
+        var rig = new Rig(host, late: 4);
+        rig.Clients.Add(c);
+        var key = Key(seat.Player.Car, w => w.Def.Kind == 1);
+        bool fire = false;
+        CarInput Input(Client _) => new() { Buttons = fire ? key : 0 };
+        for (int i = 0; i < 10; i++) rig.Tick(Input);
+        fire = true;
+        for (int i = 0; i < 40; i++) rig.Tick(Input);
+        fire = false;
+        for (int i = 0; i < 10; i++) rig.Tick(Input);
+        int predicted = c.Predictor!.Shots!.Predicted;
+        Assert.True(predicted > 0);
+        Assert.Equal(0, c.Predictor.Shots.Rejected);
+        int gen = seat.Player.Car.NetGeneration;
+        host.Setup.Damage.Destroy(seat.Player.Car);
+        for (int i = 0; i < (int)(host.Options.RespawnDelay / host.Session.TickSeconds) + 10; i++) rig.Tick(Input);
+        Assert.Null(host.Game.RequestRespawn(seat.Player));
+        for (int i = 0; i < 20; i++) rig.Tick(Input);
+        Assert.NotEqual(gen, seat.Player.Car.NetGeneration);
+        Assert.Equal(seat.Player.Car.NetGeneration & 0xff, c.Mirror.Own!.Vehicle.NetGeneration & 0xff);
+        output.WriteLine($"{predicted} shots in the first life; after the respawn rejected {c.Predictor.Shots.Rejected}");
+        Assert.Equal(0, c.Predictor.Shots.Rejected);
+        // and the new life's shots are counted as before
+        fire = true;
+        for (int i = 0; i < 20; i++) rig.Tick(Input);
+        fire = false;
+        for (int i = 0; i < 10; i++) rig.Tick(Input);
+        Assert.True(c.Predictor.Shots.Predicted > predicted);
+        Assert.Equal(0, c.Predictor.Shots.Rejected);
+    }
+
+    /// <summary>
     /// A mine dropped by the own car is drawn at once, and when the server's mine reaches the view it takes the predicted
     /// one's place (the server's is the one that counts, for everyone).
     /// </summary>

@@ -62,11 +62,14 @@ public sealed class OwnShots(ClientWorld world)
     {
         if (s.Fire is not { } fire) return;
         uint acked = s.AckedInput;
+        // the snapshot's generation: the car is put back after this, so its own is still the last life's
+        int gen = car.NetGeneration;
+        foreach (var c in s.Cars) if (c.Serial == world.OwnSerial) { gen = (gen & ~0xff) | c.Generation; break; }
         // a new car, or a renewed one: start counting from the server's
-        if (car != _car || car.NetGeneration != _generation || !_synced)
+        if (car != _car || gen != _generation || !_synced)
         {
             _car = car;
-            _generation = car.NetGeneration;
+            _generation = gen;
             _synced = true;
             _confirmed.Clear();
             foreach (var e in fire.Weapons) if (RoundState.WeaponOf(car, e.Weapon) is { } w) _confirmed[w] = e.Shots;

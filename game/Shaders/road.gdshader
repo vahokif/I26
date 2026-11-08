@@ -37,7 +37,9 @@ void vertex() {
 }
 
 void fragment() {
-	vec4 t = mode_1997 && i76_software ? i76_point(road_tex, UV) : texture(road_tex, UV);
+	// 1997 mode: the 3D card's road strips are bilinear with no mip chain, so the near level is kept however far or
+	// slanted the road is (the modern look keeps its mipmapped, anisotropic sampling)
+	vec4 t = mode_1997 && i76_software ? i76_point(road_tex, UV) : mode_1997 ? textureLod(road_tex, UV, 0.0) : texture(road_tex, UV);
 	if (mode_1997) t = i76_tex(t);
 	if (t.a < 0.5) discard;
 	if (mode_1997) {

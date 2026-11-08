@@ -97,7 +97,8 @@ void fragment() {
 	}
 	ALBEDO = i76_out(to_linear(i76_shade(to_srgb(texel), shade)));
 	if (has_road && !show_light_only) {
-		vec4 r = i76_software ? i76_point(road_layer, road_uv) : texture(road_layer, road_uv);
+		// the 3D card's roads are bilinear with no mip chain: the layer's top level, however far or slanted
+		vec4 r = i76_software ? i76_point(road_layer, road_uv) : textureLod(road_layer, road_uv, 0.0);
 		r.rgb = i76_tex(r.rgb);
 		if (r.a >= 0.5) ALBEDO = i76_out(to_linear(i76_shade(to_srgb(r.rgb), v_road)));
 	}

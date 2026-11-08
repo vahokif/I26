@@ -53,6 +53,21 @@ public class HeliTests
         Assert.Equal(20f, v.Heli!.Height);
     }
 
+    /// <summary>The post-load in a network game lifts a helicopter at once (not landed, hover height 20 m); offline it starts landed.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ANetworkGamesHelicopterIsLiftedAtSetUp(bool network)
+    {
+        var v = new Vehicle { Pos = new Double3(0, 0, 0) };
+        HeliStep.Setup(v, player: true, network);
+        Assert.Equal(network, (v.Flags & HeliStep.Landed) == 0);
+        Assert.Equal(network ? 20f : 0f, v.Heli!.Height);
+        // with no throttle it rises in the network game and sits offline
+        for (int i = 0; i < 20; i++) HeliStep.Frame(v, Flat, Dt, true, null);
+        Assert.Equal(network, v.Pos.Y > 1);
+    }
+
     [Fact]
     public void ItClimbsStraightUpBelowWorldTen_AndEasesToItsHeight()
     {

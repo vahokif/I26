@@ -74,9 +74,10 @@ public static class HeliStep
     /// <summary>
     /// The helicopter's creation / the helicopter's post-load for a class-9 vehicle: the block, the pool from the front
     /// armour, flags 0x81 (engine on, landed). A player's helicopter keeps its specials and cockpit panels, with none of
-    /// The car's post-load's rand() draws. No car damage state.
+    /// The car's post-load's rand() draws. No car damage state. In a network game (<paramref name="network"/>) the
+    /// post-load lifts it at once: not landed, hover height 20 m.
     /// </summary>
-    public static void Setup(Vehicle v, bool player)
+    public static void Setup(Vehicle v, bool player, bool network = false)
     {
         v.Heli = new HeliState();
         if (v.Build is { } b)
@@ -85,6 +86,7 @@ public static class HeliStep
             if (player) v.Health = Damage.VehicleDamage.CreateSpecialsOnly(v, b);
         }
         v.Flags = VehicleFlags.EngineOn | Landed;
+        if (network) TakeOff(v);
     }
 
     /// <summary>SetHeliHeight.</summary>

@@ -370,7 +370,7 @@ public sealed partial class MissionSetup
                 Build = (vcf, player) =>
                 {
                     var v = VehicleFactory.Create(vfs, vcf, meleeBrakes: true, bodySound: true, specials: player);
-                    if (v.ObjectClass == 9) HeliStep.Setup(v, player);   // a hidden helicopter flown in a network melee
+                    if (v.ObjectClass == 9) HeliStep.Setup(v, player, network);   // a hidden helicopter flown in a network melee
                     else if (v.Build is { } b) v.Health = I76.Sim.Damage.VehicleDamage.Create(v, b, player, rand, network);
                     if (player) VehicleFactory.AddDriverHandguns(vfs, vcf, v);   // the game fits the player's own at the cockpit; a network car has none
                     if (night) v.Flags |= VehicleFlags.Lights;

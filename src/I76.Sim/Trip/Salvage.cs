@@ -84,19 +84,21 @@ public sealed class SalvagePool
     /// group whose type matches and whose first item has the same name
     /// (stricmp), or to a new group at the end of the list. Measured: a T03
     /// win with every car killed has a group of 48 13in tyres and a separate
-    /// group of the .fsi's four 14in ones.
+    /// group of the .fsi's four 14in ones. False when nothing was added for
+    /// a name of no type or not in the tier table.
     /// </summary>
-    public void Add(string path, int health, bool randomCondition)
+    public bool Add(string path, int health, bool randomCondition)
     {
-        if (Disabled) return;
+        if (Disabled) return true;
         int type = TypeOf(path);
-        if (type < 0) return;           // "Unknown Salvage type %s found"
+        if (type < 0) return false;     // "Unknown Salvage type %s found"
         var name = path.ToLowerInvariant();
         if (type == 0 && name.Length >= 7) name = "wauto_0" + name[7..];
-        if (Clamp(name, type, Level, Kind) is not { } clamped) return;
+        if (Clamp(name, type, Level, Kind) is not { } clamped) return false;
         var g = _groups.FirstOrDefault(x => x.Type == type && x.Items[0].Name.Equals(clamped, StringComparison.OrdinalIgnoreCase));
         if (g.Items is null) { g = (type, []); _groups.Add(g); }
         g.Items.Add(new SalvageItem(clamped, health, randomCondition));
+        return true;
     }
 
     /// <summary>The pool fed as the engine feeds it: every car but the player's, at the moment its salvage is taken (<see cref="DamageModel.Salvageable"/>).</summary>
@@ -104,24 +106,26 @@ public sealed class SalvagePool
 
     /// <summary>
     /// A dead non-player car's parts whose health is above 0 —
-    /// the six wheels (their pair's .wdf), engine, suspension, brakes and the
-    /// weapons (their .gdf) — at their current health, and every special it
-    /// carries at health 1: the original writes a special's presence, not its
-    /// HP, so one shot to 0 HP is salvaged too.
+    /// the six wheels (their pair's .wdf), engine, suspension, brakes, the
+    /// weapons (their .gdf) at their current health, and the fitted specials
+    /// at 1, whatever their health (the original's amount for a special).
+    /// A part the tier table does not know (the T16 tanks' gtktank, gtptank,
+    /// tthowitz) ends the wreck's collection there: its later weapons and its
+    /// specials are lost, as in the original.
     /// </summary>
     public void AddDeadCar(Vehicle v)
     {
         if (Disabled || v.Health is not { } d || v.Loadout is not { } lo) return;
         for (int k = 0; k < 6; k++)
-            if (d.Slots[k] is WheelPart w && w.Hp > 0 && lo.Wdf[k / 2] is { Length: > 0 } wdf && !wdf.Equals("null", StringComparison.OrdinalIgnoreCase))
-                Add(wdf, w.Hp, false);
-        if (d.Engine is { Hp: > 0 } e) Add($"eng{lo.Engine + 1:00}", e.Hp, false);
-        if (d.Suspension is { Hp: > 0 } s) Add($"sus{lo.Suspension + 1:00}", s.Hp, false);
-        if (d.Brake is { Hp: > 0 } b) Add($"bra{lo.Brakes + 1:00}", b.Hp, false);
+            if (d.Slots[k] is WheelPart w && w.Hp > 0 && lo.Wdf[k / 2] is { Length: > 0 } wdf && !wdf.Equals("null", StringComparison.OrdinalIgnoreCase)
+                && !Add(wdf, w.Hp, false)) return;
+        if (d.Engine is { Hp: > 0 } e && !Add($"eng{lo.Engine + 1:00}", e.Hp, false)) return;
+        if (d.Suspension is { Hp: > 0 } s && !Add($"sus{lo.Suspension + 1:00}", s.Hp, false)) return;
+        if (d.Brake is { Hp: > 0 } b && !Add($"bra{lo.Brakes + 1:00}", b.Hp, false)) return;
         for (int k = 10; k <= 16; k++)
-            if (d.Slots[k] is WeaponPart wp && wp.Hp > 0) Add(wp.Weapon.Def.File, wp.Hp, false);
+            if (d.Slots[k] is WeaponPart wp && wp.Hp > 0 && !Add(wp.Weapon.Def.File, wp.Hp, false)) return;
         for (int k = 17; k <= 19; k++)
-            if (d.Slots[k] is SpecialPart sp) Add($"spc{sp.Type:00}", 1, false);
+            if (d.Slots[k] is SpecialPart sp && !Add($"spc{sp.Type:00}", 1, false)) return;
     }
 
     /// <summary>

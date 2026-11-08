@@ -408,6 +408,7 @@ public sealed partial class MissionSetup
                 }) { Paths = coopPaths };
             }
             ms = new MissionScript(program, host, rand, seed, nitroDriver, i76Lines);
+            MarkTaurus(ms.Vm!.Actors);
         }
         // the explosion templates in the original's load order (the first file with a key keeps it): the startup three, then
         // each scenery object's SDFC file in ODEF order, then the LDEF links'. Weapon effects register as first used; no
@@ -489,6 +490,24 @@ public sealed partial class MissionSetup
             };
         }
         return new MissionSetup { Humans = seatCars.Count > 0 ? seatCars.Select(x => x.Car).ToList() : world.Player is { } hp ? [hp] : [], Melee = game, PlacementOf = staticOf.ToDictionary(kv => kv.Value, kv => kv.Key), Damage = damage, Combat = combat, World = world, Statics = statics, Ground = ground, Cars = cars, Entities = entities, Script = ms, ObjectiveText = text };
+    }
+
+    /// <summary>
+    /// The Taurus car: the object the script's actor labelled "taurus" (in any case) names takes load-based cornering
+    /// when it is a car (class 1), as the original sets it once the mission is read, whatever the play options say. The
+    /// flag picks the cornering law, the AI's planned cornering limit and the steering-slide threshold, and outside a
+    /// network game a car resting on its roof is put back on its wheels instead of wrecked. Nothing else decides it (not
+    /// the car file, the team or the car's name); in T05 the label names a wreck, which is not a car. With more than one
+    /// actor so labelled the last one is the Taurus, as the original keeps the last match. Returns the car flagged, or null.
+    /// </summary>
+    public static Vehicle? MarkTaurus(IEnumerable<(string Label, byte[] Id, object? Handle)> actors)
+    {
+        object? taurus = null;
+        foreach (var (label, _, handle) in actors)
+            if (label.Equals("taurus", StringComparison.OrdinalIgnoreCase)) taurus = handle;
+        if (taurus is not Entity { Vehicle: { ObjectClass: 1 } v }) return null;
+        v.Flags |= VehicleFlags.LoadBasedCornering;
+        return v;
     }
 
     /// <summary>An a1flagN placement (the CTF flag), class 2 or 3.</summary>

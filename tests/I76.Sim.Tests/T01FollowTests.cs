@@ -51,6 +51,10 @@ public class T01FollowTests
                 // objective 2 open: drive at the stand and have it blown up from 55 m; then 15 m behind Taurus
                 bool stand = !fireworks.Dead && (h.Objectives.Flags[1] & (Objectives.Hidden | Objectives.Succeeded)) == 0;
                 var goal = stand ? fireworks.Static!.Centre : taurus.Position - taurus.Rot.Forward * 15;
+                // Taurus, cornering on load-based grip, can stop right in the line to the stand: go round him
+                var tt = taurus.Position - player.Pos.ToVector3();
+                if (stand && tt.Length() < 15 && Vector3.Dot(tt, player.Rot.Forward) > 0)
+                    goal += new Vector3(player.Rot.Forward.Z, 0, -player.Rot.Forward.X) * 12;
                 var to = goal - player.Pos.ToVector3();
                 float err = MathF.Atan2(to.X, to.Z) - MathF.Atan2(player.Rot.Forward.X, player.Rot.Forward.Z);
                 while (err > MathF.PI) err -= 2 * MathF.PI;

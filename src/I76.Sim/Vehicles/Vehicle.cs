@@ -223,6 +223,7 @@ public enum VehicleFlags : uint
     Jamming = 0x40000,
     CommandedYaw = 0x1000,
     Blending = 0x2000,
+    /// <summary>Load-based cornering: the player's car with Arcade Phys. on, and the mission's Taurus car always (<see cref="I76.Sim.Missions.MissionSetup.MarkTaurus"/>).</summary>
     LoadBasedCornering = 0x10000,
     Disabled = 0x8000,
     /// <summary>The horn key is held (set by honk_horn in a network game only, the caller); remote clients play the horn from it.</summary>

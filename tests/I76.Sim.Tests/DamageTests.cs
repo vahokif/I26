@@ -30,6 +30,8 @@ public class DamageTests(Xunit.Abstractions.ITestOutputHelper log)
     [InlineData(-1, 0.5f, 0.2f, 1, 1)]  // left, front half
     [InlineData(1, 0.5f, -0.2f, 2, 4)]  // right, rear half
     [InlineData(0, 3, 0.1f, 4, 6)]      // top
+    [InlineData(0, -0.2f, 0, 3, 2)]     // straight down (a landing): x and z renormalise to 0, the back side, zone 2
+    [InlineData(0, 0, 0, 3, 2)]         // no offset at all: the same
     public void ZonesFollowTheHitPoint(float x, float y, float z, int zone, int sub)
     {
         Assert.Equal((zone, sub), VehicleDamage.Zones(new Vector3(x, y, z)));

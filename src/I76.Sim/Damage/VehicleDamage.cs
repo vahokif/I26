@@ -351,7 +351,7 @@ public sealed class VehicleDamage
     public static (int Zone, int Sub) Zones(Vector3 hitLocal)
     {
         float len = hitLocal.Length();
-        if (len < 1e-9f) return (3, 5);
+        if (len < 1e-9f) return (3, 2);   // the original's reciprocal square root of 0 is finite: hx = hz = 0, the back side and zone 2
         var h = hitLocal / len;
         if (h.Y > 0.8f) return (4, 6);
         float l2 = MathF.Sqrt(h.X * h.X + h.Z * h.Z);

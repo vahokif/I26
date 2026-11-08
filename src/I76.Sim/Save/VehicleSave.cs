@@ -78,12 +78,17 @@ public static class VehicleSave
         _ => throw new InvalidOperationException($"snapshot: no kind for a {p.GetType().Name}"),
     };
 
-    /// <summary>What the car is made of, as the restore checks it: its class, weapons, handguns, damage parts, helicopter and emplacement blocks.</summary>
+    /// <summary>What the car is made of, as the restore checks it: its class, weapons (each by its file), handguns, damage parts, helicopter and emplacement blocks.</summary>
     internal static void WriteShape(SaveWriter w, Vehicle v)
     {
         w.U32(v.ObjectClass);
         w.Int(v.Armory is { } a ? a.LoadOrder.Count : -1);
-        if (v.Armory is { } aa) { w.Bool(aa.Handguns[0] is not null); w.Bool(aa.Handguns[1] is not null); }
+        if (v.Armory is { } aa)
+        {
+            // each weapon's file: the Developer panel's loadout swaps one in place (DevTools.SwapWeapon)
+            foreach (var wp in aa.LoadOrder) w.Str(wp.Def.File.ToLowerInvariant());
+            w.Bool(aa.Handguns[0] is not null); w.Bool(aa.Handguns[1] is not null);
+        }
         w.Bool(v.Health is not null);
         if (v.Health is { } h)
             foreach (var p in h.Slots) { w.U8(KindOf(p)); if (p is SpecialPart sp) w.Int(sp.Type); }
@@ -104,7 +109,11 @@ public static class VehicleSave
         w.U32(r.U32());
         int n = r.Int();
         w.Int(n);
-        if (n >= 0) { w.Bool(r.Bool()); w.Bool(r.Bool()); }
+        if (n >= 0)
+        {
+            for (int i = 0; i < n; i++) w.Str(r.Str());
+            w.Bool(r.Bool()); w.Bool(r.Bool());
+        }
         bool health = r.Bool();
         w.Bool(health);
         if (health)

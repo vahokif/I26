@@ -192,6 +192,30 @@ public sealed class Armory
 
     private static Rows RowsOf(Affine a) => new(new(a.R[0], a.R[3], a.R[6]), new(a.R[1], a.R[4], a.R[7]), new(a.R[2], a.R[5], a.R[8]));
 
+    /// <summary>A weapon on a hardpoint, whole and loaded: its style there, muzzle, aim pivot and mount kind.</summary>
+    public static Weapon Mount(GizmoDef g, Hardpoint hp)
+    {
+        uint style = g.StyleOn(hp);
+        var at = Affine.From(hp.Transform);
+        var muzzle = MuzzleOn(g, hp, style);
+        var rot = RowsOf(muzzle);
+        Vector3? pivot = style == 3 && g.TurretGun() is { } gn ? at.Apply(gn) : null;
+        int kind = style switch { 3 => 4, 6 => hp.Facing == 3 ? 8 : 0x10, _ => rot.Forward.Z < 0 ? 2 : 1 };
+        return new Weapon
+        {
+            Def = g, Hardpoint = hp, Style = style, MountKind = kind, MuzzlePos = muzzle.T, BaseRot = rot, TurretPivot = pivot,
+            Hp = (int)g.HitPoints, MaxHp = (int)g.HitPoints, Damage = (int)g.Damage, Ammo = (int)g.Ammo,
+        };
+    }
+
+    /// <summary>The weapons in the original's order: ids 0-4 sorted by key, ties by id.</summary>
+    public void Sort()
+    {
+        var sorted = LoadOrder.Where(w => w.Hardpoint.Id <= 4).OrderBy(w => SortKey(w.Style, w.Hardpoint.Facing)).ThenBy(w => w.Hardpoint.Id).ToList();
+        Weapons.Clear();
+        Weapons.AddRange(sorted);
+    }
+
     /// <summary>WEPN slots onto HLOC hardpoints; a slot without its hardpoint loads nothing (the handler's "wrldr").</summary>
     public static Armory Create(AssetVfs vfs, Bwd2File vcf, Bwd2File vdf)
     {
@@ -201,23 +225,11 @@ public sealed class Armory
         {
             if (hps.FirstOrDefault(h => h.Id == m.Slot) is not { } hp) continue;
             if (vfs.TryRead(m.Gizmo) is not { } gd || GizmoDef.Read(m.Gizmo, gd) is not { } g) continue;
-            uint style = g.StyleOn(hp);
-            var at = Affine.From(hp.Transform);
-            var muzzle = MuzzleOn(g, hp, style);
-            var rot = RowsOf(muzzle);
-            Vector3? pivot = style == 3 && g.TurretGun() is { } gn ? at.Apply(gn) : null;
-            int kind = style switch { 3 => 4, 6 => hp.Facing == 3 ? 8 : 0x10, _ => rot.Forward.Z < 0 ? 2 : 1 };
-            a.Weapons.Add(new Weapon
-            {
-                Def = g, Hardpoint = hp, Style = style, MountKind = kind, MuzzlePos = muzzle.T, BaseRot = rot, TurretPivot = pivot,
-                Hp = (int)g.HitPoints, MaxHp = (int)g.HitPoints, Damage = (int)g.Damage, Ammo = (int)g.Ammo,
-            });
+            a.Weapons.Add(Mount(g, hp));
         }
         a.LoadOrder.AddRange(a.Weapons);
         // ids 0–4 sorted by key, ties by id; ids > 4 would go to fixed entries 5 and 6 (none ship)
-        var sorted = a.Weapons.Where(w => w.Hardpoint.Id <= 4).OrderBy(w => SortKey(w.Style, w.Hardpoint.Facing)).ThenBy(w => w.Hardpoint.Id).ToList();
-        a.Weapons.Clear();
-        a.Weapons.AddRange(sorted);
+        a.Sort();
         if (a.Weapons.Count > 0) a.Selected = 0;
         return a;
     }

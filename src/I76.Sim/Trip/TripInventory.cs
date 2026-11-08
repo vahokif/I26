@@ -74,10 +74,8 @@ public sealed class TripInventory
         }
         foreach (var (hp, gdf) in car.Mounts(hps))
         {
-            var h = hps.FirstOrDefault(x => x.Id == hp);
-            uint style = h?.Style ?? 1;
-            int type = style == 4 ? 8 : 7;
-            inv.Fit(new CarSlot(type, $"HP {hp}", hp, (int)style, (int)(h?.Facing ?? 1)), db.ByStem(gdf) ?? db.Empty(type));
+            var slot = ChassisRules.WeaponSlot(hp, hps.FirstOrDefault(x => x.Id == hp));
+            inv.Fit(slot, db.ByStem(gdf) ?? db.Empty(slot.Type));
         }
         // three special rows always (the garage's placeholders where the car has none)
         for (int k = 0; k < 3; k++)

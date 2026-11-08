@@ -24,7 +24,7 @@ public partial class Main : IDevHost
     private bool _devPausedTree;
 
     /// <summary>The stored state: kept across a Replay of the same mission (a rebuilt session takes it as a checkpoint's retry does).</summary>
-    private sealed record DevStoredState(string Mission, byte[] Snapshot, byte[]? Salvage, int Tick);
+    private sealed record DevStoredState(string Mission, byte[] Snapshot, byte[]? Salvage, int Tick, (uint Hp, string File)[] Loadout);
     private static DevStoredState? _devStore;
 
     private void OpenDevPanel()
@@ -165,7 +165,7 @@ public partial class Main : IDevHost
     public string DevStore()
     {
         if (_sim?.Session is not { } s) return "no mission";
-        _devStore = new DevStoredState(_opt.Mission ?? "", s.Snapshot(), _salvage?.Save(), s.Ticks);
+        _devStore = new DevStoredState(_opt.Mission ?? "", s.Snapshot(), _salvage?.Save(), s.Ticks, DevLoadoutOf(s.World.Player));
         return $"stored tick {s.Ticks} ({_devStore.Snapshot.Length / 1024} KB)";
     }
 
@@ -176,6 +176,12 @@ public partial class Main : IDevHost
         if (_sim?.Session is not { } s) return "no mission";
         if (_devStore is not { } st) return "nothing stored";
         if (!st.Mission.Equals(_opt.Mission ?? "", System.StringComparison.OrdinalIgnoreCase)) return $"the stored state is of {st.Mission}";
+        // the weapons the store had, back on their mounts first (the snapshot names each weapon and refuses a car with others)
+        if (s.World.Player is { } pv && _builder?.Vfs is { } vfs)
+            foreach (var (hp, file) in st.Loadout)
+                if (pv.Armory?.LoadOrder.FirstOrDefault(w => w.Hardpoint.Id == hp) is { } now && !now.Def.File.Equals(file, System.StringComparison.OrdinalIgnoreCase)
+                    && vfs.TryRead(file) is { } gd && I76.Formats.Bwd2.GizmoDef.Read(file, gd) is { } g)
+                    DevTools.SwapWeapon(s, pv, hp, g);
         RestoreResult r;
         try { r = s.Restore(st.Snapshot); }
         catch (System.Exception ex)
@@ -231,6 +237,56 @@ public partial class Main : IDevHost
         GetTree().Paused = false;
         GetTree().ReloadCurrentScene();
         return $"starting {mission}";
+    }
+
+    private static (uint Hp, string File)[] DevLoadoutOf(I76.Sim.Vehicles.Vehicle? v) =>
+        v?.Armory is { } a ? [.. a.LoadOrder.Select(w => (w.Hardpoint.Id, w.Def.File))] : [];
+
+    private static I76.Sim.Trip.PartsDatabase? _devParts;
+
+    private static string GdfFile(string stem) => stem.EndsWith(".gdf", System.StringComparison.OrdinalIgnoreCase) ? stem : stem + ".gdf";
+
+    public System.Collections.Generic.IReadOnlyList<DevMount> DevMounts()
+    {
+        if (_car?.Sim is not { Armory: { } a, Definition: { } vcf } || _builder?.Vfs is not { } vfs) return [];
+        try
+        {
+            _devParts ??= I76.Sim.Trip.PartsDatabase.Build(vfs);
+            var hps = I76.Formats.Bwd2.Hardpoint.Read(new I76.Formats.Bwd2.Bwd2File(vfs.Read(I76.Sim.Trip.TripCar.FromVcf(vfs.Read(vcf)).Vdf)));
+            var list = new System.Collections.Generic.List<DevMount>();
+            foreach (var w in a.LoadOrder)
+            {
+                // the garage's rule for the mount: its slot kind and what that slot accepts (ChassisRules)
+                var slot = I76.Sim.Trip.ChassisRules.WeaponSlot((int)w.Hardpoint.Id, hps.FirstOrDefault(h => h.Id == w.Hardpoint.Id));
+                var options = I76.Sim.Trip.ChassisRules.WeaponsFor(_devParts, slot, I76.Game.Shell.ShellSettings.Nitro, hidden: false)
+                    .Select(p => (GdfFile(p.Stem).ToLowerInvariant(), I76.Sim.Trip.HiddenContent.WeaponName(vfs, p.Stem))).ToList();
+                if (!options.Any(o => o.Item1.Equals(w.Def.File, System.StringComparison.OrdinalIgnoreCase)))
+                    options.Insert(0, (w.Def.File.ToLowerInvariant(), I76.Sim.Trip.HiddenContent.WeaponName(vfs, w.Def.File)));
+                // the hardpoint's own facing and style (HLOC), as the garage labels its slots
+                string where = (slot.MountStyle, w.Hardpoint.Facing) switch { (4, _) => "dropper", (1, _) => "roof", (_, 2) => "rear", (_, 3) => "right", (_, 4) => "left", _ => "front" };
+                list.Add(new DevMount(w.Hardpoint.Id, $"HP {w.Hardpoint.Id} {where}", w.Def.File.ToLowerInvariant(), options));
+            }
+            return list;
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.IO.InvalidDataException or System.ArgumentException or System.IndexOutOfRangeException)
+        {
+            GD.PrintErr($"developer: the car's mounts: {ex.Message}");
+            return [];
+        }
+    }
+
+    public string DevSwap(uint hardpoint, string file)
+    {
+        if (_sim?.Session is not { } s || s.World.Player is not { } p || _builder?.Vfs is not { } vfs) return "no car";
+        if (vfs.TryRead(file) is not { } gd || I76.Formats.Bwd2.GizmoDef.Read(file, gd) is not { } g) return $"{file}: no such weapon";
+        if (DevTools.SwapWeapon(s, p, hardpoint, g) is not { } old) return "not swapped: the car is dead or has no weapon there";
+        return Cheat($"HP {hardpoint}: {old.Def.File} for {g.File}, loaded ({g.Ammo} rounds; the car is still drawn with its old guns)");
+    }
+
+    public string DevRefill()
+    {
+        if (_sim?.Session is not { } s || s.World.Player is not { } p) return "no car";
+        return DevTools.RefillAmmo(s, p) ? Cheat("refilled: every weapon's ammunition and the specials' charges, nothing repaired") : "not refilled: the car is dead";
     }
 
     public bool DevFrozen

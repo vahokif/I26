@@ -55,6 +55,17 @@ public static class ChassisRules
     public static bool Accepts(CarSlot slot, PartDef part) =>
         TypeFits(slot.Type, part.Type) && (slot.Type != 7 || !part.IsTurret || TurretMount(slot));
 
+    /// <summary>A WEPN mount's garage slot: a dropper slot (8) on a dropper mount (style 4), else a weapon slot (7); a mount the body lacks counts as style 1.</summary>
+    public static CarSlot WeaponSlot(int hardpoint, Hardpoint? h)
+    {
+        uint style = h?.Style ?? 1;
+        return new CarSlot(style == 4 ? 8 : 7, $"HP {hardpoint}", hardpoint, (int)style, (int)(h?.Facing ?? 1));
+    }
+
+    /// <summary>What the garage offers for a weapon slot: the catalogue of its kind (<see cref="Catalogue"/>) that the slot accepts.</summary>
+    public static List<PartDef> WeaponsFor(PartsDatabase db, CarSlot slot, bool nitro, bool hidden) =>
+        [.. Catalogue(db, slot.Type, nitro, hidden, "").Select(n => n.Part).Where(p => Accepts(slot, p))];
+
     /// <summary>A roof turret mount: the style the turret check names.</summary>
     public static bool TurretMount(CarSlot slot) => slot.MountStyle == 1;
 

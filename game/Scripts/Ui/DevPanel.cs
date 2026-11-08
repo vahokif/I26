@@ -3,6 +3,9 @@ using I76.Sim.Session;
 
 namespace I76.Game.Ui;
 
+/// <summary>A weapon mount of the player's car: its hardpoint, a label, the weapon file on it and the files the garage lets onto it (with their names).</summary>
+public sealed record DevMount(uint Hardpoint, string Label, string Current, IReadOnlyList<(string File, string Name)> Options);
+
 /// <summary>What the Developer panel asks of the game (Main, MainDev.cs). Each action returns the line the panel shows.</summary>
 public interface IDevHost
 {
@@ -21,6 +24,12 @@ public interface IDevHost
     string DevGod(bool on);
     bool DevGodOn { get; }
     string DevBring();
+    /// <summary>The player's car's weapon mounts, each with what the garage allows on it.</summary>
+    IReadOnlyList<DevMount> DevMounts();
+    /// <summary>Puts that weapon file on that hardpoint, loaded.</summary>
+    string DevSwap(uint hardpoint, string file);
+    /// <summary>Every weapon's ammunition and the specials' charges, nothing repaired.</summary>
+    string DevRefill();
     string DevStore();
     string DevRestore();
     /// <summary>What is stored ("tick 1234 of t14"), or null.</summary>
@@ -57,6 +66,7 @@ public partial class DevPanel : Control
     private readonly List<string> _carFiles = [];
     private LineEdit _x = null!, _z = null!, _heading = null!, _keepName = null!;
     private CheckBox _god = null!, _freeze = null!;
+    private readonly List<(DevMount Mount, OptionButton Pick)> _mounts = [];
     private IReadOnlyList<DevPoint> _pointList = [];
     private static readonly double[] Scales = [0.1, 0.25, 0.5, 1, 2, 4];
     /// <summary>The last place chosen, kept for the next time the panel opens in this run.</summary>
@@ -113,6 +123,21 @@ public partial class DevPanel : Control
         _god = new CheckBox { Text = "God mode", ButtonPressed = Host.DevGodOn };
         _god.Toggled += on => Say(Host.DevGod(on));
         col.AddChild(Row(Button("Repair & refill", () => Say(Host.DevRepair())), _god, Button("Bring nearest car", () => Say(Host.DevBring()))));
+
+        col.AddChild(Heading("Loadout"));
+        foreach (var m in Host.DevMounts())
+        {
+            var pick = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, FitToLongestItem = false };
+            for (int i = 0; i < m.Options.Count; i++)
+            {
+                pick.AddItem($"{m.Options[i].Name}  ({m.Options[i].File})");
+                if (m.Options[i].File.Equals(m.Current, System.StringComparison.OrdinalIgnoreCase)) pick.Selected = i;
+            }
+            _mounts.Add((m, pick));
+            col.AddChild(Row(new Label { Text = m.Label, CustomMinimumSize = new Vector2(110, 0) }, pick));
+        }
+        if (_mounts.Count == 0) col.AddChild(new Label { Text = "(the car has no weapons)" });
+        col.AddChild(Row(Button("Apply", ApplyLoadout), Button("Refill ammo & specials", () => Say(Host.DevRefill()))));
 
         col.AddChild(Heading("State"));
         _stored = new Label();
@@ -183,6 +208,21 @@ public partial class DevPanel : Control
         if (_pointList.Count == 0) return;
         Say(Host.DevForget(_pointList[_points.Selected].Name));
         FillPoints(_points.Selected);
+    }
+
+    private void ApplyLoadout()
+    {
+        var lines = new List<string>();
+        for (int i = 0; i < _mounts.Count; i++)
+        {
+            var (m, pick) = _mounts[i];
+            if (pick.Selected < 0) continue;
+            var file = m.Options[pick.Selected].File;
+            if (file.Equals(m.Current, System.StringComparison.OrdinalIgnoreCase)) continue;
+            lines.Add(Host.DevSwap(m.Hardpoint, file));
+            _mounts[i] = (m with { Current = file }, pick);
+        }
+        Say(lines.Count == 0 ? "the loadout is as chosen already" : string.Join("\n", lines));
     }
 
     private void GoCoords()

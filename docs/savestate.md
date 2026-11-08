@@ -40,7 +40,7 @@ meets another tag has lost step with the writer):
 | Section | What |
 |---|---|
 | `SESS` | the tick, the skip latch, the debug-boom counter, the id counters, the rand seed |
-| `VTAB` | every car the session knows (in the world, a human's, an entity's, removed ones too), by id: its .vcf, whether it was built with the player's rules, its paint (`CarPaint.ToBytes`, empty for the factory paint; restored onto the car, a melee-built one included), its make-up (class, weapons, handguns, damage parts) |
+| `VTAB` | every car the session knows (in the world, a human's, an entity's, removed ones too), by id: its .vcf, whether it was built with the player's rules, its paint (`CarPaint.ToBytes`, empty for the factory paint; restored onto the car, a melee-built one included), its make-up (class, weapons each by its file, handguns, damage parts) |
 | `ETAB` | the entities made while the mission ran (a melee's cars and players): name, instance id, type, flags, car |
 | `VEHS` | each car: pose, motion, controls, flags, timers, the contact record; its parameters (which damage lowers), engine, wheels (suspension filter state included), arms; the armoury (selection, link group) and every weapon (ammo, timers, burst, trigger, heat lock, turret aim, gun pitch, hit points); armour, chassis, the pick table and every damage part (special charges and on-times); a helicopter's or an emplacement's block. Then the world's car list in order, the humans, the player |
 | `DRVR` | each driver: slot, car, last input, key ramps, the latched trigger request, the car generation |
@@ -67,7 +67,7 @@ The header (`SnapshotHeader`) is the magic `I76SNAP\0`, the format version, the 
 near/far policy, the tick, and the host's bytes; then the body's length and the body. **Any change to what a
 snapshot holds or how it is laid out bumps `SnapshotHeader.CurrentVersion`.** A snapshot of another version
 is refused with a clear message; there is no migration. Snapshots are for checkpoints within a session and
-quick saves, not archives. Version 13 added the cars' paint (the VTAB entries, the melee players). Version 14 added a co-op game's personal camera scenes (a camera per seat, and the seat a script thread's scene is in). Version 15 added a co-op script thread's hold on a gate it shuts behind the player (the test it waits at and since when). Version 16 added the paths whose node 0 a teleport has put on the ground.
+quick saves, not archives. Version 13 added the cars' paint (the VTAB entries, the melee players). Version 14 added a co-op game's personal camera scenes (a camera per seat, and the seat a script thread's scene is in). Version 15 added a co-op script thread's hold on a gate it shuts behind the player (the test it waits at and since when). Version 16 added the paths whose node 0 a teleport has put on the ground, and each weapon's file to a car's make-up (the Developer panel swaps weapons in place).
 
 ## The completeness guard
 

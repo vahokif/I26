@@ -19,6 +19,8 @@ namespace I76.Game.Ui;
 /// (the mirror too, from its live view), the reticles, and none of
 /// them while the head is turned from forward; the CB handset is the Hud's. The maps keep their rows bottom-up, so each
 /// region is the stored image's last rows, drawn flipped.
+///
+/// The ghost cockpit (']' over the 3D dash) is the same overlay with only its first three panels and the reticles.
 /// </summary>
 public partial class ExtInstruments : Control
 {
@@ -38,7 +40,8 @@ public partial class ExtInstruments : Control
         bool cockpit = l.InCockpit();
         if (cockpit && pit.Binoculars) return [];
         // the 3D cockpit's instruments are the car's model at the same places; the 2D dash and the chase view's own set are these panels
-        if (cockpit && pit.Dash3D) return HudLayout.TopInstruments(w, h, mirror && pit.MirrorFace is not null, dash3d: true);
+        if (cockpit && pit.Dash3D && !pit.Ghost) return HudLayout.TopInstruments(w, h, mirror && pit.MirrorFace is not null, dash3d: true);
+        if (cockpit && pit.Ghost) return HudLayout.TopInstruments(w, h, false);
         return l.Visible ? HudLayout.TopInstruments(w, h, mirror && cockpit && pit.MirrorFace is not null) : [];
     }
 
@@ -79,7 +82,7 @@ public partial class ExtInstruments : Control
         // 175x55 clip ran off the 640 frame's right edge and cut the bezel; here the whole 256x64 art is drawn, moved
         // left until its right end is on the frame (x 384)
         var pit = Pit();
-        bool show = InCockpit() && pit is not null && !pit.LookingAway && pit.MirrorFace is not null;
+        bool show = InCockpit() && pit is not null && !pit.Ghost && !pit.LookingAway && pit.MirrorFace is not null;
         _mirror!.Visible = show;
         if (!show) return;
         var (view, art) = pit!.MirrorFace!.Value;
@@ -99,8 +102,10 @@ public partial class ExtInstruments : Control
         float k = size.Y / 480f;
         var origin = new Vector2((size.X - 640 * k) / 2, 0);
         bool dash = InCockpit();
+        int slot = 0;
         foreach (var (panel, x, y, w, h) in Slots)
         {
+            if (dash && pit.Ghost && slot++ == 3) break;   // the ghost cockpit: radar, damage diagram and compass only
             if (dash && pit.LookingAway) break;   // The nine panels wait for the head to come forward
             // a panel not drawn into yet is the original's empty descriptor: its slot is skipped
             if ((panel is null ? pit.RadarTexture : pit.Panels.Texture(panel)) is not { } tex) continue;
@@ -110,7 +115,7 @@ public partial class ExtInstruments : Control
             DrawTextureRectRegion(tex, new Rect2(0, 0, w, h), new Rect2(0, th - h, w, h));
         }
         DrawSetTransformMatrix(Transform2D.Identity);
-        // the reticles are drawn whatever the head does, the 2D dash only
+        // the reticles are drawn whatever the head does, the 2D dash and the ghost cockpit only
         if (dash && pit.Reticle() is { } r)
             DrawTextureRect(r.Tex, new Rect2(origin + new Vector2(r.X, r.Y) * k, new Vector2(32, 32) * k), false);
     }

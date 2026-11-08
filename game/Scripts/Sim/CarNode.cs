@@ -239,13 +239,23 @@ public partial class CarNode : Node3D
     /// <summary>The interior's bounds in the car's frame, the hood included.</summary>
     public Aabb? CockpitBounds => _cockpit?.Mesh is not { } m ? null : _hood?.Mesh is { } h ? m.GetAabb().Merge(h.GetAabb()) : m.GetAabb();
 
-    private bool _inCar, _dash3d = true;
+    private bool _inCar, _dash3d = true, _ghost;
 
     /// <summary>The 3D dash: the interior model is drawn. Off: the 2D dash, the driver's eye over the world with the panels flat on the screen (Hud).</summary>
     public bool Dash3D
     {
         get => _dash3d;
         set { _dash3d = value; Apply(); }
+    }
+
+    /// <summary>
+    /// The ghost cockpit (TOGGLE_GOSTPIT_DETAIL, ']'): with the 3D dash on, the interior model is not drawn and the
+    /// 2D overlay shows only the radar, the damage diagram and the compass. Not kept with the settings.
+    /// </summary>
+    public bool GhostCockpit
+    {
+        get => _ghost;
+        set { _ghost = value; Apply(); }
     }
 
     private bool _outside;
@@ -282,7 +292,7 @@ public partial class CarNode : Node3D
     private void Apply()
     {
         bool inside = _inCar && !_outside, hidden = !I76.Sim.Views.OwnCar.Drawn(_inCar, _hoodView, _outside);
-        if (_cockpit is not null) _cockpit.Visible = inside && _dash3d;
+        if (_cockpit is not null) _cockpit.Visible = inside && _dash3d && !_ghost;
         if (_body is not null) _body.Visible = !hidden;
         foreach (var (node, _, _, _) in _wheels) node.Visible = !hidden && !_flung.Contains(node);
         foreach (var (_, node) in _weapons) node.Visible = !hidden && !_flung.Contains(node);

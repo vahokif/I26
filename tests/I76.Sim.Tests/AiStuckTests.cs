@@ -109,6 +109,8 @@ public class AiStuckTests(ITestOutputHelper log)
         s.World.Vehicles.Add(v);
         h.Add(car);
         var me = h.Player!;
+        // t15as01 sits on this spot: out of the way, so the two cars do not start inside each other
+        Put(s, s.Entities.First(e => e.Name == "t15as01").Vehicle!, 2412.5f, 45857.5f, 0);
         Put(s, v, 2412.5f, 45757.5f, 0);
         void Park() { var p = v.Pos.ToVector3() + v.Rot.ToWorld(new Vector3(right, 0, ahead)); Put(s, me.Vehicle!, p.X, p.Z, 0); }
         Park();

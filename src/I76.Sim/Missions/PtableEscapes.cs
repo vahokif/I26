@@ -364,27 +364,23 @@ public sealed partial class Ptable
     }
 
     /// <summary>
-    /// Blocked in the gear direction: the short terrain probe,
-    /// then a 7 swept volume against the other objects (here other cars' boxes
-    /// and the scenery's meshes and node boxes along three lines).
+    /// Blocked in the gear direction: the short terrain probe, then the car's origin swept 7 along its forward row in
+    /// the gear direction against the other cars' boxes (<see cref="OriginSweepHitsBox"/>), then the scenery's meshes
+    /// and node boxes along three lines.
     /// </summary>
     private bool BlockedInGear(Entity e)
     {
         if (ProbeShort(e)) return true;
         var v = e.Vehicle!; var p = Pos(e);
-        var dir = Travel(v.Rot.Forward, v.Gear);
-        var right = new Vector3(dir.Z, 0, -dir.X);
-        float reach = 7f + MathF.Max(v.BoxZ[3], -v.BoxZ[0]);
+        var sweep = v.Rot.Forward * (7f * v.Gear);
         foreach (var o in host.Entities)
         {
             if (o == e || o.Vehicle is not { } ov || o.Removed) continue;
-            foreach (var h in Hull(ov))
-            {
-                var w = o.Position + ov.Rot.ToWorld(h) - p;
-                float lz = Vector3.Dot(w, dir), lx = Vector3.Dot(w, right);
-                if (lz > 0 && lz < reach && MathF.Abs(lx) < 1.3f) return true;
-            }
+            if (OriginSweepHitsBox(p, sweep, o.Position, ov)) return true;
         }
+        var dir = Travel(v.Rot.Forward, v.Gear);
+        var right = new Vector3(dir.Z, 0, -dir.X);
+        float reach = 7f + MathF.Max(v.BoxZ[3], -v.BoxZ[0]);
         if (World.Ground is IHasStatics hs)
             foreach (var so in hs.World.Objects)
             {
@@ -393,6 +389,36 @@ public sealed partial class Ptable
                     if (WallHit(so, p + right * side + new Vector3(0, 1f, 0), dir * reach) is not null) return true;
             }
         return false;
+    }
+
+    /// <summary>
+    /// The probe's test of another car: the origin <paramref name="p"/> (on the ground under the car) swept by
+    /// <paramref name="sweep"/> against the car's collision box in that car's frame, x and z to the outer planes and y
+    /// from the lower inner plane to the upper outer (the planes the original's box test reads), with no pad. A hit is
+    /// an entry into the box within the sweep; a start already inside is none. Every car's box begins above its origin
+    /// (0.23 to 0.35 up), so a car ahead on the same ground is passed under and never sends a car into back_away; one
+    /// the car stands higher than, by the box's height, does. Measured in the original (T02's opening, retail 1.0 on an
+    /// emulated Pentium, n = 2): the script-driven player's car, put 5 behind Taurus's at 20 u/s, keeps driving.
+    /// </summary>
+    public static bool OriginSweepHitsBox(Vector3 p, Vector3 sweep, Vector3 origin, Vehicle o)
+    {
+        var lp = o.Rot.ToLocal(p - origin); var lv = o.Rot.ToLocal(sweep);
+        float t0 = float.NegativeInfinity, t1 = 1f;
+        return Slab(lp.X, lv.X, o.BoxX[0], o.BoxX[3], ref t0, ref t1)
+            && Slab(lp.Y, lv.Y, o.BoxY[1], o.BoxY[3], ref t0, ref t1)
+            && Slab(lp.Z, lv.Z, o.BoxZ[0], o.BoxZ[3], ref t0, ref t1)
+            && t0 >= 0f;
+    }
+
+    /// <summary>One axis of the slab test: narrows [t0, t1] to the sweep's time inside [min, max]; false when nothing is left, or the sweep is already past it.</summary>
+    private static bool Slab(float x, float dx, float min, float max, ref float t0, ref float t1)
+    {
+        if (MathF.Abs(dx) < 1e-6f) return x >= min && x <= max;
+        float a = (min - x) / dx, b = (max - x) / dx;
+        if (a > b) (a, b) = (b, a);
+        if (b < 0f) return false;
+        t0 = MathF.Max(t0, a); t1 = MathF.Min(t1, b);
+        return t0 <= t1;
     }
 
     /// <summary>

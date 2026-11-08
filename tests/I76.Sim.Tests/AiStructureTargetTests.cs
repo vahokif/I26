@@ -198,9 +198,18 @@ public class AiStructureTargetTests
         var creepers = setup.Entities.Where(e => e.Name.StartsWith("t06c") && e.Vehicle is not null).ToList();
         int hp0 = HitPoints(station);
         bool turned = false;
-        int shots = Run(setup, s, h.Now + 30, "t06c", () => turned |= creepers.Any(c => c.OrderTarget == player));
+        // up to 30 s, or as soon as both are on the station, 20 rounds fired and 3000 off it: a seed whose tactics shoot
+        // it down sooner must not bring it down before the player's round
+        float t0 = h.Now;
+        int shots = 0;
+        List<Entity> attackers;
+        do
+        {
+            shots += Run(setup, s, h.Now + 1, "t06c", () => turned |= creepers.Any(c => c.OrderTarget == player));
+            attackers = creepers.Where(c => c.OrderTarget == station).ToList();
+        }
+        while (h.Now < t0 + 30 && !(attackers.Count == 2 && shots >= 20 && hp0 - HitPoints(station) >= 3000));
         Assert.False(turned, "a creeper turned on the player unprovoked");
-        var attackers = creepers.Where(c => c.OrderTarget == station).ToList();
         Assert.Equal(2, attackers.Count);
         Assert.True(shots >= 20 && hp0 - HitPoints(station) >= 3000, $"{shots} shots, station {hp0} -> {HitPoints(station)}");
 

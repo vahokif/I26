@@ -227,9 +227,12 @@ public class AiStuckTests(ITestOutputHelper log)
         e.BackFarthest = 2f;
         Assert.False(JustDoIt());                  // it has been backing off: the original's test alone, and it says no here
     }
-    /// <summary>The avoid predicates' one-frame look-ahead (VehicleStep.Predict) leaves the car as it was, the height above ground included (the airborne forces write it).</summary>
+    /// <summary>
+    /// The avoid predicates' one-frame look-ahead (VehicleStep.Predict) leaves the car as it was, except its height above
+    /// ground: the airborne forces write it into the car, and the original leaves it written.
+    /// </summary>
     [Fact]
-    public void TheLookAheadLeavesAnAirborneCarAsItWas()
+    public void TheLookAheadLeavesAnAirborneCarAsItWasButItsClearance()
     {
         if (InstallDir is null) return;
         var v = VehicleFactory.Create(new AssetVfs(new GameInstall(InstallDir!)), "vppirna1.vcf");
@@ -237,7 +240,8 @@ public class AiStuckTests(ITestOutputHelper log)
         v.Pos = new Double3(0, 10, 0); v.Vel = new Vector3(0, 2, 20); v.Flags |= VehicleFlags.Airborne; v.HeightAboveGround = 10;
         var (p, _, _) = step.Predict(v, SimRate.R20.TickSeconds, false, false, 0, 1);
         Assert.True(p.Y > 10f);
-        Assert.Equal(10f, v.HeightAboveGround);
+        Assert.Equal(p.Y, v.HeightAboveGround, 4);
         Assert.Equal(10.0, v.Pos.Y);
+        Assert.Equal(new Vector3(0, 2, 20), v.Vel);
     }
 }

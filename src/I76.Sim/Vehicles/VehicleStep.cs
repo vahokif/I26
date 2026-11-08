@@ -125,11 +125,12 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         {
             if (far)
                 return CheapMotion(v, frameDelta, isPlayer, out var cp, out var cv, out var cr, out _, out _) ? (cp, cv, cr) : (v.Pos.ToVector3(), Vector3.Zero, v.Rot);
-            // the forces write the height above ground too (airborne); the prediction leaves the car as it was
-            var (pos, vel, rot, ang, above) = (v.Pos, v.Vel, v.Rot, v.AngVel, v.HeightAboveGround);
+            // the forces' airborne branch writes the height above ground into the car itself, and the original
+            // leaves it written: every candidate tested moves the clearance the next "still rising" test reads
+            var (pos, vel, rot, ang) = (v.Pos, v.Vel, v.Rot, v.AngVel);
             Forces(v, frameDelta, isPlayer, out _, out _);
             var r = (v.Pos.ToVector3(), v.Vel, v.Rot);
-            (v.Pos, v.Vel, v.Rot, v.AngVel, v.HeightAboveGround) = (pos, vel, rot, ang, above);
+            (v.Pos, v.Vel, v.Rot, v.AngVel) = (pos, vel, rot, ang);
             return r;
         }
         finally { v.Steer = s0; v.Throttle = t0; }

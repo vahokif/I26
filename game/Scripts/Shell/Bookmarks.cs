@@ -67,6 +67,22 @@ public sealed class Bookmarks
         return f is null ? null : I76.Sim.Trip.TripInventory.Load(f.GetAsText(), db, vfs);
     }
 
+    /// <summary>
+    /// Drops the entry at <paramref name="index"/> and keeps the others in order with their stems. Returns the row to select
+    /// afterwards: the one that moved up into its place, else the new last row, else -1.
+    /// </summary>
+    public int RemoveAt(int index)
+    {
+        Entries.RemoveAt(index);
+        return Entries.Count == 0 ? -1 : Math.Min(index, Entries.Count - 1);
+    }
+
+    /// <summary>Removes a bookmark's kept car from user://saves.</summary>
+    public static void DeleteCar(string stem)
+    {
+        if (Godot.FileAccess.FileExists(CarPath(stem))) DirAccess.RemoveAbsolute(CarPath(stem));
+    }
+
     /// <summary>A new entry's stem: save%03d with the number one past the largest (parsed back from the stem).</summary>
     public string NextStem() => $"save{(Entries.Count == 0 ? 0 : Entries.Max(e => int.TryParse(e.Stem.AsSpan(4), out int n) ? n : 0) + 1):000}";
 }
@@ -245,6 +261,33 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
 {
     protected override int Record => 12;
     protected override string Action => "Load";
+
+    protected override void Build()
+    {
+        base.Build();
+        // Delete sits left of Load, drawn the same way (to the right of Cancel it would run off the sheet)
+        Add(328 - 25 - Small.Measure("Delete"), 420, "Delete", Delete, Small);
+    }
+
+    /// <summary>Delete: asks first; Yes removes the picked bookmark's entry and its kept car and selects the row that took its place.</summary>
+    private void Delete()
+    {
+        if (Picked < 0 || Picked >= Marks.Entries.Count) return;
+        int row = Picked;
+        Shell.Modal(new ConfirmPopup
+        {
+            Lines = ["Delete this bookmark?"],
+            Answer = yes =>
+            {
+                if (!yes || row >= Marks.Entries.Count) return;
+                Bookmarks.DeleteCar(Marks.Entries[row].Stem);
+                Picked = Marks.RemoveAt(row);
+                Marks.Save();
+                Top = Math.Clamp(Top, 0, Math.Max(0, Marks.Entries.Count - 10));
+                Redraw();
+            },
+        });
+    }
 
     protected override (int, string) Header() =>
         Picked >= 0 && Picked < Marks.Entries.Count ? (Marks.Entries[Picked].Scene, Marks.Entries[Picked].Name) : (Shell.Trip.Mission, "");

@@ -324,4 +324,38 @@ public class DamageTests(Xunit.Abstractions.ITestOutputHelper log)
         player.Flags |= VehicleFlags.EngineOn;
         Assert.Equal(player, combat.TargetFor(ai, 4));
     }
+
+    /// <summary>
+    /// Taurus's van (T14) with its right side's armour gone, as measured in the original (retail 1.0 on an emulated
+    /// Pentium): seven 45-point rounds through that side each landed whole on one live component of the side's rows (both
+    /// right wheels 100 to 55, engine 300 to 255, suspension 200 to 65, brake 150 to 105), the chassis words stayed full
+    /// and the van lived. Bullets never touch the chassis; with no component destroyed there is no kill roll.
+    /// </summary>
+    [Fact]
+    public void RoundsThroughAZeroArmourSideGoWholeToALiveComponent()
+    {
+        if (InstallDir is null) return;
+        var vfs = new AssetVfs(new GameInstall(InstallDir));
+        var world = new SimWorld(new Flat(), new CrtRand(1));
+        var van = VehicleFactory.Create(vfs, "t14sv01.vcf");
+        world.Vehicles.Add(van);
+        van.Health = VehicleDamage.Create(van, van.Build!, false, world.Rand);
+        var combat = new Combat(world, n => vfs.TryRead(n) is { } d ? EffectDef.Read(n, d) : null);
+        var damage = new DamageModel(world, combat);
+        var d = van.Health;
+        d.Armour[2] = d.ArmourMirror[2] = 0;
+        int Parts() => d.Slots.Where(x => x is not null and not WeaponPart).Sum(x => x!.Hp) + d.Slots.OfType<WeaponPart>().Sum(x => x.Hp);
+        for (int i = 0; i < 7; i++)
+        {
+            int before = Parts();
+            var p = new DamagePacket { Mask = 1, Kind = DamageKind.Round };
+            p.Ch[0] = 45;
+            damage.Apply(van, p, new Vector3(1, 0.5f, i % 2 == 0 ? 0.2f : -0.2f));   // the right side, front and rear half
+            Assert.False(van.Health.V.Flags.HasFlag(VehicleFlags.Dead));
+            Assert.Contains(before - Parts(), new[] { 0, 45 });   // whole on one component, or lost on the row's empty entry
+            Assert.Equal(d.ChassisMax, d.Chassis);
+            Assert.Equal(0, d.Armour[2]);
+        }
+        Assert.All(d.Slots.Where(x => x is not null), x => Assert.True(x!.Hp > 0));
+    }
 }

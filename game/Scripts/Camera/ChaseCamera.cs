@@ -26,8 +26,9 @@ namespace I76.Game.Camera;
 /// engine ramps these axes in its binding layer, which is not
 /// modelled. The mouse (Mouse Camera, on by default) moves the same targets by its motion. An axis bound to the track_yaw_delta or track_pitch_delta rows
 /// (the pad's right stick in the port's preset) turns it in proportion.
-/// When the car dies it swings into a slow orbit round the wreck, as the
-/// original's death camera does.
+/// When the car dies (and round the winner at a network match's end) it swings
+/// into an orbit round the wreck, 8 degrees per sim tick's worth of time as the
+/// original's 8 a frame (DeathOrbit).
 /// </summary>
 public partial class ChaseCamera : Camera3D
 {
@@ -44,7 +45,7 @@ public partial class ChaseCamera : Camera3D
     /// raised by Lift (2), the track keys moving only the distance. Null is the chase view (F2).
     /// </summary>
     public (float Pitch, float Yaw, float Lift)? Fixed { get; set; }
-    private float _orbitYaw;
+    private readonly I76.Sim.Views.DeathOrbit _death = new();
     /// <summary>The track axes at full deflection, degrees a second (the original maps them to ±10° a frame; the port's keys turn at 90 and 45).</summary>
     private const float StickYawRate = 180, StickPitchRate = 90;
     private bool _orbiting;
@@ -75,13 +76,13 @@ public partial class ChaseCamera : Camera3D
     private static Vector3 Game(Vector3 g) => new(g.X, g.Y, -g.Z);
 
     /// <summary>Where the camera stands relative to the car (its eased pitch, yaw, zoom and heading, and their targets), for a checkpoint.</summary>
-    public float[] SaveState() => [_pitchT, _yawT, _zoomT, _orbit.Pitch, _orbit.Yaw, _zoom, _heading, _orbitYaw, _orbiting ? 1 : 0];
+    public float[] SaveState() => [_pitchT, _yawT, _zoomT, _orbit.Pitch, _orbit.Yaw, _zoom, _heading, _death.Yaw, _orbiting ? 1 : 0];
 
     /// <summary>The camera as <see cref="SaveState"/> had it.</summary>
     public void LoadState(float[] s)
     {
         if (s.Length < 9) return;
-        (_pitchT, _yawT, _zoomT, _zoom, _heading, _orbitYaw) = (s[0], s[1], s[2], s[5], s[6], s[7]);
+        (_pitchT, _yawT, _zoomT, _zoom, _heading, _death.Yaw) = (s[0], s[1], s[2], s[5], s[6], s[7]);
         (_orbit.Pitch, _orbit.Yaw) = (s[3], s[4]);
         _orbiting = s[8] != 0;
         _orbit.Reset();
@@ -163,14 +164,17 @@ public partial class ChaseCamera : Camera3D
         float k = 1f - Mathf.Exp(-6f * dt);
         if (!_orbiting)
         {
-            var off = Position - t.Origin;
-            _orbitYaw = Mathf.Atan2(off.X, off.Z);
+            var from = Position - t.Origin;
+            _death.Start(Mathf.Atan2(from.X, from.Z));
             _orbiting = true;
         }
-        _orbitYaw += 0.35f * dt;
+        _death.Advance(dt, I76.Game.Sim.SimClock.Tick);
         float d = MathF.Min(_zoom * Radius, 150f);
-        var want = centreG + new Vector3(Mathf.Sin(_orbitYaw), 0, Mathf.Cos(_orbitYaw)) * (d * 1.3f) + Vector3.Up * (d * 0.6f);
-        Position = Position.Lerp(want, k * 0.5f);
+        // the angle is the orbit's; only the distance and the height ease in (easing the position cut inside the circle)
+        var off = Position - centreG;
+        float r = Mathf.Lerp(new Vector2(off.X, off.Z).Length(), d * 1.3f, k * 0.5f);
+        float y = Mathf.Lerp(off.Y, d * 0.6f, k * 0.5f);
+        Position = centreG + new Vector3(Mathf.Sin(_death.Yaw) * r, y, Mathf.Cos(_death.Yaw) * r);
         LookAt(centreG, Vector3.Up);
     }
 

@@ -357,7 +357,7 @@ moving from the current 27.8 Hz to the new default.
 | 22 | sky scroll 1/(1001 − 2⁻⁷) per frame | shaders (per second) | frame (no clock) | 0.020/s at 20 vs 0.028 | low (look) |
 | 23 | damage smoke: 2 puffs per frame, life 20 frames | `DamageSmoke.cs` (render frames) | frame | 1.0 s trails at 20 vs 0.72 | low (look) |
 | 24 | third-person camera: yaw += 4·rawDt·Δ (no clamp), pitch/roll snap above 0.95 | `ChaseCamera.cs` (render dt, 2·dt) | ease | none visible | low (look) |
-| 25 | death camera 8° per frame | `ChaseCamera.DeathOrbit` (time based) | frame | 160°/s at 20 vs 222°/s | low (look) |
+| 25 | death and end-of-match orbit 8° per frame (one view for both, no clock) | `Views/DeathOrbit` (8° per tick's worth of time, on the render delta at the session's rate: the original at that sim rate) | frame | 160°/s at 20, 222°/s at 28, 482°/s at 60, smooth at any display rate | low (look) |
 | 26 | cockpit: ammo digits roll one step per update; steering-wheel strip the steering-wheel animation (integer, truncated: frozen at high fps); binocular glance ±29/31° per frame | `Cockpit.cs` (render frames) | frame / edge | the wheel turns in the original at 20, not at 60 | low (look) |
 | 27 | contrails / cluster trail: 4 segments removed a frame | `Contrails.cs` | frame | look | low (look) |
 | 28 | scenery spinners rotate ω·rawDt | `ScenerySpawner` (time) | dt | none | low |

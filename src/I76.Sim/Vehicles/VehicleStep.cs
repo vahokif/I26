@@ -577,13 +577,15 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
             if (!o.Solid) continue;
             if (o.Type == 4)
             {
-                // a sign: its sphere against the car's box, now and at the end of the frame; no response, it is knocked off
-                float reach = r + o.SphereRadius + v.Speed * dtFrame;
-                if ((new Vector2(o.Centre.X - c.X, o.Centre.Z - c.Z)).LengthSquared() > reach * reach) continue;
-                if (SphereHitsBox(v, o.Centre, o.SphereRadius, dtFrame))
+                // a sign: each part's sphere against the car's box, now and at the end of the frame; no response, it is knocked off
+                foreach (var sp in o.Spheres.Count > 0 ? o.Spheres : [new Collision.NodeSphere(o.Centre, o.SphereRadius)])
                 {
+                    float reach = r + sp.Radius + v.Speed * dtFrame;
+                    if ((new Vector2(sp.Centre.X - c.X, sp.Centre.Z - c.Z)).LengthSquared() > reach * reach) continue;
+                    if (!SphereHitsBox(v, sp.Centre, sp.Radius, dtFrame)) continue;
                     ObjectHits.Add((v, o.Name, o.Type, Vector3.UnitY, v.Speed));
                     Damage?.StaticContact(v, o, new Contact { Hit = true, Other = o });
+                    break;
                 }
                 continue;
             }
@@ -599,6 +601,16 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
                 {
                     best = hit.T;
                     rec = hit with { Other = o, Node = b.Node };
+                }
+            }
+            foreach (var sp in o.Spheres)
+            {
+                if (signsOnly && !o.SignNode(sp.Node)) continue;
+                if (!SweptSphere(c, v.Vel, sp.Centre, r + sp.Radius, dtFrame)) continue;
+                if (SphereContact(v, sp.Centre, sp.Radius, dtFrame) is { } hit && hit.T < best)
+                {
+                    best = hit.T;
+                    rec = hit with { Other = o, Node = sp.Node };
                 }
             }
             var polys = signsOnly ? o.Polys.FindAll(q => o.SignNode(q.Node)) : o.Polys;
@@ -711,6 +723,29 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
             if ((q - local).LengthSquared() < radius * radius) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// A class-0x4000 / 0x5000 node's sphere against the car's box, sampled as <see cref="SphereHitsBox"/> (now, half
+    /// way, the end of the frame): the first sample that touches gives the record, its point the box's nearest to the
+    /// centre, its normal from the centre toward it.
+    /// </summary>
+    private static Contact? SphereContact(Vehicle v, Vector3 centre, float radius, float dt)
+    {
+        var min = new Vector3(v.BoxX[0], v.BoxY[1], v.BoxZ[0]); var max = new Vector3(v.BoxX[3], v.BoxY[3], v.BoxZ[3]);
+        var p0 = v.Pos.ToVector3();
+        for (int k = 0; k <= 2; k++)
+        {
+            float t = dt * k / 2f;
+            var local = v.Rot.ToLocal(centre - (p0 + v.Vel * t));
+            var q = Vector3.Clamp(local, min, max);
+            if ((q - local).LengthSquared() >= radius * radius) continue;
+            var away = v.Rot.ToWorld(q - local);
+            if (away.LengthSquared() < 1e-8f) away = p0 + v.Vel * t - centre;
+            var n = away.LengthSquared() > 1e-8f ? Vector3.Normalize(away) : Vector3.UnitY;
+            return new Contact { Hit = true, T = t, C = q, RelVel = -(v.Vel + v.Rot.ToWorld(Vector3.Cross(q, v.AngVel))), N = n };
+        }
+        return null;
     }
 
     /// <summary>For a moving sphere against a static one.</summary>

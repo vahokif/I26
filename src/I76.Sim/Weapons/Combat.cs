@@ -1318,6 +1318,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 var (t, poly) = StaticWorld.RayMesh(o.Polys, p0, d, 1f);
                 if (poly is not null && t < best) { best = t; victim = o; normal = poly.N; node = poly.Node; }
                 if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; normal = bh.N; node = bh.Box.Node; }
+                // a breakable's part spheres are its car contact's (rounds pass a sign)
+                if (o.Type != 4 && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sh && sh.T < best) { best = sh.T; victim = o; normal = sh.N; node = sh.Sphere.Node; }
             }
         }
         Vector3 at;

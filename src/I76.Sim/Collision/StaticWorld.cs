@@ -132,7 +132,7 @@ public sealed partial class StaticObject
     public Vector3? Marker { get; set; }
     /// <summary>The session's stable id: the collider's place in the static world, from 1 (0 until a session assigns it).</summary>
     public int NetId;
-    /// <summary>Type 4's collider: a sphere about Centre (0.75 × the bounding radius).</summary>
+    /// <summary>Type 4's sphere about Centre (0.75 × the bounding radius): the spawn spacing's, and the collider of one made without parts (<see cref="StaticWorld.AddBox"/>).</summary>
     public float SphereRadius;
     /// <summary>The collider record's radius (rec[4]): the farthest vertex from <see cref="Centre"/>, in 3D. A splash reaches what it touches.</summary>
     public float BoundRadius;
@@ -151,7 +151,7 @@ public sealed partial class StaticObject
     /// <summary>Counts the geometry swaps, for whatever mirrors the colliders.</summary>
     public int Revision { get; private set; }
     /// <summary>Whether it still collides and carries cars.</summary>
-    public bool Solid => Nodes.Count == 0 || Type == 4 ? !Destroyed || Collapsed : Polys.Count + Boxes.Count + Surfaces.Count > 0;
+    public bool Solid => Nodes.Count == 0 || Type == 4 ? !Destroyed || Collapsed : Polys.Count + Boxes.Count + Spheres.Count + Surfaces.Count > 0;
 
     /// <summary>The whole placement's destruction geometry swap (then the rebuild): an emplacement's wreck, or a collider without nodes.</summary>
     public void Collapse()
@@ -160,12 +160,13 @@ public sealed partial class StaticObject
         Polys.Clear(); Polys.AddRange(r.Polys);
         Surfaces.Clear(); Surfaces.AddRange(r.Surfaces);
         Boxes.Clear(); Boxes.AddRange(r.Boxes);
+        Spheres.Clear(); Spheres.AddRange(r.Spheres);
         Centre = r.Centre; Radius = r.Radius; BoundRadius = r.BoundRadius;
         Collapsed = true;
         Revision++;
     }
 
-    private (Poly[] Polys, Poly[] Surfaces, NodeBox[] Boxes, Vector3 Centre, float Radius, float BoundRadius)? _intact;
+    private (Poly[] Polys, Poly[] Surfaces, NodeBox[] Boxes, NodeSphere[] Spheres, Vector3 Centre, float Radius, float BoundRadius)? _intact;
 
     /// <summary>
     /// The geometry after nodes died (and the rebuild):
@@ -175,27 +176,30 @@ public sealed partial class StaticObject
     public void Refresh()
     {
         if (Nodes.Count == 0) { if (Destroyed) Collapse(); return; }
-        _intact ??= ([.. Polys], [.. Surfaces], [.. Boxes], Centre, Radius, BoundRadius);
+        _intact ??= ([.. Polys], [.. Surfaces], [.. Boxes], [.. Spheres], Centre, Radius, BoundRadius);
         bool Alive(int n) => n < 0 ? !Destroyed : !Nodes[n].Destroyed;
         bool Dead(int n) => n < 0 ? Destroyed : Nodes[n].Destroyed;
-        Polys.Clear(); Surfaces.Clear(); Boxes.Clear();
+        Polys.Clear(); Surfaces.Clear(); Boxes.Clear(); Spheres.Clear();
         Polys.AddRange(_intact.Value.Polys.Where(p => Alive(p.Node)).Select(Moved));
         Surfaces.AddRange(_intact.Value.Surfaces.Where(p => Alive(p.Node)).Select(Moved));
         Boxes.AddRange(_intact.Value.Boxes.Where(b => Alive(b.Node)).Select(Moved));
+        Spheres.AddRange(_intact.Value.Spheres.Where(b => Alive(b.Node)).Select(Moved));
         bool swapped = false;
         if (Remains is { } r)
         {
             foreach (var p in r.Polys) if (Dead(p.Node)) { Polys.Add(Moved(p)); swapped = true; }
             foreach (var p in r.Surfaces) if (Dead(p.Node)) { Surfaces.Add(Moved(p)); swapped = true; }
             foreach (var b in r.Boxes) if (Dead(b.Node)) { Boxes.Add(Moved(b)); swapped = true; }
+            foreach (var b in r.Spheres) if (Dead(b.Node)) { Spheres.Add(Moved(b)); swapped = true; }
         }
         Collapsed = swapped;
         Revision++;
         // the collider's sphere is rebuilt round what is left (measured: the grain hopper's
         // 11.84 about its marker before, 12.24 about (1549.4, 31.8, 49738.8) with its bin gone)
         var pts = Polys.Concat(Surfaces).SelectMany(p => p.V)
-            .Concat(Boxes.SelectMany(b => new[] { b.Origin + b.Rot.ToWorld(b.Min), b.Origin + b.Rot.ToWorld(b.Max) })).ToList();
-        if (_intact.Value.Polys.All(p => Alive(p.Node)) && _intact.Value.Surfaces.All(p => Alive(p.Node)) && _intact.Value.Boxes.All(b => Alive(b.Node)))
+            .Concat(Boxes.SelectMany(b => new[] { b.Origin + b.Rot.ToWorld(b.Min), b.Origin + b.Rot.ToWorld(b.Max) }))
+            .Concat(Spheres.SelectMany(b => new[] { b.Centre - new Vector3(b.Radius), b.Centre + new Vector3(b.Radius) })).ToList();
+        if (_intact.Value.Polys.All(p => Alive(p.Node)) && _intact.Value.Surfaces.All(p => Alive(p.Node)) && _intact.Value.Boxes.All(b => Alive(b.Node)) && _intact.Value.Spheres.All(b => Alive(b.Node)))
         {
             (Centre, Radius, BoundRadius) = (_intact.Value.Centre, _intact.Value.Radius, _intact.Value.BoundRadius);
             // a gate slid past the placement's circle still meets cars there (the circle is only the port's broad test)
@@ -223,6 +227,11 @@ public sealed partial class StaticObject
     {
         var d = ShiftOf(b.Node);
         return d == Vector3.Zero ? b : b with { Origin = b.Origin + d };
+    }
+    private NodeSphere Moved(NodeSphere b)
+    {
+        var d = ShiftOf(b.Node);
+        return d == Vector3.Zero ? b : b with { Centre = b.Centre + d };
     }
 
     /// <summary>
@@ -289,6 +298,8 @@ public sealed partial class StaticObject
 
     /// <summary>Class 0x2000 nodes: a box each, in the node's own frame.</summary>
     public List<NodeBox> Boxes { get; } = [];
+    /// <summary>Class 0x4000 / 0x5000 nodes: a sphere each, the part's SGEO radius x 1 (0x4000) or 0.75 (0x5000, the default of type 4's parts).</summary>
+    public List<NodeSphere> Spheres { get; } = [];
     /// <summary>Type 0xc: the first type-0xd node (the deck) in the node walk, for the bridge tree.</summary>
     public NodeFrame? Deck { get; set; }
 }
@@ -301,6 +312,13 @@ public sealed record NodeBox(Rows Rot, Vector3 Origin, Vector3 Min, Vector3 Max,
 {
     public Vector3 Centre => Origin + Rot.ToWorld((Min + Max) * 0.5f);
     /// <summary>The structure node it belongs to, or −1 for the root.</summary>
+    public int Node { get; init; } = -1;
+}
+
+/// <summary>A class-0x4000 (radius x 1) or 0x5000 (x 0.75) node's collider: its SGEO sphere, placed in the world.</summary>
+public sealed record NodeSphere(Vector3 Centre, float Radius)
+{
+    /// <summary>The structure node it belongs to, or -1 for the root.</summary>
     public int Node { get; init; } = -1;
 }
 
@@ -337,9 +355,9 @@ public sealed class StaticWorld
     /// default; 0x1000 nodes do not collide.
     /// </summary>
     public StaticObject? Add(string name, uint type, float[] engineRotation, Vector3 position, AssembledModel model, Func<string, uint>? nodeClass = null, Func<string, uint>? nodeType = null,
-        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null)
+        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null, Func<string, (Vector3 Centre, float Radius)?>? nodeSphere = null)
     {
-        if (Build(name, type, engineRotation, position, model, nodeClass, nodeType, nodeIndex, nodeBase) is not { } o) return null;
+        if (Build(name, type, engineRotation, position, model, nodeClass, nodeType, nodeIndex, nodeBase, nodeSphere) is not { } o) return null;
         Objects.Add(o);
         return o;
     }
@@ -353,8 +371,9 @@ public sealed class StaticWorld
     /// </summary>
     /// <param name="nodeIndex">A part's structure node (<see cref="StaticObject.Nodes"/>) by part name, −1 for none: its polygons and boxes carry it.</param>
     /// <param name="nodeBase">Told each node's <see cref="StructureNode.Base"/>, from its part's geometry.</param>
+    /// <param name="nodeSphere">A part's SGEO sphere (centre in part space, radius), for its class-0x4000 / 0x5000 collider; null takes the geometry's bounds.</param>
     public static StaticObject? Build(string name, uint type, float[] engineRotation, Vector3 position, AssembledModel model, Func<string, uint>? nodeClass = null, Func<string, uint>? nodeType = null,
-        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null)
+        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null, Func<string, (Vector3 Centre, float Radius)?>? nodeSphere = null)
     {
         if (!Collides(type)) return null;
         var place = Affine.FromEngine(engineRotation, position);
@@ -383,6 +402,19 @@ public sealed class StaticWorld
             uint cls = nodeClass?.Invoke(part.NodeName) ?? 0;
             if (cls == 0) cls = DefaultClass(type);
             if (cls == 0x1000) continue;
+            if (cls is 0x4000 or 0x5000)
+            {
+                // a flag base (part type 0x5a / 0x5b): the car's collide slot ignores it, the CTF game takes the flag
+                if (type != 4 && nodeType?.Invoke(part.NodeName) is 0x5a or 0x5b) continue;
+                // a sphere: the part's SGEO centre and radius, x 1.0 (0x4000) or 0.75 (0x5000); a breakable (type 4) has
+                // one per part
+                var (sc, sr) = nodeSphere?.Invoke(part.NodeName) ?? BoundSphere(g.Vertices);
+                var sw = place.Apply(part.ToModel.Apply(sc));
+                o.Spheres.Add(new NodeSphere(sw, sr * (cls == 0x4000 ? 1f : 0.75f)) { Node = node });
+                // a breakable's bounds stay its vertices' (the spawn spacing's sphere)
+                if (type != 4) { all.Add(sw - new Vector3(sr)); all.Add(sw + new Vector3(sr)); }
+                continue;
+            }
             if (cls == 0x2000 && type != 4)
             {
                 var rot = Frame();
@@ -415,11 +447,38 @@ public sealed class StaticWorld
         if (all.Count == 0) return null;
         var min = all.Aggregate(Vector3.Min); var max = all.Aggregate(Vector3.Max);
         o.Centre = (min + max) * 0.5f;
-        // class 0x5000 (type 4, signs): a sphere of 0.75 × the node's bounding radius (C1)
+        // type 4: 0.75 × the whole object's bounding radius, for the spawn spacing (its parts collide by their own spheres)
         o.BoundRadius = all.Max(p => Vector3.Distance(p, o.Centre));
         o.SphereRadius = 0.75f * o.BoundRadius;
         o.Radius = all.Max(p => new Vector2(p.X - o.Centre.X, p.Z - o.Centre.Z).Length());
         return o;
+    }
+
+    private static (Vector3, float) BoundSphere(Vector3[] v)
+    {
+        var c = (v.Aggregate(Vector3.Min) + v.Aggregate(Vector3.Max)) * 0.5f;
+        return (c, v.Max(p => Vector3.Distance(p, c)));
+    }
+
+    /// <summary>A segment p + v t, t in [0, maxT], against spheres: the earliest entry, its outward normal and the sphere.</summary>
+    public static (float T, Vector3 N, NodeSphere Sphere)? RaySpheres(IReadOnlyList<NodeSphere> spheres, Vector3 p, Vector3 v, float maxT)
+    {
+        (float T, Vector3 N, NodeSphere Sphere)? best = null;
+        float a = v.LengthSquared();
+        if (a < 1e-12f) return null;
+        foreach (var s in spheres)
+        {
+            var m = p - s.Centre;
+            float b = Vector3.Dot(m, v), c = m.LengthSquared() - s.Radius * s.Radius;
+            float disc = b * b - a * c;
+            if (disc < 0) continue;
+            float t = (-b - MathF.Sqrt(disc)) / a;
+            if (t < 0) t = c <= 0 ? 0 : float.MaxValue;   // from inside: at once; behind: none
+            if (t > maxT || (best is { } bb && t >= bb.T)) continue;
+            var n = p + v * t - s.Centre;
+            best = (t, n.LengthSquared() > 1e-12f ? Vector3.Normalize(n) : Vector3.UnitY, s);
+        }
+        return best;
     }
 
     /// <summary>An axis-aligned box collider (tests, and objects without a model).</summary>

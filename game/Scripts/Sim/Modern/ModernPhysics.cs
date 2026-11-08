@@ -106,7 +106,7 @@ public partial class ModernPhysics : Node
                 GD.Print($"modern vehicle at {w.Pos.X:0.0},{w.Pos.Y:0.0},{w.Pos.Z:0.0} fwd {w.Rot.Forward.X:0.00},{w.Rot.Forward.Z:0.00} mass {w.P.Mass:0}{(w == Car ? " (player)" : "")}");
         if (_debug)
             foreach (var o in Statics.Objects)
-                GD.Print($"modern static {o.Name} type {o.Type} centre {o.Centre.X:0},{o.Centre.Y:0},{o.Centre.Z:0} radius {o.Radius:0.0} polys {o.Polys.Count} surfaces {o.Surfaces.Count} boxes {o.Boxes.Count}"
+                GD.Print($"modern static {o.Name} type {o.Type} centre {o.Centre.X:0},{o.Centre.Y:0},{o.Centre.Z:0} radius {o.Radius:0.0} polys {o.Polys.Count} surfaces {o.Surfaces.Count} boxes {o.Boxes.Count} spheres {o.Spheres.Count}"
                     + string.Concat(o.Surfaces.Take(3).Select(p => $" [{p.V.Min(q => q.X):0}..{p.V.Max(q => q.X):0} x {p.V.Min(q => q.Z):0}..{p.V.Max(q => q.Z):0} y {p.V.Min(q => q.Y):0.0}..{p.V.Max(q => q.Y):0.0}]")));
         UpdateActive();
     }
@@ -258,6 +258,12 @@ public partial class ModernPhysics : Node
             if (size.X < 1e-3f || size.Y < 1e-3f || size.Z < 1e-3f) continue;
             var centre = G(bx.Origin + bx.Rot.ToWorld((bx.Min + bx.Max) * 0.5f) - c);
             body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = size }, Transform = new Transform3D(BasisOf(bx.Rot), centre) });
+        }
+        // the class-0x4000 / 0x5000 parts' spheres (a breakable's are knocked off, never met: the sim's sign pass has them)
+        foreach (var sp in o.Spheres)
+        {
+            if (o.Type == 4 || o.SignNode(sp.Node) || sp.Radius < 1e-3f) continue;
+            body.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = sp.Radius }, Position = G(sp.Centre - c) });
         }
         if (body.GetChildCount() == 0) { body.Free(); return null; }
         _root.AddChild(body);

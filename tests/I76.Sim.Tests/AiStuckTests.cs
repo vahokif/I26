@@ -227,6 +227,38 @@ public class AiStuckTests(ITestOutputHelper log)
         e.BackFarthest = 2f;
         Assert.False(JustDoIt());                  // it has been backing off: the original's test alone, and it says no here
     }
+    /// <summary>A gully: the bare terrain 10 down for x &lt; 0, a bank at 0 elsewhere (a bridge deck spans it at 0).</summary>
+    private sealed class Gully : I76.Sim.Terrain.IGround
+    {
+        public (float Height, Vector3 Normal) Query(double x, double y, double z) => (x < 0 ? -10 : 0, Vector3.UnitY);
+        public int SurfaceId(double x, double z) => 0;
+        public I76.Sim.Terrain.Surface Surface(int id) => new(2f, 0.03f, 0, 0, 0);
+    }
+
+    /// <summary>
+    /// back_away ends when the terrain under the car has risen or fallen more than 3 since it began (strict), read from
+    /// the original: it saves the terrain height under the car on entry and compares terrain heights only, never the
+    /// car's own y. A car reversing along a deck over a gully ends it there; one going up or down 3 on a ramp does not.
+    /// </summary>
+    [Fact]
+    public void BackAwayEndsOnTheTerrainUnderTheCarNotItsHeight()
+    {
+        var v = new Vehicle { Pos = new Double3(5, 0, 0), Rot = new Rows(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ), Gear = 1f };
+        var e = new Entity("ai", [], 1, 0) { Vehicle = v };
+        var world = new SimWorld(new Gully(), new I76.Sim.Rng.CrtRand(1));
+        world.Vehicles.Add(v);
+        var host = new ScriptHost(world, new List<Entity> { e }, (Objectives)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Objectives)), _ => null);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        typeof(Ptable).GetMethod("BackAwayEnter", flags)!.Invoke(host.Ptable, [e, null]);
+        var term = typeof(Ptable).GetMethod("TermBackAway", flags)!;
+        bool Ends() => (bool)term.Invoke(host.Ptable, [e, null])!;
+        Assert.False(Ends());
+        v.Pos = new Double3(5, 4, 0);            // the car 4 up (on a ramp, a structure, in the air), the terrain under it as it was
+        Assert.False(Ends());
+        v.Pos = new Double3(-5, 0, 0);           // on the deck over the gully: the car's y as it was, the terrain 10 down
+        Assert.True(Ends());
+    }
+
     /// <summary>
     /// The avoid predicates' one-frame look-ahead (VehicleStep.Predict) leaves the car as it was, except its height above
     /// ground: the airborne forces write it into the car, and the original leaves it written.

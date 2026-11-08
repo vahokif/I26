@@ -579,7 +579,7 @@ public sealed partial class Ptable
         var v = e.Vehicle!;
         v.Handbrake = 0;
         e.BackSteer = v.Steer;
-        e.BackHeight = Pos(e).Y;
+        e.BackHeight = GroundUnder(e);
         e.BackStart = Pos(e); e.BackFarthest = 0;
         BackOff(e);
         e.EscapeTimer = Now + 4f;
@@ -603,9 +603,12 @@ public sealed partial class Ptable
         }
     }
 
-    /// <summary>termBK: climbed or dropped 3, or turned 1.5 rad and stopped.</summary>
+    /// <summary>The bare terrain height under the car: back_away's height test reads the terrain, not the car's own y.</summary>
+    private float GroundUnder(Entity e) { var p = Pos(e); return World.Ground.BareHeight(p.X, p.Z); }
+
+    /// <summary>termBK: the terrain under the car rose or fell 3, or turned 1.5 rad and stopped.</summary>
     private bool TermBackAway(Entity e, Entity? _) =>
-        MathF.Abs(e.BackHeight - Pos(e).Y) > 3f || (MathF.Abs(Delta(Hdg(e), e.BackHeading)) >= 1.5f && e.Vehicle!.Speed < 1f);
+        MathF.Abs(e.BackHeight - GroundUnder(e)) > 3f || (MathF.Abs(Delta(Hdg(e), e.BackHeading)) >= 1.5f && e.Vehicle!.Speed < 1f);
 
     /// <summary>Reset the boxed-in ring, brake, gear back.</summary>
     private void BackAwayMatch(Entity e, Entity? _)

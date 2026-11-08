@@ -63,7 +63,10 @@ public interface IFsmHost
     /// <summary>successAll / failAll / failAllObj: end the mission after a delay (seconds); failMessage −2 none.</summary>
     void EndMission(bool success, float delay, int failMessage);
 
+    /// <summary>teleport: the object at <paramref name="at"/> (its height already the ground's), facing the heading, at the speed.</summary>
     void Teleport(object o, Vector3 at, int angleDegrees, float speed);
+    /// <summary>The terrain's height at (x, z), which teleport writes into its path's node 0; null without a terrain.</summary>
+    float? GroundHeight(float x, float z) => null;
     void Destroy(object o);
     void StartCar(object o);
     void SetLights(object o, bool on);

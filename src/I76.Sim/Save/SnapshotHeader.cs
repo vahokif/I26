@@ -115,7 +115,7 @@ public sealed record SnapshotHeader(int Version, SessionBuild Build, SimRate Rat
     /// The format's version. Any change to what a snapshot holds or how it is laid out bumps it; a snapshot of
     /// another version is refused (docs/savestate.md).
     /// </summary>
-    public const int CurrentVersion = 15;
+    public const int CurrentVersion = 16;
 
     public static SnapshotHeader Read(byte[] data)
     {

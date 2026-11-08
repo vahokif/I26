@@ -237,11 +237,12 @@ public sealed partial class ScriptHost : IFsmHost
 
     // ---- vehicles ----
     /// <summary>Onto the nav point's ground, facing angle (degrees, yaw), moving at speed along the heading.</summary>
+    public float? GroundHeight(float x, float z) => World.Ground.BareHeight(x, z);
+
     public void Teleport(object o, Vector3 at, int angleDegrees, float speed)
     {
         var e = E(o);
         int a = angleDegrees > 179 ? angleDegrees - 360 : angleDegrees;
-        at.Y = World.Ground.BareHeight(at.X, at.Z);
         var rot = Rows.Euler(0, a * 0.017445918f, 0);
         if (e.Vehicle is not { } v) { e.StaticPosition = at; e.StaticRot = rot; return; }
         v.Pos = new Double3(at.X, at.Y, at.Z);

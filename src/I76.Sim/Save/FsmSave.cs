@@ -18,7 +18,7 @@ public sealed partial class FsmVm
     internal static void AuditFields(SaveAudit a)
     {
         a.For<FsmVm>()
-            .Saved(nameof(Data), nameof(Threads), nameof(Actors), nameof(TickCount), nameof(Watchdog), nameof(_warned), nameof(_shadows))
+            .Saved(nameof(Data), nameof(Threads), nameof(Actors), nameof(TickCount), nameof(Watchdog), nameof(_warned), nameof(_shadows), nameof(_grounded))
             .Structural("the mission's program and the script host, and the session's rand stream", nameof(_p), nameof(_host), nameof(_rand))
             .Structural("co-op's group slots and routines, found again from the program and the seats by the build", nameof(_group), nameof(_coop), nameof(Routines), nameof(_personalCams), nameof(CameraSites), nameof(GateSites))
             .Transient("set and taken within one instruction", nameof(_restart));
@@ -49,6 +49,7 @@ public sealed partial class FsmVm
         var shadows = _shadows.OrderBy(kv => kv.Key.Thread).ThenBy(kv => kv.Key.Index).ToList();
         w.VarU((ulong)shadows.Count);
         foreach (var (c, per) in shadows) { w.Int(c.Thread); w.Int(c.Index); w.Bool(per is not null); if (per is not null) w.Ints(per); }
+        w.VarU((ulong)_grounded.Count); foreach (var (k, y) in _grounded) { w.Int(k); w.F32(y); }
         w.VarU((ulong)Threads.Count);
         foreach (var t in Threads)
         {
@@ -100,6 +101,13 @@ public sealed partial class FsmVm
             var c = new CoopRoutines.Cell(r.Int(), r.Int());
             if (!_shadows.ContainsKey(c)) throw r.Mismatch("an FSM co-op counter");
             _shadows[c] = r.Bool() ? r.Ints() : null;
+        }
+        _grounded.Clear();
+        for (int k = r.Count(); k > 0; k--)
+        {
+            int path = r.Int(); float y = r.F32();
+            if (path < 0 || path >= _p.Paths.Count || _p.Paths[path].Points.Count == 0) throw r.Mismatch($"a grounded FSM path {path}");
+            Ground(path, y);
         }
         if (r.Count() != Threads.Count) throw r.Mismatch("the FSM's threads");
         foreach (var t in Threads)

@@ -58,6 +58,8 @@ public sealed partial class FsmVm
     public int TickCount { get; private set; }
     public bool Watchdog { get; private set; }
     private readonly HashSet<string> _warned = [];
+    /// <summary>The paths whose node 0 a teleport has put on the ground, with the height it wrote there.</summary>
+    private readonly SortedDictionary<int, float> _grounded = [];
 
     public FsmVm(FsmProgram p, IFsmHost host, CrtRand rand)
     {
@@ -378,6 +380,13 @@ public sealed partial class FsmVm
         return h;
     }
 
+    private void Ground(int path, float y)
+    {
+        var pts = _p.Paths[path].Points;
+        pts[0] = pts[0] with { Y = y };
+        _grounded[path] = y;
+    }
+
     private IReadOnlyList<Vector3>? N(Thread t, int i)
     {
         int idx = V(t, i);
@@ -623,6 +632,9 @@ public sealed partial class FsmVm
                 if (O(t, 0) is null || path is null || path.Count == 0) break;
                 int angle = V(t, 3);
                 if (angle < 0 || angle > 360) h.Log($"teleport angle out of bounds {angle}");
+                // the original writes the terrain height under node 0 into the path itself, and the car takes that height
+                // (an offset moves it across, not up or down)
+                if (h.GroundHeight(path[0].X, path[0].Z) is { } y) Ground(V(t, 1), y);
                 var at = path[0];
                 if (name.Equals("teleportOffset", StringComparison.OrdinalIgnoreCase)) at += new Vector3(V(t, 4) / 100f, 0, V(t, 5) / 100f);
                 // co-op: the lead, and the others into formation behind it (a teleport of the player is a change of

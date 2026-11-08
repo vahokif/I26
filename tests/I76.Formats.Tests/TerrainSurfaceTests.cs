@@ -90,7 +90,8 @@ public class TerrainSurfaceTests(ITestOutputHelper log)
         static string H(byte[] d) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(d))[..12];
         // _ht, _hb, _open, _anchor, _cone, _coneBase, _under
         string[] serial = ["FC3C558174ED", "AA7CBF8A0644", "BFF9DCB88C4D", "1C83D94DEC1B", "0BF20A1078AE", "63FB6BB0DF7A", "688C61CA9EE9"];
-        Assert.Equal(serial, blobs.Skip(1).Select(b => H(b.Data)).ToArray());
+        Assert.Equal(serial, blobs.Skip(1).Take(7).Select(b => H(b.Data)).ToArray());
+        Assert.All(blobs[8].Data, b => Assert.Equal(0, b));   // _pin: no objects pin a surface built from seeds alone
         // twice the same, and the same back from its blobs
         Assert.Equal(blobs.Select(b => H(b.Data)), new TerrainSurface(w.Terrain, seeds).ToBlobs().Select(b => H(b.Data)));
         var back = TerrainSurface.FromBlobs(blobs)!;

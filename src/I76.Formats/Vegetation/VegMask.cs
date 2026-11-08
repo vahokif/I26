@@ -166,25 +166,7 @@ public sealed class VegMask
             }
             if (!models.TryGetValue(p.Definition, out var model)) models[p.Definition] = model = assembler.Assemble(p.Definition);
             if (model is null) { mask.AddDisc(XZ(pos), 4f); continue; }
-            var place = Affine.FromEngine(p.Object.Rotation, pos);
-            var u = place.Rotate(System.Numerics.Vector3.UnitX); var w = place.Rotate(System.Numerics.Vector3.UnitZ);
-            foreach (var part in model.Parts)
-            {
-                if (part.Mesh.Vertices.Length == 0) continue;
-                var mn = new System.Numerics.Vector3(float.MaxValue); var mx = new System.Numerics.Vector3(float.MinValue);
-                foreach (var v in part.Mesh.Vertices) { var q = part.ToModel.Apply(v); mn = System.Numerics.Vector3.Min(mn, q); mx = System.Numerics.Vector3.Max(mx, q); }
-                var centre = place.Apply((mn + mx) * 0.5f);
-                // the part's lowest corner in the world, against the ground under its middle
-                float lowest = float.MaxValue;
-                for (int k = 0; k < 8; k++)
-                {
-                    var corner = new System.Numerics.Vector3((k & 1) == 0 ? mn.X : mx.X, (k & 2) == 0 ? mn.Y : mx.Y, (k & 4) == 0 ? mn.Z : mx.Z);
-                    lowest = MathF.Min(lowest, place.Apply(corner).Y);
-                }
-                if (lowest > world.BilinearHeight(centre.X, centre.Z) + 2.5) continue;
-                float lu = new System.Numerics.Vector2(u.X, u.Z).Length(), lw = new System.Numerics.Vector2(w.X, w.Z).Length();
-                mask.AddFootprint(XZ(centre), new System.Numerics.Vector2(u.X, u.Z), (mx.X - mn.X) * 0.5f * MathF.Max(lu, 0.3f), (mx.Z - mn.Z) * 0.5f * MathF.Max(lw, 0.3f));
-            }
+            foreach (var b in GroundFootprints.Parts(world, p, pos, model)) mask.AddFootprint(b.Centre, b.AxisU, b.HalfU, b.HalfV);
         }
         if (world.Mission.GetFsmTables()?.Paths is { } paths)
             foreach (var path in paths)

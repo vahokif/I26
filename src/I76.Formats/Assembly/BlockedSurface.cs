@@ -10,9 +10,10 @@ namespace I76.Formats.Assembly;
 /// into blocks of <see cref="Block"/> by <see cref="Block"/>; each is a <see cref="TerrainSurface"/> over its own samples and a
 /// border of <see cref="Halo"/> (so its rims, blur and lean-back cone come out as they would over the whole map: the cone
 /// reaches 21 samples at most), made when a point in it is first asked for, and the least used are let go. Seedless: every
-/// gentle cell is open (reachability needs the whole map). A query is answered by the block its point lies in.
+/// gentle cell is open (reachability needs the whole map); the cells under placed objects are pinned as on a whole map
+/// (<paramref name="pins"/>). A query is answered by the block its point lies in.
 /// </summary>
-public sealed class BlockedSurface(TerrainTiles tiles, int maxBlocks = 48) : ITerrainSurface
+public sealed class BlockedSurface(TerrainTiles tiles, int maxBlocks = 48, IReadOnlyList<GroundBox>? pins = null) : ITerrainSurface
 {
     public const int Block = 256;
     public const int Halo = 48;
@@ -32,7 +33,7 @@ public sealed class BlockedSurface(TerrainTiles tiles, int maxBlocks = 48) : ITe
         if (l.Owner == this && l.Bx == bx && l.Bz == bz) return l.S!;
         var key = (bx, bz);
         var lazy = _blocks.GetOrAdd(key, k => new Lazy<TerrainSurface>(() =>
-            new TerrainSurface(tiles, (k.Item1 * Block - Halo, k.Item2 * Block - Halo, Block + 2 * Halo, Block + 2 * Halo))));
+            new TerrainSurface(tiles, (k.Item1 * Block - Halo, k.Item2 * Block - Halo, Block + 2 * Halo, Block + 2 * Halo), pins)));
         var s = lazy.Value;
         _used[key] = Interlocked.Increment(ref _tick);
         if (_blocks.Count > maxBlocks) Trim();

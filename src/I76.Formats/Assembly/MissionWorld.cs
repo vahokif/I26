@@ -88,6 +88,34 @@ public sealed class MissionWorld
     /// <summary>The terrain was edited: <see cref="Outside"/> is made again from it when next asked for.</summary>
     public void ForgetOutside() => _outside = null;
 
+    private sealed record FootprintSet(long Mark, List<GroundBox> Boxes);
+    private FootprintSet? _footprints;
+
+    /// <summary>
+    /// The outlines of the placed objects' ground-standing parts as they stand now (<see cref="GroundFootprints.Of"/>), from models
+    /// assembled here (an assembler of its own, so any thread may ask); made again when the placements have changed (the map editor).
+    /// </summary>
+    public IReadOnlyList<GroundBox> Footprints()
+    {
+        long mark = PlacementMark();
+        if (_footprints is { } f && f.Mark == mark) return f.Boxes;
+        var boxes = GroundFootprints.Of(this, new ModelAssembler(_vfs));
+        _footprints = new FootprintSet(mark, boxes);
+        return boxes;
+    }
+
+    // what the footprints are made from: every placement's model, position and rotation
+    private long PlacementMark()
+    {
+        var h = new HashCode();
+        foreach (var p in Placements.Concat(LinePlacements))
+        {
+            h.Add(p.Definition); h.Add(p.Object.ObjectType); h.Add(p.Object.Position);
+            foreach (var r in p.Object.Rotation) h.Add(r);
+        }
+        return ((long)Placements.Count << 32) ^ (uint)h.ToHashCode();
+    }
+
     /// <summary>The names WDEF holds, read again: after <see cref="WorldSettings.Patch"/> changed the mission's look in memory (the map editor).</summary>
     public void RefreshLook()
     {
@@ -116,9 +144,25 @@ public sealed class MissionWorld
     /// Where a placed object stands: its file position with the height set to the terrain's bilinear height at its x, z.
     /// The loader (the original's scene loader, called with its ground flag for every ODEF record) overwrites
     /// the node's y with the bilinear terrain height at x and z, so a pole authored at y=100 stands on the ground. The sim's colliders
-    /// and the drawing both use it.
+    /// and the drawing both use it. In a map's last cells the samples past the tiles are the outside ground's (<see cref="Outside"/>), as
+    /// the simulation's ground has them, where the original reads 0 and sinks the object halfway to it.
     /// </summary>
-    public Vector3 GroundedPosition(Placement p) => p.Object.Position with { Y = (float)BilinearHeight(p.Object.Position.X, p.Object.Position.Z) };
+    public Vector3 GroundedPosition(Placement p) => p.Object.Position with { Y = (float)PlacedHeight(p.Object.Position.X, p.Object.Position.Z) };
+
+    /// <summary><see cref="BilinearHeight"/>, but for a cell with a corner off the tiles, whose samples there are the outside ground's.</summary>
+    private double PlacedHeight(double x, double z)
+    {
+        double fx = SampleScale * x, fz = SampleScale * z;
+        int sx = (int)Math.Floor(fx), sz = (int)Math.Floor(fz);
+        if (Terrain.Sample(sx, sz) is not null && Terrain.Sample(sx + 1, sz) is not null && Terrain.Sample(sx, sz + 1) is not null && Terrain.Sample(sx + 1, sz + 1) is not null
+            || Outside is not { } o)
+            return BilinearHeight(x, z);
+        double S(int a, int b) => Terrain.Sample(a, b) is { } v ? v & MissionFile.HeightMask : o.Raw(a, b);
+        double tx = fx - sx, tz = fz - sz;
+        double a0 = S(sx, sz) + (S(sx + 1, sz) - S(sx, sz)) * tx;
+        double a1 = S(sx, sz + 1) + (S(sx + 1, sz + 1) - S(sx, sz + 1)) * tx;
+        return (a0 + (a1 - a0) * tz) * HeightScale;
+    }
 
     public static int ToSample(double world) => (int)Math.Floor(world * SampleScale + SampleBias);
 

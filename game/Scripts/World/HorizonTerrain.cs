@@ -269,7 +269,7 @@ public partial class HorizonTerrain : Node3D
     /// <summary>
     /// <see cref="Compute"/>, or what it made last time for the same ground, panels, light and colour in this map editor session (a playtest
     /// builds the ring its editor built; the CPU work is more than a second on a big map and the rest of the build waits for it).
-    /// The key is the terrain and the seeds of its reachable ground (the surface's key), the panels' profile, the light and the ground's colour;
+    /// The key is the terrain, the seeds of its reachable ground and the placed objects' outlines (the surface's key), the panels' profile, the light and the ground's colour;
     /// the stored result is the fields <see cref="Compute"/> sets and the chunks' arrays, read only (<see cref="Finish"/> copies them into meshes).
     /// </summary>
     public void ComputeCached(MissionWorld world, Profile profile, System.Numerics.Vector3 lightGame, Color ground)
@@ -278,7 +278,7 @@ public partial class HorizonTerrain : Node3D
         string key;
         using (var k = new I76.Formats.Assembly.BakeCache.Key("horizon-ring"))
         {
-            k.Add(I76.Formats.Assembly.TerrainSurface.CacheKey(world.Terrain, I76.Formats.Assembly.TerrainSurface.Seeds(world).ToList(), world.Outside));
+            k.Add(I76.Formats.Assembly.TerrainSurface.CacheKey(world.Terrain, I76.Formats.Assembly.TerrainSurface.Seeds(world).ToList(), world.Outside, world.Footprints()));
             k.Add<float>(profile.Height).Add<Color>(profile.Rock).Add(profile.Scrub.ToRgba32().ToString()).Add(profile.RockLight.ToRgba32().ToString())
                 .Add(profile.RockDark.ToRgba32().ToString()).Add(profile.Snow).Add(profile.Dark);
             k.Add(lightGame.X).Add(lightGame.Y).Add(lightGame.Z).Add(ground.ToRgba32().ToString()).Add(Segments).Add(Reach).Add(Aspect);

@@ -171,18 +171,20 @@ public partial class TerrainNode : Node3D
 
     /// <summary>
     /// The modern look's surface for the mission: from the bake cache, else made (its reachability fill and lean-back
-    /// cone are serial, ~0.3 s on t01, more in a debug build) and kept there, keyed by the tiles and the seeds.
+    /// cone are serial, ~0.3 s on t01, more in a debug build) and kept there, keyed by the tiles, the seeds and the placed
+    /// objects' outlines, whose cells it draws on the simulation's ground.
     /// </summary>
     internal static ITerrainSurface SurfaceFor(MissionWorld world)
     {
-        if (world.Terrain.Huge) return new BlockedSurface(world.Terrain);
+        var pins = world.Footprints();
+        if (world.Terrain.Huge) return new BlockedSurface(world.Terrain, pins: pins);
         var seeds = TerrainSurface.Seeds(world).ToList();
         var cache = MissionBuilder.HeightCache;
         bool session = I76.Formats.Vfs.SessionStore.Active;
         var outside = world.Outside;
-        string? key = cache is null && !session ? null : TerrainSurface.CacheKey(world.Terrain, seeds, outside);
+        string? key = cache is null && !session ? null : TerrainSurface.CacheKey(world.Terrain, seeds, outside, pins);
         if (cache is not null && key is not null && cache.Read("surface", key) is { } blobs && TerrainSurface.FromBlobs(blobs) is { } hit) { hit.Key = key; return hit; }
-        var surf = new TerrainSurface(world.Terrain, seeds, outside) { Key = key };
+        var surf = new TerrainSurface(world.Terrain, seeds, outside, pins) { Key = key };
         if (cache is not null && key is not null) MissionBuilder.Background(() => cache.Write("surface", key, surf.ToBlobs()));
         return surf;
     }

@@ -15,7 +15,9 @@ namespace I76.Formats.Assembly;
 /// drawn on a smooth surface through the samples (separable monotone cubic,
 /// no overshoot), pulled back to within <see cref="Tolerance"/> of the
 /// bilinear surface the cars ride on.</item>
-/// <item>Points with no open cell about them (cliff faces, plateaus no car
+/// <item>Cells under a placed object's ground-standing parts (<see cref="GroundFootprints"/>, the pins) are drawn as
+/// open cells are, wherever they lie, so every object stands on the drawn ground as it stands on the simulation's.</item>
+/// <item>Points with no open or pinned cell about them (cliff faces, plateaus no car
 /// reaches, the map's edge walls) follow a softened surface (the samples
 /// blurred edge-preservingly, so terraces of a few metres melt into slopes
 /// while mesa walls keep their flat tops; walls under ground no car reaches
@@ -52,12 +54,15 @@ public sealed class TerrainSurface : ITerrainSurface
     public const double Spacing = 5.0;
     /// <summary>Height steps much larger than this (metres) survive the softening of free ground; smaller ones melt.</summary>
     public const double StepKeep = 9.0;
+    /// <summary>A cell is pinned when a placed object's outline grown by this much (metres) overlaps it.</summary>
+    public const float PinMargin = 1f;
 
     private readonly int _sx0, _sz0, _w, _h;
     private readonly float[] _ht;    // filtered heights, metres
     private readonly float[] _hb;    // blurred heights, metres
     private readonly bool[] _open;   // per cell (indexed like samples; the last row and column unused)
-    private readonly bool[] _anchor; // per sample: a corner of an open cell
+    private readonly bool[] _pin;    // per cell: under a placed object (drawn as an open cell, but no ground a car reaches)
+    private readonly bool[] _anchor; // per sample: a corner of an open or pinned cell
     private readonly float[] _cone;  // per sample: the lowest of (anchor height + LeanSlope × distance to it), metres
     private readonly float[] _coneBase; // the height of the anchor that cone stands on
     private readonly float[] _under; // per sample: 1 where drivable ground stands above within two samples (a rim to keep)
@@ -72,19 +77,20 @@ public sealed class TerrainSurface : ITerrainSurface
     public string? Key { get; set; }
 
     /// <summary>Changes with anything that changes the surface's arrays: cached surfaces (<see cref="CacheKey"/>) are keyed by it.</summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>Samples of the outside ground the surface holds round the map's bounds (<see cref="OutsideGround"/>): the cubic and the filters reach this far.</summary>
     public const int OutsidePad = 8;
 
-    /// <summary>The bake cache's key for the surface of these tiles from these seeds (and the ground outside them): everything the arrays are made from.</summary>
-    public static string CacheKey(TerrainTiles tiles, IReadOnlyList<Vector2> seeds, OutsideGround? outside = null)
+    /// <summary>The bake cache's key for the surface of these tiles from these seeds (and the ground outside them, and the objects pinning it): everything the arrays are made from.</summary>
+    public static string CacheKey(TerrainTiles tiles, IReadOnlyList<Vector2> seeds, OutsideGround? outside = null, IReadOnlyList<GroundBox>? pins = null)
     {
         using var k = new BakeCache.Key("terrain-surface");
         k.Add(Version).Add(tiles.TileCount).Add<byte>(tiles.Grid);
         for (int t = 0; t < tiles.TileCount; t++) k.Add(tiles.TileSamples(t));
         k.Add<Vector2>(seeds.ToArray());
         k.Add(outside?.Key ?? "-");
+        k.Add<GroundBox>((pins ?? []).ToArray());
         return k.Finish();
     }
 
@@ -94,26 +100,26 @@ public sealed class TerrainSurface : ITerrainSurface
         static byte[] B<T>(T[] a) where T : unmanaged => System.Runtime.InteropServices.MemoryMarshal.AsBytes(a.AsSpan()).ToArray();
         var head = new int[] { _sx0, _sz0, _w, _h, _openCount };
         return [new(0, 0, B(head)), new(1, 0, B(_ht)), new(2, 0, B(_hb)), new(3, 0, B(_open)), new(4, 0, B(_anchor)),
-            new(5, 0, B(_cone)), new(6, 0, B(_coneBase)), new(7, 0, B(_under))];
+            new(5, 0, B(_cone)), new(6, 0, B(_coneBase)), new(7, 0, B(_under)), new(8, 0, B(_pin))];
     }
 
     /// <summary>A surface from <see cref="ToBlobs"/>' blobs, or null if they do not fit together.</summary>
     public static TerrainSurface? FromBlobs(IReadOnlyList<BakeCache.Blob> b)
     {
-        if (b.Count != 8 || b[0].Data.Length != 20) return null;
+        if (b.Count != 9 || b[0].Data.Length != 20) return null;
         static T[] A<T>(byte[] d) where T : unmanaged => System.Runtime.InteropServices.MemoryMarshal.Cast<byte, T>(d).ToArray();
         var head = A<int>(b[0].Data);
         long n = (long)head[2] * head[3];
         if (head[2] <= 0 || head[3] <= 0 || b[1].Data.Length != n * 4 || b[2].Data.Length != n * 4 || b[3].Data.Length != n || b[4].Data.Length != n
-            || b[5].Data.Length != n * 4 || b[6].Data.Length != n * 4 || b[7].Data.Length != n * 4) return null;
+            || b[5].Data.Length != n * 4 || b[6].Data.Length != n * 4 || b[7].Data.Length != n * 4 || b[8].Data.Length != n) return null;
         return new TerrainSurface(head, A<float>(b[1].Data), A<float>(b[2].Data), A<bool>(b[3].Data), A<bool>(b[4].Data),
-            A<float>(b[5].Data), A<float>(b[6].Data), A<float>(b[7].Data));
+            A<float>(b[5].Data), A<float>(b[6].Data), A<float>(b[7].Data), A<bool>(b[8].Data));
     }
 
-    private TerrainSurface(int[] head, float[] ht, float[] hb, bool[] open, bool[] anchor, float[] cone, float[] coneBase, float[] under)
+    private TerrainSurface(int[] head, float[] ht, float[] hb, bool[] open, bool[] anchor, float[] cone, float[] coneBase, float[] under, bool[] pin)
     {
         (_sx0, _sz0, _w, _h, _openCount) = (head[0], head[1], head[2], head[3], head[4]);
-        (_ht, _hb, _open, _anchor, _cone, _coneBase, _under) = (ht, hb, open, anchor, cone, coneBase, under);
+        (_ht, _hb, _open, _anchor, _cone, _coneBase, _under, _pin) = (ht, hb, open, anchor, cone, coneBase, under, pin);
     }
 
     /// <param name="seeds">Points known to be reachable, in sample coordinates (placements, roads); none: every gentle cell is open.</param>
@@ -122,21 +128,22 @@ public sealed class TerrainSurface : ITerrainSurface
     /// cells), so the map's last cells are drawn running into it as the simulation has them, and every gentle cell there is open (a car can
     /// come in from outside). Null: samples off the tiles take the nearest one's height, the map's edge is level.
     /// </param>
-    public TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds = null, OutsideGround? outside = null)
+    /// <param name="pins">The placed objects' outlines on the ground (<see cref="GroundFootprints.Of"/>): the cells under them are drawn on the simulation's ground.</param>
+    public TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds = null, OutsideGround? outside = null, IReadOnlyList<GroundBox>? pins = null)
         : this(tiles, seeds, tiles.Bounds() is var (r0, r1, c0, c1)
             ? outside is null ? (c0 * TerrainTiles.Tile, r0 * TerrainTiles.Tile, (c1 - c0 + 1) * TerrainTiles.Tile, (r1 - r0 + 1) * TerrainTiles.Tile)
                 : (c0 * TerrainTiles.Tile - OutsidePad, r0 * TerrainTiles.Tile - OutsidePad, (c1 - c0 + 1) * TerrainTiles.Tile + 2 * OutsidePad, (r1 - r0 + 1) * TerrainTiles.Tile + 2 * OutsidePad)
-            : default, outside)
+            : default, outside, pins)
     {
     }
 
     /// <summary>
     /// The surface over a window of samples (a block of <see cref="BlockedSurface"/>): <paramref name="rect"/> is its corner and size in
-    /// sample coordinates; seedless, so every gentle cell is open.
+    /// sample coordinates; seedless, so every gentle cell is open. <paramref name="pins"/> as for the whole map's.
     /// </summary>
-    public TerrainSurface(TerrainTiles tiles, (int X0, int Z0, int W, int H) rect) : this(tiles, null, rect, null) { }
+    public TerrainSurface(TerrainTiles tiles, (int X0, int Z0, int W, int H) rect, IReadOnlyList<GroundBox>? pins = null) : this(tiles, null, rect, null, pins) { }
 
-    private TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds, (int X0, int Z0, int W, int H) rect, OutsideGround? outside)
+    private TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds, (int X0, int Z0, int W, int H) rect, OutsideGround? outside, IReadOnlyList<GroundBox>? pins)
     {
         (_sx0, _sz0, _w, _h) = rect;
         int n = _w * _h;
@@ -273,15 +280,16 @@ public sealed class TerrainSurface : ITerrainSurface
                     }
             }
         }
+        _pin = new bool[n];
+        if (pins is not null) Pin(pins);
         _anchor = new bool[n];
         for (int z = 0; z < _h - 1; z++)
             for (int x = 0; x < _w - 1; x++)
-                if (_open[z * _w + x])
-                {
-                    _openCount++;
-                    int i = z * _w + x;
-                    _anchor[i] = _anchor[i + 1] = _anchor[i + _w] = _anchor[i + _w + 1] = true;
-                }
+            {
+                int i = z * _w + x;
+                if (_open[i]) _openCount++;
+                if (_open[i] || _pin[i]) _anchor[i] = _anchor[i + 1] = _anchor[i + _w] = _anchor[i + _w + 1] = true;
+            }
         // the lean-back cone over the drivable ground: Dijkstra from every anchor, 16 neighbours
         _cone = new float[n];
         _coneBase = new float[n];
@@ -324,6 +332,24 @@ public sealed class TerrainSurface : ITerrainSurface
             }
         });
         blur.Wait();
+    }
+
+    /// <summary>Marks the cells each outline (grown by <see cref="PinMargin"/>) overlaps.</summary>
+    private void Pin(IReadOnlyList<GroundBox> pins)
+    {
+        float s = (float)Spacing;
+        foreach (var b in pins)
+        {
+            float r = MathF.Sqrt(b.HalfU * b.HalfU + b.HalfV * b.HalfV) + PinMargin;
+            int x0 = Math.Max(0, (int)MathF.Floor((b.Centre.X - r) / s) - _sx0), x1 = Math.Min(_w - 2, (int)MathF.Floor((b.Centre.X + r) / s) - _sx0);
+            int z0 = Math.Max(0, (int)MathF.Floor((b.Centre.Y - r) / s) - _sz0), z1 = Math.Min(_h - 2, (int)MathF.Floor((b.Centre.Y + r) / s) - _sz0);
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    var min = new Vector2((_sx0 + x) * s, (_sz0 + z) * s);
+                    if (b.Overlaps(min, min + new Vector2(s), PinMargin)) _pin[z * _w + x] = true;
+                }
+        }
     }
 
     /// <summary>
@@ -404,7 +430,7 @@ public sealed class TerrainSurface : ITerrainSurface
                     for (int dx = -1; dx <= 0; dx++)
                     {
                         int cx = x + dx, cz = z + dz;
-                        if (cx >= 0 && cz >= 0 && cx < w - 1 && cz < hh - 1 && _open[cz * w + cx]) { an = true; break; }
+                        if (cx >= 0 && cz >= 0 && cx < w - 1 && cz < hh - 1 && (_open[cz * w + cx] || _pin[cz * w + cx])) { an = true; break; }
                     }
                 _anchor[z * w + x] = an;
             }
@@ -503,6 +529,14 @@ public sealed class TerrainSurface : ITerrainSurface
         return _open[z * _w + x];
     }
 
+    /// <summary>Whether the cell with corner (sx, sz) is drawn on the simulation's ground: open, or under a placed object.</summary>
+    public bool Held(int sx, int sz)
+    {
+        int x = sx - _sx0, z = sz - _sz0;
+        if (x < 0 || z < 0 || x >= _w - 1 || z >= _h - 1) return false;
+        return _open[z * _w + x] || _pin[z * _w + x];
+    }
+
     /// <summary>The bilinear surface on the (needle-filtered) samples, metres: the simulation's own on open cells.</summary>
     public double Bilinear(double fx, double fz)
     {
@@ -567,11 +601,11 @@ public sealed class TerrainSurface : ITerrainSurface
         double b = Bilinear(fx, fz);
         int ix = (int)Math.Floor(fx), iz = (int)Math.Floor(fz);
         bool onX = fx == ix, onZ = fz == iz;
-        // free: no open cell touches the point
+        // free: no open or pinned cell touches the point
         bool free = true;
         for (int cz = onZ ? iz - 1 : iz; cz <= iz && free; cz++)
             for (int cx = onX ? ix - 1 : ix; cx <= ix && free; cx++)
-                if (Open(cx, cz)) free = false;
+                if (Held(cx, cz)) free = false;
         if (!free)
         {
             double s = Smooth(_ht, fx, fz);

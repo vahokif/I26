@@ -1204,7 +1204,7 @@ public partial class Main : Node3D
         // a respray: the car's own colours (a network game's, from its car list), else the variant's sidecar (a local game's cars); the factory paint costs nothing
         if ((vehicle.Paint ?? (_net is null ? I76.Game.Shell.CarPaints.Of(builder.Vfs, carDef) : null)) is { IsNone: false } paint) builder.Meshes!.Paint(node, model2, paint);
         if (!vehicle.IsEmplacement && I76.Sim.Vehicles.VehicleFactory.EngineSound(builder.Vfs, vehicle.EngineNumber) is { } snd)
-            node.SetEngineSound(_audio?.Get(snd, loop: true), player, I76.Sim.Vehicles.VehicleFactory.EngineRevable(builder.Vfs, vehicle.EngineNumber));
+            node.SetEngineSound(_audio?.Get(snd, loop: true), player, I76.Sim.Vehicles.VehicleFactory.EngineRevable(builder.Vfs, vehicle.EngineNumber), _audio?.Volume(snd) ?? 100);
         if (!vehicle.IsEmplacement)
             Voice3D.Trace($"car {vehicle.Definition}{(player ? " (player)" : "")}: engsnd row {vehicle.EngineNumber}, engine {I76.Sim.Vehicles.VehicleFactory.EngineSound(builder.Vfs, vehicle.EngineNumber) ?? "none"}"
                 + $"{(I76.Sim.Vehicles.VehicleFactory.EngineRevable(builder.Vfs, vehicle.EngineNumber) ? "" : " (not revable)")}, horn and siren {I76.Sim.Vehicles.VehicleFactory.HornSound(builder.Vfs, vehicle.EngineNumber) ?? "none"}");

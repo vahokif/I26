@@ -64,6 +64,35 @@ public static class SoundFiles
 
     public static Pcm? Read(AssetVfs vfs, string name) => ReadRiff(vfs, name) is { } r ? Parse(r) : null;
 
+    /// <summary>
+    /// The volume a sound's GAS0 header asks for, in percent: the int32 at offset 16, -1 (or no header) meaning 100. The original
+    /// starts the voice at 400·log2(v/100) millibels (<see cref="VolumeDb"/>). The Moth trucks', buses' and tractor's engine
+    /// (eimarx) says 60; the tyre skid and turn sounds 50.
+    /// </summary>
+    public static int Volume(AssetVfs vfs, string name)
+    {
+        var d = vfs.TryRead(name);
+        if (d is null)
+        {
+            int dot = name.LastIndexOf('.');
+            var stem = dot < 0 ? name : name[..dot];
+            d = vfs.TryRead(stem + ".gpw") ?? vfs.TryRead(stem + ".wav");
+        }
+        if (d is null && CompanionSounds.For(vfs, name) is { } other) return Volume(other, name);
+        return d is null ? 100 : Volume(d);
+    }
+
+    /// <summary>The same, from the file's bytes.</summary>
+    public static int Volume(ReadOnlySpan<byte> file)
+    {
+        if (file.Length < 28 || file[0] != 'G' || file[1] != 'A' || file[2] != 'S' || file[3] != '0') return 100;
+        int v = BitConverter.ToInt32(file[16..]);
+        return v < 0 ? 100 : v;
+    }
+
+    /// <summary>A header volume in percent as decibels: 4 dB per halving, 0 dB at 100 (60 is -2.9 dB, 50 is -4 dB).</summary>
+    public static float VolumeDb(int percent) => percent <= 0 ? -80f : 4f * MathF.Log2(percent / 100f);
+
     public static Pcm? Parse(byte[] riff)
     {
         if (riff.Length < 12 || Bin.Latin1(riff.AsSpan(0, 4)) != "RIFF" || Bin.Latin1(riff.AsSpan(8, 4)) != "WAVE") return null;

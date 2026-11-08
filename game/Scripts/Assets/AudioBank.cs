@@ -40,6 +40,9 @@ public sealed class AudioBank(AssetVfs vfs)
     public (int Priority, int MaxVoices) Limits(string name) =>
         _limits.TryGetValue(name, out var l) ? l : _limits[name] = SoundFiles.Limits(vfs, name);
 
+    /// <summary>The sound's GAS0 volume in percent (<see cref="SoundFiles.Volume(AssetVfs, string)"/>).</summary>
+    public int Volume(string name) => SoundFiles.Volume(vfs, name);
+
     /// <summary>PCM as a Godot stream (8- or 16-bit; null otherwise), looped whole if asked.</summary>
     public static AudioStreamWav? ToStream(Pcm pcm, bool loop = false)
     {

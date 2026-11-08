@@ -1,5 +1,6 @@
 using Godot;
 using I76.Formats.Assembly;
+using I76.Formats.Audio;
 using I76.Sim.Math;
 using I76.Sim.Vehicles;
 
@@ -26,28 +27,30 @@ public partial class CarNode : Node3D
     /// The engine loop: the car's own engsnd.dat sound. Its pitch follows the
     /// engine's rpm as the original's (EngineSoundPitch).
     /// </summary>
-    public void SetEngineSound(AudioStream? loop, bool player, bool revable = true)
+    public void SetEngineSound(AudioStream? loop, bool player, bool revable = true, int volume = 100)
     {
         if (loop is null) return;
+        _engineVolume = volume;
         _engineRevable = revable;
         _engineRate = loop is AudioStreamWav wav && wav.MixRate > 0 ? wav.MixRate : 11025f;
         (_engineLoop, _enginePlayer) = (loop, player);
         // a DirectSound3D voice as the original's (a mode-1 loop, started at any range): min distance 10, held at
         // 400 m, parked past 600 m from the followed car (Voice3D). The player's own sits at the listener in the cockpit
         // (dead centre, GitHub #83); Godot's model cut a far helicopter's loop at 250 m, so it fell silent.
-        _engine = new Voice3D { Stream = loop, Autoplay = true, BaseDb = -6, Name = "Engine" };
+        _engine = new Voice3D { Stream = loop, Autoplay = true, BaseDb = -6 + SoundFiles.VolumeDb(_engineVolume), Name = "Engine" };
         AddChild(_engine);
     }
 
     private AudioStream? _engineLoop;
     private bool _engineRevable = true;
     private float _engineRate = 11025f;
+    private int _engineVolume = 100;   // the file's GAS0 volume, percent
     private bool _enginePlayer;
 
     /// <summary>The engine running again (a car renewed after its death: a network melee's respawn).</summary>
     public void RestartEngine()
     {
-        if (_engine is null && _engineLoop is not null) SetEngineSound(_engineLoop, _enginePlayer, _engineRevable);
+        if (_engine is null && _engineLoop is not null) SetEngineSound(_engineLoop, _enginePlayer, _engineRevable, _engineVolume);
     }
 
     private Voice3D? _horn;

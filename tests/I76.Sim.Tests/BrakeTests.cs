@@ -59,6 +59,51 @@ public class BrakeTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.InRange(dist, real * 0.95, real * 1.03);
     }
 
+    /// <summary>
+    /// A braking car that comes to rest keeps the braking acceleration for that frame's weight transfer: the pitch does
+    /// not move on the stop frame (measured in the original, 34 stops, retail 1.0 on an emulated Pentium) and the nose
+    /// rises on the next, when the acceleration is 0.
+    /// </summary>
+    [Fact]
+    public void ABrakingCarsNoseHoldsOnTheStopFrameAndRisesOnTheNext()
+    {
+        if (InstallDir is not { } dir) return;
+        var install = new GameInstall(dir);
+        var vfs = new AssetVfs(install);
+        var asm = new ModelAssembler(vfs);
+        var w = new MissionWorld(vfs, asm, install.FindMission("m04")!);
+        var setup = MissionSetup.Build(vfs, w, asm, "vppirna1.vcf", script: false, rand: new CrtRand(1), seed: 1);
+        setup.Melee?.Start();
+        var s = new SimSession(setup, SessionOptions.SinglePlayer, SimRate.FromLabel(28));
+        var v = setup.World.Player!;
+        s.AddDriver(v);
+        setup.World.Vehicles.RemoveAll(x => x != v);
+        v.Pos = new Double3(4172.5, 119.9, 49552.5);
+        v.Rot = new Rows(new Vector3(0, 0, -1), Vector3.UnitY, Vector3.UnitX);
+        v.Vel = Vector3.Zero;
+        double Pitch() => System.Math.Asin(v.Rot.Forward.Y) * 180 / System.Math.PI;
+        var pitch = new List<double>();
+        var moving = new List<bool>();
+        for (int f = 1; f <= 400; f++)
+        {
+            var i = new CarInput();
+            if (f is >= 70 and <= 80) i.Commands = CarCommands.StartEngine;
+            if (f >= 100 && f < 222) i.Buttons = CarButtons.ThrottleUp;
+            if (f >= 222) i.Buttons = CarButtons.ThrottleDown;
+            s.Tick([i]);
+            setup.Damage?.Events.Clear();
+            pitch.Add(Pitch()); moving.Add(v.Vel != Vector3.Zero);
+            if (f > 222 && !moving[^1]) break;
+        }
+        int stop = moving.Count - 1;
+        Assert.True(stop > 0 && !moving[stop] && moving[stop - 1], "the car came to rest");
+        s.Tick([new CarInput { Buttons = CarButtons.ThrottleDown }]);
+        double next = Pitch();
+        output.WriteLine($"pitch deg: before {pitch[stop - 1]:0.000}, stop frame {pitch[stop]:0.000}, next {next:0.000}");
+        Assert.InRange(pitch[stop] - pitch[stop - 1], -0.01, 0.01);
+        Assert.True(next - pitch[stop] > 0.1, $"the nose rises on the next frame: {pitch[stop]:0.000} -> {next:0.000}");
+    }
+
     /// <summary>A mission ignores the BRAK part (with neither a melee nor a network session): 2300/mass.</summary>
     [Fact]
     public void AMissionCarsBrakeIsTheMassAlone()

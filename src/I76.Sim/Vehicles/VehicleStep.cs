@@ -428,7 +428,10 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         if (Vector3.Dot(vel, rot.Forward) < 0) sp = -sp;
         if (throttle < 0 && sp > -1 && sp < 1)
         {
-            vel = Vector3.Zero; accel = Vector3.Zero; sp = 0;
+            // the substep that brings the car to rest keeps its braking acceleration for the attitude (the nose holds);
+            // the next one, with the car already at rest, writes 0 (the nose rises)
+            if (v.Vel == Vector3.Zero) accel = Vector3.Zero;
+            vel = Vector3.Zero; sp = 0;
             flags &= ~(VehicleFlags.Blending | VehicleFlags.Sliding);
         }
         else if (sliding && !triggered && MathF.Abs(Vector3.Dot(rot.Right, vel)) < 3)

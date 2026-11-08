@@ -756,15 +756,15 @@ public partial class Main : Node3D
 
     private bool _extInstruments = true;
 
-    /// <summary>The audio levels on their buses: Music, SFX and Voice, level 1 off, 8 as recorded, 2 dB a step.</summary>
+    /// <summary>The audio levels on their buses: Music, SFX and Voice, level 1 off, 8 as recorded; Music 2 dB a step, SFX and Voice the original's 4 dB per halving (AudioLevels).</summary>
     public static void ApplyAudio(I76.Game.Shell.ShellSettings s)
     {
-        void Bus(string name, int level)
+        void Bus(string name, int level, bool law = false)
         {
             int i = AudioServer.GetBusIndex(name);
             if (i < 0) { AudioServer.AddBus(); i = AudioServer.BusCount - 1; AudioServer.SetBusName(i, name); AudioServer.SetBusSend(i, "Master"); }
             AudioServer.SetBusMute(i, level < 2);
-            AudioServer.SetBusVolumeDb(i, (level - 8) * 2f);
+            AudioServer.SetBusVolumeDb(i, law ? AudioLevels.EffectDb(level) : (level - 8) * 2f);
         }
         // the buses sum past full scale (an explosion over the engine peaks at +18 dB, ordinary driving at +1): with nothing on
         // Master the output stage hard-clips them, which is a crackle, loudest on headphones. A look-ahead limiter keeps the peak under -1 dB
@@ -773,8 +773,8 @@ public partial class Main : Node3D
         I76.Game.Net.CbVoice.Active?.ApplyMic(s.CbMic);
         I76.Game.Assets.HiFiAudio.Enabled = s.HiFiAudio;
         Bus("Music", s.Audio[0]);
-        Bus("SFX", s.Audio[1]);
-        Bus("Voice", s.Audio[2]);
+        Bus("SFX", s.Audio[1], true);
+        Bus("Voice", s.Audio[2], true);
     }
 
     private void EndMission(bool won)

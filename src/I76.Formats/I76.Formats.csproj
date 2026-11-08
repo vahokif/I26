@@ -6,8 +6,12 @@
   <ItemGroup>
     <EmbeddedResource Include="Imaging/CarMaterials.tsv" LogicalName="CarMaterials.tsv" />
     <EmbeddedResource Include="Imaging/CarMasks.bin" LogicalName="CarMasks.bin" Condition="Exists('Imaging/CarMasks.bin')" />
+    <EmbeddedResource Include="Fsm/mission-script.schema.json" LogicalName="mission-script.schema.json" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="I76.Formats.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 </Project>

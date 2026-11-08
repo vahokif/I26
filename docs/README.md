@@ -14,6 +14,7 @@ the rules of the project are in [../CHARTER.md](../CHARTER.md).
 | [dev-hooks.md](dev-hooks.md) | Every `I76_*` environment variable: capture, test and debug hooks. |
 | [map-editor.md](map-editor.md) | The in-game map editor: terrain brushes, undo, playtest, saving to `addon\`. |
 | [map-format-writing.md](map-format-writing.md) | Writing missions and terrain back in the original formats. |
+| [mission-scripts.md](mission-scripts.md) | Mission scripts as YAML source: the bytecode, the source form, the names sidecar, the CLI. |
 
 ## Behaviour notes
 

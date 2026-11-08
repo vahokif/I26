@@ -13,6 +13,9 @@ using I76.Formats.Vfs;
 //   i76 [--install DIR] dump NAME                 a parsed asset as JSON
 //   i76 [--install DIR] mission NAME              a mission summary as JSON
 //   i76 [--install DIR] fsm-disasm NAME           the mission script's bytecode
+//   i76 [--install DIR] fsm-decompile MISSION [--names FILE]... [--out FILE.yaml] [--names-template FILE]   the script as YAML source (docs/mission-scripts.md)
+//   i76 fsm-compile FILE.yaml --into MISSION_FILE --out NEW_FILE   the source compiled into a copy of a mission file (only its FSM chunk changes)
+//   i76 fsm-roundtrip [--install DIR]... [--verbose]   every scripted mission of the install(s) (default I76_INSTALL and I76_NITRO_INSTALL): decompile, compile, compare
 //   i76 [--install DIR] export-obj --out DIR [--nitro-install DIR] [--no-cars|--no-objects|--no-terrain] [--only a,b]   every car and scenery model as OBJ/MTL/PNG, and the terrains (original data: keep it out of the repository)
 //   i76 [--install DIR] car-table survey|sheet   the car material table: a model's textures per paint scheme, and each beside its false-colour material map
 //   i76 [--install DIR] car-tex DEF OUT [ACT] [--maps]  a model's textures as PPMs (and the modern look's material maps)
@@ -28,6 +31,13 @@ using I76.Formats.Vfs;
 
 var argv = args.ToList();
 if (argv.Count > 0 && argv[0] == "installer") return I76.Cli.InstallerCommand.Run(argv);
+if (argv.FindIndex(a => a is "fsm-decompile" or "fsm-compile" or "fsm-roundtrip") is int fsmAt and >= 0)
+{
+    var cmd = argv[fsmAt];
+    argv.RemoveAt(fsmAt);
+    argv.Insert(0, cmd);
+    return I76.Cli.FsmScriptCommand.Run(argv);
+}
 string? installDir = Environment.GetEnvironmentVariable("I76_INSTALL");
 int ii = argv.IndexOf("--install");
 if (ii >= 0) { installDir = argv[ii + 1]; argv.RemoveRange(ii, 2); }

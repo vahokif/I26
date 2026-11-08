@@ -32,7 +32,10 @@ Jolt Physics (MIT), bundled in Godot
 LiteNetLib 2.1.4 (MIT)
   Copyright (c) 2020 Ruslan Pyrch. https://github.com/RevenantX/LiteNetLib
 
-The MIT licence, which applies to each of the four components above with its
+YamlDotNet 16.3.0 (MIT), the mission-script source format
+  Copyright (c) Antoine Aubry and contributors. https://github.com/aaubry/YamlDotNet
+
+The MIT licence, which applies to each of the five components above with its
 own copyright line:
 
   Permission is hereby granted, free of charge, to any person obtaining a copy

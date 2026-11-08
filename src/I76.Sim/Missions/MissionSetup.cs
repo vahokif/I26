@@ -226,10 +226,9 @@ public sealed partial class MissionSetup
         var types = new Dictionary<string, Func<string, uint>>(StringComparer.OrdinalIgnoreCase);
         var structures = new Dictionary<string, StructureDef>(StringComparer.OrdinalIgnoreCase);
         var destroyedAsm = new ModelAssembler(vfs) { Destroyed = true };
-        // every placement stands on the terrain (the original's scene loader with its ground flag, from the ODEF loader);
+        // every placement stands on the terrain (the original's scene loader with its ground flag, from the ODEF loader),
+        // the vehicle types 1, 8 and 9 included: a gun emplacement's collider stands where its model does;
         // LDEF links (guardrails, tyre walls) have no ODEF type of their own; taken as type 2 (per-node box class), an assumption
-        // a type 1/8/9 placement is created without the ground flag: a gun emplacement keeps its file y, collider included
-        System.Numerics.Vector3 at8(Placement p) => p.Object.ObjectType == 8 ? p.Object.Position : w.GroundedPosition(p);
         foreach (var (p, type) in w.Placements.Select(p => (p, p.Object.ObjectType)).Concat(w.LinePlacements.Select(p => (p, 2u))))
         {
             if (p.Definition is null || !StaticWorld.Collides(type)) continue;
@@ -237,7 +236,7 @@ public sealed partial class MissionSetup
             if (melee is not null && IsFlagPlacement(p) && meleeRules?.Kind != MeleeKind.Ctf) continue;
             var sd = structures.TryGetValue(p.Definition, out var known) ? known : structures[p.Definition] = StructureInfo(vfs, p.Definition);
             var (nodes, nodeIndex) = sd.Instance();
-            if (asm.Assemble(p.Definition) is { } m && statics.Add(p.Object.Name, type, p.Object.Rotation, at8(p), m,
+            if (asm.Assemble(p.Definition) is { } m && statics.Add(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), m,
                     classes.TryGetValue(p.Definition, out var nc) ? nc : classes[p.Definition] = NodeClasses(vfs, p.Definition),
                     types.TryGetValue(p.Definition, out var nt) ? nt : types[p.Definition] = NodeTypes(vfs, p.Definition),
                     nodeIndex, (i, b) => nodes[i].Base ??= b, NodeSpheres(vfs, p.Definition)) is { } so)
@@ -245,17 +244,17 @@ public sealed partial class MissionSetup
                 staticOf[p] = so;
                 so.Nodes.AddRange(nodes);
                 // a gate's slide in the world: the record's offset through its node's transform to the model and the placement
-                var place = Affine.FromEngine(p.Object.Rotation, at8(p));
+                var place = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p));
                 foreach (var part in m.Parts)
                     if (nodeIndex(part.NodeName) is var gi and >= 0 && nodes[gi].Gate is { } gate && nodes[gi].Name.Equals(part.NodeName, StringComparison.OrdinalIgnoreCase))
                         gate.World = place.Rotate(part.ToModel.Rotate(gate.Offset));
                 so.Explosion = sd.Explosion;
                 so.Sound = sd.Sound;
-                if (sd.Marker is { } mk) so.Marker = Affine.FromEngine(p.Object.Rotation, at8(p)).Apply(mk.Apply(System.Numerics.Vector3.Zero));
+                if (sd.Marker is { } mk) so.Marker = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p)).Apply(mk.Apply(System.Numerics.Vector3.Zero));
                 // what it leaves when destroyed: the 'A' geometry, if any (type 3's dead nodes give no response)
                 if (type != 3 && type != 4 && destroyedAsm.Assemble(p.Definition) is { } dm
                     && !dm.Parts.Select(x => x.NodeName).SequenceEqual(m.Parts.Select(x => x.NodeName)))
-                    so.Remains = StaticWorld.Build(p.Object.Name, type, p.Object.Rotation, at8(p), dm, classes[p.Definition], types[p.Definition], nodeIndex, nodeSphere: NodeSpheres(vfs, p.Definition));
+                    so.Remains = StaticWorld.Build(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), dm, classes[p.Definition], types[p.Definition], nodeIndex, nodeSphere: NodeSpheres(vfs, p.Definition));
             }
         }
         var ground = new WorldGround(terrain, statics);
@@ -285,12 +284,12 @@ public sealed partial class MissionSetup
             v.Rot = Rows.FromEngine(p.Object.Rotation);
             var pos = p.Object.Position;
             // the class is the .vdf's (the player's car sits on a type-1 placement whatever it is)
-            // a helicopter (class 9) stays where it was placed, at least on the terrain (the helicopter's post-load)
-            // an emplacement (class 8) stands where it was placed: the emplacement's post-load sets no height, and its class update is empty
+            // the loader creates every placement on the terrain (bilinear at its origin), whatever its file y:
+            // a helicopter's (class 9) post-load only lifts it to the terrain if below, an emplacement's (class 8) sets
+            // no height and its class update is empty, so both stay there
             pos.Y = v.ObjectClass switch
             {
-                9 => MathF.Max(pos.Y, terrain.Height(pos.X, pos.Z)),
-                8 => pos.Y,
+                8 or 9 => terrain.Height(pos.X, pos.Z),
                 _ => ground.Query(pos.X, pos.Y + 2, pos.Z).Height,
             };
             v.Pos = new Double3(pos.X, pos.Y, pos.Z);
@@ -454,7 +453,7 @@ public sealed partial class MissionSetup
                     {
                         var burnt = new AssembledModel { Definition = wm.Definition, Kind = wm.Kind, ObjectCode = wm.ObjectCode };
                         burnt.Parts.AddRange(wm.Parts.Where(x => !wm.GizmoOf.ContainsKey(x)));
-                        so.Remains = StaticWorld.Build(p.Object.Name, 8, p.Object.Rotation, at8(p), burnt);
+                        so.Remains = StaticWorld.Build(p.Object.Name, 8, p.Object.Rotation, w.GroundedPosition(p), burnt);
                     }
                 }
             }

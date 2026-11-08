@@ -9,8 +9,9 @@ using Xunit;
 namespace I76.Sim.Tests;
 
 /// <summary>
-/// T11's gun emplacements stand at their file y (the loader creates type 1, 8 and 9 without the ground flag):
-/// their collider must be where the model is, not on the terrain beneath it (mg2turr at 3407.5, 48327.5 is placed 2 m above the ground).
+/// T11's gun emplacements stand on the terrain (the loader creates every type, 1, 8 and 9 included, with the ground
+/// flag, and the emplacement's post-load sets no height), whatever their file y (mg2turr at 3407.5, 48327.5 is placed
+/// 2 m above the ground): their collider is where the model is.
 /// </summary>
 public class EmplacementPlacementTests
 {
@@ -37,6 +38,36 @@ public class EmplacementPlacementTests
             var so = g.Emplacement!.Collider!;
             Assert.InRange(so.Centre.Y, (float)g.Pos.Y, (float)g.Pos.Y + 2.5f);
         }
+    }
+
+    [Fact]
+    public void EveryT11GunAndHelicopterStandsOnTheTerrainWhateverItsFileY()
+    {
+        if (InstallDir is null) return;
+        var install = new GameInstall(InstallDir!);
+        var vfs = new AssetVfs(install);
+        var asm = new ModelAssembler(vfs);
+        var w = new MissionWorld(vfs, asm, install.Resolve("miss16", "t11.msn")!);
+        // a synthetic placement: the first gun, lifted 2 m above where its file puts it
+        int k = w.Placements.FindIndex(p => p.Object.ObjectType == 8);
+        var gun = w.Placements[k];
+        w.Placements[k] = gun with { Object = gun.Object with { Position = gun.Object.Position + new Vector3(0, 2, 0) } };
+        var s = MissionSetup.Build(vfs, w, asm, script: false);
+        int guns = 0, helis = 0;
+        foreach (var (p, _, v) in s.Cars)
+        {
+            if (!v.IsEmplacement && v.ObjectClass != 9) continue;
+            float terrain = (float)w.BilinearHeight(p.Object.Position.X, p.Object.Position.Z);
+            Assert.Equal(terrain, (float)v.Pos.Y, 3);
+            if (v.IsEmplacement)
+            {
+                Assert.InRange(v.Emplacement!.Collider!.Centre.Y, terrain, terrain + 2.5f);
+                guns++;
+            }
+            else helis++;
+        }
+        Assert.Equal(20, guns);
+        Assert.True(helis > 0);
     }
 
     [Fact]

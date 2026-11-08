@@ -611,7 +611,6 @@ public partial class Cockpit : Node
     private string? _radarMember;
     private int _radarCur, _radarPrev;
     private double _radarNext, _t;
-    private readonly HashSet<Vehicle> _swept = [];
     private readonly Dictionary<Vehicle, double> _sweptAt = [];
     /// <summary>The 256-colour palette the panels' bitmaps use (the radar's blip colours are indices into it).</summary>
     public I76.Formats.Imaging.Palette? Palette { get; init; }
@@ -641,7 +640,7 @@ public partial class Cockpit : Node
         {
             if (_t < _radarNext) return;
             _radarPrev = _radarCur;
-            while (_radarNext < _t) { _radarNext += 0.2; _radarCur = (_radarCur + 1) % 29; }
+            while (_radarNext < _t) { _radarNext += 0.2; _radarCur = I76.Sim.Weapons.RadarScope.NextSweep(_radarCur); }
             frame = _radarF[_radarCur];
         }
         if (frame is null) return;
@@ -657,16 +656,14 @@ public partial class Cockpit : Node
         {
             Panels.StampInto(img, "zrad.map", RadarRange == 0 ? "range_1" : "range_3", "range_pos");
             float R = RadarRange == 0 ? 100 : 600;
-            float a0 = _radarPrev * Mathf.Tau / 29, a1 = _radarCur * Mathf.Tau / 29;
             bool any = false, pinged = false;
             foreach (var v in Combat.World.Vehicles)
             {
-                if (v == Car || v.Wreck || !I76.Sim.Weapons.Combat.IsLive(v)) continue;   // the contact list: no dead or engine-off car
+                if (v.Wreck || !Combat.IsContact(Car, v)) continue;   // the contact list: 600 m on the ground, no dead or engine-off car
+                any = true;   // the LED and the growl: any listed car, on the scope or past its range circle
                 if (I76.Sim.Weapons.RadarScope.Project(Car.Rot, Car.Pos.ToVector3(), v.Pos.ToVector3(), R) is not var (nx, nz)) continue;
-                any = true;
-                float ang = Mathf.PosMod(Mathf.Atan2(nx, nz), Mathf.Tau);
-                bool inWedge = locked is null && (a1 >= a0 ? ang >= a0 && ang <= a1 : ang >= a0 || ang <= a1);
-                if (inWedge) { if (_swept.Add(v) && !pinged) { Sound("cradar.wav"); pinged = true; } _sweptAt[v] = _t; }   // one ping a pass, however many cars the wedge crosses
+                bool inWedge = locked is null && I76.Sim.Weapons.RadarScope.InPingWedge(_radarPrev, _radarCur, nx, nz);
+                if (inWedge) { if (!pinged) { Sound("cradar.wav"); pinged = true; } _sweptAt[v] = _t; }   // every pass pings; blips in one step share the sound
                 int px = System.Math.Clamp((int)(99 + 51 * nx), 0, img.GetWidth() - 2);
                 int py = System.Math.Clamp((int)(65 + 51 * nz), 0, img.GetHeight() - 2);   // a raw bitmap row: bottom-up, as the image stores it
                 // no team colours: palette index 0x69 when listed, 0 as the sweep passes or it is picked, +3 a second back to
@@ -686,7 +683,6 @@ public partial class Cockpit : Node
                 }
             if (any && !_ledAny) Sound("cgrowl.wav");
             _ledAny = any;
-            if (!any) _swept.Clear();
             Panels.StampInto(img, "zrad.map", any ? "radled_1" : "radled_2", "led_pos");
         }
         UploadRadar(img);

@@ -28,6 +28,26 @@ public static class RadarScope
         return f >= 30 ? f - 30 : f < 0 ? f + 30 : f;
     }
 
+    /// <summary>The sweep's frames per turn: the original's step table cycles 0..29, one step every 0.2 s, a turn in 6 s.</summary>
+    public const int SweepFrames = 30;
+    /// <summary>The ping window's divisor: the original scales the steps by 2π/29 although the art has 30 frames, so pings run up to a step off the beam and the 29 -> 0 window is empty.</summary>
+    public const int PingSteps = 29;
+
+    /// <summary>The sweep frame after <paramref name="cur"/>.</summary>
+    public static int NextSweep(int cur) => (cur + 1) % SweepFrames;
+
+    /// <summary>
+    /// The sweep's ping test: a blip at scope position (x, z) pings when its bearing lies between the step the beam left
+    /// (prev) and the one it reached (cur), each scaled by 2π/29. Every pass pings again.
+    /// </summary>
+    public static bool InPingWedge(int prev, int cur, float x, float z)
+    {
+        float a0 = prev * MathF.Tau / PingSteps, a1 = cur * MathF.Tau / PingSteps;
+        float ang = MathF.Atan2(x, z);
+        if (ang < 0) ang += MathF.Tau;
+        return a1 >= a0 ? ang >= a0 && ang <= a1 : ang >= a0 || ang <= a1;
+    }
+
     public static (float X, float Z)? Project(Rows carRot, Vector3 carPos, Vector3 contactPos, float range)
     {
         var d = carRot.ToLocal(contactPos - carPos);

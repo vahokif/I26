@@ -4,9 +4,10 @@
 // plus a few centimetres), which keeps it on top of the terrain it lies on
 // without visibly lifting it.
 //
-// 1997 mode: unshaded, the engine's per-vertex road light:
-// clamp(viewZ*fade_a + fade_b, 0.75, 1) * Ly + ambient,
-// through the mission's light ramp like the terrain.
+// 1997 mode: unshaded, the engine's road light: one flat value,
+// max(0, I*Ly) + ambient, with no normal and no depth term (the terrain and
+// the objects have the depth fade, the roads do not), through the mission's
+// light ramp like the terrain.
 shader_type spatial;
 render_mode cull_disabled;
 
@@ -14,8 +15,6 @@ uniform sampler2D road_tex : source_color, filter_linear_mipmap_anisotropic, rep
 uniform bool mode_1997 = false;
 uniform float light_y = 0.2588;
 uniform float ambient = 0.0;
-uniform float fade_a = 0.000417;
-uniform float fade_b = 0.7496;
 uniform float pull = 0.004;
 
 // the engine's light ramp (the mission's .act and .lum): a vertex lit `light` takes LUMA[round(31·light)]
@@ -30,8 +29,7 @@ vec3 to_linear(vec3 c) { return mix(c / 12.92, pow(max((c + 0.055) / 1.055, vec3
 void vertex() {
 	vec4 view = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	float depth = -view.z;
-	float fade = clamp(depth * fade_a + fade_b, 0.75, 1.0);
-	v_intensity = i76_ramp(fade * light_y + ambient);
+	v_intensity = i76_ramp(max(light_y, 0.0) + ambient);
 	// fade the pull in with distance: right at the eye a proportional pull
 	// would drag nearby road up into the view
 	view.xyz *= 1.0 - (pull + 0.12 / max(depth, 1.0)) * smoothstep(1.5, 12.0, depth);

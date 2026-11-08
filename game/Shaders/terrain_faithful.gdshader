@@ -13,8 +13,8 @@
 //
 // Roads (both looks paint them into the terrain, RoadRaster): the layer is cut
 // hard at half alpha, as the engine's strips keyed their texels, and lit with
-// the engine's road light: clamp(viewZ*fade_a + fade_b, 0.75, 1)
-// * Ly + ambient, gamma-encoded, per vertex.
+// the engine's road light: max(0, I*Ly) + ambient, gamma-encoded, with no
+// depth term (the ground's fade does not reach the roads).
 //
 // No shadow map in this look (the original had none; its drop shadows are
 // projected polygons, DropShadows.cs): light() passes the engine's colour.
@@ -77,8 +77,7 @@ void vertex() {
 		light = min(d * fade + ambient, 1.0);
 	}
 	v_intensity = i76_ramp(light);
-	float road_fade = clamp(view_z * fade_a + fade_b, 0.75, 1.0);
-	v_road = i76_ramp(road_fade * road_light_y + ambient);
+	v_road = i76_ramp(max(road_light_y, 0.0) + ambient);
 	road_uv = vec2(VERTEX.x, -VERTEX.z) / chunk_units;
 }
 

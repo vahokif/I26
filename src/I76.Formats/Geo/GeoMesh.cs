@@ -116,3 +116,21 @@ public static class FaceLight
         return row == 5 ? b1 && keyed : !b1 || keyed;
     }
 }
+
+/// <summary>
+/// An effect's quad (.xdf XGEO): which way its first textured face's v runs and where its middle stands. The stock quads
+/// stand on the effect's origin (the WP mortar's burst from 0 to 5 m) with v = 0 at their foot, all but one (xmslc1):
+/// the original draws a frame's first row at the bottom of the quad.
+/// </summary>
+public static class EffectQuad
+{
+    /// <summary><c>FirstRowAtBottom</c>: v grows up the quad; <c>Lift</c>: the middle of the mesh's height above its origin.</summary>
+    public static (bool FirstRowAtBottom, float Lift) Of(GeoMesh g)
+    {
+        if (g.Vertices.Length == 0) return (false, 0);
+        float lift = (g.Vertices.Min(v => v.Y) + g.Vertices.Max(v => v.Y)) / 2;
+        var face = g.Faces.FirstOrDefault(f => f.Texture.Length > 0);
+        var corners = face?.Vertices.Where(v => (uint)v.Index < g.Vertices.Length).Select(v => (P: g.Vertices[v.Index], v.V)).ToList();
+        return (corners is { Count: > 0 } && corners.MaxBy(c => c.P.Y).V > corners.MinBy(c => c.P.Y).V, lift);
+    }
+}

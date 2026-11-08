@@ -453,13 +453,7 @@ public partial class CombatView : Node3D
     private bool Animate(EffectSprites.Look? look, System.Numerics.Vector3 at, Node3D? on = null, System.Numerics.Vector3 local = default)
     {
         if (look is null) return false;
-        var tex = look.Frames[0];
-        var sp = new Sprite3D
-        {
-            Texture = tex, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Shaded = false, DoubleSided = true,
-            AlphaCut = SpriteBase3D.AlphaCutMode.Discard, PixelSize = look.Size / MathF.Max(1, tex.GetWidth()),
-            Position = on is null ? G(at) : Coords.ToGodot(local), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-        };
+        var sp = look.Sprite(on is null ? G(at) : Coords.ToGodot(local));
         (on ?? (Node)this).AddChild(sp);
         _anims.Add((sp, look.Frames, _t));
         return true;
@@ -578,13 +572,7 @@ public partial class CombatView : Node3D
             foreach (var wav in o.ImpactWav) if (wav.Length > 0 && !wav.Equals("null", StringComparison.OrdinalIgnoreCase)) Audio?.Get(wav);
         }
         if (any is null) return;
-        var tex = any.Frames[0];
-        var sp = new Sprite3D
-        {
-            Texture = tex, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Shaded = false, DoubleSided = true,
-            AlphaCut = SpriteBase3D.AlphaCutMode.Discard, PixelSize = any.Size / MathF.Max(1, tex.GetWidth()),
-            Position = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-        };
+        var sp = any.Sprite(at);
         AddChild(sp);
         _warmSprites.Add(sp);
     }

@@ -66,6 +66,8 @@ public static class Protocol
     public const string InviteDeclined = "The host has rejected you. Go find another game, pink boy.", InviteTimedOut = "Your request timed out. Try again.";
     /// <summary>A booted player's notice (the original said nothing: the session just ended).</summary>
     public const string Booted = "The host booted you from the game.";
+    /// <summary>A banned player's refusal on joining again (the host's /ban; the port's).</summary>
+    public const string Banned = "The host has banned you from this game.";
 }
 
 public enum MsgType : byte

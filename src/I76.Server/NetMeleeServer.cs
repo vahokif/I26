@@ -157,7 +157,7 @@ public sealed partial class NetMeleeServer : IDisposable
         // a player of the game this one took over, coming back to its seat (host migration)
         if (j.Rejoin is not null) { RequestRejoin(req, j); return; }
         string? why = j.Version != Protocol.Version ? $"protocol {j.Version}; this server speaks {Protocol.Version}"
-            : CheckPassword(req.RemoteEndPoint.Address, j.Password)
+            : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint.Address, j.Password)
             ?? (_lobbyClosed ? LobbyClosedText : Host.Seats.Count + _lobby.Count + _requests.Count + _waiting.Count + _invites.Count >= Options.MaxPlayers ? "the server is full"
             : Host.Over ? (CarriesOn ? "between rounds: try again in a few seconds" : Options.Coop is not null ? "the mission is over" : "the melee is over")
             : Host.Mode.CanJoin() ?? Host.CheckJoin(j.Car, j.Config));
@@ -345,10 +345,7 @@ public sealed partial class NetMeleeServer : IDisposable
         {
             who = who.Trim();
             if (_lobbyOpen && KickFromLobby(who)) return null;
-            var seat = int.TryParse(who, out int slot) ? _byPeer.Values.FirstOrDefault(x => x.Slot == slot) : null;
-            seat ??= _byPeer.Values.FirstOrDefault(x => x.Name.Equals(who, StringComparison.OrdinalIgnoreCase))
-                ?? (_byPeer.Values.Where(x => x.Name.StartsWith(who, StringComparison.OrdinalIgnoreCase)).ToList() is { Count: 1 } one ? one[0] : null);
-            if (seat is null) return Host.BootBot(who);
+            if (FindSeat(who) is not { } seat) return Host.BootBot(who);
             var peer = (NetPeer)seat.Connection!;
             _byPeer.Remove(peer.Id);
             _joined.Remove(peer.Id);
@@ -357,6 +354,14 @@ public sealed partial class NetMeleeServer : IDisposable
             Turn(peer, Protocol.Booted);
             return null;
         }
+    }
+
+    /// <summary>A connected player's seat by slot number, name, or a unique start of a name (case does not matter); null if none.</summary>
+    private Seat? FindSeat(string who)
+    {
+        var seat = int.TryParse(who, out int slot) ? _byPeer.Values.FirstOrDefault(x => x.Slot == slot) : null;
+        return seat ?? _byPeer.Values.FirstOrDefault(x => x.Name.Equals(who, StringComparison.OrdinalIgnoreCase))
+            ?? (_byPeer.Values.Where(x => x.Name.StartsWith(who, StringComparison.OrdinalIgnoreCase)).ToList() is { Count: 1 } one ? one[0] : null);
     }
 
     /// <summary>Boots the player in this slot (the listen host's BOOT keys).</summary>

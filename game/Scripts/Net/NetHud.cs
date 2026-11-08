@@ -133,11 +133,32 @@ public partial class NetHud : CanvasLayer
         };
         if (k.Echo && key is I76.Formats.Shell.ChatKey.Enter or I76.Formats.Shell.ChatKey.Escape) return;
         char typed = I76.Formats.Shell.TextEntry.Typed((int)k.Unicode, (int)k.KeyLabel, k.ShiftPressed, k.CtrlPressed || k.AltPressed || k.MetaPressed);
-        if (_chat.Press(key, typed) == I76.Formats.Shell.ChatResult.Sent && _cb?.Command(_chat.Sent!) != true) Client.SendChat(_chat.Sent!);
+        if (_chat.Press(key, typed) == I76.Formats.Shell.ChatResult.Sent && !BanCommand(_chat.Sent!) && _cb?.Command(_chat.Sent!) != true) Client.SendChat(_chat.Sent!);
         if (!_chat.Active) Controls.Suspended = false;
     }
 
     public override void _ExitTree() => Controls.Suspended = false;
+
+    /// <summary>
+    /// The listen host's /ban NAME (boots the player and refuses their rejoins for the rest of the game, by name and address),
+    /// /ban alone (the list) and /unban NAME. Returns whether the line was one (it is then not sent).
+    /// </summary>
+    private bool BanCommand(string text)
+    {
+        var w = text.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (w.Length == 0 || !(w[0].Equals("/ban", StringComparison.OrdinalIgnoreCase) || w[0].Equals("/unban", StringComparison.OrdinalIgnoreCase))) return false;
+        string arg = w.Length > 1 ? w[1].Trim() : "";
+        if (Server is null) { Say("Only the host can ban a player", FeedKind.Own); return true; }
+        if (w[0].Equals("/unban", StringComparison.OrdinalIgnoreCase)) { Say(Server.Unban(arg) ?? $"{arg}: the ban is lifted", FeedKind.Own); return true; }
+        if (arg.Length == 0)
+        {
+            var list = Server.Banned;
+            Say(list.Count == 0 ? "Nobody is banned (/ban NAME, /unban NAME)" : "Banned: " + string.Join(", ", list), FeedKind.Own);
+            return true;
+        }
+        if (Server.Ban(arg) is { } why) Say(why, FeedKind.Own);     // the server tells everyone when it is done
+        return true;
+    }
 
     /// <summary>The CTF teams' colours (Red Dawn, Gang Green, Purple Reign, Black Plague; the last drawn light so it shows).</summary>
     public static Color TeamColour(int team) => team switch

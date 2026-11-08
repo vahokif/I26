@@ -28,7 +28,7 @@ using I76.Server;
 // With no --install and no I76_INSTALL it finds the game as I26 does (GameDiscovery: next to the executable, i76/ and
 // nitro/ there and in the user folder, GOG installers, which it unpacks the same way); --game picks one when both exist.
 // Logs joins, leaves, kills and scores; a line on stdin is said as the server's chat, except the commands: kick NAME|SLOT
-// (boots a player), players (lists them), y / n / s (an invite-only join), say TEXT, help. Ctrl+C stops it.
+// (boots a player), ban NAME|SLOT / unban NAME / bans (boots and refuses rejoins for the rest of the game), players (lists them), y / n / s (an invite-only join), say TEXT, help. Ctrl+C stops it.
 //       [--rotate a,b,c]  the arenas the rounds cycle through (the names --arena takes, custom maps too); without it every round
 //                         is the same arena. [--once] the server exits after one melee. [--round-pause 15] seconds of standings.
 // When a melee is over the clients see the standings for the pause, then the server starts the next round: the players still
@@ -222,6 +222,15 @@ bool Command(string t)
         case "kick" or "boot" when arg.Length > 0:
             Log(server.Kick(arg) ?? $"booted {arg}");
             return true;
+        case "ban" when arg.Length > 0:
+            Log(server.Ban(arg) ?? $"banned {arg} for the rest of the game");
+            return true;
+        case "ban" or "bans" when arg.Length == 0:
+            Log(server.Banned.Count == 0 ? "nobody is banned" : "banned: " + string.Join(", ", server.Banned));
+            return true;
+        case "unban" when arg.Length > 0:
+            Log(server.Unban(arg) ?? $"lifted the ban on {arg}");
+            return true;
         case "cbmute" or "cbunmute" when arg.Length > 0:
             Log(server.CbMute(arg, cmd == "cbmute") ?? (cmd == "cbmute" ? $"muted {arg} on the CB for everyone" : $"unmuted {arg} on the CB"));
             return true;
@@ -243,7 +252,7 @@ bool Command(string t)
             server.Chat(arg);
             return true;
         case "help" when t.StartsWith('/') || arg.Length == 0 && parts.Length == 1:
-            Log("commands: kick NAME|SLOT, cbmute NAME / cbunmute NAME (a player's CB voice, for everyone), start (a co-op lobby), players, y / n / s (an invite-only join), say TEXT; any other line is chat");
+            Log("commands: kick NAME|SLOT, ban NAME|SLOT / unban NAME / bans (refused rejoins for the rest of the game), cbmute NAME / cbunmute NAME (a player's CB voice, for everyone), start (a co-op lobby), players, y / n / s (an invite-only join), say TEXT; any other line is chat");
             return true;
     }
     if (t.StartsWith('/')) { Log($"unknown command {t}; /help lists them"); return true; }

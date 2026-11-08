@@ -240,6 +240,16 @@ by itself in 43 s; Space 3 s after a death was refused, 6.5 s after it brought a
   port's Ctrl+8 and Ctrl+9 for the rest of the page, Ctrl+PgUp/PgDn turning it; a booted player is told "The host
   booted you from the game" (the original said nothing; its session just ended), the others see the leave line, and
   the car blows up as a leaver's. `i26-server`'s console: `kick NAME|SLOT`.
+- **Bans** (I26, #117; `NetMeleeServer.Ban`, `BanList`): the listen host's chat line `/ban NAME` (a slot, a name or a
+  unique start of one) boots the player and refuses their joins for the rest of the game ("The host has banned you
+  from this game.", the refusal's text: no wire change); everyone sees "*** NAME has been banned by the host". `/ban`
+  alone lists the bans, `/unban NAME` lifts one; `i26-server`'s console has `ban`, `unban` and `bans`. A ban holds what
+  the server knows of the player: the name (case does not matter) and the address they joined from; a join matching
+  either is refused, before the password. Limits: another name from another address (a new connection, a VPN) gets
+  in; everyone behind the banned public address is refused with them; a loopback address (players on the server's
+  machine) is never held; a name not in the game is banned by name only; bots are booted, not banned. The list lives
+  in the server for this game: the dedicated server keeps it across rounds, a host migration's new host starts
+  without one.
 - **Invite only** (cfg bit 2; INVITE_ACCEPT / DECLINE / SKIP, Ctrl+Y / N /
   H): every join request queues; the host sees "Let %s join the game? (CTRL-Y / CTRL-N) " for the oldest; Ctrl+H puts it
   at the back keeping its time; one unanswered 30 s after it asked is turned away. The joiner is told "The host has
@@ -964,7 +974,8 @@ nix develop -c dotnet run --project tools/I76.Server -- [--install DIR] [--game 
 - Every 30 s with players seated it logs a load line: players, the tick's time, the upload, the snapshot size and how
   many went in pieces (a listen server's log too, as `[server] load:`).
 - It logs joins, leaves, kills, scores and respawns. A line typed on stdin is sent as the server's chat, except the
-  console's commands (a leading `/` optional): `kick NAME|SLOT` boots a player, `players` lists them, `y` / `n` / `s`
+  console's commands (a leading `/` optional): `kick NAME|SLOT` boots a player, `ban NAME|SLOT` / `unban NAME` / `bans`
+  (below, "Bans"), `players` lists them, `y` / `n` / `s`
   answer an invite-only join (`--invite-only`), `say TEXT` sends a line that starts with a command's word, `help`.
 - Ctrl+C stops it. When a melee is over it carries on with another round
   (below, "Rounds"); `--once` exits instead, after 20 s for the clients to see the standings.

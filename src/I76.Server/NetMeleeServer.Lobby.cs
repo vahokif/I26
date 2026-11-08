@@ -177,15 +177,20 @@ public sealed partial class NetMeleeServer
     /// <summary>The host boots a lobby player (by their number in the lobby's list, or name); false when there is none by that name.</summary>
     private bool KickFromLobby(string who)
     {
-        var m = int.TryParse(who, out int n) && n >= 0 && n < _lobby.Count ? _lobby[n]
-            : _lobby.FirstOrDefault(x => x.Request.Name.Equals(who, StringComparison.OrdinalIgnoreCase))
-            ?? (_lobby.Where(x => x.Request.Name.StartsWith(who, StringComparison.OrdinalIgnoreCase)).ToList() is { Count: 1 } one ? one[0] : null);
-        if (m is null) return false;
+        if (FindInLobby(who) is not { } m) return false;
         _lobby.Remove(m);
         Log?.Invoke($"lobby: {m.Request.Name} was booted");
         Turn(m.Peer, Protocol.Booted);
         SendLobby();
         return true;
+    }
+
+    /// <summary>A co-op lobby's player by place, name, or a unique start of a name; null if none.</summary>
+    private LobbyPeer? FindInLobby(string who)
+    {
+        return int.TryParse(who, out int n) && n >= 0 && n < _lobby.Count ? _lobby[n]
+            : _lobby.FirstOrDefault(x => x.Request.Name.Equals(who, StringComparison.OrdinalIgnoreCase))
+            ?? (_lobby.Where(x => x.Request.Name.StartsWith(who, StringComparison.OrdinalIgnoreCase)).ToList() is { Count: 1 } one ? one[0] : null);
     }
 
     /// <summary>A lobby with no host (a dedicated server) starts itself when enough players are all ready.</summary>

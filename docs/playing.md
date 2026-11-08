@@ -145,4 +145,5 @@ it does; any axis can be the throttle, the steering or the camera, Invert turns 
 Without `--mission` the game plays the intro and opening credits (Esc, Space, Enter or a click skips), then opens
 the original front end; `--skip-movies` leaves them out. Useful options (after `--` when run through Godot):
 `--install DIR`, `--mission a01`, `--drive [car.vcf]`, `--melee`, `--1997`, `--cockpit`, `--windowed` (Godot's, before the `--`).
+For unattended runs `--skip-cutscenes` skips a mission's skippable camera scenes as Esc would, and `--mute` turns the sound off.
 

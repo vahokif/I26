@@ -10,6 +10,7 @@ namespace I76.Game.Boot;
 ///   --screenshot PATH  --quit-after FRAMES   --seed N
 ///   --drive [car.vcf]  --hold-throttle
 ///   --skip-movies   --movie NAME.smk
+///   --skip-cutscenes   (a mission's skippable cut-scenes are skipped as if Esc were pressed when they start; single player)   --mute   (all audio off)   for unattended runs
 ///   --connect HOST:PORT [--name N] [--car X.vcf] [--team T]   (a network melee)
 ///   --host-listen [--arena m05] [--port 7676] [--rate 20|24|25|28|30|40|60] [--fill N] [--bots-ai N] [--bot-skill easy|normal|hard] [--teams] [--max-score S] [--time-limit SECONDS] [--anet HOST[:PORT]]
 ///   --host-listen --coop MISSION [--max-players 8] [--port 7676]   (a co-op story mission for up to eight instead of a melee: t01, s03, p05, ...)
@@ -62,6 +63,22 @@ public sealed class LaunchOptions
     public bool NoMusic { get; set; }
     /// <summary>--skip-movies: no intro or credits at startup, no briefing movies in missions.</summary>
     public bool SkipMovies { get; set; }
+    /// <summary>--skip-cutscenes: a mission's skippable scripted camera scenes are skipped as Esc would, as they start (single player).</summary>
+    public bool SkipCutscenes { get; set; }
+    /// <summary>--mute: the master bus is muted for the run (unattended runs); the audio settings are not touched.</summary>
+    public bool Mute { get; set; }
+    /// <summary>Set by Parse from --mute; read by <c>Main.ApplyAudio</c>.</summary>
+    public static bool Muted { get; private set; }
+    /// <summary>The unattended-run switches (--skip-cutscenes, --mute); false for any other argument.</summary>
+    public static bool ApplySwitch(LaunchOptions o, string arg)
+    {
+        switch (arg)
+        {
+            case "--skip-cutscenes": o.SkipCutscenes = true; return true;
+            case "--mute": o.Mute = true; Muted = true; return true;
+            default: return false;
+        }
+    }
     /// <summary>--movie NAME: play that movie from smk/ first (then the menu, or quit with --quit-after).</summary>
     public string? Movie { get; set; }
     /// <summary>--modern-physics: the player's car on the optional modern physics (docs/modern-physics.md), whatever the setting says.</summary>
@@ -307,6 +324,7 @@ public sealed class LaunchOptions
                     break;
                 }
                 case "--seed": o.Seed = uint.Parse(Next(), System.Globalization.CultureInfo.InvariantCulture); break;
+                default: LaunchOptions.ApplySwitch(o, args[i]); break;
             }
         }
         var env = System.Environment.GetEnvironmentVariable("I76_INSTALL");

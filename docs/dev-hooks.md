@@ -142,6 +142,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 
 | Variable | Kind | What it does |
 |---|---|---|
+| `--skip-cutscenes`, `--mute` | test | Command-line switches (after `--`) for unattended runs: `--skip-cutscenes` skips a single-player mission's skippable scripted camera scenes as Esc would, when they start (a network game still follows its host); `--mute` mutes the master audio bus for the run, leaving the saved audio levels alone. |
 | `I76_END_MISSION` | test | `win@frame` or `fail@frame`: end the mission as the script would (on a network co-op listen host, the server's mission: every player gets the end). |
 | `I76_SCRIPT_MOVIE` | test | `name.smk@frame`: ask for that movie as a script's playMovie does (T05's `Ang05f01.smk`, T06's `ang06f01.smk`), the game paused under it; needs `I76_SHOT_MOVIES=1`. |
 | `I76_CHECKPOINTS` | test | `1`: Checkpoints on for the run, whatever the setting (docs/savestate.md). |

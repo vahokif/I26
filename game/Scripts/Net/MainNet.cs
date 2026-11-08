@@ -587,7 +587,7 @@ public partial class Main
             GD.Print($"movie: {name}{(SkipsCutscenes ? "" : " (the host's to skip)")}");
             try
             {
-                var player = new I76.Game.Ui.MoviePlayer { Path = path, Faithful = _opt.Mode1997, Name = "Movie", Skippable = SkipsCutscenes };
+                var player = new I76.Game.Ui.MoviePlayer { Path = path, Faithful = _opt.Mode1997, Nitro = install.IsNitro, Name = "Movie", Skippable = SkipsCutscenes };
                 player.Finished += () => { GD.Print($"movie: {name} over here"); NetMovieOver(); c.SendMovieDone(name); };
                 _netMovie = player;
                 AddChild(player);

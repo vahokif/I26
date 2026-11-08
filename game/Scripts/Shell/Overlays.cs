@@ -387,11 +387,11 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     }
 }
 
-/// <summary>The port's rows under Audio Control's levels: the CB microphone, and the sound pack's switch only when a pack is installed.</summary>
+/// <summary>The port's rows under Audio Control's levels: the CB microphone, and HiFi Audio's switch only when a pack is installed (the front end's and the mission menu's).</summary>
 public static class AudioControlRows
 {
-    public const string Mic = "CB Microphone", HdSounds = "HD Sounds";
-    public static IReadOnlyList<string> Labels(bool soundPack) => soundPack ? [Mic, HdSounds] : [Mic];
+    public const string Mic = "CB Microphone", HiFiAudio = "HiFi Audio";
+    public static IReadOnlyList<string> Labels(bool pack) => pack ? [Mic, HiFiAudio] : [Mic];
 }
 
 /// <summary>Audio Control, overlay 6: record 7, the music, effects and voice levels with a value and a row of check boxes each.</summary>
@@ -400,7 +400,7 @@ public sealed class AudioScreen : OverlayScreen
     protected override int Record => 7;
     private byte[] _saved = [];
     private string _savedMic = "";
-    private bool _savedHd;
+    private bool _savedHiFi;
     // Number Of Channels (+0x53, 347) is gone: it capped the sound hardware's voices, and this port plays every sound
     private static readonly (int Y, string Label, int Boxes)[] Rows = [(140, "Music Level", 10), (209, "Sfx Level", 10), (278, "Voice Level", 10)];
 
@@ -409,7 +409,7 @@ public sealed class AudioScreen : OverlayScreen
         var s = Shell.Settings;
         _saved = (byte[])s.Audio.Clone();
         _savedMic = s.CbMic;
-        _savedHd = s.HdSounds;
+        _savedHiFi = s.HiFiAudio;
         for (int r = 0; r < Rows.Length; r++)
         {
             int row = r;
@@ -424,25 +424,25 @@ public sealed class AudioScreen : OverlayScreen
         }
         // the port's: the microphone the CB voice chat uses (network games), under the levels; a click steps through the input devices
         Frame.CopyBackground(200, 324, 150, 18, 200, 371);      // (the sheet's unused check boxes on that line, wiped)
-        var rows = AudioControlRows.Labels(I76.Game.Assets.HdSounds.Installed);
+        var rows = AudioControlRows.Labels(I76.Game.Assets.HiFiAudio.Installed);
         Add(204, 347, AudioControlRows.Mic, null);
         Add(204, 371, () => PlayOptionsScreen.MicLabel(s.CbMic), () => s.CbMic = PlayOptionsScreen.NextMic(s.CbMic), w: 300, h: 18);
-        // the sound pack's samples, on or off (only with a pack installed, its name under it): sounds started after a change follow it
-        if (rows.Contains(AudioControlRows.HdSounds))
+        // HiFi Audio's sounds and movie tracks, on or off (only with a pack installed, its name under it): sounds and movies started after a change follow it
+        if (rows.Contains(AudioControlRows.HiFiAudio))
         {
             // (the two unused check boxes in the sheet's bottom box, wiped)
             Frame.CopyBackground(240, 405, 14, 16, 206, 405);
             Frame.CopyBackground(240, 405, 14, 16, 332, 405);
-            Add(204, 400, AudioControlRows.HdSounds, null);
-            Add(400, 400, () => s.HdSounds ? "On" : "Off", () => ApplyHd(!s.HdSounds));
-            Add(204, 420, () => I76.Game.Assets.HdSounds.Label ?? "", null, Small);
+            Add(204, 400, AudioControlRows.HiFiAudio, null);
+            Add(400, 400, () => s.HiFiAudio ? "On" : "Off", () => ApplyHiFi(!s.HiFiAudio));
+            Add(204, 420, () => I76.Game.Assets.HiFiAudio.Label ?? "", null, Small);
         }
         Add(350, 438, "Done", () => { s.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
         // Cancel puts the four bytes back but resets only the music live (as written)
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, s.Audio, 4); s.CbMic = _savedMic; ApplyHd(_savedHd); Apply(0); Shell.Overlay(new OptionsScreen()); }, Small);
+        Add(402, 438, "Cancel", () => { Array.Copy(_saved, s.Audio, 4); s.CbMic = _savedMic; ApplyHiFi(_savedHiFi); Apply(0); Shell.Overlay(new OptionsScreen()); }, Small);
     }
 
-    private void ApplyHd(bool on) { Shell.Settings.HdSounds = on; I76.Game.Assets.HdSounds.Enabled = on; }
+    private void ApplyHiFi(bool on) { Shell.Settings.HiFiAudio = on; I76.Game.Assets.HiFiAudio.Enabled = on; }
 
     // the music level is live; the SFX and voice levels reach their buses and play their preview (cammo.wav for the SFX level, croger.wav for the voice level)
     private void Apply(int row)

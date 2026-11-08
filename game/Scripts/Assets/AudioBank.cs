@@ -5,8 +5,8 @@ using I76.Formats.Vfs;
 namespace I76.Game.Assets;
 
 /// <summary>
-/// Game sounds as Godot streams, cached by name: the original's samples, or a sound pack's in their place
-/// (<see cref="HdSounds"/>) while it is switched on. Everything else about a sound (its header's rules, how it is
+/// Game sounds as Godot streams, cached by name: the original's samples, or HiFi Audio's in their place
+/// (<see cref="HiFiAudio"/>) while it is switched on. Everything else about a sound (its header's rules, how it is
 /// pitched, placed and mixed) is the caller's, from the original file, either way.
 /// </summary>
 public sealed class AudioBank(AssetVfs vfs)
@@ -17,12 +17,12 @@ public sealed class AudioBank(AssetVfs vfs)
 
     public AudioStream? Get(string name, bool loop = false)
     {
-        bool hd = HdSounds.Enabled && HdSounds.Installed;
-        var key = name + (loop ? "#loop" : "") + (hd ? "#hd" : "");
+        bool hifi = HiFiAudio.Enabled && HiFiAudio.Installed;
+        var key = name + (loop ? "#loop" : "") + (hifi ? "#hifi" : "");
         if (_cache.TryGetValue(key, out var s)) return s;
         var pcm = SoundFiles.Read(vfs, name);
         // a pack replaces only sounds the game has: one the install lacks stays silent
-        s = pcm is null ? null : (hd ? HdSounds.Load(name, vfs.Install.IsNitro, loop, pcm.Seconds) : null) ?? ToStream(pcm, loop);
+        s = pcm is null ? null : (hifi ? HiFiAudio.Load(name, vfs.Install.IsNitro, loop, pcm.Seconds) : null) ?? ToStream(pcm, loop);
         return _cache[key] = s;
     }
 

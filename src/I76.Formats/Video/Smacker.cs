@@ -76,6 +76,34 @@ public sealed class Smacker : IDisposable
     public bool Stereo(int track) => (AudioRate[track] & 0x10000000) != 0;
     public bool Is16Bit(int track) => (AudioRate[track] & 0x20000000) != 0;
 
+    /// <summary>
+    /// The audio track's whole length in sample frames (a stereo pair is one), from each frame's chunk header without decoding
+    /// it; 0 for a track the movie lacks. It moves the file's position, so not while another thread decodes.
+    /// </summary>
+    public long AudioSamples(int track)
+    {
+        if (!HasAudio(track)) return 0;
+        long bytes = 0;
+        var head = new byte[8];
+        for (int f = 0; f < FrameCount; f++)
+        {
+            if ((_type[f] & (2 << track)) == 0) continue;
+            long p = _offset[f], end = _offset[f] + _size[f];
+            if ((_type[f] & 1) != 0) { _s.Position = p; p += _s.ReadByte() * 4; }
+            for (int t = 0; t <= track && p + 8 <= end; t++)
+            {
+                if ((_type[f] & (2 << t)) == 0) continue;
+                _s.Position = p;
+                _s.ReadExactly(head);
+                uint len = BitConverter.ToUInt32(head, 0);
+                // a packed chunk starts with its unpacked size; a raw one is its own
+                if (t == track) bytes += (AudioRate[t] & 0x80000000) != 0 ? BitConverter.ToUInt32(head, 4) : len - 4;
+                p += len;
+            }
+        }
+        return bytes / ((Is16Bit(track) ? 2 : 1) * (Stereo(track) ? 2 : 1));
+    }
+
     /// <summary>The index of the frame the next <see cref="NextFrame"/> decodes.</summary>
     public int Position => _next;
 

@@ -19,6 +19,8 @@ public class SmackerTests
         Assert.Equal(1 / 15.0, m.FrameDuration, 3);
         Assert.True(m.HasAudio(0));
         Assert.Equal((22050, false, false), (m.SampleRate(0), m.Is16Bit(0), m.Stereo(0)));
+        Assert.Equal(383628, m.AudioSamples(0));      // from the chunk headers alone: what HiFi Audio's track for it is measured against
+        Assert.Equal(0, m.AudioSamples(1));
         long audio = 0;
         while (m.NextFrame((t, pcm) => audio += pcm.Length)) Assert.InRange(m.BitsLeft, 0, 31);
         Assert.Equal(261, m.Position);
@@ -40,8 +42,10 @@ public class SmackerTests
     {
         using var m = Smacker.Open(Movie(name));
         Assert.Equal((640, 480, frames), (m.Width, m.Height, m.FrameCount));
-        while (m.NextFrame((_, _) => { })) Assert.InRange(m.BitsLeft, 0, 31);
+        long headers = m.AudioSamples(0), audio = 0;
+        while (m.NextFrame((_, pcm) => audio += pcm.Length)) Assert.InRange(m.BitsLeft, 0, 31);
         Assert.Equal(frames, m.Position);
+        Assert.Equal(audio, headers);
     }
 
     /// <summary>

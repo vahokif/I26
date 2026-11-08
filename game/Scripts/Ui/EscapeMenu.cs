@@ -346,6 +346,12 @@ public sealed partial class EscapeMenu : Control
             _audio.Items.Insert(3, Setting(Cycle, "CB Microphone", 32, mics.Count, names, s => Math.Max(0, mics.IndexOf(s.CbMic)), (s, v) => s.CbMic = mics[v],
                 apply: () => Live?.Invoke(Settings)));
         }
+        if (I76.Game.Assets.HiFiAudio.Installed)
+        {
+            // the port's own, only with a pack installed: HiFi Audio on or off (the shell's Audio Control row), live: sounds and movies started after a change follow it
+            _audio.Items.Insert(_audio.Items.Count - 2, Setting(Cycle, AudioControlRows.HiFiAudio, 13, 2, ["Off", "On"], s => s.HiFiAudio ? 1 : 0, (s, v) => s.HiFiAudio = v == 1,
+                apply: () => Live?.Invoke(Settings)));
+        }
 
         if (End is { } netEnd && Net)
         {

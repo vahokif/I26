@@ -52,7 +52,7 @@ public enum CarCommands : uint
     /// <summary>shift_up / shift_down (. and ,): the drive selector one step, 0..5, cars only.</summary>
     ShiftUp = 1 << 10,
     ShiftDown = 1 << 11,
-    /// <summary>start_engine (S): set for this tick. Nothing reads it yet (no behaviour is documented).</summary>
+    /// <summary>start_engine (S): set for this tick, the ignition key's one-shot request (<see cref="Vehicle.StartEngineKey"/>): the engine starts cranking when off, stops when on.</summary>
     StartEngine = 1 << 12,
     /// <summary>special1..3 (6, 7, 8): the car's n-th special, by its kind.</summary>
     Special1 = 1 << 13,

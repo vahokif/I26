@@ -771,7 +771,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
 
     // ---- fire control ----
 
-    /// <summary>Turrets slew toward the radar target's lead point (aimed as the original's: the target predictor at the round's closest-approach time) at dt·(0.75 + 0.25·HP/max)·1.7 rad, or back to the mount's forward without one.</summary>
+    /// <summary>Turrets slew toward the radar target's lead point (aimed as the original's: the target predictor at the round's closest-approach time) at dt·(0.75 + 0.25·HP/max)·1.7 rad (dt·1.7 in a network game), or back to the mount's forward without one.</summary>
     private void AimTurrets(Vehicle v, Armory a, float dt)
     {
         foreach (var w in a.Weapons.Where(w => w.Style == 3))
@@ -801,12 +801,12 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 if (len < 1e-3f) continue;
                 yaw = MathF.Atan2(local.X, local.Z);
                 float sp = local.Y / len;
-                pitch = MathF.Abs(sp) < 0.95f ? MathF.Asin(sp) : w.AimPitch;
+                pitch = MathF.Asin(System.Math.Clamp(sp, -1f, 1f));
                 // a turret hung upside down under a body (the Phantom's belly mount) keeps below the body's own level: no aiming up through the hull
                 if (w.BaseRot.Up.Y < -0.5f) pitch = MathF.Max(pitch, 0f);
             }
-            // a helicopter's turrets slew four times as fast (6.8 for type 9)
-            float slew = dt * (0.75f + 0.25f * w.HpRatio) * (v.IsHeli ? 6.8f : 1.7f);
+            // a helicopter's turrets slew four times as fast (6.8 for type 9); a damaged turret is slower offline only
+            float slew = dt * (NetSession ? 1f : 0.75f + 0.25f * w.HpRatio) * (v.IsHeli ? 6.8f : 1.7f);
             float ey = Ai.AiDriver.AngleDelta(w.AimYaw, yaw);
             w.AimYaw += System.Math.Clamp(ey, -slew, slew);
             // the pitch moves only while the yaw error is under 90°, and never for class 3 tier 3 (the EZK);
@@ -814,7 +814,9 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             if (MathF.Abs(ey) < MathF.PI / 2 && !(w.Def.Class == 3 && w.Def.Tier == 3))
             {
                 float ep = pitch - w.AimPitch;
-                w.AimPitch += System.Math.Clamp(ep, -slew, slew);
+                // the step is kept only while the barrel's up-row z (the sine of its pitch) stays under 0.95: about 71.8°
+                float np = w.AimPitch + System.Math.Clamp(ep, -slew, slew);
+                if (MathF.Abs(MathF.Sin(np)) < 0.95f) w.AimPitch = np;
                 w.OnTarget = MathF.Abs(ey) < 0.0349f && MathF.Abs(ep) < 0.0349f;
             }
             else w.OnTarget = MathF.Abs(ey) < 0.0349f;

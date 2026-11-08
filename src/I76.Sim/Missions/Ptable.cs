@@ -281,22 +281,8 @@ public sealed partial class Ptable
         return rr < 0.01f ? 1e7f : Vector3.Dot(ps - pt, rv) / rr;
     }
 
-    /// <summary>
-    /// Where o will be at t + 0.09 s, along its velocity, or
-    /// along the arc of radius speed/|yaw rate| when it is turning
-    /// (|veh+0xcc| ≥ 0.05). Non-vehicles: the aim point (<see cref="AimPointOf"/>).
-    /// </summary>
-    private static Vector3 Predict(Entity o, float t)
-    {
-        if (o.Vehicle is not { } v) return AimPointOf(o);
-        t += 0.09f;
-        var p = o.Position;
-        float w = v.AngVel.Y;
-        if (MathF.Abs(w) < 0.05f) return p + v.Vel * t;
-        float s = new Vector2(v.Vel.X, v.Vel.Z).Length();
-        float phi = MathF.Atan2(v.Vel.X, v.Vel.Z), om = -w, phi1 = phi + om * t;
-        return new Vector3(p.X + s / om * (MathF.Cos(phi) - MathF.Cos(phi1)), p.Y + v.Vel.Y * t, p.Z + s / om * (MathF.Sin(phi1) - MathF.Sin(phi)));
-    }
+    /// <summary>Where o will be at t + 0.09 s (<see cref="TargetPredictor"/>). Non-vehicles: the aim point (<see cref="AimPointOf"/>).</summary>
+    private static Vector3 Predict(Entity o, float t) => o.Vehicle is { } v ? TargetPredictor.Predict(v, t) : AimPointOf(o);
 
     /// <summary>The octant of b − a, 0 dead ahead, 4 dead behind.</summary>
     public static int Octant(float a, float b)

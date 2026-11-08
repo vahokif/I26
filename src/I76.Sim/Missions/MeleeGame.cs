@@ -250,7 +250,13 @@ public sealed partial class MeleeGame
 
     private static float Radius(Vehicle v) => SpawnSpace.Radius(v);
 
-    private void Place(Vehicle v, int spot, int team = 0)
+    /// <summary>
+    /// A car to a spawn point (<paramref name="spot"/> of the team's table), at rest. A fresh car (<paramref name="fresh"/>:
+    /// a new one, a respawn's, a network regen's renewed one) has its wheels' history set from the ground there, as
+    /// the original's entity set-up does for every car it places (<see cref="VehicleStep.PrimeWheels"/>); a single player's
+    /// regen repairs the car it has and keeps its history.
+    /// </summary>
+    private void Place(Vehicle v, int spot, int team = 0, bool fresh = true)
     {
         if (spot < 0) return;
         var s = SpawnTable(team)[spot];
@@ -269,6 +275,7 @@ public sealed partial class MeleeGame
         v.Pos = pos;
         v.Vel = default;
         v.AngVel = default;
+        if (fresh) VehicleStep.PrimeWheels(v, World.Ground);
     }
 
     /// <summary>
@@ -651,7 +658,7 @@ public sealed partial class MeleeGame
         if (!(Rules.Network && Rules.Kind == MeleeKind.Ctf)) pl.Score += 400;
         Ctf?.CarrierGone(pl);
         Renew(pl, full: Rules.Network);
-        Place(p, PickSpawn(pl.Team, p), pl.Team);
+        Place(p, PickSpawn(pl.Team, p), pl.Team, fresh: Rules.Network);
         PlayerRenewed?.Invoke(p);
     }
 

@@ -40,6 +40,11 @@ public sealed class Wheel
     /// <summary>The wheel's offset with the current suspension travel, body frame.</summary>
     public Vector3 Mount => new(Offset.X, Rest + Travel, Offset.Z);
 
+    /// <summary>
+    /// The suspension's limits and filter from the mount. The history (ground, last target and its rate) is not set
+    /// here: the original's wheel record starts with the ground and last target at 64, but placing the car overwrites
+    /// both with the ground under the wheel before any step reads them (<see cref="VehicleStep.PrimeWheels"/>).
+    /// </summary>
     public void InitSuspension()
     {
         Rest = Offset.Y;

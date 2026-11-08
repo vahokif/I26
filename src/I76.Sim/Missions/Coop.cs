@@ -262,6 +262,7 @@ public sealed partial class ScriptHost
         if (Combat is { } cb) { cb.RadarTarget.Remove(v); cb.RadarCamera.Remove(v); cb.StructureTarget.Remove(v); }
         World.Ai.Remove(v);
         PutBeside(s, mate.Car, System.Numerics.Vector3.Zero, 0);
+        VehicleStep.PrimeWheels(v, World.Ground);   // a fresh car: its wheels' history from the ground it now stands on
         EndPersonalScene(s.Index);
         StartCar(e);   // its engine turns over, as the script's startCar would
         s.RespawnAt = null;

@@ -283,6 +283,7 @@ public sealed partial class MissionSetup
                 _ => ground.Query(pos.X, pos.Y + 2, pos.Z).Height,
             };
             v.Pos = new Double3(pos.X, pos.Y, pos.Z);
+            VehicleStep.PrimeWheels(v, ground);
             world.Vehicles.Add(v);
             byPlacement[p] = v;
             cars.Add((p, carDef, v));
@@ -306,6 +307,7 @@ public sealed partial class MissionSetup
                 VehicleFactory.AddDriverHandguns(vfs, carDef, v);   // the server has no cockpit to fit them (as a network melee's)
                 v.Rot = lead.Rot;
                 v.Pos = SpawnSpace.Beside(world, lead, v, coopPaths);
+                VehicleStep.PrimeWheels(v, ground);
                 world.Vehicles.Add(v);
                 world.Humans.Add(v);
                 cars.Add((at, carDef, v));

@@ -988,6 +988,25 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
     }
 
     /// <summary>
+    /// A newly placed car's suspension history, as the original's entity set-up leaves it once the car stands where it
+    /// will start: each wheel's ground and last target are the ground under the wheel (the height
+    /// <see cref="Suspension"/> queries there), and the target's rate is 0. Travel and the filter stay as built, at 0. A car
+    /// at rest then sees no change in its target on its first substep and stands still on its springs; with the history
+    /// left at 0 it took the whole terrain height as one bump and bobbed as the mission began (#141). Every path that
+    /// places a fresh car calls this after its pose is set; a repair in place keeps its history, and a save or a
+    /// snapshot restores its own.
+    /// </summary>
+    public static void PrimeWheels(Vehicle v, IGround ground)
+    {
+        foreach (var w in v.Wheels.Concat(v.MiddleWheels))
+        {
+            var p = v.Pos.ToVector3() + v.Rot.ToWorld(w.Mount);
+            w.Ground = w.PrevTarget = ground.Query(p.X, p.Y, p.Z).Height;
+            w.PrevRate = 0;
+        }
+    }
+
+    /// <summary>
     /// One wheel's suspension. The target is the ground under
     /// the wheel plus a bump (by the wheel's world position,
     /// times the surface's roughness); the input is the drive term plus 5 ×

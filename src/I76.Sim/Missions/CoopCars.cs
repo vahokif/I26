@@ -19,6 +19,7 @@ public sealed partial class ScriptHost
         // the build of a later seat (sounds, handguns): the first seat's own car had them fitted by the cockpit, a chosen one has not
         MeleeGame.Rebuild(v, c.Build(car, System.Math.Max(1, seat)), World.Rand);
         (v.Pos, v.Rot) = (pos, rot);
+        I76.Sim.Vehicles.VehicleStep.PrimeWheels(v, World.Ground);   // the rebuilt car stands where the old one stood: its wheels from that ground
         Log($"co-op: seat {seat} drives {car}");
     }
 }

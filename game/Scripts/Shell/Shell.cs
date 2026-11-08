@@ -1152,6 +1152,10 @@ public sealed class ShellSettings
     public bool AutoReverse { get; set; }
     /// <summary>The port's own: the pad's rumble for the original's force-feedback events (Play Options; on, and without a pad it does nothing; both looks).</summary>
     public bool ForceFeedback { get; set; } = true;
+    /// <summary>The port's own: Play Options' Rumble (second page): Original (the game's own effects), Enhanced (and pulses for the events they do not cover) or Off ([port] rumble, written when not original).</summary>
+    public I76.Formats.Input.RumbleMode RumbleMode { get; set; }
+    /// <summary>The port's own: Play Options' Rumble Strength, percent on every level sent to the pad (25 to 150; [port] rumble_strength, written when not 100).</summary>
+    public int RumbleStrength { get; set; } = I76.Formats.Input.RumbleStrength.Default;
     /// <summary>The port's own: the simulation rate in Hz (Play Options; 20, 24, 25, 28, 30, 40 or 60, docs/frame-rate.md), applied from the next mission start; a network game runs at the server's.</summary>
     public int SimRate { get; set; } = I76.Sim.Session.SimRate.Default.Label;
     /// <summary>The port's own: the player has been told once that a rate other than 20 Hz can break the game (helicopters, AI, physics); it is not said again.</summary>
@@ -1290,6 +1294,9 @@ public sealed class ShellSettings
         s.Look1997 = version >= 6 && (bool)c.GetValue("port", "look_1997", false);
         // version 7 added Force Feedback: older files have none, so it is on
         s.ForceFeedback = version < 7 || (bool)c.GetValue("port", "force_feedback", true);
+        // no version step: absent, the game's own effects at full strength
+        s.RumbleMode = Enum.TryParse<I76.Formats.Input.RumbleMode>((string)c.GetValue("port", "rumble", "original"), true, out var rm) ? rm : I76.Formats.Input.RumbleMode.Original;
+        s.RumbleStrength = I76.Formats.Input.RumbleStrength.Clamp((int)c.GetValue("port", "rumble_strength", I76.Formats.Input.RumbleStrength.Default));
         // version 8 added the simulation rate: older files have none, so it is the default (20)
         s.SimRate = version < 8 ? I76.Sim.Session.SimRate.Default.Label : I76.Sim.Session.SimRate.FromLabel((int)c.GetValue("port", "sim_rate", I76.Sim.Session.SimRate.Default.Label)).Label;
         // the warning flag has no version: an older file has none, so the warning is still due
@@ -1361,6 +1368,8 @@ public sealed class ShellSettings
         c.SetValue("port", "draw_distance", DrawDistance);
         c.SetValue("port", "checkpoints", Checkpoints);
         c.SetValue("port", "force_feedback", ForceFeedback);
+        if (RumbleMode != I76.Formats.Input.RumbleMode.Original) c.SetValue("port", "rumble", RumbleMode.ToString().ToLowerInvariant());
+        if (RumbleStrength != I76.Formats.Input.RumbleStrength.Default) c.SetValue("port", "rumble_strength", RumbleStrength);
         c.SetValue("port", "sim_rate", SimRate);
         if (SimRateWarned) c.SetValue("port", "sim_rate_warned", true);
         if (AutoReverse) c.SetValue("port", "auto_reverse", true);

@@ -152,6 +152,11 @@ command on the Controller screen and they do only that command instead. The pad 
 skippable cut-scene, as Esc does. Everything is rebindable on the Controller
 screen (Control Configuration > Calibrate).
 
+**Rumble.** A pad's rumble follows the game's own force-feedback effects (Play Options' Force Feedback row). Further down
+Play Options' list the Rumble row steps Original (those effects only, the default), Enhanced (and short pulses for a nitrous kick, the handbrake,
+gear changes, the starter, each kind of weapon's shot and a light engine growl) and Off; Rumble Strength sets 25 to 150 % on
+every level. Both apply when a mission starts.
+
 **Joysticks.** A flight stick, wheel or any other USB device that is not a game pad is found too (it is joystick 1 when
 there is no game pad). Out of the box the stick steers sideways and accelerates (forward) or brakes (back), the trigger
 fires, buttons 2 to 10 cycle, target, brake, link, map, horn, view and reverse, and the hat looks. Calibrate opens the

@@ -219,6 +219,8 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     // in the value column's right end: the labels run up to the column's rule
     protected override int MarkX => 458;
     private int _savedFlags;
+    private I76.Formats.Input.RumbleMode _savedRumble;
+    private int _savedRumbleStrength;
     private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair;
     private int _savedRate, _savedDownloads;
     private static readonly (int Y, string Label, int Bit)[] Rows =
@@ -247,7 +249,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     public static readonly string[] PortRows =
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
-        "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair",
+        "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength",
     ];
 
     protected override void Build()
@@ -265,6 +267,8 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedCb = s.CbVoice;
         _savedUpdate = s.UpdateCheck;
         _savedCrosshair = s.ChaseCrosshair;
+        _savedRumble = s.RumbleMode;
+        _savedRumbleStrength = s.RumbleStrength;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
         // the original's six check rows on consecutive ruled lines. The sheet prints a check box only on every other line (where
@@ -319,8 +323,15 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         Toggle(PortRows[9], () => s.UpdateCheck, () => s.UpdateCheck = !s.UpdateCheck);
         // Chase Crosshair: the aiming mark in the F2 chase view (a network game shows it only when the host allows it)
         Toggle(PortRows[10], () => s.ChaseCrosshair, () => s.ChaseCrosshair = !s.ChaseCrosshair);
+        // Rumble (docs/playing.md): the game's own effects, with the port's pulses added, or off; and the strength of every level
+        Step(PortRows[11], () => s.RumbleMode = (I76.Formats.Input.RumbleMode)(((int)s.RumbleMode + 1) % 3), () => s.RumbleMode.ToString());
+        Step(PortRows[12], () => s.RumbleStrength = I76.Formats.Input.RumbleStrength.Next(s.RumbleStrength), () => s.RumbleStrength + " %");
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
+        // Check for Updates (upstream's row, under the port's own): whether the next start asks GitHub if a newer release exists (a line under the version says so)
+        Frame.CopyBackground(200, 139, 22, 18, 200, 300);
+        Add(222, 300, "Check for Updates", null);
+        Add(205, 301, () => Check(s.UpdateCheck), () => s.UpdateCheck = !s.UpdateCheck, Small, w: 200, h: 12);
     }
 
     /// <summary>Each visible line of the list gets the sheet's check box when a check row is on it and blank paper when a value row is (or none).</summary>
@@ -357,7 +368,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private void Cancel()
     {
         var s = Shell.Settings;
-        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair;
+        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored
         Shell.Overlay(new OptionsScreen());

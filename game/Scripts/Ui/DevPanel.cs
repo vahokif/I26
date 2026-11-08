@@ -83,7 +83,7 @@ public partial class DevPanel : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
         var theme = new Theme { DefaultFontSize = 15 };
-        var bg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.09f, 0.1f, 0.92f), BorderColor = new Color(0.85f, 0.6f, 0.2f) };
+        var bg = new StyleBoxFlat { BgColor = DevScale.Background, BorderColor = new Color(0.85f, 0.6f, 0.2f) };
         var (panel, scroll, col) = DevScale.Frame(theme, bg);
         AddChild(panel);
         // a second column beside the first: the settings without a row and the devices' signals
@@ -95,12 +95,17 @@ public partial class DevPanel : Control
             DevScale.Apply(panel, scroll, col, theme, bg, f);
             DevScale.Apply(panel2, scroll2, col2, theme, bg, f, () => new Vector2(panel.GetRect().End.X + 12 * f, 16 * f));
         };
+        // the status lines are set every frame and can widen the first column after the second was placed: the second
+        // then covered the first's right edge, the Teleport row's Go, Keep and Forget among it (they took no clicks)
+        DevScale.Follow(panel, panel2, () => new Vector2(panel.GetRect().End.X + 12 * DevScale.Factor(GetViewportRect().Size.Y), 16 * DevScale.Factor(GetViewportRect().Size.Y)));
         GetViewport().SizeChanged += _rescale;
         TreeExiting += () => GetViewport().SizeChanged -= _rescale;
 
         col.AddChild(Heading("Developer  (Ctrl+F2, Ctrl+` or Esc closes)"));
-        _status = new Label { AutowrapMode = TextServer.AutowrapMode.Off };
+        // wrapped to the column's width: a long line does not widen the panel
+        _status = DevScale.Min(new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill }, 400);
         _status.AddThemeColorOverride("font_color", new Color(0.75f, 0.9f, 0.75f));
+        _status.Text = Host.DevStatus();   // its lines counted when the column's height is set (_rescale)
         col.AddChild(_status);
 
         col.AddChild(Heading("Scene"));

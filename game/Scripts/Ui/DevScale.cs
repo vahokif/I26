@@ -5,10 +5,20 @@ namespace I76.Game.Ui;
 /// <summary>
 /// Scaling for the Developer panels (in mission and on the shell's main menu): font size, margins, separations and minimum
 /// sizes are multiplied by a whole factor from the window's height, so the theme re-rasterises the text sharp. 1 up to a
-/// 1079-pixel window, 2 at 1080 and 1440, 3 from 2160. Sizes are tagged with their 1x value (metadata) and reapplied when the window resizes.
+/// 2159-pixel window (1080 and 1440 among them), 2 from 2160, 3 from 3600. Sizes are tagged with their 1x value (metadata) and reapplied when the window resizes.
 /// </summary>
 public static class DevScale
 {
+    /// <summary>The panels' background: dark, 85 % opaque, so the game shows through a little.</summary>
+    public static Color Background => new(0.08f, 0.09f, 0.1f, 0.85f);
+
+    /// <summary>
+    /// Keeps <paramref name="second"/> at <paramref name="at"/> whenever <paramref name="first"/> changes size: a panel's
+    /// width follows its live text (the status lines), and a second column placed once would cover the first's right edge.
+    /// </summary>
+    public static void Follow(Control first, Control second, System.Func<Vector2> at) =>
+        first.Resized += () => { if (GodotObject.IsInstanceValid(second)) second.Position = at(); };
+
     /// <summary>The panel's frame, a vertical scroll box in it and the column of rows inside that.</summary>
     public static (PanelContainer Panel, ScrollContainer Scroll, VBoxContainer Col) Frame(Theme theme, StyleBoxFlat bg)
     {
@@ -23,8 +33,8 @@ public static class DevScale
 
     private const string MinKey = "dev_min", SepKey = "dev_sep", GridKey = "dev_grid";
 
-    /// <summary>max(1, round(height / 720)), at most 3: 720 is 1, 1080 is 2 (1.5 rounds up), 1440 is 2, 2160 is 3.</summary>
-    public static int Factor(float windowHeight) => System.Math.Clamp((int)System.Math.Round(windowHeight / 720f, System.MidpointRounding.AwayFromZero), 1, 3);
+    /// <summary>max(1, round(height / 1440)), at most 3: 720 to 1440 are 1, 2160 is 2 (1.5 rounds up), 4320 is 3. (Was height / 720: the panel took too much of a 1440 window.)</summary>
+    public static int Factor(float windowHeight) => System.Math.Clamp((int)System.Math.Round(windowHeight / 1440f, System.MidpointRounding.AwayFromZero), 1, 3);
 
     /// <summary>A minimum size at 1x, scaled by <see cref="Apply"/>.</summary>
     public static T Min<T>(T c, float w, float h = 0) where T : Control

@@ -2876,13 +2876,19 @@ public partial class Main : Node3D
 
         // I76_MOUSE="frame@dx,dy;..." moves the mouse by that much at those frames (a capture of the Mouse Camera)
         private readonly List<(int Frame, float Dx, float Dy)> _mouse = (System.Environment.GetEnvironmentVariable("I76_MOUSE") ?? "")
-            .Split(';', System.StringSplitOptions.RemoveEmptyEntries).Select(e => e.Split('@', ',')).Where(p => p.Length == 3)
+            .Split(';', System.StringSplitOptions.RemoveEmptyEntries).Select(e => e.Split('@', ',')).Where(p => p.Length == 3 && !p[1].StartsWith('c'))
             .Select(p => (int.Parse(p[0]), float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[2], System.Globalization.CultureInfo.InvariantCulture))).ToList();
 
         // I76_MOUSE also takes "frame@wN": N wheel notches at that frame (positive up, nearer), the external view on screen's zoom
         private readonly List<(int Frame, int Notches)> _wheel = (System.Environment.GetEnvironmentVariable("I76_MOUSE") ?? "")
             .Split(';', System.StringSplitOptions.RemoveEmptyEntries).Select(e => e.Split('@')).Where(p => p.Length == 2 && p[1].StartsWith('w') && int.TryParse(p[1][1..], out _))
             .Select(p => (int.Parse(p[0]), int.Parse(p[1][1..]))).ToList();
+
+        // I76_MOUSE also takes "frame@cX,Y": a left click at window pixel (X, Y), pressed that frame and released the next (the Developer panel's buttons)
+        private readonly List<(int Frame, Vector2 At)> _clicks = (System.Environment.GetEnvironmentVariable("I76_MOUSE") ?? "")
+            .Split(';', System.StringSplitOptions.RemoveEmptyEntries).Select(e => e.Split('@')).Where(p => p.Length == 2 && p[1].StartsWith('c') && p[1][1..].Split(',').Length == 2)
+            .Select(p => (int.Parse(p[0]), p[1][1..].Split(',').Select(t => float.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray()))
+            .Select(x => (x.Item1, new Vector2(x.Item2[0], x.Item2[1]))).ToList();
 
         private static (Key Key, int Mods)? ParseKey(string text)
         {
@@ -2946,6 +2952,12 @@ public partial class Main : Node3D
             Record();
             Owner.UpdateMouseCapture();
             foreach (var (f, dx, dy) in _mouse.Where(e => e.Frame == _n)) Input.ParseInputEvent(new InputEventMouseMotion { Relative = new Vector2(dx, dy) });
+            foreach (var (f, at) in _clicks.Where(e => e.Frame == _n || e.Frame == _n - 1))
+            {
+                bool down = f == _n;
+                if (down) Input.ParseInputEvent(new InputEventMouseMotion { Position = at, GlobalPosition = at });
+                Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = down, Position = at, GlobalPosition = at, ButtonMask = down ? MouseButtonMask.Left : 0 });
+            }
             foreach (var (f, n) in _wheel.Where(e => e.Frame == _n))
                 for (int i = 0; i < Math.Abs(n); i++) Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = n > 0 ? MouseButton.WheelUp : MouseButton.WheelDown, Pressed = true, Factor = 1 });
             // each key is down for one frame, so held-key checks see it too

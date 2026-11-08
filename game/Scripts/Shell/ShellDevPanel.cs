@@ -20,7 +20,7 @@ public partial class ShellDevPanel : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;   // the menu underneath takes no clicks while the panel is up
         var theme = new Theme { DefaultFontSize = 15 };
-        var bg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.09f, 0.1f, 0.92f), BorderColor = new Color(0.85f, 0.6f, 0.2f) };
+        var bg = new StyleBoxFlat { BgColor = DevScale.Background, BorderColor = new Color(0.85f, 0.6f, 0.2f) };
         var (panel, scroll, col) = DevScale.Frame(theme, bg);
         AddChild(panel);
         var (panel2, scroll2, col2) = DevScale.Frame(theme, bg);
@@ -31,6 +31,7 @@ public partial class ShellDevPanel : Control
             DevScale.Apply(panel, scroll, col, theme, bg, f);
             DevScale.Apply(panel2, scroll2, col2, theme, bg, f, () => new Vector2(panel.GetRect().End.X + 12 * f, 16 * f));
         };
+        DevScale.Follow(panel, panel2, () => new Vector2(panel.GetRect().End.X + 12 * DevScale.Factor(GetViewportRect().Size.Y), 16 * DevScale.Factor(GetViewportRect().Size.Y)));
         GetViewport().SizeChanged += _rescale;
         TreeExiting += () => GetViewport().SizeChanged -= _rescale;
 

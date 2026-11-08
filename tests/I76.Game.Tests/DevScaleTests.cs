@@ -9,9 +9,11 @@ public class DevScaleTests
     [InlineData(480, 1)]
     [InlineData(720, 1)]
     [InlineData(960, 1)]
-    [InlineData(1080, 2)]
-    [InlineData(1440, 2)]
-    [InlineData(2160, 3)]
+    [InlineData(1080, 1)]
+    [InlineData(1440, 1)]
+    [InlineData(2159, 1)]
+    [InlineData(2160, 2)]
+    [InlineData(2880, 2)]
     [InlineData(4320, 3)]
     public void Factor_FollowsWindowHeight(float height, int factor) => Assert.Equal(factor, DevScale.Factor(height));
 }

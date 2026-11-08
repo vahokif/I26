@@ -160,8 +160,6 @@ public partial class Main : Node3D
     private static I76.Game.Shell.NetResult? _lastNet;
     /// <summary>Why a mission launched from the shell could not be built (a custom map without its terrain, say): the shell says it.</summary>
     private static string? _lastLoadError;
-    /// <summary>A cheat was on when the escape menu closed; a win then gets the end menu instead.</summary>
-    private static bool _cheated;
     /// <summary>The typed cheats' buffer: a global of the original, kept for the whole run.</summary>
     private static I76.Sim.Session.CheatTyper _typer = new();
     private EscapeMenu? _menu;
@@ -191,7 +189,7 @@ public partial class Main : Node3D
         NextMission = null; DebugCar = null;
         _launch = null; _lastLaunch = null; _lastResult = I76.Game.Shell.MissionResult.FirstEntry;
         _lastTrip = null; _lastMelee = null; _lastNet = null; _lastLoadError = null;
-        _cheated = false; _typer = new();
+        I76.Game.Shell.CheatMarker.Clear(); _typer = new();
         _menuShown = false; _backToMenu = false;
         _cmdLine = false; _cmdLineKnown = false;
         _checkpoint = null; _retry = null;
@@ -338,7 +336,7 @@ public partial class Main : Node3D
             {
                 Install = install, Name = "Shell", Faithful = _opt.Mode1997,
                 LastResult = _lastResult, LastLaunch = _lastLaunch, LastTrip = _lastTrip, LastMelee = _lastMelee, LastNet = lastNet, LoadError = loadError,
-                OnLaunch = l => { GD.Print($"shell: launch {l.Mission} ({l.Kind})"); _launch = l; DebugCar = null; _cheated = false; NextMission = l.Mission; GetTree().ReloadCurrentScene(); },
+                OnLaunch = l => { GD.Print($"shell: launch {l.Mission} ({l.Kind})"); _launch = l; DebugCar = null; NextMission = l.Mission; GetTree().ReloadCurrentScene(); },
                 OnEditor = () =>
                 {
                     GetNodeOrNull("Shell")?.QueueFree();
@@ -352,7 +350,7 @@ public partial class Main : Node3D
                             GD.Print($"shell: map editor on {mission}");
                             I76.Game.Editor.EditorSession.Install = install;
                             I76.Game.Editor.EditorSession.Begin(mission);
-                            _launch = null; DebugCar = null; _cheated = false;
+                            _launch = null; DebugCar = null;
                             GetTree().ReloadCurrentScene();
                         },
                         Cancelled = () => { _backToMenu = true; GetTree().ReloadCurrentScene(); },
@@ -509,7 +507,7 @@ public partial class Main : Node3D
         _menu = new EscapeMenu
         {
             Vfs = _builder.Vfs, Palette = pal, InstallDir = _opt.Install, Mission = mission, NoReconfigure = four, Faithful = _mode1997, End = end, Net = _net is not null,
-            Live = s => { ApplyAudio(s); ApplyGraphics(s); }, CheatsOff = () => _cheated = false, CanRetry = CanRetry,
+            Live = s => { ApplyAudio(s); ApplyGraphics(s); }, CheatsOff = I76.Game.Shell.CheatMarker.Clear, CanRetry = CanRetry,
             Closed = o => { layer.QueueFree(); _menu = null; MenuClosed(o); },
         };
         layer.AddChild(_menu);
@@ -587,7 +585,7 @@ public partial class Main : Node3D
     private void MenuClosed(MenuOutcome o)
     {
         var settings = I76.Game.Shell.ShellSettings.Load();
-        if ((settings.PlayOptions & 0x1c) != 0) _cheated = true;
+        I76.Game.Shell.CheatMarker.Read(settings.PlayOptions);
         if (o == MenuOutcome.Replay && (_opt.Mission ?? "").Equals("t17", System.StringComparison.OrdinalIgnoreCase)) o = MenuOutcome.Reconfigure;
         // a mission given on the command line: every outcome but resume and replay ends the program
         if (_cmdLine && _launch is null && o is MenuOutcome.Abort or MenuOutcome.Reconfigure) o = MenuOutcome.Exit;
@@ -906,6 +904,7 @@ public partial class Main : Node3D
         AddChild(_sim);
         AddChild(new PausedClock { Owner = this, Name = "PausedClock" });
         var playSettings = I76.Game.Shell.ShellSettings.Load();
+        I76.Game.Shell.CheatMarker.Read(playSettings.PlayOptions);   // the original reads the options back after every shell return
         ApplyAudio(playSettings);
         ApplyPlayOptions(playSettings);
         ApplyGraphics(playSettings);
@@ -3073,7 +3072,7 @@ public partial class Main : Node3D
         {
             // a network game runs on under the map or the notepad: the end comes over them, so they go
             if (_net is not null && _picture is not null) { _picture.QueueFree(); _picture = null; }
-            if (result && !_cheated) EndMission(true);
+            if (result && !I76.Game.Shell.CheatMarker.Set) EndMission(true);
             else
             {
                 _endMenuShown = true;

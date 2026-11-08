@@ -198,6 +198,9 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
             if (v.GroundHeight - v.Pos.Y > 35.0) { v.Flags = flags; dmg.FallKill(v); return; }
             Landings.Add(v);
             dmg.Landing(v, -v.Vel, v.GroundNormal);
+            // a landing that kills the car ends the substep: no probe, attitude, skid marks or rough-terrain damage (and its
+            // rand()); the car keeps its old flags with the kill bits, the substep's new ones are never written
+            if (((uint)v.Flags & 0x8020) != 0) return;
         }
 
         if ((flags & VehicleFlags.Airborne) == 0)

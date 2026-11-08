@@ -244,6 +244,13 @@ Ctrl+F2, Ctrl+` or Esc closes it. The game stays paused while it is open.
 | State | Store: the whole session's snapshot (docs/savestate.md), kept in memory for the run (a Replay of the same mission can still restore it), with the car's weapons. Restore: the stored weapons back on their mounts first, then written back into the running session; the views re-sync as a checkpoint's retry does (car nodes made or dropped, every car's damage look, the trip's salvage). A structure destroyed after the store stays drawn destroyed although the sim's is whole again |
 | Time | Freeze (no ticks; the cameras still move, Ctrl+F5 flies), Step 1 / Step 10 ticks, and a speed x0.1 to x4 (the ticks are the same at any speed; only their pace against the clock changes) |
 
+**On the shell's main menu** the same keys (shown only when it is on) open a Developer panel of its own
+(`game/Scripts/Shell/ShellDevPanel.cs`) with one section, **Saves**: the tools that stood on Load Bookmark before. Import
+Saves lists the original game's bookmarks in the install (docs/playing.md, "Bringing in saves"); Import makes an I26
+bookmark of each and goes on to Load Bookmark. All Scenes, after asking, makes a bookmark per mission of the trip in that
+mission's own stock car (docs/deviations.md, "Scene bookmarks") and opens Load Bookmark. Both are the base game's only
+(the Nitro Pack has no trip). Neither marks anything a cheater's: they only write bookmarks, as Save Bookmark does.
+
 The generated landmarks (`src/I76.Sim/Session/DevLandmarks.cs`, read from the mission's terrain and structures when the
 panel first opens; nothing of a map is written down): **start** (where the player's car was placed), **highest ground**
 facing downhill, **lowest ground** facing up the slope, **map centre** (the reached sample nearest the middle of the map's

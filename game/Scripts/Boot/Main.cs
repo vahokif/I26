@@ -339,6 +339,7 @@ public partial class Main : Node3D
             PlayMovies(install, startup, () => AddChild(new I76.Game.Shell.Shell
             {
                 Install = install, Name = "Shell", Faithful = _opt.Mode1997,
+                Developer = _opt.Dev || System.Environment.GetEnvironmentVariable("I76_DEV") == "1",
                 LastResult = _lastResult, LastLaunch = _lastLaunch, LastTrip = _lastTrip, LastMelee = _lastMelee, LastNet = lastNet, LoadError = loadError,
                 OnLaunch = l => { GD.Print($"shell: launch {l.Mission} ({l.Kind})"); _launch = l; DebugCar = null; DevCar = null; NextMission = l.Mission; GetTree().ReloadCurrentScene(); },
                 OnEditor = () =>

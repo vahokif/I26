@@ -274,14 +274,23 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
     protected override string Action => "Load";
     protected override string? EmptyText => "(No Games available)";
 
-    /// <summary>The port's Import Saves, between the scroll-down arrow and Load: the original's own bookmarks from the install (the base game only: Nitro has no trip).</summary>
+    /// <summary>
+    /// The original's sheet plus the port's Delete. The port's Import Saves and All Scenes are on the shell's Developer
+    /// panel (<see cref="ShellDevPanel"/>).
+    /// </summary>
     protected override void Build()
     {
         base.Build();
-        if (!Shell.Install.IsNitro) Add(230, 420, "Import Saves", () => Shell.Overlay(new ImportSavesScreen { Direct = Direct }), Small);
-        // Delete sits left of Load, drawn the same way (to the right of Cancel it would run off the sheet)
-        Add(328 - 25 - Small.Measure("Delete"), 420, "Delete", Delete, Small);
+        var (x, y) = DeletePlace(Shell.Install.IsNitro, Small.Measure);
+        Add(x, y, "Delete", Delete, Small);
     }
+
+    /// <summary>
+    /// Where Delete goes on the sheet (both looks share the art): beside the scroll-up arrow; in Nitro left of Load, drawn the
+    /// same way (to the right of Cancel it would run off the sheet).
+    /// </summary>
+    public static (int X, int Y) DeletePlace(bool nitro, Func<string, int> measure) =>
+        nitro ? (328 - 25 - measure("Delete"), 420) : (250, 158);
 
     /// <summary>Delete: asks first; Yes removes the picked bookmark's entry and its kept car and selects the row that took its place.</summary>
     private void Delete()
@@ -324,7 +333,7 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
 }
 
 /// <summary>
-/// The port's Import Saves (from Load Bookmark): the original game's bookmarks (savegame.dir and its saveNNN.cmp files in
+/// The port's Import Saves (from the shell's Developer panel): the original game's bookmarks (savegame.dir and its saveNNN.cmp files in
 /// the install, or in its VirtualStore copy on Windows) listed as the Load board lists them; Import makes an I26
 /// bookmark of each (<see cref="OriginalSaveImport"/>), leaving out one already imported, and goes back to Load Bookmark.
 /// The original's files are only read.

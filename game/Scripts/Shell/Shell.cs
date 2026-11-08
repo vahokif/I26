@@ -200,6 +200,18 @@ public partial class Shell : CanvasLayer
     /// <summary>Opens the map editor's map list (the main menu's Map Editor entry, F8).</summary>
     public Action? OnEditor { get; init; }
     public void OpenEditor() => OnEditor?.Invoke();
+    /// <summary>--dev or I76_DEV=1 for this run; the setting (<see cref="ShellSettings.DeveloperTools"/>) turns the panel on as well.</summary>
+    public bool Developer { get; init; }
+    private CanvasLayer? _devPanel;
+
+    /// <summary>The main menu's Developer panel (<see cref="ShellDevPanel"/>), or closes it.</summary>
+    private void ToggleDevPanel()
+    {
+        if (_devPanel is not null) { _devPanel.QueueFree(); _devPanel = null; return; }
+        _devPanel = new CanvasLayer { Layer = Layer + 1, Name = "DevPanel" };
+        _devPanel.AddChild(new ShellDevPanel { Shell = this, Close = ToggleDevPanel });
+        AddChild(_devPanel);
+    }
     /// <summary>Seconds since the last tick.</summary>
     public double Delta { get; private set; }
     /// <summary>In a trip: the Options Menu offers Save Bookmark and Exit Trip (block +0x20 == 2).</summary>
@@ -714,6 +726,15 @@ public partial class Shell : CanvasLayer
         {
             GetViewport().SetInputAsHandled();
             SwitchLook();
+            return;
+        }
+        // the port's Developer panel over the main menu (Ctrl+F2 or Ctrl+`, as in a mission); it has the keyboard and mouse while up
+        if (_devPanel is not null) return;
+        if (e is InputEventKey { Pressed: true, Echo: false, CtrlPressed: true, Keycode: Key.F2 or Key.Quoteleft } && Current is MainMenuScreen
+            && (Developer || Settings.DeveloperTools))
+        {
+            GetViewport().SetInputAsHandled();
+            ToggleDevPanel();
             return;
         }
         // F9 on the main menu: the debug mission list (every mission in miss16, straight into it); Esc there comes back

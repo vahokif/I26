@@ -60,6 +60,15 @@ the settings and saves of the older "Interstate '76 (Godot)" folder if there is 
 
 **Update check.** At every start I26 asks GitHub (one request, nothing about you or your machine is sent) whether a newer release exists and, if so, shows "version X available" under the version in the corner of the chooser and the main menu; click it to open the release page. Options > Play Options > Check for Updates (near the end of the sheet's scrolling list) turns it off, and then nothing is requested. A build run from source never asks.
 
+**Saves of the original game.** Load Bookmark has an Import Saves button: it lists the bookmarks the original game
+saved in its folder (`savegame.dir` and the `saveNNN.cmp` files; on Windows also their copy in
+`%LOCALAPPDATA%\VirtualStore` when the game sits under Program Files), as the original's Load board lists them, and
+Import turns each into an I26 bookmark with the same name and scene. The car comes with it: the body, paint, armour
+and chassis, every part fitted, in the van, in the repair order or left in Field Salvage, each in the condition it
+was saved in. A part is fitted only where the original's garage would show it fitted, and weapons past the
+garage's eleventh go to Field Salvage, as the original does on loading. Importing again skips the bookmarks
+already imported. The original's files are only read.
+
 **Log file.** Off by default, so it cannot grow. For a bug report, start the game once with `--log` (or the environment
 variable `I76_LOG=1`) and attach `logs/godot.log` from the user folder (the last three runs' logs are kept as
 `logs/godot<date>.log`); Graphic Detail's Log (restart) switch keeps it on for every start. Logs from older versions

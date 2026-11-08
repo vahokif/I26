@@ -53,6 +53,13 @@ public sealed class Bookmarks
     /// <summary>The car and inventory a bookmark keeps (the .cmp body): user://saves/bookmark_save000.json.</summary>
     private static string CarPath(string stem) => $"user://saves/bookmark_{stem}.json";
 
+    /// <summary>The kept car's text, or null.</summary>
+    public static string? CarJson(string stem)
+    {
+        using var f = Godot.FileAccess.Open(CarPath(stem), Godot.FileAccess.ModeFlags.Read);
+        return f?.GetAsText();
+    }
+
     public static void WriteCar(string stem, string json)
     {
         DirAccess.MakeDirRecursiveAbsolute("user://saves");
@@ -102,10 +109,14 @@ public abstract class BookmarkScreen : OverlayScreen
     protected ShellFont Rows = null!;
     protected int RowH => Rows.Height + 8;
     protected abstract string Action { get; }
+    /// <summary>What an empty list says, or nothing.</summary>
+    protected virtual string? EmptyText => null;
+    /// <summary>The rows: the kept bookmarks.</summary>
+    protected virtual Bookmarks List() => Bookmarks.Load();
 
     protected override void Build()
     {
-        Marks = Bookmarks.Load();
+        Marks = List();
         Rows = Shell.Db.Font(0x45);
         int done = Small.Measure(Action);
         Add(328, 420, Action, DoAction, Small);
@@ -116,7 +127,7 @@ public abstract class BookmarkScreen : OverlayScreen
 
     protected abstract void DoAction();
 
-    protected void Cancel()
+    protected virtual void Cancel()
     {
         if (Direct) { Shell.Overlay(null); return; }
         Shell.Overlay(new OptionsScreen());
@@ -172,7 +183,7 @@ public abstract class BookmarkScreen : OverlayScreen
 
     protected override void DrawExtra()
     {
-        if (Marks.Entries.Count == 0 && Action == "Load") Frame.Text(Label, 228, 252, "(No Games available)", ShellFrame.OverlayInk);
+        if (Marks.Entries.Count == 0 && EmptyText is { } empty) Frame.Text(Label, 228, 252, empty, ShellFrame.OverlayInk);
         var (scene, name) = Header();
         Frame.Text(Label, 186, 132, $"Scene {scene}. ", ShellFrame.OverlayInk);
         Frame.Text(Label, 275, 132, name, ShellFrame.OverlayInk);
@@ -261,10 +272,13 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
 {
     protected override int Record => 12;
     protected override string Action => "Load";
+    protected override string? EmptyText => "(No Games available)";
 
+    /// <summary>The port's Import Saves, between the scroll-down arrow and Load: the original's own bookmarks from the install (the base game only: Nitro has no trip).</summary>
     protected override void Build()
     {
         base.Build();
+        if (!Shell.Install.IsNitro) Add(230, 420, "Import Saves", () => Shell.Overlay(new ImportSavesScreen { Direct = Direct }), Small);
         // Delete sits left of Load, drawn the same way (to the right of Cancel it would run off the sheet)
         Add(328 - 25 - Small.Measure("Delete"), 420, "Delete", Delete, Small);
     }
@@ -306,5 +320,71 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
         Shell.Settings.Save();      // I76PLYR.DEF is written at once
         Shell.Overlay(null);
         Shell.Go(new TripRouterScreen());
+    }
+}
+
+/// <summary>
+/// The port's Import Saves (from Load Bookmark): the original game's bookmarks (savegame.dir and its saveNNN.cmp files in
+/// the install, or in its VirtualStore copy on Windows) listed as the Load board lists them; Import makes an I26
+/// bookmark of each (<see cref="OriginalSaveImport"/>), leaving out one already imported, and goes back to Load Bookmark.
+/// The original's files are only read.
+/// </summary>
+public sealed class ImportSavesScreen : BookmarkScreen
+{
+    protected override int Record => 12;
+    protected override string Action => "Import";
+    protected override string? EmptyText => "(None in the game folder)";
+    private readonly List<(I76.Formats.Save.OriginalSaveEntry Entry, I76.Formats.Save.OriginalSave? Save, string? Error)> _found = [];
+
+    protected override Bookmarks List()
+    {
+        var local = OperatingSystem.IsWindows() ? System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData) : null;
+        // Windows reads an old game's files from its VirtualStore copy when there is one: that folder's rows first, a file listed once
+        var folders = I76.Formats.Save.OriginalSaveFolders.Find(Shell.Install.Root, local);
+        folders.Reverse();
+        foreach (var folder in folders)
+        {
+            try
+            {
+                foreach (var r in I76.Formats.Save.OriginalSaveFolders.Read(folder))
+                    if (!_found.Any(f => f.Entry.File.Equals(r.Entry.File, StringComparison.OrdinalIgnoreCase))) _found.Add(r);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException) { GD.Print($"import saves: {folder}: {ex.Message}"); }
+        }
+        var b = new Bookmarks();
+        foreach (var (e, _, _) in _found) b.Entries.Add(new Bookmarks.Entry(e.Scene, e.Name, e.File, e.State, false));
+        return b;
+    }
+
+    protected override (int, string) Header() =>
+        Picked >= 0 && Picked < Marks.Entries.Count ? (Marks.Entries[Picked].Scene, Marks.Entries[Picked].Name) : (Shell.Trip.Mission, "");
+
+    /// <summary>Cancel and Esc go back to Load Bookmark.</summary>
+    private void Back() => Shell.Overlay(new LoadBookmarkScreen { Direct = Direct });
+    protected override void Cancel() => Back();
+    protected override void Escape() => Back();
+
+    protected override void DoAction()
+    {
+        if (_found.Count == 0) { Back(); return; }
+        var marks = Bookmarks.Load();
+        int made = 0, had = 0, failed = 0;
+        foreach (var (e, save, err) in _found)
+        {
+            if (save is null || e.Plays is < 1 or > 17) { failed++; GD.Print($"import saves: {e.File}: {err ?? $"scene {e.Plays}"}"); continue; }
+            ImportedSave imp;
+            try { imp = OriginalSaveImport.Convert(e, save, Shell.Parts, Shell.Vfs); }
+            catch (Exception ex) when (ex is InvalidDataException or IOException) { failed++; GD.Print($"import saves: {e.File}: {ex.Message}"); continue; }
+            var json = imp.Inventory.Save();
+            if (marks.Entries.Any(m => m.Mission == imp.Mission && m.Name == imp.Name && m.State == imp.State && Bookmarks.CarJson(m.Stem) == json)) { had++; continue; }
+            foreach (var n in imp.Notes) GD.Print($"import saves: {e.File}: {n}");
+            var stem = marks.NextStem();
+            marks.Entries.Add(new Bookmarks.Entry(imp.Mission, imp.Name, stem, imp.State, imp.NoSalvage));
+            Bookmarks.WriteCar(stem, json);
+            made++;
+        }
+        marks.Save();
+        var text = $"{made} bookmark{(made == 1 ? "" : "s")} imported." + (had > 0 ? $" {had} already were." : "") + (failed > 0 ? $" {failed} could not be read." : "");
+        Shell.Modal(new NoticePopup { Sprite = 17, Ok = new Rect2I(119, 61, 42, 16), Text = text, Closed = Back });
     }
 }

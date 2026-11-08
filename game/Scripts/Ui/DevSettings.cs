@@ -35,6 +35,7 @@ public static class DevSettings
         new("telemetry_format", ["i26", "outsim" + M, "outgauge" + M],
             s => (int)(TelemetryPackets.ParseFormat(s.TelemetryFormat) ?? TelemetryFormat.I26),
             (s, v) => s.TelemetryFormat = v == 0 ? null : ((TelemetryFormat)v).ToString().ToLowerInvariant(), DevWhen.NextMission),
+        new("dev_fps", FalseTrue, s => s.DevFps ? 1 : 0, (s, v) => s.DevFps = v != 0, DevWhen.Live),
         new("developer", FalseTrue, s => s.DeveloperTools ? 1 : 0, (s, v) => s.DeveloperTools = v != 0, DevWhen.NextStart),
     ];
 

@@ -683,6 +683,7 @@ public partial class Main : Node3D
     /// </summary>
     private void ApplyGraphics(I76.Game.Shell.ShellSettings s)
     {
+        ApplyDevFps(s);
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(s.CarInteriors);
         if (_modernEnv is not null) { _modernEnv.AdjustmentEnabled = true; _modernEnv.AdjustmentBrightness = ModernBrightness(s.Graphics[0xc]); }
         if (_env1997 is not null)

@@ -45,6 +45,19 @@ public partial class Main : IDevHost
     {
         ApplyGraphics(settings);
         ApplyPlayOptions(settings);
+        ApplyDevFps(settings);
+    }
+
+    private CanvasLayer? _fps;
+
+    /// <summary>[port] dev_fps: the frame-rate overlay up while the setting is on.</summary>
+    private void ApplyDevFps(I76.Game.Shell.ShellSettings s)
+    {
+        if (s.DevFps == (_fps is not null)) return;
+        if (!s.DevFps) { _fps!.QueueFree(); _fps = null; return; }
+        _fps = new CanvasLayer { Layer = 46, ProcessMode = ProcessModeEnum.Always, Name = "DevFps" };
+        _fps.AddChild(new FpsOverlay());
+        AddChild(_fps);
     }
 
     private CanvasLayer? _signals;

@@ -165,10 +165,11 @@ public class PlacementGroundTests(ITestOutputHelper log) : IDisposable
                 {
                     Check(p.Object.Position.X, p.Object.Position.Z, p.Object.Name, ref worstObj);
                     points++;
-                    // and the object itself stands there, as both looks draw and the simulation's colliders have it
+                    // and the object itself stands there, as both looks draw and the simulation's colliders have it (a fence or
+                    // tyre-wall piece takes its height from its line's posts, centred on its link, not from the ground at its origin)
                     var at = w.GroundedPosition(p);
                     double drawn = surf.Point(at.X / 5, at.Z / 5, out _).Y;
-                    if (Math.Abs(at.Y - drawn) > Near && bad++ < 12)
+                    if (!p.OnLine && Math.Abs(at.Y - drawn) > Near && bad++ < 12)
                         problems.Add($"{label}: {p.Object.Name} at {at.X:0.0},{at.Z:0.0} stands at {at.Y:0.00} on ground drawn at {drawn:0.00}");
                 }
             // every drivable cell's corner and middle (the corners of its neighbours are theirs), a row of cells per job

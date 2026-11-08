@@ -4,7 +4,8 @@ using I76.Formats.Vfs;
 
 namespace I76.Formats.Assembly;
 
-public sealed record Placement(PlacedObject Object, string? Definition);
+/// <summary>A placed object; <paramref name="OnLine"/>: an LDEF link's piece, whose position the line already set on the ground.</summary>
+public sealed record Placement(PlacedObject Object, string? Definition, bool OnLine = false);
 
 /// <summary>
 /// Everything a mission puts in the world, resolved without any engine:
@@ -65,8 +66,12 @@ public sealed class MissionWorld
         foreach (var line in LineObjects.Read(Mission))
         {
             var def = asm.ResolveDefinition(line.Name);
-            foreach (var (rot, pos) in LineObjects.Placements(line, BilinearHeight))
-                LinePlacements.Add(new Placement(new PlacedObject(line.Name, 0, rot, pos, []), def));
+            // the handler sets the model's (first) part on each link, replacing the part's own offset: its centred mesh
+            // at the link's midpoint, lifted by the half height of its box (the stock fences' and tyre walls' boxes are centred)
+            var (offset, lift) = def is not null && asm.Assemble(def)?.Parts.FirstOrDefault() is { Mesh.Vertices.Length: > 0 } part
+                ? (part.ToModel.T, -part.Mesh.Vertices.Min(v => v.Y)) : (Vector3.Zero, 0f);
+            foreach (var (rot, pos) in LineObjects.Placements(line, PlacedHeight, offset, lift))
+                LinePlacements.Add(new Placement(new PlacedObject(line.Name, 0, rot, pos, []), def, OnLine: true));
         }
     }
 
@@ -151,9 +156,11 @@ public sealed class MissionWorld
     /// The loader (the original's scene loader, called with its ground flag for every ODEF record) overwrites
     /// the node's y with the bilinear terrain height at x and z, so a pole authored at y=100 stands on the ground. The sim's colliders
     /// and the drawing both use it. In a map's last cells the samples past the tiles are the outside ground's (<see cref="Outside"/>), as
-    /// the simulation's ground has them, where the original reads 0 and sinks the object halfway to it.
+    /// the simulation's ground has them, where the original reads 0 and sinks the object halfway to it. A fence link's piece keeps the
+    /// height its line gave it (from the posts' heights).
     /// </summary>
-    public Vector3 GroundedPosition(Placement p) => p.Object.Position with { Y = (float)PlacedHeight(p.Object.Position.X, p.Object.Position.Z) };
+    public Vector3 GroundedPosition(Placement p) => p.OnLine ? p.Object.Position
+        : p.Object.Position with { Y = (float)PlacedHeight(p.Object.Position.X, p.Object.Position.Z) };
 
     /// <summary><see cref="BilinearHeight"/>, but for a cell with a corner off the tiles, whose samples there are the outside ground's.</summary>
     private double PlacedHeight(double x, double z)

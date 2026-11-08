@@ -273,7 +273,9 @@ public sealed partial class MissionSetup
                  ?? w.Placements.FirstOrDefault(p => p.Object.Name.Equals("spawn", StringComparison.OrdinalIgnoreCase))
                  ?? w.Placements.FirstOrDefault(p => def is not null && string.Equals(p.Definition, def, StringComparison.OrdinalIgnoreCase))
                  ?? w.Placements.FirstOrDefault(p => IsCar(p.Definition));
-        def ??= IsCar(at?.Definition) ? at!.Definition! : "vppirna1.vcf";
+        // no car from the shell: the original seeds vppirna1 at start-up and never loads the mission's own car for the player;
+        // a co-op game's "Mission's own car" (seat 0 without a car) is the placement's, as the lobby offers it
+        def ??= coop is not null && IsCar(at?.Definition) ? at!.Definition! : "vppirna1.vcf";
         at ??= new Placement(new PlacedObject(def, 0x10, [1, 0, 0, 0, 1, 0, 0, 0, 1], origin, new byte[0x64]), def);
 
         var order = network ? [] : melee is not null ? [at] : w.Placements.Where(p => IsCar(p.Definition) && p != at).Prepend(at).ToList();

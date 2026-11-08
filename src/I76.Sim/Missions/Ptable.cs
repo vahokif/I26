@@ -700,7 +700,7 @@ public sealed partial class Ptable
             ["rw_flee.trans2"] = (e, t) => AvoidTrigger(e, t, AvoidKind.Terrain), ["road_ram.trans5"] = BoxedIn, ["dirt_brave.trans6"] = SkidChance,
             ["avoid clsn.trans0"] = AvoidToBackAway, ["back_away.trans0"] = BackAwayToJustDoIt, ["handle too far search.trans0"] = SearchComplete,
             // rules
-            ["road_ram.clsnDmg"] = (e, _) => e.RammedTick == host.FsmTick - 1 || e.RammedTick == host.FsmTick,
+            ["road_ram.clsnDmg"] = (e, _) => e.RammedTick == host.FsmTick,   // this frame's ram only (isRammed also sees the next frame)
             ["road_ram.timeUp"] = (e, _) => Now > e.TacticDeadline, ["tactic_skid.clsnTime"] = (e, _) => Now > e.EscapeTimer,
             ["road_ram.termRW"] = TermRoadWar, ["road_side.termSd"] = (e, t) => Motion(t).Speed < 5 && Dist(e, t!) < 30,
             ["dirt_brave.termRW"] = TermDirtWar, ["road_flee.termflee"] = TermFlee, ["rockford.termRock"] = TermRock,

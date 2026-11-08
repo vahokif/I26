@@ -87,6 +87,8 @@ public sealed class MainMenuScreen : ShellScreen
             _w[id] = new SpriteWidget(id, x, y, _bank, sprite, b) { Hot = hot };
         }
         Repaint();
+        // the 3D garage's first build, made while the menu stands (#143)
+        Garage3D.GarageWarmup.Start(Shell, this);
     }
 
     /// <summary>The background and the four top buttons, every row closed.</summary>

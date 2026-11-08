@@ -57,18 +57,43 @@ public sealed class GarageRoom
     private static float Fbm(float u, float v, int cells, int seed) =>
         0.55f * Noise(u * cells, v * cells, cells, seed) + 0.3f * Noise(u * cells * 2, v * cells * 2, cells * 2, seed + 1) + 0.15f * Noise(u * cells * 4, v * cells * 4, cells * 4, seed + 2);
 
-    private static ImageTexture Tex(int size, Func<float, float, int, int, Color> px)
+    private static Image Tex(int size, Func<float, float, int, int, Color> px)
     {
         var img = Image.CreateEmpty(size, size, true, Image.Format.Rgba8);
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++) img.SetPixel(x, y, px((x + 0.5f) / size, (y + 0.5f) / size, x, y));
         img.GenerateMipmaps();
-        return ImageTexture.CreateFromImage(img);
+        return img;
+    }
+
+    /// <summary>Every texture of the room by name: the same pixels each time, so they are made once a run.</summary>
+    private static readonly (string Name, Func<Image> Make)[] Images =
+    [
+        ("concrete", Concrete), ("blockA", () => Blocks(new Color(0.62f, 0.64f, 0.60f))), ("blockB", () => Blocks(new Color(0.42f, 0.47f, 0.50f))),
+        ("door", RollerDoor), ("hazard", Hazard), ("steel", () => Metal(new Color(0.34f, 0.35f, 0.37f), 0.6f)),
+        ("darkSteel", () => Metal(new Color(0.12f, 0.12f, 0.13f), 0.4f)), ("ceiling", () => Plain(new Color(0.16f, 0.16f, 0.17f))),
+        ("lamp", () => Plain(new Color(1f, 0.97f, 0.88f))), ("rubber", Rubber), ("wood", Wood),
+        ("red", () => Metal(new Color(0.60f, 0.10f, 0.08f), 0.3f)), ("blue", () => Metal(new Color(0.10f, 0.22f, 0.50f), 0.3f)),
+        ("yellow", () => Plain(new Color(0.85f, 0.65f, 0.08f))), ("cabinet", () => Metal(new Color(0.07f, 0.07f, 0.075f), 0.5f)),
+        ("cone", () => Metal(new Color(0.20f, 0.20f, 0.21f), 0.8f)), ("chrome", () => Metal(new Color(0.65f, 0.66f, 0.68f), 0.3f)),
+    ];
+
+    private static System.Threading.Tasks.Task<Dictionary<string, Image>>? _images;
+    private static readonly Dictionary<string, ImageTexture> _textures = [];
+
+    /// <summary>Starts making the room's pixels on a worker thread (once a run): the first visit no longer waits half a second for them.</summary>
+    public static void Prepare() => _images ??= System.Threading.Tasks.Task.Run(() => Images.ToDictionary(i => i.Name, i => i.Make()));
+
+    private static ImageTexture T(string name)
+    {
+        if (_textures.TryGetValue(name, out var t)) return t;
+        Prepare();
+        return _textures[name] = ImageTexture.CreateFromImage(_images!.Result[name]);
     }
 
     private static Color Grey(float v, float r = 1f, float g = 1f, float b = 1f) => new(Mathf.Clamp(v * r, 0, 1), Mathf.Clamp(v * g, 0, 1), Mathf.Clamp(v * b, 0, 1));
 
-    private static ImageTexture Concrete() => Tex(256, (u, v, x, y) =>
+    private static Image Concrete() => Tex(256, (u, v, x, y) =>
     {
         float n = Fbm(u, v, 8, 3), speck = Hash(x, y, 9) > 0.985f ? 0.12f : 0f;
         float joint = MathF.Min(MathF.Min(u, 1 - u), MathF.Min(v, 1 - v)) * 256f < 1.5f ? 0.55f : 1f;   // the slab's expansion joint along its edge
@@ -76,7 +101,7 @@ public sealed class GarageRoom
         return Grey((0.30f + 0.16f * n + speck) * joint * oil, 1f, 0.99f, 0.96f);
     });
 
-    private static ImageTexture Blocks(Color paint) => Tex(256, (u, v, x, y) =>
+    private static Image Blocks(Color paint) => Tex(256, (u, v, x, y) =>
     {
         // painted cinder block: courses 32 px high, 64 wide, alternate courses offset, mortar lines, the paint chipped
         int course = y / 32, bx = (x + (course % 2) * 32) % 64, by = y % 32;
@@ -88,7 +113,7 @@ public sealed class GarageRoom
         return new Color(c.R, c.G, c.B);
     });
 
-    private static ImageTexture RollerDoor() => Tex(256, (u, v, x, y) =>
+    private static Image RollerDoor() => Tex(256, (u, v, x, y) =>
     {
         // ribbed slats 16 px high: a lit upper edge, a shadowed lower one, a faint scrape, the paint a dull green-grey
         int s = y % 16;
@@ -98,24 +123,24 @@ public sealed class GarageRoom
         return Grey((0.30f + 0.10f * n) * rib * wear, 0.82f, 0.95f, 0.88f);
     });
 
-    private static ImageTexture Hazard() => Tex(128, (u, v, x, y) =>
+    private static Image Hazard() => Tex(128, (u, v, x, y) =>
     {
         bool yellow = ((x + y) / 16) % 2 == 0;
         float n = Fbm(u, v, 4, 11);
         return yellow ? new Color(0.82f * (0.75f + 0.25f * n), 0.62f * (0.75f + 0.25f * n), 0.06f) : new Color(0.07f, 0.07f, 0.07f) * (0.8f + 0.4f * n);
     });
 
-    private static ImageTexture Metal(Color c, float grain) => Tex(128, (u, v, x, y) =>
+    private static Image Metal(Color c, float grain) => Tex(128, (u, v, x, y) =>
     {
         float n = Fbm(u, v, 4, 14) * 0.6f + Hash(x, y, 2) * 0.4f * grain;
         return new Color(c.R * (0.8f + 0.4f * n), c.G * (0.8f + 0.4f * n), c.B * (0.8f + 0.4f * n));
     });
 
-    private static ImageTexture Plain(Color c) => Tex(8, (_, _, _, _) => c);
+    private static Image Plain(Color c) => Tex(8, (_, _, _, _) => c);
 
-    private static ImageTexture Rubber() => Tex(64, (u, v, x, y) => Grey(0.10f + 0.04f * Hash(x, y, 6) + (y % 16 < 3 ? 0.03f : 0f)));
+    private static Image Rubber() => Tex(64, (u, v, x, y) => Grey(0.10f + 0.04f * Hash(x, y, 6) + (y % 16 < 3 ? 0.03f : 0f)));
 
-    private static ImageTexture Wood() => Tex(128, (u, v, x, y) =>
+    private static Image Wood() => Tex(128, (u, v, x, y) =>
     {
         float grain = 0.5f + 0.5f * MathF.Sin((v * 9f + Fbm(u, v, 4, 40) * 3f) * MathF.PI * 2f);
         return new Color(0.42f + 0.1f * grain, 0.28f + 0.07f * grain, 0.15f + 0.04f * grain);
@@ -178,20 +203,20 @@ public sealed class GarageRoom
 
     private void Build()
     {
-        var concrete = Mat(Concrete(), roughness: 0.42f, specular: 0.5f);
-        var blockA = Mat(Blocks(new Color(0.62f, 0.64f, 0.60f)), roughness: 0.95f);
-        var blockB = Mat(Blocks(new Color(0.42f, 0.47f, 0.50f)), roughness: 0.95f);
-        var door = Mat(RollerDoor(), roughness: 0.55f, metallic: 0.5f);
-        var hazard = Mat(Hazard(), roughness: 0.6f);
-        var steel = Mat(Metal(new Color(0.34f, 0.35f, 0.37f), 0.6f), roughness: 0.4f, metallic: 0.8f);
-        var darkSteel = Mat(Metal(new Color(0.12f, 0.12f, 0.13f), 0.4f), roughness: 0.5f, metallic: 0.7f);
-        var ceiling = Mat(Plain(new Color(0.16f, 0.16f, 0.17f)), roughness: 1f);
-        var lampMat = Mat(Plain(new Color(1f, 0.97f, 0.88f)), lamp: true);
-        var rubber = Mat(Rubber(), roughness: 0.95f);
-        var wood = Mat(Wood(), roughness: 0.8f);
-        var red = Mat(Metal(new Color(0.60f, 0.10f, 0.08f), 0.3f), roughness: 0.45f, metallic: 0.3f);
-        var blue = Mat(Metal(new Color(0.10f, 0.22f, 0.50f), 0.3f), roughness: 0.45f, metallic: 0.3f);
-        var yellow = Mat(Plain(new Color(0.85f, 0.65f, 0.08f)), roughness: 0.6f);
+        var concrete = Mat(T("concrete"), roughness: 0.42f, specular: 0.5f);
+        var blockA = Mat(T("blockA"), roughness: 0.95f);
+        var blockB = Mat(T("blockB"), roughness: 0.95f);
+        var door = Mat(T("door"), roughness: 0.55f, metallic: 0.5f);
+        var hazard = Mat(T("hazard"), roughness: 0.6f);
+        var steel = Mat(T("steel"), roughness: 0.4f, metallic: 0.8f);
+        var darkSteel = Mat(T("darkSteel"), roughness: 0.5f, metallic: 0.7f);
+        var ceiling = Mat(T("ceiling"), roughness: 1f);
+        var lampMat = Mat(T("lamp"), lamp: true);
+        var rubber = Mat(T("rubber"), roughness: 0.95f);
+        var wood = Mat(T("wood"), roughness: 0.8f);
+        var red = Mat(T("red"), roughness: 0.45f, metallic: 0.3f);
+        var blue = Mat(T("blue"), roughness: 0.45f, metallic: 0.3f);
+        var yellow = Mat(T("yellow"), roughness: 0.6f);
 
         // shell: floor, ceiling, four walls (each facing in)
         Wall(Root, new Vector3(0, 0, 0), Vector3.Up, new Vector2(HalfX * 2, HalfZ * 2), new Vector2(HalfX * 2 / 4, HalfZ * 2 / 4), concrete, "Floor");
@@ -262,9 +287,9 @@ public sealed class GarageRoom
         // the boombox on the bench: a black cabinet with two speaker cones, a handle, an antenna and a tuning dial
         var bb = new Node3D { Name = "Boombox", Position = Boombox };
         Root.AddChild(bb);
-        var cabinet = Mat(Metal(new Color(0.07f, 0.07f, 0.075f), 0.5f), roughness: 0.55f, metallic: 0.2f);
-        var cone = Mat(Metal(new Color(0.20f, 0.20f, 0.21f), 0.8f), roughness: 0.8f);
-        var chrome = Mat(Metal(new Color(0.65f, 0.66f, 0.68f), 0.3f), roughness: 0.25f, metallic: 0.9f);
+        var cabinet = Mat(T("cabinet"), roughness: 0.55f, metallic: 0.2f);
+        var cone = Mat(T("cone"), roughness: 0.8f);
+        var chrome = Mat(T("chrome"), roughness: 0.25f, metallic: 0.9f);
         Solid(bb, new BoxMesh { Size = new Vector3(0.22f, 0.26f, 0.62f) }, new Vector3(0, 0.13f, 0), cabinet, "Cabinet");
         foreach (float z in new[] { -0.17f, 0.17f })
         {

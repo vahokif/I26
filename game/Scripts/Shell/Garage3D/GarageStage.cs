@@ -24,6 +24,8 @@ public sealed partial class GarageStage : SubViewportContainer
     public int MusicLevel { get; init; } = 8;
     public GarageRadio? Radio { get; private set; }
     public bool Mode1997 { get; private set; }
+    /// <summary>Drawn though nothing shows it (the warm-up's stage: a see-through container skips drawing its viewport's picture, and a viewport drawn when visible would not draw).</summary>
+    public bool DrawUnseen { get; init; }
 
     private SubViewport _vp = null!;
     private Camera3D _cam = null!;
@@ -53,7 +55,7 @@ public sealed partial class GarageStage : SubViewportContainer
         Stretch = true;
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _vp = new SubViewport { OwnWorld3D = true, AudioListenerEnable3D = true, HandleInputLocally = false, GuiDisableInput = true, RenderTargetUpdateMode = SubViewport.UpdateMode.WhenVisible, Name = "Viewport" };
+        _vp = new SubViewport { OwnWorld3D = true, AudioListenerEnable3D = true, HandleInputLocally = false, GuiDisableInput = true, RenderTargetUpdateMode = DrawUnseen ? SubViewport.UpdateMode.Always : SubViewport.UpdateMode.WhenVisible, Name = "Viewport" };
         AddChild(_vp);
         _room = new GarageRoom();
         _vp.AddChild(_room.Root);

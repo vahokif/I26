@@ -31,6 +31,17 @@ public static class LampSupport
         return (brake, lights && frontOk && !brake);
     }
 
+    /// <summary>How long the modern look keeps the brake lamps lit after the last braking tick (ms).</summary>
+    public const ulong BrakeHoldMs = 150;
+
+    /// <summary>
+    /// The brake lamp's state: the original shows it only while the throttle is below -0.2. The modern look holds it
+    /// <see cref="BrakeHoldMs"/> after the last braking tick (<paramref name="msSinceBrake"/>, null if it never braked), so
+    /// an AI flicking between brake and throttle tick by tick reads as braking instead of strobing.
+    /// </summary>
+    public static bool BrakeLit(float throttle, ulong? msSinceBrake, bool hold) =>
+        throttle < -0.2f || (hold && msSinceBrake is { } ms && ms < BrakeHoldMs);
+
     /// <summary>How much farther back than the intact body the damaged one may lie behind a lamp face and still hold it (m).</summary>
     public const float Slack = 0.05f;
 

@@ -450,8 +450,6 @@ public partial class CarNode : Node3D
     private MeshInstance3D? _tailGlow, _brakeGlow, _brakeHeld;
     private MeshInstance3D[] _glare = [], _rearGlare = [];
     private OmniLight3D? _brakeLight;
-    /// <summary>How long the brake lamps stay lit after the last braking tick (ms), so an AI's brake-throttle flicker reads as braking.</summary>
-    private const ulong BrakeHoldMs = 150;
     private ulong _brakeSeenMs;
     private float _rearLevel = -1;
     /// <summary>The modern look: the headlamps flare towards the camera.</summary>
@@ -932,11 +930,11 @@ public partial class CarNode : Node3D
         }
         // Lamps work while their end of the car holds half its armour and chassis
         bool frontOk = Sim.Health is not { } hd || hd.ZoneRatio(0) >= 0.5f, rearOk = Sim.Health is not { } hr || hr.ZoneRatio(3) >= 0.5f;
-        // the lamps hold on a moment after the brake lets go: the AI's controllers flick between brake and throttle tick by tick,
-        // which strobed them (the port's; a held brake looks the same)
+        // the modern look holds the lamps on a moment after the brake lets go: the AI's controllers flick between brake and
+        // throttle tick by tick, which strobed them (a held brake looks the same); the 1997 look follows the throttle, as the original
         ulong nowMs = Time.GetTicksMsec();
         if (Sim.Throttle < -0.2f) _brakeSeenMs = nowMs;
-        bool braking = rearOk && _brakeSeenMs != 0 && nowMs - _brakeSeenMs < BrakeHoldMs;
+        bool braking = rearOk && I76.Formats.Assembly.LampSupport.BrakeLit(Sim.Throttle, _brakeSeenMs != 0 ? nowMs - _brakeSeenMs : null, Modern);
         // the modern look's upturned wreck lies on the ground, not on the sim's taller roof (the 1997 look keeps the original's)
         if (_body is not null)
             _body.Position = Wrecked && Modern ? new Vector3(0, _wreckGap * Mathf.Max(0, -rows.Up.Y), 0) : Vector3.Zero;

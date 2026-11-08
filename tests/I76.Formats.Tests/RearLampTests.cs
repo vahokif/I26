@@ -28,4 +28,21 @@ public class RearLampTests
         // a car with no brake lamp part keeps its tail lamp while braking
         Assert.Equal((false, true), LampSupport.RearFaces(braking: true, lights: true, frontOk: true, hasBrake: false));
     }
+
+    [Fact]
+    public void TheBrakeLampFollowsTheThrottleAsTheOriginalsDoes()
+    {
+        // below -0.2 it is lit; the tick the throttle rises it is out
+        Assert.True(LampSupport.BrakeLit(-0.5f, 0, hold: false));
+        Assert.False(LampSupport.BrakeLit(-0.1f, 0, hold: false));
+        Assert.False(LampSupport.BrakeLit(0.5f, 50, hold: false));
+    }
+
+    [Fact]
+    public void TheModernLookHoldsTheBrakeLampAMoment()
+    {
+        Assert.True(LampSupport.BrakeLit(0.5f, 149, hold: true));
+        Assert.False(LampSupport.BrakeLit(0.5f, 150, hold: true));
+        Assert.False(LampSupport.BrakeLit(0.5f, null, hold: true));
+    }
 }

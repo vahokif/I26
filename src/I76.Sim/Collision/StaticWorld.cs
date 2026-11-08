@@ -160,13 +160,14 @@ public sealed partial class StaticObject
         Polys.Clear(); Polys.AddRange(r.Polys);
         Surfaces.Clear(); Surfaces.AddRange(r.Surfaces);
         Boxes.Clear(); Boxes.AddRange(r.Boxes);
+        MeshBounds.Clear(); MeshBounds.AddRange(r.MeshBounds);
         Spheres.Clear(); Spheres.AddRange(r.Spheres);
         Centre = r.Centre; Radius = r.Radius; BoundRadius = r.BoundRadius;
         Collapsed = true;
         Revision++;
     }
 
-    private (Poly[] Polys, Poly[] Surfaces, NodeBox[] Boxes, NodeSphere[] Spheres, Vector3 Centre, float Radius, float BoundRadius)? _intact;
+    private (Poly[] Polys, Poly[] Surfaces, NodeBox[] Boxes, NodeSphere[] Spheres, NodeBox[] MeshBounds, Vector3 Centre, float Radius, float BoundRadius)? _intact;
 
     /// <summary>
     /// The geometry after nodes died (and the rebuild):
@@ -176,13 +177,14 @@ public sealed partial class StaticObject
     public void Refresh()
     {
         if (Nodes.Count == 0) { if (Destroyed) Collapse(); return; }
-        _intact ??= ([.. Polys], [.. Surfaces], [.. Boxes], [.. Spheres], Centre, Radius, BoundRadius);
+        _intact ??= ([.. Polys], [.. Surfaces], [.. Boxes], [.. Spheres], [.. MeshBounds], Centre, Radius, BoundRadius);
         bool Alive(int n) => n < 0 ? !Destroyed : !Nodes[n].Destroyed;
         bool Dead(int n) => n < 0 ? Destroyed : Nodes[n].Destroyed;
-        Polys.Clear(); Surfaces.Clear(); Boxes.Clear(); Spheres.Clear();
+        Polys.Clear(); Surfaces.Clear(); Boxes.Clear(); Spheres.Clear(); MeshBounds.Clear();
         Polys.AddRange(_intact.Value.Polys.Where(p => Alive(p.Node)).Select(Moved));
         Surfaces.AddRange(_intact.Value.Surfaces.Where(p => Alive(p.Node)).Select(Moved));
         Boxes.AddRange(_intact.Value.Boxes.Where(b => Alive(b.Node)).Select(Moved));
+        MeshBounds.AddRange(_intact.Value.MeshBounds.Where(b => Alive(b.Node)).Select(Moved));
         Spheres.AddRange(_intact.Value.Spheres.Where(b => Alive(b.Node)).Select(Moved));
         bool swapped = false;
         if (Remains is { } r)
@@ -190,6 +192,7 @@ public sealed partial class StaticObject
             foreach (var p in r.Polys) if (Dead(p.Node)) { Polys.Add(Moved(p)); swapped = true; }
             foreach (var p in r.Surfaces) if (Dead(p.Node)) { Surfaces.Add(Moved(p)); swapped = true; }
             foreach (var b in r.Boxes) if (Dead(b.Node)) { Boxes.Add(Moved(b)); swapped = true; }
+            foreach (var b in r.MeshBounds) if (Dead(b.Node)) MeshBounds.Add(Moved(b));
             foreach (var b in r.Spheres) if (Dead(b.Node)) { Spheres.Add(Moved(b)); swapped = true; }
         }
         Collapsed = swapped;
@@ -298,6 +301,8 @@ public sealed partial class StaticObject
 
     /// <summary>Class 0x2000 nodes: a box each, in the node's own frame.</summary>
     public List<NodeBox> Boxes { get; } = [];
+    /// <summary>Class 0x3000 nodes: the bounds of each one's mesh, in the node's own frame (the AI's sight test grows them by 3).</summary>
+    public List<NodeBox> MeshBounds { get; } = [];
     /// <summary>Class 0x4000 / 0x5000 nodes: a sphere each, the part's SGEO radius x 1 (0x4000) or 0.75 (0x5000, the default of type 4's parts).</summary>
     public List<NodeSphere> Spheres { get; } = [];
     /// <summary>Type 0xc: the first type-0xd node (the deck) in the node walk, for the bridge tree.</summary>
@@ -422,6 +427,8 @@ public sealed class StaticWorld
                 o.Boxes.Add(new NodeBox(rot, place.Apply(part.ToModel.Apply(Vector3.Zero)), bmin, bmax, g.Vertices.Max(v => v.Length())) { Node = node });
                 if (!o.IsStructure) continue;
             }
+            if (cls == 0x3000)
+                o.MeshBounds.Add(new NodeBox(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(Vector3.Min), g.Vertices.Aggregate(Vector3.Max), g.Vertices.Max(v => v.Length())) { Node = node });
             // A bridge's surfaces are its deck nodes' only (not its trusses and spans)
             bool drive = o.IsStructure && (type != 0xc || nodeType is null || deck);
             var mine = new List<Poly>();

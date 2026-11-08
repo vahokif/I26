@@ -51,9 +51,10 @@ public sealed partial class Ptable
         return Now > e.LosSeen + 5f;
     }
 
-    /// <summary>Actor + 1.5 up to target + 1.5 up (both aim points), against the terrain (objects not tested here).</summary>
+    /// <summary>The fire gate's sight test (Combat.CanSee); without a car or a combat, actor + 1.5 up to target + 1.5 up against the terrain.</summary>
     private bool LineOfSight(Entity a, Entity b)
     {
+        if (host.Combat is { } c && a.Vehicle is { } v && ((object?)b.Vehicle ?? b.Static) is { } t) return c.CanSee(v, t);
         var p = Pos(a) + new Vector3(0, 1.5f, 0); var q = AimPointOf(b) + new Vector3(0, 1.5f, 0);
         int n = System.Math.Max(2, (int)(Vector3.Distance(p, q) / 5f));
         for (int i = 1; i < n; i++)

@@ -77,8 +77,11 @@ public sealed partial class MeleeClient : IDisposable
     public int LastSnapshotSize;
     public int Malformed;
 
-    /// <summary>Round trip time to the server, ms.</summary>
+    /// <summary>Round trip time to the server, ms: the transport's latest sample.</summary>
     public int Rtt => _peer?.RoundTripTime ?? 0;
+    /// <summary>The ping the HUD shows, ms: the low of the recent samples (<see cref="PingWindow"/>).</summary>
+    public int Ping => _ping.Low;
+    private readonly PingWindow _ping = new();
     /// <summary>The client's own input tick, and the last one the server says it applied.</summary>
     public uint InputTick => _inputs.Tick;
     public uint AckedInput { get; private set; }
@@ -173,6 +176,7 @@ public sealed partial class MeleeClient : IDisposable
             MtuDiscovery = true,
         };
         _listener.PeerConnectedEvent += p => _peer = p;
+        _listener.NetworkLatencyUpdateEvent += (p, _) => { if (p == _peer) _ping.Add(p.RoundTripTime); };
         _listener.PeerDisconnectedEvent += (p, info) =>
         {
             // we left (Leave, Fail): the reason is ours

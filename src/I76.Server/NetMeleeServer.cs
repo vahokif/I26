@@ -131,7 +131,7 @@ public sealed partial class NetMeleeServer : IDisposable
             try { Receive(p, s, reader.GetRemainingBytesSpan()); }
             catch (WireException ex) { Log?.Invoke($"{s.Name}: malformed message ({ex.Message})"); }
         };
-        _listener.NetworkLatencyUpdateEvent += (p, latency) => { if (_byPeer.TryGetValue(p.Id, out var s)) s.Rtt = p.RoundTripTime; };
+        _listener.NetworkLatencyUpdateEvent += (p, latency) => { if (_byPeer.TryGetValue(p.Id, out var s)) { s.Ping.Add(p.RoundTripTime); s.Rtt = s.Ping.Low; } };
         if (!_net.Start(port ?? o.Port)) throw new IOException($"could not open UDP port {port ?? o.Port}");
         Log?.Invoke($"listening on UDP {_net.LocalPort}");
         _lobbyOpen = o.Lobby && o.Coop is not null && port is null;

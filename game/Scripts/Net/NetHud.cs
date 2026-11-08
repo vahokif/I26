@@ -366,7 +366,7 @@ public partial class NetHud : CanvasLayer
     /// <summary>This frame's readouts from the client and the HUD's own state.</summary>
     private NetHudFrame Gather()
     {
-        var f = new NetHudFrame { T = _t, Feed = _feed, Ping = Client.Rtt, Kind = Kind, Goal = Goal, Host = Host, Pad = Godot.Input.GetConnectedJoypads().Count > 0, Coop = Coop };
+        var f = new NetHudFrame { T = _t, Feed = _feed, Ping = Client.Ping, Kind = Kind, Goal = Goal, Host = Host, Pad = Godot.Input.GetConnectedJoypads().Count > 0, Coop = Coop };
         var a = Client.Accept;
         var sc = Client.Scores;
         if (Client.State != ClientState.Joined) f.Connection = $"{Client.State}{(Client.Reason is { } r ? ": " + r : "")}";

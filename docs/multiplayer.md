@@ -231,7 +231,9 @@ by itself in 43 s; Space 3 s after a death was refused, 6.5 s after it brought a
   `'` and show_team_scores `;`; I26: one view on Tab or a pad's Back, the teams' totals heading their players): up only while its key is held, the console's lines hidden meanwhile. "# Player Name
   Score Kills Deaths" (a race's "Laps", CTF's "Captures"), players in slot order, unsorted; the teams' window (team play
   only, and not while `'` is held) sums each team and sorts by score. On the host's machine its own row is marked H and
-  the others numbered for BOOT_n. I26 draws it as a panel of columns with the ping, a page at a time (below).
+  the others numbered for BOOT_n. I26 draws it as a panel of columns with the ping, a page at a time (below). The
+  ping (there and on the HUD) is the lowest of the transport's last ten round-trip samples (`PingWindow`): under packet
+  loss its samples read far above the link's round trip.
 - **Boot** (BOOT_1..7, Ctrl+1..7 → dpDestroyPlayer): "Boot %s from the game? (CTRL-Y /
   CTRL-N) " for the n-th numbered row; Ctrl+Y boots, Ctrl+N cancels. I26 (`NetHud.HostKey`, `NetMeleeServer.Kick`):
   the listen host's score window pages nine numbered rows (the own H row besides), Ctrl+1..7 as the original's and the

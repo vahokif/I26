@@ -187,9 +187,10 @@ public sealed class Seat
     public MeleePlayer Player => ((MeleeActor)Actor).Player;
     public required Driver Driver { get; init; }
     public required InputQueue Inputs { get; init; }
-    /// <summary>The connection's id (the transport's), and its round trip time.</summary>
+    /// <summary>The connection's id (the transport's), and its round trip time (the low of <see cref="Ping"/>), shown in the score window.</summary>
     public object? Connection { get; init; }
     public int Rtt { get; set; }
+    public PingWindow Ping { get; } = new();
     internal (int Score, int Kills, int Deaths) Told;
     /// <summary>The car's build last told to the clients (<see cref="MeleePlayer.CarEpoch"/>).</summary>
     internal int ToldEpoch;

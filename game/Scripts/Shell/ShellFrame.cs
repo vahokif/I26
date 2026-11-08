@@ -85,12 +85,17 @@ public sealed class ShellFrame
     public void BlitRotated(Sprite? s, int ax, int ay)
     {
         if (s is null) return;
+        // the box the turned sprite covers: its last pixel lands at its top-left
+        int bx = ax - s.X0 - (s.Width - 1), by = ay - s.Y0 - (s.Height - 1);
+        bool hd = HasHdSprite?.Invoke(s) == true;
+        if (hd) { Unplace(bx, by, bx + s.Width, by + s.Height); _placed.Add((s, bx, by, true)); PlacedVersion++; }
         for (int r = 0; r < s.Height; r++)
             for (int c = 0; c < s.Width; c++)
             {
                 int i = r * s.Width + c, xx = ax - (s.X0 + c), yy = ay - (s.Y0 + r);
                 if (!s.Opaque[i] || xx < 0 || xx >= W || yy < 0 || yy >= H) continue;
                 Put(yy * W + xx, s.Pixels[i]);
+                if (hd) _hide[yy * W + xx] = true;
             }
         _dirty = true;
     }
@@ -98,11 +103,11 @@ public sealed class ShellFrame
     // ---- sprites drawn at the window's resolution (the modern look; ShellSprites.cs) ----
 
     private readonly bool[] _hide = new bool[W * H];
-    private readonly List<(Sprite Sprite, int X, int Y)> _placed = [];
+    private readonly List<(Sprite Sprite, int X, int Y, bool Turned)> _placed = [];
     /// <summary>Whether a sprite has an upscale to show in its place (set in the modern look).</summary>
     public Func<Sprite, bool>? HasHdSprite { get; set; }
-    /// <summary>The sprites with an upscale that are on the frame now, where they were blitted.</summary>
-    public IReadOnlyList<(Sprite Sprite, int X, int Y)> Placed => _placed;
+    /// <summary>The sprites with an upscale that are on the frame now, where they were blitted (the box they cover; Turned: drawn at scale (−1, −1), the rear weapons).</summary>
+    public IReadOnlyList<(Sprite Sprite, int X, int Y, bool Turned)> Placed => _placed;
     /// <summary>Changes whenever <see cref="Placed"/> does.</summary>
     public int PlacedVersion { get; private set; }
 
@@ -116,7 +121,7 @@ public sealed class ShellFrame
     {
         if (s is null) return;
         bool hd = HasHdSprite?.Invoke(s) == true;
-        if (hd) { Unplace(x, y, x + s.Width, y + s.Height); _placed.Add((s, x, y)); PlacedVersion++; }
+        if (hd) { Unplace(x, y, x + s.Width, y + s.Height); _placed.Add((s, x, y, false)); PlacedVersion++; }
         for (int r = 0; r < s.Height; r++)
         {
             int yy = y + r;

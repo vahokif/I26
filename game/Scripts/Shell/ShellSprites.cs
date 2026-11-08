@@ -94,13 +94,17 @@ public partial class ShellSprites : Control
         var size = GetViewportRect().Size;
         float s = Mathf.Min(size.X / ShellFrame.W, size.Y / ShellFrame.H);
         var off = (size - new Vector2(ShellFrame.W, ShellFrame.H) * s) / 2;
-        foreach (var (sprite, x, y) in Frame.Placed)
+        foreach (var (sprite, x, y, turned) in Frame.Placed)
         {
             if (Find(sprite) is not { } e || Load(e) is not { } tex) continue;
             // the sprite's rectangle on screen and in texels
             var dest = new Rect2(off + new Vector2(x, y) * s, new Vector2(sprite.Width, sprite.Height) * s);
             var src = new Rect2(e.Bx, e.By, e.Ax * sprite.Width, e.Ay * sprite.Height);
-            DrawTextureRectRegion(tex, dest, src);
+            if (!turned) { DrawTextureRectRegion(tex, dest, src); continue; }
+            // the rear weapons: the picture turned half a turn about the box's middle, as the frame draws them
+            DrawSetTransform(dest.GetCenter(), Mathf.Pi, Vector2.One);
+            DrawTextureRectRegion(tex, new Rect2(-dest.Size / 2, dest.Size), src);
+            DrawSetTransform(Vector2.Zero, 0, Vector2.One);
         }
     }
 }

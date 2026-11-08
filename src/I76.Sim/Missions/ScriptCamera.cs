@@ -94,7 +94,10 @@ public sealed partial class ScriptCamera
 
     public void Set(string op, int[] ints, Entity?[] objs, IReadOnlyList<Vector3>? path)
     {
-        if (_op != op.ToLowerInvariant()) _cut = true;
+        // a new placement is a cut, whether or not the op changes (t04's intro cuts camObjObj to camObjObj between the
+        // speakers); the same op re-issued with the same arguments, as a travelling shot is every frame, is not
+        if (_op != op.ToLowerInvariant() || !ints.AsSpan().SequenceEqual(_a) || !SameObjects(objs, _o)
+            || (path is null ? _path is not null : _path is null || !SamePath(_path, path))) _cut = true;
         _op = op.ToLowerInvariant(); _a = ints; _o = objs; _path = path;
         // the scripts issue a travelling op every frame until it arrives: progress is kept while the path stays the same
         // only pushCam takes the view (camera mode 5); an op on an un-pushed camera only sets its placement
@@ -129,10 +132,12 @@ public sealed partial class ScriptCamera
                 LookAt = _heldLook; Basis = _heldBasis;
                 break;
             case "camobjobj" when O(0) is { } from:
+                _arrived = false;   // the fixed placements clear camIsArrived too
                 Eye = Clamp(from.Position + from.Rot.ToWorld(new Vector3(A(1), A(2), A(3)) / 100f));
                 LookAt = O(4)?.Position;
                 break;
             case "camobjdir" when O(0) is { } o:
+                _arrived = false;
                 Eye = Clamp(o.Position + o.Rot.ToWorld(new Vector3(A(1), A(2), A(3)) / 100f));
                 Basis = Rows.Concat(Rows.Euler(Angle(A(4)), Angle(A(6)), Angle(A(5))), o.Rot);
                 break;
@@ -141,6 +146,7 @@ public sealed partial class ScriptCamera
                 FollowPath(dt, 0, A(1), O(2));
                 break;
             case "camposdir":
+                _arrived = false;   // a path camera that never arrives: it clears camIsArrived each call
                 if (_path is { Count: > 0 }) Eye = AtHeight(_path[0], A(1));
                 Basis = Rows.Euler(Angle(A(2)), Angle(A(4)), Angle(A(3)));
                 break;
@@ -152,6 +158,7 @@ public sealed partial class ScriptCamera
                 Basis = Rows.Euler(Angle(A(3)), Angle(A(5)), Angle(A(4)));
                 break;
             case "camf12" when O(0) is { } a && O(1) is { } b:
+                _arrived = false;
                 (Eye, LookAt) = F12(a.Position, b.Position, A(2) / 100f, A(3) / 100f);
                 break;
         }
@@ -227,6 +234,7 @@ public sealed partial class ScriptCamera
             if (f < 0) f += 1;
             Segment(p, (float)f, _seg + 1);
         }
+        _arrived = false;   // a call that places the camera clears camIsArrived, as the original's does
         Eye = AtHeight(new Vector3(_cam.X, 0, _cam.Y), h);
         LookAt = at?.Position;
         if (MathF.Abs(_target.X - _cam.X) >= 0.005f) _cam.X += 0.3f * (_target.X - _cam.X);
@@ -245,6 +253,13 @@ public sealed partial class ScriptCamera
         _target = new Vector2(a.X, a.Z) + _dir * t;
         float l2 = _dir.LengthSquared();
         _invLen = l2 > 0 ? 1 / MathF.Sqrt(l2) : 0;
+    }
+
+    private static bool SameObjects(Entity?[] a, Entity?[] b)
+    {
+        if (a.Length != b.Length) return false;
+        for (int i = 0; i < a.Length; i++) if (!ReferenceEquals(a[i], b[i])) return false;
+        return true;
     }
 
     private static bool SamePath(IReadOnlyList<Vector3>? a, IReadOnlyList<Vector3> b) =>

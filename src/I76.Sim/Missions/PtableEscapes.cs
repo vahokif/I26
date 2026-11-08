@@ -214,11 +214,13 @@ public sealed partial class Ptable
         {
             float max = MathF.Max(20f, 1.5f * vl);
             float pl = g.BareHeight(p.X - right.X * 2.5f, p.Z - right.Z * 2.5f), pr = g.BareHeight(p.X + right.X * 2.5f, p.Z + right.Z * 2.5f);
+            // the no-go cell is tested on the first track only, 2.5 to the car's left in either gear (right is along travel)
+            float nl = v.Gear < 0 ? -2.5f : 2.5f;
             for (float d = 2.5f; d <= max; d += 2.5f)
             {
                 var c = p + dir * d;
                 float hl = g.BareHeight(c.X - right.X * 2.5f, c.Z - right.Z * 2.5f), hr = g.BareHeight(c.X + right.X * 2.5f, c.Z + right.Z * 2.5f);
-                bool hit = g.Impassable(c.X, c.Z) || hl - pl is < -1f or > 1.5f || hr - pr is < -1f or > 1.5f || MathF.Abs(hl - hr) > 1.5f;
+                bool hit = g.Impassable(c.X - right.X * nl, c.Z - right.Z * nl) || hl - pl is < -1f or > 1.5f || hr - pr is < -1f or > 1.5f || MathF.Abs(hl - hr) > 1.5f;
                 if (hit)
                 {
                     tImpact = vl < 1e-4f ? float.MaxValue : d / vl;

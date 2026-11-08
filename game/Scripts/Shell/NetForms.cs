@@ -17,9 +17,11 @@ namespace I76.Game.Shell;
 /// its port (if not anet's 21157) the one to host on.</item>
 /// <item>7 JOIN → IPX: the games a LAN search finds, asked again every
 /// second.</item>
-/// <item>8 JOIN → INTERNET: the address book first; the I26 games the anet
-/// server at that address lists, and a game at the address itself, asked
-/// every second.</item>
+/// <item>8 JOIN → INTERNET: straight to the roster, which searches every
+/// entry of the address book at once (<see cref="ServerBrowser"/>): the I26
+/// games each anet server lists and a game at an entry's own address, asked
+/// every second, under a header row per entry. SERVERS (the port's) opens the
+/// address book to add, edit and delete entries.</item>
 /// </list>
 /// The host form (record 19; the base game's drawn by the port, HostForm.cs)
 /// adds GAME NAME, NO. DRIVERS, TEAM PLAY, INVITE ONLY and MAX SCORE to the
@@ -121,17 +123,25 @@ public sealed partial class MeleeScreen
     /// <summary>A join was refused for its password: that game asks for one the next time, whatever its listing said.</summary>
     public static void NoteLocked(string address, ulong anetId) => KnownLocked.Add(anetId != 0 ? $"anet:{anetId}" : address);
 
-    // the roster: the games found, the highlighted one, and where mode 8 asks
+    // the roster: the games found (mode 7's LAN search, mode 8's search of the whole address book), the highlighted one
     private SessionBrowser? _browser;
+    private ServerBrowser? _servers;
     private List<SessionBrowser.Found> _games = [];
+    /// <summary>Mode 8's groups, one per address book entry, as last drawn.</summary>
+    private IReadOnlyList<ServerGroup> _groups = [];
+    /// <summary>
+    /// The list's rows: a game (its index in <see cref="_games"/>) or, in mode 8, an entry's header row (Game −1, not
+    /// joinable): the entry's name and its state, its games under it.
+    /// </summary>
+    private List<(int Group, int Game)> _rows = [];
     private int _game;
     private ulong _gameId;
+    /// <summary>The entry the highlighted game was listed under (a game two servers list is under both).</summary>
+    private string? _gameFrom;
     private int _seen = -1;
     private double _askIn;
-    private (string Host, int Port)? _address;
-    // mode 8: the anet server whose list the roster shows; mode 4: the one the game is listed on
-    private (string Host, int Port)? _anet;
-    private string? _listOn, _serverStatus;
+    // mode 4: the anet server the game is listed on
+    private string? _listOn;
 
     /// <summary>How many games the roster lists (the capture script waits on it).</summary>
     public int GamesFound => _games.Count;
@@ -163,17 +173,40 @@ public sealed partial class MeleeScreen
         }
     }
 
-    /// <summary>After the entry's first paint: the notice, then the address book in the internet modes.</summary>
+    /// <summary>After the entry's first paint: the notice, then the address book for HOST → INTERNET (JOIN → INTERNET searches the whole book).</summary>
     private void NetShown()
     {
         void Book()
         {
-            if (Mode is not (4 or 8)) return;
+            if (Mode != 4) return;
             Shell.Modal(new AddressBookPopup { Font = _font, Picked = OnAddress });
         }
         if (Notice is { Length: > 0 } n) Say(n, Book);
         else Book();
     }
+
+    /// <summary>The address book's entries as the roster searches them.</summary>
+    private static List<ServerSource> BookSources() => [.. AddressBook.Load().Entries.Select(e => ServerSource.Parse(e.Name, e.Address))];
+
+    /// <summary>
+    /// The roster's SERVERS (the port's): the address book over the form, to add, edit and delete entries. DONE or CANCEL
+    /// closes it, the book saved either way; the roster then searches the book as it is, and DONE on an entry scrolls to it.
+    /// </summary>
+    private void OpenServers() =>
+        Shell.Modal(new AddressBookPopup
+        {
+            Font = _font,
+            Picked = e =>
+            {
+                _servers?.Watch(BookSources());
+                _askIn = 0;
+                PollGames(draw: false);
+                int gi = e is null ? -1 : _groups.ToList().FindIndex(g => g.Source.Name == e.Name && g.Source.Address == e.Address);
+                int at = _rows.FindIndex(r => r.Group == gi && r.Game < 0);
+                if (gi >= 0 && at >= 0) _scroll = Math.Clamp(at, 0, Math.Max(0, _rows.Count - ListRows));
+                Draw();
+            },
+        });
 
     /// <summary>Back from the chassis form: the search starts again by itself (PollGames).</summary>
     private void NetResume() { }
@@ -183,63 +216,79 @@ public sealed partial class MeleeScreen
         Shell.Modal(new NoticePopup { Sprite = 17, Ok = new Rect2I(119, 61, 42, 16), Text = text, Closed = () => { Draw(); then?.Invoke(); } });
 
     /// <summary>
-    /// The address book's DONE: nothing picked goes back to
-    /// the main menu; hosting takes the entry's port, joining its address.
+    /// HOST → INTERNET's address book DONE: nothing picked goes back to the main menu; else the entry's host is the anet
+    /// server the game is listed on, and its port the one to host on.
     /// </summary>
     private void OnAddress(AddressBook.Entry? e)
     {
         if (e is null) { StopGames(); Shell.Go(new MainMenuScreen()); return; }
         bool ok = Discovery.TryParseAddress(e.Address, out var host, out var port);
-        bool anetPort = !I76.Net.Anet.AnetClient.HasPort(e.Address) || port == I76.Net.Anet.AnetWire.ServerPort;
-        if (Mode == 4)
-        {
-            // "server" lists the game there and hosts on the default port; "server:7680" hosts on 7680; ":7680" is only the port
-            _port = port > 0 && port != I76.Net.Anet.AnetWire.ServerPort ? port : Protocol.DefaultPort;
-            _listOn = ok ? host : null;
-            Draw();
-            return;
-        }
-        _address = ok && !(anetPort && I76.Net.Anet.AnetClient.HasPort(e.Address)) ? (host, port) : null;
-        _anet = ok && anetPort ? (host, I76.Net.Anet.AnetWire.ServerPort) : null;
-        _games = [];
-        _seen = -1;
-        StopGames();
+        // "server" lists the game there and hosts on the default port; "server:7680" hosts on 7680; ":7680" is only the port
+        _port = port > 0 && port != I76.Net.Anet.AnetWire.ServerPort ? port : Protocol.DefaultPort;
+        _listOn = ok ? host : null;
         Draw();
-        if (!ok) Say($"\"{AddressBookPopup.Fit(_font, e.Address, 150)}\" is no address.");
-        else if (_address is null && _anet is null) Say($"\"{AddressBookPopup.Fit(_font, e.Address, 150)}\" is no address.");
     }
 
     /// <summary>The roster's search: asked every second, the answers taken every frame, the list redrawn when it changes.</summary>
     private void PollGames(bool draw = true)
     {
-        if (Mode == 8 && _address is null && _anet is null) return;
-        _browser ??= new SessionBrowser { Nitro = Nitro };
-        _browser.Poll();
-        if ((_askIn -= Shell.Delta) <= 0)
+        int version;
+        if (Mode == 8)
         {
-            _askIn = 1;
-            if (Mode == 7) _browser.SearchLan();
-            else
+            if (_servers is null) { _servers = new ServerBrowser { Nitro = Nitro }; _servers.Watch(BookSources()); }
+            _servers.Poll();
+            if ((_askIn -= Shell.Delta) <= 0) { _askIn = 1; _servers.Refresh(); }
+            version = _servers.Version;
+        }
+        else
+        {
+            _browser ??= new SessionBrowser { Nitro = Nitro };
+            _browser.Poll();
+            if ((_askIn -= Shell.Delta) <= 0) { _askIn = 1; _browser.SearchLan(); }
+            version = _browser.Version;
+        }
+        if (version == _seen) return;
+        _seen = version;
+        _games = [];
+        _rows = [];
+        if (_servers is { } sv)
+        {
+            _groups = sv.Groups;
+            for (int g = 0; g < _groups.Count; g++)
             {
-                if (_address is { } a) _browser.Ask(a.Host, a.Port);
-                if (_anet is { } s) _browser.List(s.Host, s.Port);
+                _rows.Add((g, -1));
+                foreach (var f in _groups[g].Games) { _rows.Add((g, _games.Count)); _games.Add(f); }
             }
         }
-        if (_browser.Version == _seen && _browser.ServerStatus == _serverStatus) return;
-        _seen = _browser.Version;
-        _serverStatus = _browser.ServerStatus;
-        _games = [.. _browser.Sessions];
-        int keep = _games.FindIndex(g => g.Info.Id == _gameId);
-        _game = keep >= 0 ? keep : 0;
-        if (_games.Count > 0) _gameId = _games[_game].Info.Id;
-        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, _games.Count - ListRows));
+        else foreach (var f in _browser!.Sessions) { _rows.Add((-1, _games.Count)); _games.Add(f); }
+        // the highlighted game stays highlighted: under the entry it was picked under, else wherever it is now, else the first
+        int keep = _rows.FindIndex(r => r.Game >= 0 && _games[r.Game].Info.Id == _gameId && From(r.Group) == _gameFrom);
+        if (keep < 0) keep = _rows.FindIndex(r => r.Game >= 0 && _games[r.Game].Info.Id == _gameId);
+        if (keep < 0) keep = _rows.FindIndex(r => r.Game >= 0);
+        if (keep >= 0) Highlight(keep);
+        else _game = 0;
+        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, _rows.Count - ListRows));
         if (draw) Draw();   // (under a game's popup the form is drawn again when it closes)
+    }
+
+    /// <summary>An entry of the book as the highlight remembers it (null on the LAN).</summary>
+    private string? From(int group) => group >= 0 && group < _groups.Count ? $"{_groups[group].Source.Name}\n{_groups[group].Source.Address}" : null;
+
+    /// <summary>The game on list row <paramref name="row"/> becomes the highlighted one.</summary>
+    private void Highlight(int row)
+    {
+        var (g, game) = _rows[row];
+        _game = game;
+        _gameId = _games[game].Info.Id;
+        _gameFrom = From(g);
     }
 
     private void StopGames()
     {
         _browser?.Dispose();
         _browser = null;
+        _servers?.Dispose();
+        _servers = null;
         _seen = -1;
         _askIn = 0;
     }
@@ -251,22 +300,28 @@ public sealed partial class MeleeScreen
     {
         // Nitro's art has the list lower (the box and its first row where the host form's are) and the up arrow on the first row
         int top = Nitro ? 130 : 109, nx = Nitro ? 34 : 14;
+        if (Mode == 8) DrawServersButton();
         if (_games.Count == 0)
         {
-            // while an anet server is still being reached, or is not answering, that is what the box says
-            string none = _serverStatus is { } st && !st.StartsWith("Listing") ? st : "No games found";
+            // the box says why there is nothing: no entries, every entry still being reached, or no games anywhere
+            string none = Mode != 8 ? "No games found" : _groups.Count == 0 ? "No servers in the book"
+                : _groups.All(g => g.State == ServerState.Connecting) ? "Contacting servers..." : "No games found";
             Frame.Text(_font, 34, top, AddressBookPopup.Fit(_font, none, 176));
-            return;
         }
-        _game = Math.Clamp(_game, 0, _games.Count - 1);
-        var hi = _games[_game];
-        string ping = (hi.Info.RateHz > 0 ? $"  {hi.Info.RateHz} Hz" : "") + (hi.Ping >= 0 ? $"  {hi.Ping} ms" : "");
-        Frame.Text(_font, 34, top, AddressBookPopup.Fit(_font, RowName(hi.Info), 176 - 8 * ping.Length) + ping);
-        var arrow = Shell.Db.Bank(0x24)[14];
-        for (int k = 0; k < ListRows && _scroll + k < _games.Count; k++)
+        else
         {
-            var g = _games[_scroll + k].Info;
+            _game = Math.Clamp(_game, 0, _games.Count - 1);
+            var hi = _games[_game];
+            string ping = (hi.Info.RateHz > 0 ? $"  {hi.Info.RateHz} Hz" : "") + (hi.Ping >= 0 ? $"  {hi.Ping} ms" : "");
+            Frame.Text(_font, 34, top, AddressBookPopup.Fit(_font, RowName(hi.Info), 176 - 8 * ping.Length) + ping);
+        }
+        var arrow = Shell.Db.Bank(0x24)[14];
+        for (int k = 0; k < ListRows && _scroll + k < _rows.Count; k++)
+        {
             int y = (Nitro ? 171 : 149) + Row * k;
+            var (group, game) = _rows[_scroll + k];
+            if (game < 0) { DrawServerRow(_groups[group], nx, y); continue; }
+            var g = _games[game].Info;
             string tag = TypeTag(g);
             int lockW = g.Locked ? 12 : 0, tagW = tag.Length > 0 ? _font.Measure(tag) : 0;
             // "(players/seats)" is right-aligned to the arrow: "(64/64)" is wider than the original's "(8/8)", and the name gives way
@@ -278,6 +333,50 @@ public sealed partial class MeleeScreen
             Frame.Text(_font, cx, y, count);
             Frame.Blit(arrow, 204, y);
         }
+    }
+
+    /// <summary>
+    /// An entry's header row on the internet roster (not joinable): its name in the form's label face, the art's own
+    /// headings' (LOCAL DRIVER, GAME NAME), and its state in the handwriting right-aligned to where the arrow column starts
+    /// (x 204), where a game row's "(3/8)" ends, so it never reaches the list's edge.
+    /// </summary>
+    private void DrawServerRow(ServerGroup g, int x, int y)
+    {
+        var label = Shell.Db.Font(0x47);
+        string status = g.Status;
+        int sw = _font.Measure(status), sx = 203 - sw;
+        string name = AddressBookPopup.Fit(label, (g.Source.Name.Trim() is { Length: > 0 } n ? n : g.Source.Address).ToUpperInvariant(), sx - 8 - x);
+        int ly = y + Math.Max(0, (_font.Height - label.Height) / 2);
+        Frame.Text(label, x, ly, name, ShellFrame.DefaultInk);
+        Frame.Text(_font, sx, y, status);
+    }
+
+    /// <summary>SERVERS' place (the port's, hotspot 39): under the list, on the line of JOIN GAME and CANCEL.</summary>
+    private static (int X0, int X1, int Y0, int Y1) ServersButton => Hot[39];
+
+    /// <summary>
+    /// SERVERS: the art's CANCEL button (record 18; ArtButtons) drawn again under the list without its word, and SERVERS
+    /// lettered as the art letters CANCEL; the art has no such button.
+    /// </summary>
+    private (Pcx Art, Rect2I Border, ArtButtons.ArtLabel Word)? _cancelArt;
+
+    private void DrawServersButton()
+    {
+        if (_cancelArt is null)
+        {
+            var bg = Shell.Db.Background(18);
+            byte Px(int x, int y) => bg.Pixels[Math.Clamp(y, 0, bg.Height - 1) * bg.Width + Math.Clamp(x, 0, bg.Width - 1)];
+            var c = Hot[15];
+            if (ArtButtons.Label(Px, bg.Palette, new Rect2I(c.X0 - 4, c.Y0 - 4, c.X1 - c.X0 + 8, c.Y1 - c.Y0 + 8)) is not { } border
+                || ArtButtons.Label(Px, bg.Palette, border.Box.Grow(-3)) is not { } word) return;
+            _cancelArt = (bg, border.Box, word);
+        }
+        var (art, b, word0) = _cancelArt.Value;
+        byte P(int x, int y) => art.Pixels[Math.Clamp(y, 0, art.Height - 1) * art.Width + Math.Clamp(x, 0, art.Width - 1)];
+        // the same place against the hotspot as CANCEL's border against its own
+        var dest = new Rect2I(ServersButton.X0 + b.Position.X - Hot[15].X0, b.Position.Y, b.Size.X, b.Size.Y);
+        ArtButtons.Face(Frame, P, b, word0.Box.Position.X, dest, 4);
+        ArtButtons.Letter(Frame, Shell.Db.Font(0x47), "SERVERS", word0, "CANCEL", dest);
     }
 
     /// <summary>A small padlock (7 x 11) in the form's ink: a game with a password.</summary>
@@ -624,18 +723,20 @@ public sealed partial class MeleeScreen
             }
             case 11:
             {
-                // a row picks the game; its arrow (x from 207) shows the game's popup
+                // a row picks the game; its arrow (x from 207) shows the game's popup; an entry's header row does neither
                 int row = _scroll + (p.Y - (Nitro ? 173 : 151)) / Row;
-                if (row < 0 || row >= _games.Count) return true;
-                if (p.X < 207) { _game = row; _gameId = _games[row].Info.Id; }
+                if (row < 0 || row >= _rows.Count || _rows[row].Game < 0) return true;
+                var g = _games[_rows[row].Game];
+                if (p.X < 207) Highlight(row);
                 else Shell.Modal(new SessionPopup
                 {
-                    Info = _games[row].Info, Type = TypeOf(_games[row]), Data = _data, Font = _font, Closed = Draw, Rules = RulesText(_games[row].Info),
-                    Live = LiveInfo(_games[row].Info.Id),
-                    RuleRows = Nitro ? RuleRows(_games[row].Info) : null,
+                    Info = g.Info, Type = TypeOf(g), Data = _data, Font = _font, Closed = Draw, Rules = RulesText(g.Info),
+                    Live = LiveInfo(g.Info.Id),
+                    RuleRows = Nitro ? RuleRows(g.Info) : null,
                 });
                 return true;
             }
+            case 39 when Mode == 8: OpenServers(); return true;
             case 23: TypePopup(); return true;
             case 25: OptionsPopup(); return true;
             case 16: _teamPlay = !_teamPlay; return true;
@@ -1105,10 +1206,13 @@ public sealed class AddressBook
 /// bank 36 sprite 29 at (184,38) with its shadow. The list shows three
 /// entries 57 px apart from y 223, each its name and, a line below, its
 /// address; a click picks one, shown in the NAME and IP boxes, which edit it
-/// in place. NEW adds an empty entry and edits its name and then its address.
-/// DONE uses the one picked (none: back to the main menu, as CANCEL); the
-/// book is saved either way. The DRIVER box is drawn greyed in the art and
-/// does nothing.
+/// in place. NEW adds an empty entry and edits its name and then its address;
+/// DELETE removes the one picked (the Nitro Pack's art has the button; the
+/// base game's has DONE, NEW and CANCEL only, and the port redraws that row
+/// as four). DONE gives the one picked, CANCEL none, to the caller: HOST →
+/// INTERNET lists its game on it (none: back to the main menu), the internet
+/// roster's SERVERS searches the book again. The book is saved either way.
+/// The DRIVER box is drawn greyed in the art and does nothing.
 /// </summary>
 public sealed class AddressBookPopup : ShellScreen
 {
@@ -1121,9 +1225,19 @@ public sealed class AddressBookPopup : ShellScreen
     // id → x0, x1, y0, y1, relative to the popup
     private static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> BaseHot = new()
     {
-        [0] = (52, 68, 167, 181), [1] = (52, 68, 340, 353), [2] = (48, 220, 183, 338), [3] = (193, 262, 371, 386),
-        [4] = (54, 227, 104, 123), [5] = (54, 227, 125, 144), [6] = (101, 169, 371, 387), [7] = (9, 78, 371, 387),
+        [0] = (52, 68, 167, 181), [1] = (52, 68, 340, 353), [2] = (48, 220, 183, 338),
+        [4] = (54, 227, 104, 123), [5] = (54, 227, 125, 144),
+        // the art's DONE (9..78), NEW (101..169) and CANCEL (193..262) redrawn narrower with DELETE (8) among them: BaseButtons
+        [7] = (8, 64, 371, 387), [6] = (74, 130, 371, 387), [8] = (140, 196, 371, 387), [3] = (206, 262, 371, 387),
     };
+    /// <summary>The base art's own buttons (their hotspots as the art has them), whose words are cut out for the redrawn row.</summary>
+    private static readonly Dictionary<string, (int X0, int X1, int Y0, int Y1)> ArtWords = new()
+    {
+        ["DONE"] = (9, 78, 371, 387), ["NEW"] = (101, 169, 371, 387), ["CANCEL"] = (193, 262, 371, 387),
+    };
+    /// <summary>The redrawn row: each button's word and the left of its border; all are <see cref="ButtonW"/> wide.</summary>
+    private static readonly (string Word, int X0)[] BaseButtons = [("DONE", 8), ("NEW", 74), ("DELETE", 140), ("CANCEL", 206)];
+    private const int ButtonW = 57;
     // the Nitro Pack's redrawn popup (bank 36's sprite 28): no DRIVER box, so NAME and IP sit higher; four entries in the list;
     // NEW and DONE over DELETE and CANCEL. Placed by measuring the art (the original's table was not read); 8 is DELETE.
     private static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> NitroHot = new()
@@ -1161,10 +1275,43 @@ public sealed class AddressBookPopup : ShellScreen
         Draw();
     }
 
+    /// <summary>
+    /// The base game's button row as four (ArtButtons): the art's row wiped with the paper between its DONE and NEW, DONE's
+    /// face without its word at each new place, the art's own DONE, NEW and CANCEL cut out and centred on theirs, and DELETE,
+    /// which the art lacks, lettered as the art letters DONE. Drawn into the frame over the popup (an upscaled popup included),
+    /// every time the popup is.
+    /// </summary>
+    private void DrawBaseButtons(Sprite art)
+    {
+        byte At(int x, int y) => art.Pixels[Math.Clamp(y, 0, art.Height - 1) * art.Width + Math.Clamp(x, 0, art.Width - 1)];
+        // in the frame's coordinates
+        byte Px(int x, int y) => At(x - X, y - Y);
+        var pal = Frame.Palette;
+        var found = new Dictionary<string, (Rect2I Border, ArtButtons.ArtLabel Word)>();
+        foreach (var (word, r) in ArtWords)
+            if (ArtButtons.Label(Px, pal, new Rect2I(X + r.X0 - 4, Y + r.Y0 - 4, r.X1 - r.X0 + 8, r.Y1 - r.Y0 + 8)) is { } border
+                && ArtButtons.Label(Px, pal, border.Box.Grow(-3)) is { } label)
+                found[word] = (border.Box, label);
+        if (!found.TryGetValue("DONE", out var done)) return;
+        // the paper: columns 82..97, between the art's DONE and NEW, repeated along the row
+        int y0 = done.Border.Position.Y - Y - 2, y1 = done.Border.End.Y - Y + 2;
+        for (int y = y0; y < y1; y++)
+            for (int x = 4; x < 268; x++) Frame.Fill(X + x, Y + y, 1, 1, At(82 + (x - 4) % 16, y));
+        foreach (var (word, x0) in BaseButtons)
+        {
+            var dest = new Rect2I(X + x0, done.Border.Position.Y, ButtonW, done.Border.Size.Y);
+            ArtButtons.Face(Frame, Px, done.Border, done.Word.Box.Position.X, dest, 3);
+            if (found.TryGetValue(word, out var own)) ArtButtons.Word(Frame, Px, own.Word.Box, dest);
+            else ArtButtons.Letter(Frame, Shell.Db.Font(0x47), word, done.Word, "DONE", dest);
+        }
+    }
+
     private void Draw()
     {
         Frame.Restore(X, Y, W + 6, H + 6);
-        Frame.Blit(Shell.Db.Bank(0x24)[29], X, Y);
+        var art = Shell.Db.Bank(0x24)[29];
+        Frame.Blit(art, X, Y);
+        if (!Nitro && art is not null) DrawBaseButtons(art);
         Frame.Fill(X + 6, Y + H, W, 6, 0x0f);
         Frame.Fill(X + W, Y + 6, 6, H, 0x0f);
         if (_sel >= 0 && _sel < _book.Entries.Count)

@@ -4,14 +4,15 @@
 # "Testing against the real server"; I76_ANET_SERVER names its binary, built with the ANET_BIND change).
 #   one game hosts: MELEE > MULTI MELEE > HOST > INTERNET > the book's "Local anet" (127.0.0.1) > DONE > BROADCAST GAME,
 #     a listen server listed on the local server;
-#   a second opens JOIN > INTERNET > the same entry, is captured once its roster lists the game (roster.png), and its
-#     game popup (popup.png);
+#   a second opens JOIN > INTERNET, whose roster searches its book (the same server alone), is captured once the roster
+#     lists the game under the entry's header row (roster.png), and its game popup (popup.png);
 #   a third joins it from the roster through the server's path (on one machine, with no NAT between, the host answers the
 #     joiner's first probe before the introduction; the NAT cases are tests/I76.Net.Tests/Anet).
 #   tools/anet-test.sh OUTDIR [seconds]     (I76_INSTALL set; each game runs through tools/shot.sh)
 # Extra arguments for every game come from I76_ANET_ARGS (say --1997). I76_ANET_NAV, I76_ANET_HOST_IN,
-# I76_ANET_ROSTER_IN and I76_ANET_JOIN_IN replace the click scripts, I76_ANET_BOOK the address book's and I76_ANET_ARROW
-# the roster's first arrow (the Nitro Pack's menu sits elsewhere: docs/multiplayer.md "Lobby servers (anet)").
+# I76_ANET_ROSTER_IN and I76_ANET_JOIN_IN replace the click scripts, I76_ANET_BOOK the host's address book clicks and
+# I76_ANET_ARROW the roster's first game's arrow (the Nitro Pack's menu sits elsewhere: docs/multiplayer.md "Lobby servers (anet)").
+# Every book is the local server alone (internet_i76com.done keeps the community servers out of it).
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 out=$(realpath -m "${1:?OUTDIR}")
@@ -37,6 +38,7 @@ user() { # user DIR DRIVER MODEL VARIANT ADDRESS: a scratch user:// with that me
     mkdir -p "$d"
     rm -f "$d/melee.cfg" "$d/internet.lst"
     printf '[melee]\n\narea=4\nmodel=%s\nvariant=%s\ndrivers=4\ngame="Anet Test"\ndriver="%s"\n' "$3" "$4" "$2" > "$d/melee.cfg"
+    echo 1 > "$d/internet_i76com.done"
     python3 - "$d/internet.lst" "$5" <<'EOF'
 import struct, sys
 e = [("Local anet", sys.argv[2])]
@@ -49,8 +51,8 @@ EOF
 nav=${I76_ANET_NAV:-"click:447,311@8;click:395,351@12"}
 book=${I76_ANET_BOOK:-"click:284,230@24;click:228,417@26"}
 host_in=${I76_ANET_HOST_IN:-"$nav;click:367,379@16;click:407,406@20;$book;click:300,462@30"}
-roster_in=${I76_ANET_ROSTER_IN:-"$nav;click:417,379@16;click:407,406@20;$book;wait:games=1@28"}
-join_in=${I76_ANET_JOIN_IN:-"$nav;click:417,379@16;click:407,406@20;$book;wait:games=1@28;click:100,155@32;click:300,462@34"}
+roster_in=${I76_ANET_ROSTER_IN:-"$nav;click:417,379@16;click:407,406@20;wait:games=1@28"}
+join_in=${I76_ANET_JOIN_IN:-"$nav;click:417,379@16;click:407,406@20;wait:games=1@28;click:100,172@32;click:300,462@34"}
 run() { # run NAME DATA INPUT FRAMES [env...]
     local name=$1 data=$2 input=$3 frames=$4; shift 4
     env "$@" I76_SHOT_DATA=$data I76_SHOT_FRAMES=$frames I76_SHELL_INPUT=$input \
@@ -60,7 +62,7 @@ rm -f "$out"/*.png
 run host "$(user host Taurus 20 1 127.0.0.1)" "$host_in" 120 I76_NET_TEST=2,$seconds & hp=$!
 # the roster once it lists the game (wait: holds the frames until then), and the game's popup from its arrow
 run roster "$(user roster Skeeter 4 1 127.0.0.1:21157)" "$roster_in" 36
-run popup "$(user roster Skeeter 4 1 127.0.0.1:21157)" "${roster_in};click:${I76_ANET_ARROW:-212,155}@32" 38
+run popup "$(user roster Skeeter 4 1 127.0.0.1:21157)" "${roster_in};click:${I76_ANET_ARROW:-212,172}@32" 38
 run join "$(user join Jade 4 ${I76_ANET_JOIN_VARIANT:-2} 127.0.0.1:21157)" "$join_in" 120 I76_NET_TEST=2,$seconds & jp=$!
 rc=0
 wait $hp || rc=$?

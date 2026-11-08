@@ -266,7 +266,7 @@ public sealed class SessionBrowser : IDisposable
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly List<Found> _found = [];
     private readonly byte[] _query = Discovery.Query();
-    private readonly Dictionary<string, IPAddress?> _resolved = [];
+    private readonly Dictionary<string, Task<IPAddress?>> _resolved = [];
     private readonly Dictionary<IPEndPoint, double> _asked = [];
     private AnetClient? _anet;
     private int _anetSeen = -1;
@@ -337,22 +337,32 @@ public sealed class SessionBrowser : IDisposable
         Expire();
     }
 
-    /// <summary>Asks one address (the address book's): host is a name or an IP.</summary>
+    /// <summary>
+    /// Asks one address (the address book's): host is a name or an IP. A name is looked up once, in the background (the
+    /// form asks every second and must not wait on it): until it is found nothing is sent. False once it was not found.
+    /// </summary>
     public bool Ask(string host, int port)
     {
-        if (!_resolved.TryGetValue(host, out var addr) && !IPAddress.TryParse(host, out addr))
-        {
-            // a name is looked up once (the form asks every second)
-            try { addr = Dns.GetHostAddresses(host).FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork); }
-            catch (System.Net.Sockets.SocketException) { addr = null; }
-            catch (ArgumentException) { addr = null; }
-            _resolved[host] = addr;
-        }
         Expire();
+        if (!IPAddress.TryParse(host, out var addr))
+        {
+            if (!_resolved.TryGetValue(host, out var lookup))
+                _resolved[host] = lookup = Task.Run(async () =>
+                {
+                    try { return (await Dns.GetHostAddressesAsync(host)).FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork); }
+                    catch (System.Net.Sockets.SocketException) { return null; }
+                    catch (ArgumentException) { return null; }
+                });
+            if (!lookup.IsCompleted) return true;
+            addr = lookup.IsCompletedSuccessfully ? lookup.Result : null;
+        }
         if (addr is null) return false;
         AskAt(new IPEndPoint(addr, port));
         return true;
     }
+
+    /// <summary>Whether a name given to <see cref="Ask"/> was looked up and not found.</summary>
+    public bool NotFound(string host) => _resolved.TryGetValue(host, out var t) && t.IsCompleted && (!t.IsCompletedSuccessfully || t.Result is null);
 
     private void AskAt(IPEndPoint ep)
     {

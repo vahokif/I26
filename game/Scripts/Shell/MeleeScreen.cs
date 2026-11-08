@@ -37,6 +37,8 @@ public sealed partial class MeleeScreen : ShellScreen
         // (the base game's host form is the port's own sheet, its hotspots HostFormLayout's: 8, 9 and 16..38 there)
         // the Nitro host form's WEAPON RESTRICTIONS (its own rectangle is NitroHost's)
         [24] = (31, 193, 310, 326),
+        // the internet roster's SERVERS (the port's, drawn: NetForms.cs), the address book
+        [39] = (42, 183, 453, 471),
     };
     // The ids each mode keeps
     private int[] Live => Mode switch
@@ -46,6 +48,7 @@ public sealed partial class MeleeScreen : ShellScreen
         3 or 4 when Nitro => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 22, 23, 24, 25, 27],
         // the base game's: the drawn form's rows (a co-op game has no team play, score limit, Bots or custom map to share)
         3 or 4 => [.. HostHot.Keys.Order()],
+        8 => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 39],
         _ => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15],
     };
     private (int X0, int X1, int Y0, int Y1) Rect(int id) =>
@@ -109,7 +112,7 @@ public sealed partial class MeleeScreen : ShellScreen
         else if (Notice is { Length: > 0 } n) Say(n);
     }
 
-    private int ListCount => Mode switch { 1 => MeleeData.Scenarios.Length, 7 or 8 => _games.Count, _ => Arenas.Count };
+    private int ListCount => Mode switch { 1 => MeleeData.Scenarios.Length, 7 or 8 => _rows.Count, _ => Arenas.Count };
     /// <summary>
     /// One row of the list. A co-op trip mission's title can be longer than the list is wide ("7. The Blood On The Highway"): the "7. " goes, then
     /// the smaller handwriting (font 0x44), and only then is it cut.

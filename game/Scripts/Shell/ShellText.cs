@@ -153,6 +153,54 @@ public static class ShellGlyphs
         return Captions[(text, w, h)] = tex;
     }
 
+    // ---- button labels in the art's own lettering (the port's buttons drawn among the art's: ArtButtons)
+    private static Font? _arialBold, _arialBoldHinted;
+    private static bool _arialBoldTried;
+    private static readonly Dictionary<(string, int, int), ImageTexture?> Labels = [];
+    private static readonly Dictionary<(string, int), (byte[] A, int W, int H)?> LabelInk = [];
+
+    /// <summary>
+    /// The art's buttons are lettered in an antialiased bold Arial-like sans (JOIN GAME, CANCEL, DONE; no shell font record has it), so a
+    /// label of the port's is Arial Bold: at <paramref name="px"/> pixels, hinted, as the art's own were printed (the 1997 look),
+    /// or (0) at <see cref="RenderSize"/>, unhinted, to be fitted to a box (the modern look). Null without Arial or a character of it.
+    /// </summary>
+    private static (byte[] A, int W, int H)? LabelRaster(string text, int px = 0)
+    {
+        if (LabelInk.TryGetValue((text, px), out var r)) return r;
+        if (!_arialBoldTried)
+        {
+            _arialBoldTried = true;
+            _arialBold = HdAssets.Arial(true, TextServer.FontAntialiasing.Gray, TextServer.Hinting.None);
+            _arialBoldHinted = HdAssets.Arial(true, TextServer.FontAntialiasing.Gray, TextServer.Hinting.Light);
+        }
+        var f = px > 0 ? _arialBoldHinted : _arialBold;
+        return LabelInk[(text, px)] = f is null ? null : Raster(f, text, px > 0 ? px : RenderSize);
+    }
+
+    /// <summary>A label's ink width over its height as Arial Bold sets it (null without the face).</summary>
+    public static float? LabelAspect(string text) => LabelRaster(text) is { } r ? r.W / (float)r.H : null;
+
+    /// <summary>A label's coverage as Arial Bold prints it at <paramref name="px"/> pixels (the 1997 look: blended into the palette), trimmed to its ink; null without the face.</summary>
+    public static (byte[] A, int W, int H)? LabelPixels(string text, int px) => px > 0 ? LabelRaster(text, px) : null;
+
+    /// <summary>A label fitted to a box of w × h shell pixels at the window's resolution (the modern look: the text layer draws it in the label's ink).</summary>
+    public static ImageTexture? Label(string text, int w, int h)
+    {
+        if (Labels.TryGetValue((text, w, h), out var t)) return t;
+        ImageTexture? tex = null;
+        if (LabelRaster(text) is { } r)
+        {
+            int tw = w * Scale, th = h * Scale;
+            var cov = Fit(r, tw, th);
+            var rgba = new byte[tw * th * 4];
+            for (int i = 0; i < cov.Length; i++) { rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = 255; rgba[i * 4 + 3] = cov[i]; }
+            var img = Image.CreateFromData(tw, th, false, Image.Format.Rgba8, rgba);
+            img.GenerateMipmaps();
+            tex = ImageTexture.CreateFromImage(img);
+        }
+        return Labels[(text, w, h)] = tex;
+    }
+
     /// <summary>The bitmap glyph's inked pixels' bounds (non-key), or null when blank.</summary>
     private static Rect2I? InkBox(byte[] px, int w, int h, int key)
     {
@@ -176,11 +224,11 @@ public static class ShellGlyphs
     /// coverage trimmed to its ink: the shaped glyphs' bitmaps taken from the
     /// font's own cache. Null without ink, or when a character is missing.
     /// </summary>
-    private static (byte[] A, int W, int H)? Raster(Font face, string s)
+    private static (byte[] A, int W, int H)? Raster(Font face, string s, int renderSize = RenderSize)
     {
         var ts = TextServerManager.GetPrimaryInterface();
         var line = new TextLine();
-        if (!line.AddString(s, face, RenderSize)) return null;
+        if (!line.AddString(s, face, renderSize)) return null;
         var parts = new List<(byte[] Data, int Stride, int Bpp, Rect2I Src, Vector2I At)>();
         var pages = new Dictionary<(Rid, long), (byte[] Data, int W, int Bpp)>();
         float pen = 0;
@@ -285,7 +333,8 @@ public partial class ShellTextLayer : Control
             }
             if (g.Caption is { } text)
             {
-                if (ShellGlyphs.Caption(text, g.Box.Size.X, g.Box.Size.Y) is { } t) DrawTextureRectRegion(t, dest, Sub(new Rect2(Vector2.Zero, t.GetSize())), ink);
+                var t = g.Label ? ShellGlyphs.Label(text, g.Box.Size.X, g.Box.Size.Y) : ShellGlyphs.Caption(text, g.Box.Size.X, g.Box.Size.Y);
+                if (t is not null) DrawTextureRectRegion(t, dest, Sub(new Rect2(Vector2.Zero, t.GetSize())), ink);
             }
             else if (g.Font is { } f && ShellGlyphs.For(f) is { } atlas && atlas.Cells.TryGetValue(g.Ch, out var src))
                 DrawTextureRectRegion(atlas.Texture, dest, Sub(src), ink);

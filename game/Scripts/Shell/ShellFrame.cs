@@ -229,6 +229,8 @@ public sealed class ShellFrame
         public ShellFont? Font;
         public char Ch;
         public string? Caption;
+        /// <summary>The caption is a button label in the art's bold sans (<see cref="Label"/>), not the handwriting.</summary>
+        public bool Label;
         public Rect2I Box;
         public byte Ink;
         /// <summary>The cell's pixels on the frame, and how many are still the glyph's.</summary>
@@ -289,6 +291,38 @@ public sealed class ShellFrame
 
     /// <summary>A string set in the shell's handwriting and fitted to an ink box (the action names painted into record 16, when the upscale has none).</summary>
     public void Caption(Rect2I box, string text, byte ink) => Claim(new HdGlyph { Caption = text, Box = box, Ink = ink });
+
+    /// <summary>
+    /// A button label in the art's own lettering (antialiased Arial Bold, ShellGlyphs): in the modern look its ink fitted to
+    /// <paramref name="box"/>, recorded for the text layer and drawn at the window's resolution; in the 1997 look printed at
+    /// <paramref name="px"/> pixels, hinted, as the art's own were, centred in the box and blended into the frame (each pixel the
+    /// palette's nearest to its coverage of ink over what is under it). False without the face (nothing drawn).
+    /// </summary>
+    public bool Label(Rect2I box, string text, byte ink, int px)
+    {
+        if (HdFonts is not null)
+        {
+            if (ShellGlyphs.LabelAspect(text) is null) return false;
+            Claim(new HdGlyph { Caption = text, Label = true, Box = box, Ink = ink });
+            return true;
+        }
+        if (ShellGlyphs.LabelPixels(text, px) is not { } r) return false;
+        var pal = Palette;
+        var inkC = new Vector3(pal[ink * 3], pal[ink * 3 + 1], pal[ink * 3 + 2]);
+        int x0 = box.Position.X + (box.Size.X - r.W) / 2, y0 = box.Position.Y + (box.Size.Y - r.H + 1) / 2;
+        for (int y = 0; y < r.H; y++)
+            for (int x = 0; x < r.W; x++)
+            {
+                int a = r.A[y * r.W + x], fx = x0 + x, fy = y0 + y;
+                if (a < 16 || fx < 0 || fx >= W || fy < 0 || fy >= H) continue;
+                int i = fy * W + fx, c = _work[i] * 3;
+                var under = new Vector3(pal[c], pal[c + 1], pal[c + 2]);
+                var mix = under.Lerp(inkC, a / 255f);
+                Put(i, Nearest(Color.Color8((byte)mix.X, (byte)mix.Y, (byte)mix.Z)));
+            }
+        _dirty = true;
+        return true;
+    }
 
     private void Claim(HdGlyph g)
     {

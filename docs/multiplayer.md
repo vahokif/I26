@@ -1087,18 +1087,55 @@ not shown. The port's two transports:
 | Entry | HOST (record 19, NET MELEE·HOST EVENT FORM) | JOIN (record 18, NET MELEE·ENTRY ROSTER) |
 |---|---|---|
 | IPX: the LAN (labelled LAN in the modern look) | mode 3: a listen server on port 7676 (the next free one up to 7679 if it is taken), which answers LAN searches | mode 7: the games a LAN search finds, asked again every second |
-| INTERNET: a lobby server, or an address | mode 4: the address book first; the entry's host is the anet game server the game is listed on (below, "Lobby servers"), its port, if it gives one other than anet's 21157, the one to listen on (`server`, `server:7680`; `:7680` lists nowhere) | mode 8: the address book first; the I26 games the anet server at the entry lists (`server`, `server:21157`), and a game at the entry's address itself (`host`, `host:port`), asked every second |
+| INTERNET: a lobby server, or an address | mode 4: the address book first; the entry's host is the anet game server the game is listed on (below, "Lobby servers"), its port, if it gives one other than anet's 21157, the one to listen on (`server`, `server:7680`; `:7680` lists nowhere) | mode 8: straight to the roster, which searches **every entry of the address book at once** (below, "The internet roster"): the I26 games each anet server lists (`server`, `server:21157`) and a game at an entry's own address (`host`, `host:port`), asked every second, grouped by entry; SERVERS opens the address book |
 
 **The address book** is the original's CONNECT TO SERVER popup (bank 36
 sprite 29) over the form. It lists `user://internet.lst` (the
 original's layout: `u32 n`, then n × {32-byte name, 64-byte address}), three
-entries at a time. A click picks an entry and shows it in the NAME and IP
+entries at a time (the Nitro Pack's art, four). A click picks an entry and shows it in the NAME and IP
 boxes, which edit it in place. NEW adds an empty entry and edits its name,
-then its address. DONE uses the entry picked; with none, or with CANCEL, the
-form goes back to the main menu, as the original's did. The book is saved
+then its address; DELETE removes the entry picked. The Nitro Pack's art has
+DELETE; the base game's has DONE, NEW and CANCEL only, so the port redraws
+that row as four narrower buttons, DONE / NEW / DELETE / CANCEL
+(`AddressBookPopup.DrawBaseButtons`, `ArtButtons`): the art's DONE face
+without its word at each place, the art's own DONE, NEW and CANCEL cut out
+and centred, and DELETE lettered as the art letters its buttons (below,
+"Buttons the art lacks").
+HOST → INTERNET opens it first: DONE uses the entry picked; with none, or
+with CANCEL, the form goes back to the main menu, as the original's did.
+The internet roster opens it from SERVERS: DONE and CANCEL both go back to
+the roster (DONE on an entry scrolls the roster to it). The book is saved
 either way. A player without an internet.lst starts with the community's
 anet servers (`AddressBook.Defaults`, below); an existing book is theirs
 and is never changed.
+
+**The internet roster** (mode 8; `ServerBrowser`, `src/I76.Net/ServerBrowser.cs`). The original's JOIN → INTERNET
+connected to the one server picked in the address book and listed its games; I26 goes straight to the roster and searches
+the whole book (docs/deviations.md, "MULTI MELEE"). Each entry gets its own `SessionBrowser` (its own socket, its own anet
+link, its own name lookup in the background), so a server that is slow, silent or not found holds up none of the others, and
+a game is always joined through the server that listed it (its `AnetListing`). An entry is read as before
+(`ServerSource.Parse`): `server` or `server:21157` is an anet server, `host:port` with another port a game at that address,
+`host` alone both. The list has a **header row per entry**, in the book's order: the entry's name in the label face (the art's
+headings', LOCAL DRIVER's), and on the right its state in the handwriting: "2 games", "1 game", "no games", "connecting..."
+(for up to 6 s, `ServerBrowser.AnswerWait`), "not answering", "not found" (the name has no address) or "no address" (the entry
+is not one). The entry's games follow under it, as the rows below; a header row is not joinable (a click or JOIN GAME on it does
+nothing; the highlighted game stays). A game listed on two servers is under both. The box above says "Contacting servers..."
+while every entry is still being reached, "No servers in the book" for an empty book, else "No games found" when there are no
+games. **SERVERS** (the port's, under the list on the line of JOIN GAME and CANCEL: hotspot 39, (42, 453)–(183, 471)) is the
+art's CANCEL face drawn again without its word, and SERVERS lettered as the art letters CANCEL (below); it opens the address
+book, and when that closes the roster searches the book as it now stands: the entries kept go on where they were (no new
+login), new ones start, deleted ones stop (`ServerBrowser.Watch`).
+
+**Buttons the art lacks** (`ArtButtons`, `ShellFrame.Label`, `ShellGlyphs.LabelPixels` / `Label`). The art letters its
+buttons (JOIN GAME, CANCEL, DONE) in an antialiased bold Arial-like sans that no shell font record has. A port's button is
+made from a button of the same art: its face, with the label left out (the ends as they are, the middle tiled from the plain
+columns before the word), at the new size; the art's own word where it has one, cut out and centred; a word it lacks is set
+in Arial Bold like the art's label beside it, measured at run time from the art (its ink's bounds and colour, by brightness
+inside the border). In the 1997 look it is printed at the pixel size that prints the art's word closest to the art's own
+(hinted, as the art's were) in the core's ink and blended into the palette; in the modern look the text layer draws it at the
+window's resolution, as tall as the art's word (less its faint antialiased rim), as wide as the two words' proportions make
+it, in the ink the art's strokes show in on the whole. Both are drawn into the frame, over an upscaled background or popup
+too. Without Arial, the shell's label face (font 0x47), doubled.
 
 **The host form** (the original's modes 3 and 4). The base game's is drawn by the port (`HostFormLayout`, `HostSheet`): the
 original's form (record 19) had room for its own fields only, and the port's options had come to share four short lines under
@@ -1128,7 +1165,7 @@ its - and +), the pad's regions and the text entry do what the original's contro
 **The roster** (modes 7 and 8):
 - each game found as its name, `(players/seats)` at x 160 and the arrow
   (bank 36 sprite 14) at x 204; "No games found" in the box above when there
-  are none;
+  are none; on the internet roster under its entry's header row (above, "The internet roster");
 - a row picks the game; its arrow opens the game's popup (bank 36 sprite 13):
   GAME NAME, GAME TYPE (LAN or Internet), SCORE LIMIT ("None"), TEAMS,
   AREA OF PLAY, and each driver's name, make and model, and team ("N/A"). The list shows eight drivers; with more the wheel,
@@ -1198,7 +1235,9 @@ a custom map and the asker's own for the rest; a game listed with no name, or wi
 id. A game that stops answering drops out after 3.5 s. Answers of another
 protocol version are not listed. A game in progress keeps answering, so a
 server is found whenever it is up. The dedicated server answers too, so it
-shows on a LAN roster.
+shows on a LAN roster. An address given by name is looked up once, in the background (`SessionBrowser.Ask` sends nothing
+until it is found, and `NotFound` says when it was not), so a slow name server never holds up the form. The internet roster
+runs one `SessionBrowser` per address book entry (`ServerBrowser`, above).
 
 ### Game passwords
 
@@ -2252,8 +2291,9 @@ interstate76.com's two servers joined the default book in 0.8.0; a book saved be
 (`user://internet_i76com.done` marks it), so a player who removes them keeps them removed. battlezone1.net, once
 listed, no longer answers.
 
-Adding and removing servers is the CONNECT TO SERVER popup's NEW and
-editing, as in the original. `i26-server --anet HOST[:PORT]` (repeatable)
+The internet roster lists the games of every server in the book at once, under a header row per server ("From the main
+menu", "The internet roster"). Adding and removing servers is the CONNECT TO SERVER popup's NEW, editing and DELETE,
+opened from the roster's SERVERS or by HOST → INTERNET. `i26-server --anet HOST[:PORT]` (repeatable)
 lists a dedicated server; `--host-listen --anet HOST` a listen server from
 the command line; `--join-anet HOST [--session NAME]` joins a listed game
 (the one named, else the first).
@@ -2365,8 +2405,8 @@ the session's karma and a nonce (`HolePunch`); an older I26 ignores them.
    the server has done anything; with the server down, a listed game is still
    joined that way.
 
-What the player sees: the roster's box says "Contacting SERVER..." or
-"SERVER is not answering" while it has no games; the highlighted game shows
+What the player sees: each server's header row on the roster says "connecting...", "not answering" or "not found" while it
+has no games (the box above, "Contacting servers..." while every one is still being reached); the highlighted game shows
 its ping when it answers I26's query directly (a host behind a filtering NAT
 does not, until introduced); the loading screen says "Joining via server...",
 then "Connecting to the host..."; a failed punch first asks another server
@@ -2437,10 +2477,16 @@ Room`, a servers file `127.0.0.1 localhost`, an empty apps file).
   one machine with no NAT between them the host answers the joiner's first
   probe, before the server's introduction (the NAT cases are the tests
   above). For the Nitro Pack: `I76_ANET_NAV="click:440,300@8;click:390,350@12"`,
-  `I76_ANET_BOOK="click:284,180@24;click:366,415@26"`, `I76_ANET_ARROW=212,180`,
+  `I76_ANET_BOOK="click:284,180@24;click:366,415@26"`, `I76_ANET_ARROW=212,197`,
   `I76_ANET_HOST_IN="$I76_ANET_NAV;click:380,375@16;click:410,402@20;$I76_ANET_BOOK;click:300,462@30"`,
-  `I76_ANET_ROSTER_IN="$I76_ANET_NAV;click:430,375@16;click:410,402@20;$I76_ANET_BOOK;wait:games=1@28"` and
-  `I76_ANET_JOIN_IN="$I76_ANET_ROSTER_IN;click:100,180@32;click:300,462@34"`. Both games passed (October 2026).
+  `I76_ANET_ROSTER_IN="$I76_ANET_NAV;click:430,375@16;click:410,402@20;wait:games=1@28"` and
+  `I76_ANET_JOIN_IN="$I76_ANET_ROSTER_IN;click:100,197@32;click:300,462@34"` (the roster's first row is the server's header,
+  the game the second). Both games passed (October 2026), before the roster searched the whole book; every book the script
+  writes holds the local server alone.
+- `ServerBrowserTests`: the roster's search of a whole book against two `FakeAnetServer`s, a silent socket, a name that is
+  not found, a game at its own address and an entry that is no address: each group's games and state, the silent one
+  holding up nobody, a game two servers list under both (each copy through its own server), and an edited book keeping the
+  searches that stay.
 
 ## Left for later phases
 

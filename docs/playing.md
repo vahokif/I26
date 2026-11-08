@@ -114,7 +114,7 @@ Play Options); in a network game it shows only if the host allows it.
 
 Shift or Ctrl held cancels a command, as in the original. Port keys: C poetry (in network games, the CB radio's push-to-talk), Ctrl+F3 debug text, Ctrl+F7
 Modern Physics, Ctrl+F5 debug fly camera (right mouse looks, WASD/QE fly, Shift for speed), Ctrl+F9 wins the trip
-mission on the spot (debug), Ctrl+F2 the Developer panel when it is turned on (docs/dev-hooks.md).
+mission on the spot (debug), Ctrl+F2 or Ctrl+` the Developer panel when it is turned on (`developer=true` under `[port]` in shell.cfg; docs/dev-hooks.md).
 
 **CB voice.** In network games the CB radio sends your voice while you hold the poetry key (C). Sending needs a
 microphone, and the game does not open the audio input (so no system asks for microphone access) until you pick one:

@@ -226,10 +226,12 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 ## Developer panel
 
 A plain panel over the paused mission for testing and comparisons, off for players. It is on with `--dev`,
-`I76_DEV=1`, or `developer_tools=true` under `[port]` in the user's `shell.cfg` (no menu sets it), in single player
-only (a network session refuses its actions: `SessionOptions.DebugHooks`). **Ctrl+F2** in a mission, or the escape
-menu's **Developer** row (on the free line under Control Configuration, shown only when it is on), opens it; Ctrl+F2
-or Esc closes it. The game stays paused while it is open.
+`I76_DEV=1`, or `developer=true` under `[port]` in the user's `shell.cfg` (no menu sets it; `developer_tools`, the
+key's older name, is still read; true, 1, on or yes turn it on), in single player only (a network session refuses its
+actions: `SessionOptions.DebugHooks`). **Ctrl+F2** or **Ctrl+`** in a mission (the backquote for a Mac keyboard, whose
+F-keys need fn, and for the Godot editor, which takes Ctrl+F2 for its own menu bar), or the escape menu's **Developer**
+row (the bottom of the Options Menu's list, the free line under its last entry, shown only when it is on), opens it;
+Ctrl+F2, Ctrl+` or Esc closes it. The game stays paused while it is open.
 
 | Row | What it does |
 |---|---|

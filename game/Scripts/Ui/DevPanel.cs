@@ -89,7 +89,7 @@ public partial class DevPanel : Control
         col.AddThemeConstantOverride("separation", 6);
         panel.AddChild(col);
 
-        col.AddChild(Heading("Developer  (Ctrl+F2 or Esc closes)"));
+        col.AddChild(Heading("Developer  (Ctrl+F2, Ctrl+` or Esc closes)"));
         _status = new Label { AutowrapMode = TextServer.AutowrapMode.Off };
         _status.AddThemeColorOverride("font_color", new Color(0.75f, 0.9f, 0.75f));
         col.AddChild(_status);
@@ -164,7 +164,7 @@ public partial class DevPanel : Control
     public override void _Input(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true, Echo: false } k) return;
-        if (k.Keycode == Key.Escape || (k.Keycode == Key.F2 && k.CtrlPressed))
+        if (k.Keycode == Key.Escape || (k.Keycode is Key.F2 or Key.Quoteleft && k.CtrlPressed))
         {
             GetViewport().SetInputAsHandled();
             Host.DevClose();

@@ -2400,7 +2400,7 @@ public partial class Main : Node3D
             return;
         }
         if (e is not (InputEventKey { Pressed: true } or InputEventMouseButton { Pressed: true })) return;
-        if (e is InputEventKey { CtrlPressed: true, Keycode: >= Key.F1 and <= Key.F12 }) return;   // the port's own debug keys
+        if (e is InputEventKey { CtrlPressed: true, Keycode: (>= Key.F1 and <= Key.F12) or Key.Quoteleft }) return;   // the port's own debug keys
         // F12 flips the look in a cut-scene too (the port's: the original's renderer cycle obeyed the gates)
         if (e is InputEventKey vk && GameKeys.CommandOf(vk) == GameKey.ToggleVideoMode)
         {
@@ -2433,7 +2433,8 @@ public partial class Main : Node3D
         {
             case Key.F3 when _overlay is not null: _overlay.Visible = !_overlay.Visible; return true;
             // the port's Developer panel, when it is on (MainDev.cs)
-            case Key.F2 when DevOn && _net is null && !_ended: OpenDevPanel(); return true;
+            // (Ctrl+` too: an F-key on a Mac keyboard needs fn, and Ctrl+F2 is the Godot editor's menu bar when the game runs in it)
+            case Key.F2 or Key.Quoteleft when DevOn && _net is null && !_ended: OpenDevPanel(); return true;
             // the cars' material maps and glass against the old all-over clear coat
             case Key.F8: GD.Print($"car materials {(I76.Game.Assets.MaterialLibrary.ToggleCarMaterials() ? "on" : "off")}"); return true;
             case Key.F4:

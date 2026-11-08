@@ -7,7 +7,7 @@ namespace I76.Game.Boot;
 
 /// <summary>
 /// The port's Developer panel (Ui/DevPanel.cs, docs/dev-hooks.md): on with --dev, I76_DEV=1 or the setting
-/// (<c>developer_tools</c>), in single player only. Ctrl+F2 or the escape menu's Developer row opens it over the paused game.
+/// (shell.cfg [port] <c>developer=true</c>), in single player only. Ctrl+F2, Ctrl+` or the escape menu's Developer row opens it over the paused game.
 /// The sim's side is DevTools and the session's own snapshot; this part re-syncs the views after an outside write, as a
 /// checkpoint's retry does (docs/savestate.md). Any action marks the attempt a cheater's, as the Play Options cheats do
 /// (the end menu's Turn off Cheater Options clears it).

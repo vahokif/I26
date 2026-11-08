@@ -1060,8 +1060,12 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         switch (k)
         {
             case 1 or 4 or 5 or 6 or 7 or 0xf or 0x10 or 0x12 or 0x13 or 0x15 or 0x16:
-                if (a > 0 && b > 0) rot = Rows.Concat(Rows.AboutY(Deg(a)), rot);
-                pos += rot.Forward * f;
+                // the forward start offset comes with the yaw turn: only the shots that take the spread branch have it
+                if (a > 0 && b > 0)
+                {
+                    rot = Rows.Concat(Rows.AboutY(Deg(a)), rot);
+                    pos += rot.Forward * f;
+                }
                 break;
             case 2 or 8 or 0x14:
                 if (a > 0) rot = Rows.Concat(Rows.AboutY(Deg(a)), rot);

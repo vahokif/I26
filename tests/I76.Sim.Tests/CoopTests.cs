@@ -599,7 +599,8 @@ public class CoopMissionTests(ITestOutputHelper output)
         Drive(s, 25);
         Assert.Equal(1f, gate.X);
         Place(setup, a, zone.X, zone.Z, -Vector3.UnitX, 0);
-        Place(setup, b, zone.X + 250, zone.Z, -Vector3.UnitX, 0);
+        // B on the ground 200 back (250 back is a ledge 20 up, where the race's fire can knock it off to its death, which ends the hold)
+        Place(setup, b, zone.X + 200, zone.Z, -Vector3.UnitX, 0);
         Drive(s, 10, until: () => gate.Moving);
         Assert.False(gate.Moving, "nowayback shut with B behind it");
         Place(setup, b, zone.X - 30, zone.Z, -Vector3.UnitX, 0);

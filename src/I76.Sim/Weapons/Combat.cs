@@ -771,7 +771,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
 
     // ---- fire control ----
 
-    /// <summary>Turrets slew toward the radar target's lead point at dt·(0.75 + 0.25·HP/max)·1.7 rad, or back to the mount's forward without one.</summary>
+    /// <summary>Turrets slew toward the radar target's lead point (aimed as the original's: the target predictor at the round's closest-approach time) at dt·(0.75 + 0.25·HP/max)·1.7 rad, or back to the mount's forward without one.</summary>
     private void AimTurrets(Vehicle v, Armory a, float dt)
     {
         foreach (var w in a.Weapons.Where(w => w.Style == 3))
@@ -783,12 +783,19 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             {
                 // from the gun node's origin (the original composes it up to the world), which the aim does not move
                 var muzzle = v.Pos.ToVector3() + v.Rot.ToWorld(w.TurretPivot ?? w.MuzzlePos);
-                // a structure: its aim point, still (the non-vehicle case)
-                var rel = (t is Vehicle tv ? tv.Pos.ToVector3() + new Vector3(0, 0.8f, 0) : CentreOf(t)) - muzzle;
-                var dv = (t is Vehicle tv2 ? tv2.Vel : default) - v.Vel;
-                float s = MathF.Max(w.Def.Speed, 1f);
-                float time = System.Math.Clamp(rel.Length() / s, 0f, 5f);
-                var aim = rel + dv * time;
+                // a vehicle: the target predictor (time + 0.09 s, along its turning circle) at the closest-approach time
+                // of a round leaving along the barrel's present line at the aim speed plus the carrier's velocity; the
+                // predicted point is aimed at as it is, from the barrel: the original takes nothing off it for the
+                // carrier's own travel, and with it taken off a turret on a moving car shot behind whatever it aimed
+                // at, by the car's travel over the lead (its own speed x about 0.3 s at 50 m), and never hit a car
+                // driving alongside; a structure: its aim point, still (the non-vehicle case)
+                Vector3 aim;
+                if (t is Vehicle tv)
+                {
+                    float time = TurretLeadTime(muzzle, v.Rot.ToWorld(w.MuzzleRot.Forward) * w.Def.Speed + v.Vel, tv.Pos.ToVector3(), tv.Vel);
+                    aim = TargetPredictor.Predict(tv, time) + new Vector3(0, 0.8f, 0) - muzzle;
+                }
+                else aim = CentreOf(t) - muzzle;
                 var local = w.BaseRot.ToLocal(v.Rot.ToLocal(aim));
                 float len = local.Length();
                 if (len < 1e-3f) continue;
@@ -812,6 +819,19 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             }
             else w.OnTarget = MathF.Abs(ey) < 0.0349f;
         }
+    }
+
+    /// <summary>
+    /// The turret's lead time: the closest approach of a round leaving <paramref name="from"/> at <paramref name="round"/>
+    /// to the target, ((target − from) · (round − target velocity)) / |round − target velocity|², 1e7 below 0.01, clamped
+    /// to 0..5 s. One evaluation a frame along the barrel's present line; no gravity.
+    /// </summary>
+    internal static float TurretLeadTime(Vector3 from, Vector3 round, Vector3 target, Vector3 targetVel)
+    {
+        var rv = round - targetVel;
+        float rr = rv.LengthSquared();
+        float t = rr < 0.01f ? 1e7f : Vector3.Dot(target - from, rv) / rr;
+        return System.Math.Clamp(t, 0f, 5f);
     }
 
     /// <summary>

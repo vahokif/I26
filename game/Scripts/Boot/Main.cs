@@ -3021,6 +3021,7 @@ public partial class Main : Node3D
             _cam.SetYawPitch(fa[3], fa[4]);
         }
         LeaveDeadCockpit();
+        if (_car is not null) _car.HoodView = _preset is { Current: true, Mode: PresetCamera.View.Orbit };   // F6 does not draw the player's car
         TrackLatestRound();
         CheckpointFrame();
         // test hook: I76_CHECKPOINT_RETRY=frame chooses "Retry from Checkpoint" at that frame (once: not again in the retry)

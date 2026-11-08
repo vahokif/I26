@@ -234,6 +234,17 @@ public partial class CarNode : Node3D
         set { if (_outside == value) return; _outside = value; Apply(); }
     }
 
+    /// <summary>
+    /// The hood view (F6) is current: the original's object pass skips the player's own car in it, as in the cockpit, so
+    /// glancing back shows the road behind, not the body round the eye. The interior is not drawn either.
+    /// </summary>
+    public bool HoodView
+    {
+        get => _hoodView;
+        set { if (_hoodView == value) return; _hoodView = value; Apply(); }
+    }
+    private bool _hoodView;
+
     public void SetCockpit(bool on)
     {
         _inCar = on;
@@ -243,13 +254,13 @@ public partial class CarNode : Node3D
 
     private void Apply()
     {
-        bool inside = _inCar && !_outside;
+        bool inside = _inCar && !_outside, hidden = !I76.Sim.Views.OwnCar.Drawn(_inCar, _hoodView, _outside);
         if (_cockpit is not null) _cockpit.Visible = inside && _dash3d;
-        if (_body is not null) _body.Visible = !inside;
-        foreach (var (node, _, _, _) in _wheels) node.Visible = !inside && !_flung.Contains(node);
-        foreach (var (_, node) in _weapons) node.Visible = !inside && !_flung.Contains(node);
+        if (_body is not null) _body.Visible = !hidden;
+        foreach (var (node, _, _, _) in _wheels) node.Visible = !hidden && !_flung.Contains(node);
+        foreach (var (_, node) in _weapons) node.Visible = !hidden && !_flung.Contains(node);
         // a turret's gun too: the in-car view draws the interior, not the car's outside (its underside showed through the roof)
-        foreach (var (node, _) in _turrets) node.Visible = !inside && !_flung.Contains(node);
+        foreach (var (node, _) in _turrets) node.Visible = !hidden && !_flung.Contains(node);
     }
 
     /// <summary>

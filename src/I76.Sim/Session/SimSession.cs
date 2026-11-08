@@ -108,6 +108,19 @@ public sealed partial class SimSession
             if (d.Car == car && d.State.Armed is not null) d.State.Armed = car.Armory;
     }
 
+    /// <summary>
+    /// A client's copy of a network melee's end (its mirror's melee never ends): the server's tick count from which
+    /// the own car is on the brakes (<see cref="EndBrake"/>), as the server's end event says; null while the game runs.
+    /// </summary>
+    public int? NetEndTick { get; set; }
+
+    /// <summary>
+    /// Once a network game is won (or the time limit is up) every machine puts its own car on the brakes with the
+    /// wheel straight, throttle −1 and steer 0 in place of the keys' ramps, for the 10 s to the end. The original
+    /// has the same hold while a network regen's fresh car is pending; here a regen's car comes at once.
+    /// </summary>
+    private bool EndBrake(int tick) => Melee is { Rules.Network: true, Ended: true } || (NetEndTick is { } e && tick >= e);
+
     /// <summary>A renewed car (a network melee's respawn or regen, a co-op respawn) starts with the driver's keys at rest.</summary>
     private bool FreshCarResets => Melee?.Rules.Network == true || Script?.Host.Coop is not null;
 
@@ -192,7 +205,7 @@ public sealed partial class SimSession
         }
         // the keys pressed since the last tick (SimDriver._UnhandledInput), then the held ones (its _Process)
         foreach (var d in _drivers) ApplyCommands(d);
-        foreach (var d in _drivers) ApplyControls(d);
+        foreach (var d in _drivers) ApplyControls(d, EndBrake(Ticks));
         Misfires.Clear();
         World.Step.Impacts.Clear();
         World.Step.ObjectHits.Clear();
@@ -301,7 +314,7 @@ public sealed partial class SimSession
     /// only brakes: reverse is its own command. With the car dead, or the
     /// script holding the camera, the keys do nothing.
     /// </summary>
-    private void ApplyControls(Driver d)
+    private void ApplyControls(Driver d, bool endBrake)
     {
         var p = d.Car;
         // honk_horn in a network game sets the horn flag for the other players' ears (the key itself is sampled by the view)
@@ -327,6 +340,12 @@ public sealed partial class SimSession
             // another model drives this car (Modern Physics): it reads the keys at every one of its own steps and ramps
             // throttle and steer by time (KeyRamp), so this tick's ramp is not run
             s.HoldUp = s.HoldDown = s.HoldRight = s.HoldLeft = 0;
+        }
+        else if (endBrake)
+        {
+            // the ramps are not run: their hold times stay as they were
+            p.Throttle = -1;
+            p.Steer = 0;
         }
         else
         {
@@ -492,7 +511,7 @@ public sealed partial class SimSession
             if (FreshCarResets) d.State = default;
         }
         ApplyCommands(d, predict: true, fresh);
-        ApplyControls(d);
+        ApplyControls(d, EndBrake(tick));
         World.Step.Impacts.Clear();
         World.Step.ObjectHits.Clear();
         World.Step.DriveOns.Clear();

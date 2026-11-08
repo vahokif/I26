@@ -117,6 +117,7 @@ public sealed class OwnCarPredictor
         // input k runs in the server's tick whose count before it is k + offset − 1 (the ack's tick less one, moved on)
         int tick = (int)(k + _offset - 1);
         PlaceGhosts(tick);
+        World.Session.NetEndTick = (int?)_client.EndTick;
         _damage.Fresh = fresh;
         World.Session.PredictTick(_driver!, _inputs[k % Ring], tick, _order, _damage, fresh);
         if (Shots is { } shots)

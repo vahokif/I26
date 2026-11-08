@@ -57,6 +57,8 @@ public sealed partial class MeleeClient : IDisposable
     public string? Reason { get; private set; }
     public JoinAccept? Accept { get; private set; }
     public Scoreboard? Scores { get; private set; }
+    /// <summary>The server tick of the game's end event (a win or the time limit): its next tick on, the own car brakes (<see cref="SimSession.NetEndTick"/>).</summary>
+    public uint? EndTick { get; private set; }
 
     /// <summary>The snapshots received, by server tick (the last 2.3 s of them).</summary>
     public SortedList<uint, Snapshot> Snapshots { get; } = [];
@@ -277,6 +279,17 @@ public sealed partial class MeleeClient : IDisposable
         }
     }
 
+    /// <summary>An event batch received: queued for the mirror, and what cannot wait for the view taken at once.</summary>
+    internal void Take(EventBatch batch)
+    {
+        Events.Enqueue(batch);
+        // a co-op movie stops the game for everyone: taken at once, not with the tick it began at
+        foreach (var e in batch.Events)
+            if (e is MovieEvent mv) SetMovie(mv.Name);
+            else if (e is MovieEndEvent) MovieName = null;
+            else if (e is EndEvent) EndTick ??= batch.Tick;   // the prediction brakes from the server's tick, not the view's
+    }
+
     /// <summary>A snapshot as if it had just come (the tests).</summary>
     internal void Inject(Snapshot s)
     {
@@ -387,6 +400,7 @@ public sealed partial class MeleeClient : IDisposable
                 Download = null;
                 MapDir = null;
                 Scores = null;
+                EndTick = null;
                 Snapshots.Clear();
                 Events.Clear();
                 CarAnswers.Clear();
@@ -412,12 +426,7 @@ public sealed partial class MeleeClient : IDisposable
             case MsgType.Events:
             {
                 EventBytes += data.Length;
-                var batch = EventBatch.Read(ref r);
-                Events.Enqueue(batch);
-                // a co-op movie stops the game for everyone: taken at once, not with the tick it began at
-                foreach (var e in batch.Events)
-                    if (e is MovieEvent mv) SetMovie(mv.Name);
-                    else if (e is MovieEndEvent) MovieName = null;
+                Take(EventBatch.Read(ref r));
                 break;
             }
             case MsgType.Scoreboard:

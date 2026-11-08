@@ -241,6 +241,62 @@ public class PredictionTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(2, heard);
     }
 
+    /// <summary>
+    /// Once a network game is won every machine's own car brakes with the wheel straight (throttle −1, steer 0) for the
+    /// 10 s to the end, whatever the keys say; the prediction brakes from the server's tick of the win as soon as the
+    /// end event comes with the snapshots, so the predicted car agrees with the server's throughout.
+    /// </summary>
+    [Fact]
+    public void AWonGameBrakesEveryCar()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Seed = 7, MaxScore = 5000 });
+        var seat = host.Join("a", "vppirna1.vcf", 0);
+        var other = host.Join("b", "vppirna1.vcf", 0);
+        var mirror = new ClientWorld(HostTests.Mirror("m01"), host.AcceptFor(seat));
+        var client = new MeleeClient();
+        var predictor = new OwnCarPredictor(mirror, client);
+        var late = new Queue<(Snapshot S, EventBatch? E)>();
+        var input = new CarInput { Buttons = CarButtons.ThrottleUp | CarButtons.SteerLeft };
+        var missed = new List<uint>();
+        predictor.OnCompare += (tick, _, exact) => { if (!exact) missed.Add(tick); };
+        uint wonAt = 0;
+        float speedAtWin = 0;
+        for (uint t = 1; t <= 160; t++)
+        {
+            // won while the car is at speed: full lock on m01 tops out near 13 m/s by tick 40, then the circle bleeds it off
+            if (t == 35) typeof(I76.Sim.Missions.MeleePlayer).GetProperty(nameof(I76.Sim.Missions.MeleePlayer.Score))!.SetValue(seat.Player, 5000);   // a reaches the goal (the loser's car blows up)
+            seat.Inputs.Add(new InputMessage(t, [input]));
+            other.Inputs.Add(new InputMessage(t, [input]));
+            host.Step();
+            var events = host.TakeEvents();
+            var car = seat.Player.Car;
+            if (host.Game.Ended && wonAt == 0) { wonAt = t; speedAtWin = car.Speed; }
+            else if (wonAt != 0)
+            {
+                Assert.Equal(-1f, car.Throttle);
+                Assert.Equal(0f, car.Steer);
+            }
+            else Assert.True(car.Throttle > 0);
+            predictor.Step(t, input);
+            late.Enqueue((Through(host, seat), events.Count > 0 ? new EventBatch(host.Tick, events) : null));
+            while (late.Count > 4)
+            {
+                var (sn, e) = late.Dequeue();
+                if (e is not null) client.Take(e);
+                client.Inject(sn);
+            }
+            predictor.Reconcile();
+        }
+        output.WriteLine($"won on tick {wonAt} at {speedAtWin:0.0} m/s; {seat.Player.Car.Speed:0.0} m/s 60 ticks later; end heard for server tick {client.EndTick}; {predictor.Compared} compared, {predictor.Inexact} not exact {string.Join(" ", missed)}");
+        Assert.Equal(35u, wonAt);
+        Assert.NotNull(client.EndTick);
+        Assert.True(speedAtWin > 10, "not under way at the win");
+        Assert.True(seat.Player.Car.Speed < 1, "the car did not stop");
+        Assert.Equal(0, predictor.Inexact);
+        Assert.Equal(-1f, mirror.Own!.Vehicle.Throttle);
+    }
+
     /// <summary>The snapshot the server would send this seat now, through its bytes.</summary>
     internal static Snapshot Through(MeleeHost host, Seat seat)
     {

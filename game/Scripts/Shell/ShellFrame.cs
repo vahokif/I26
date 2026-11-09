@@ -23,6 +23,8 @@ public sealed class ShellFrame
 {
     public const int W = 640, H = 480;
     private readonly byte[] _clean = new byte[W * H];
+    /// <summary>The background as loaded, before the port's edits (<see cref="CopyOriginal"/>).</summary>
+    private readonly byte[] _loaded = new byte[W * H];
     private readonly byte[] _work = new byte[W * H];
     public byte[] Palette { get; private set; } = new byte[768];
     private bool _dirty = true, _black;
@@ -38,6 +40,7 @@ public sealed class ShellFrame
         for (int y = 0; y < Math.Min(H, p.Height); y++)
             Array.Copy(p.Pixels, y * p.Width, _clean, y * W, Math.Min(W, p.Width));
         Array.Copy(_clean, _work, _clean.Length);
+        Array.Copy(_clean, _loaded, _clean.Length);
         Unplace(0, 0, W, H);
         Palette = p.Palette;
         Record = record;
@@ -98,6 +101,26 @@ public sealed class ShellFrame
         for (int r = 0; r < h; r++)
             if (sy + r is >= 0 and < H && dy + r is >= 0 and < H && sx >= 0 && dx >= 0 && sx + w <= W && dx + w <= W)
                 Array.Copy(_clean, (sy + r) * W + sx, _clean, (dy + r) * W + dx, w);
+        Restore(dx, dy, w, h);
+    }
+
+    /// <summary>
+    /// <see cref="CopyBackground"/> from the background as it was loaded, before any edit: a printed check box copied onto a line
+    /// while the line it came from may since have been wiped (Play Options' scrolling list).
+    /// </summary>
+    public void CopyOriginal(int sx, int sy, int w, int h, int dx, int dy)
+    {
+        if (sx < 0 || dx < 0 || sx + w > W || dx + w > W) return;
+        bool changed = false;
+        for (int r = 0; r < h && !changed; r++)
+            if (sy + r is >= 0 and < H && dy + r is >= 0 and < H && !_loaded.AsSpan((sy + r) * W + sx, w).SequenceEqual(_clean.AsSpan((dy + r) * W + dx, w)))
+                changed = true;
+        if (!changed) return;
+        _edits.Add(new BackgroundEdit(0, sx, sy, w, h, dx, dy, null));
+        EditsVersion++;
+        for (int r = 0; r < h; r++)
+            if (sy + r is >= 0 and < H && dy + r is >= 0 and < H)
+                Array.Copy(_loaded, (sy + r) * W + sx, _clean, (dy + r) * W + dx, w);
         Restore(dx, dy, w, h);
     }
 

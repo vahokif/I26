@@ -3,8 +3,7 @@ using I76.Formats.Input;
 namespace I76.Game.Shell;
 
 /// <summary>
-/// The port's scrolling list on a notepad sheet (Graphic Detail's every row; Play Options' own rows, in the sheet's free lines
-/// under the original's): each entry (a label, a value, a check strip) sits in a list slot, <see cref="Shown"/> slots show from
+/// The port's scrolling list on a notepad sheet (Graphic Detail's and Play Options' rows, the original's and the port's): each entry (a label, a value, a check strip) sits in a list slot, <see cref="Shown"/> slots show from
 /// <see cref="Scroll"/>, one to a ruled line of <see cref="LineH"/> px from <see cref="Top"/>. Pure, so it is tested without the engine.
 /// </summary>
 public sealed class ScrollRows<T> where T : class

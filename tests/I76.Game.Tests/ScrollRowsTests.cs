@@ -103,16 +103,24 @@ public class ScrollRowsTests
     }
 
     [Theory]
-    [InlineData(false, new[] { 139, 162, 185, 208, 231, 254, 415 })]    // the original's six check rows (closed up) and Difficulty
-    [InlineData(true, new[] { 139, 185, 323 })]                         // Nitro's Arcade Phys., Unlim. Wiper Fluid and Difficulty
-    public void Play_options_scroll_between_the_originals_rows_on_the_sheet(bool nitro, int[] original)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Play_options_scroll_every_row_over_the_sheets_lines(bool nitro)
     {
         var (top, shown) = PlayOptionsScreen.ListLines(nitro);
         var lines = Enumerable.Range(0, shown).Select(i => top + 23 * i).ToArray();
-        Assert.Empty(lines.Intersect(original));
+        Assert.Equal(139, lines[0]);                                                         // the original's first row's line
+        Assert.Equal(415, lines[^1]);                                                        // and its last (Difficulty's)
         Assert.All(lines, y => Assert.True(y >= 116 && y <= 415 && (y - 116) % 23 == 0));    // on the sheet's fourteen ruled lines
-        Assert.True(shown < PlayOptionsScreen.PortRows.Length);                              // so it scrolls
-        Assert.Contains(lines[^1] + 23, original);                                           // the list ends on Difficulty's line
+        Assert.True(shown < PlayOptionsScreen.ListRows(nitro).Length);                       // so it scrolls
+    }
+
+    [Theory]
+    [InlineData(false, new[] { "Arcade Phys.", "No Salv. Manag.", "Unlim. Ammo", "Unlim. Armor", "Unlim. Chas. Rein.", "Unlim. Wiper Fluid" })]
+    [InlineData(true, new[] { "Arcade Phys.", "Unlim. Wiper Fluid" })]
+    public void Play_options_list_the_originals_rows_then_difficulty_then_the_ports(bool nitro, string[] original)
+    {
+        Assert.Equal([.. original, PlayOptionsScreen.Difficulty, .. PlayOptionsScreen.PortRows], PlayOptionsScreen.ListRows(nitro));
     }
 
     [Fact]

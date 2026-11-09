@@ -35,8 +35,10 @@ public sealed partial class EscapeMenu : Control
         public int Value;
         /// <summary>The item's callback (msg 2/3 own step, 4 activate, 6 opened, 7 changed, 8 done, 9 cancel); null = not selectable.</summary>
         public Action<Item, int>? Cb;
-        /// <summary>A row of a pad's scrolling list (Graphic Detail's, every row): Pair is its place in the list, the pad row is Pair minus the screen's scroll.</summary>
-        public bool Scrolls;
+        /// <summary>A row of a pad's scrolling list (Graphic Detail's and Play Options', every row): its place in the list, from 1 (0: not in
+        /// one); the pad row it is on is that minus the screen's scroll. Pair stays the item's own id.</summary>
+        public int At;
+        public bool Scrolls => At > 0;
         public int Type => Flags & 0x3ff;
     }
 
@@ -164,7 +166,7 @@ public sealed partial class EscapeMenu : Control
         bool live = true, Action? apply = null)
     {
         var it = Setting(flags, label, at, n, names, get, put, live, apply);
-        it.Scrolls = true;
+        it.At = at;
         return it;
     }
 
@@ -235,7 +237,9 @@ public sealed partial class EscapeMenu : Control
                 },
             });
         }
-        // the port's own rows after the original's six, in the shell's order
+        // Difficulty, the original's last row, after them
+        _play.Items.Add(Setting(Cycle, "Difficulty Level", 24, 3, ["Wimp", "Champ", "Badass"], s => s.Difficulty, (s, v) => s.Difficulty = v));
+        // the port's own rows after the original's, in the shell's order
         _play.Items.Add(new Item
         {
             Flags = Check, Label = "Modern Physics", Pair = 26, N = 2,
@@ -292,7 +296,9 @@ public sealed partial class EscapeMenu : Control
                 else if (m == 9) { Settings.ChaseCrosshair = _snap.ChaseCrosshair; it.Value = Settings.ChaseCrosshair ? 1 : 0; }
             },
         });
-        _play.Items.Add(Setting(Cycle, "Difficulty Level", 24, 3, ["Wimp", "Champ", "Badass"], s => s.Difficulty, (s, v) => s.Difficulty = v));
+        // every row in one list that scrolls over the pad's rows, in the order added; Done and Cancel stay put
+        int at = 1;
+        foreach (var it in _play.Items) it.At = at++;
         _play.Items.Add(DoneButton());
         _play.Items.Add(CancelButton());
 
@@ -677,14 +683,7 @@ public sealed partial class EscapeMenu : Control
         15 => (new(158, 407, 218, 426), null),
         16 => (new(229, 407, 289, 426), null),
         17 => (new(87, 407, 147, 426), null),
-        >= 18 and <= 23 => Box(1 + (p - 18)),          // the original's six check rows, on rows 1..6 (the original spaced them every other row)
-        26 => Box(7),                                  // the port's own after them: Modern Physics, (Simulation Rate on row 8), Checkpoints,
-        31 => Box(9),                                  // Force Feedback, Auto Reverse, Chase Crosshair
-        30 => Box(10),
-        25 => Box(11),
-        33 => Box(12),
         32 => (RowA(11), new Rect4(24, RowY(12), 301, RowY(12) + 24)),   // the net game's CB Microphone: the label on the row, the device's name under it
-        24 => (RowA(13), new Rect4(226, 360, 301, 384)),
         27 => (new(40, 245, 80, 269), null),
         28 => (new(130, 245, 180, 269), null),
         29 => (new(222, 245, 262, 269), null),
@@ -692,14 +691,17 @@ public sealed partial class EscapeMenu : Control
         _ => (new(40, 25, 265, 55), null),
     };
 
+    /// <summary>A check row on pad row <paramref name="row"/> (Play Options' list): the label's rect, and the mark's box at the pad's left edge.</summary>
     private static (Rect4 A, Rect4? B) Box(int row) => (RowA(row), new Rect4(2, RowY(row), 32, RowY(row) + 30));
 
     /// <summary>Whether the item is on the pad now: a scrolling row is only when it is within the window of rows.</summary>
-    private bool Shown(Item it) => !it.Scrolls || (it.Pair - _screen.Scroll is >= Screen.FirstRow and < Screen.FirstRow + Screen.VisibleRows);
+    private bool Shown(Item it) => !it.Scrolls || (it.At - _screen.Scroll is >= Screen.FirstRow and < Screen.FirstRow + Screen.VisibleRows);
 
     private (Rect4 A, Rect4? B) Rects(Item it)
     {
-        var (a, b) = Layout(it.Scrolls ? it.Pair - _screen.Scroll : it.Pair);
+        // a list row on pad row r: a check row as the original's check rows are laid out, any other as a row of the 640-wide menu
+        int r = it.At - _screen.Scroll;
+        var (a, b) = !it.Scrolls ? Layout(it.Pair) : it.Type == Check ? Box(r) : Layout(Math.Clamp(r, 1, 14));
         if (it.Type == Check) a = a with { X0 = a.X0 + 2 + 13 };
         return (a, b);
     }
@@ -873,7 +875,7 @@ public sealed partial class EscapeMenu : Control
         if (s.Items.Count == 0 || s.MaxScroll == 0) return;
         var it = s.Items[Math.Clamp(s.Selected, 0, s.Items.Count - 1)];
         if (!it.Scrolls) return;
-        int row = it.Pair - Screen.FirstRow;
+        int row = it.At - Screen.FirstRow;
         s.Scroll = Math.Clamp(s.Scroll, Math.Max(0, row - Screen.VisibleRows + 1), Math.Min(row, s.MaxScroll));
     }
 

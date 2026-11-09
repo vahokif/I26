@@ -152,10 +152,9 @@ public sealed class OptionsScreen : OverlayScreen
 }
 
 /// <summary>
-/// An overlay with a scrolling list of rows on the sheet's ruled lines (Graphic Detail: every row, the original's and the port's;
-/// Play Options: the port's rows in the free lines under the original's): the mouse wheel, Up/Down and Page Up/Down, or the pad
-/// past the first or last visible row move the list; a thin bar in the sheet's ink, with an arrow at an end where there is more,
-/// marks it. The rest of the sheet (the rows outside the list, Done, Cancel) stays put.
+/// An overlay whose rows, the original's and the port's, are one scrolling list on the sheet's ruled lines (Graphic Detail, Play
+/// Options): the mouse wheel, Up/Down and Page Up/Down, or the pad past the first or last visible row move the list; a thin bar in
+/// the sheet's ink, with an arrow at an end where there is more, marks it. The rest of the sheet (Reset, Done, Cancel) stays put.
 /// </summary>
 public abstract class ScrollingOverlayScreen : OverlayScreen
 {
@@ -224,10 +223,11 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private int _savedRumbleStrength;
     private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997;
     private int _savedRate, _savedDownloads;
-    private static readonly (int Y, string Label, int Bit)[] Rows =
+    /// <summary>The original's six check rows and their bits (Nitro's sheet has only Arcade Phys. and Unlim. Wiper Fluid).</summary>
+    private static readonly (string Label, int Bit)[] Checks =
     [
-        (139, "Arcade Phys.", 0x01), (162, "No Salv. Manag.", 0x02), (185, "Unlim. Ammo", 0x04),
-        (208, "Unlim. Armor", 0x08), (231, "Unlim. Chas. Rein.", 0x10), (254, "Unlim. Wiper Fluid", 0x20),
+        ("Arcade Phys.", 0x01), ("No Salv. Manag.", 0x02), ("Unlim. Ammo", 0x04),
+        ("Unlim. Armor", 0x08), ("Unlim. Chas. Rein.", 0x10), ("Unlim. Wiper Fluid", 0x20),
     ];
     private static int NextRate(int hz)
     {
@@ -236,23 +236,28 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         return o[(i + 1) % o.Length].Label;
     }
     private static readonly string[] Levels = ["Wimp", "Champion", "Badass"];
-    /// <summary>The list slots that are check rows (the others a value): their line gets a check box.</summary>
+    /// <summary>The list slots that are check rows (the others a value): their line gets the sheet's check box.</summary>
     private readonly HashSet<int> _checks = [];
 
     /// <summary>
-    /// Where the port's rows scroll: the base game's sheet has the original's six check rows on consecutive lines from 139 and
-    /// Difficulty on its last line (415), the six lines between for the list; Nitro's keeps Arcade Phys. (139), Unlim. Wiper
-    /// Fluid (185) and Difficulty (323) where its sheet has them, the five lines between the last two for the list.
+    /// Where the list scrolls: every row, one to a ruled line, over the sheet's lines from the original's first row (139) to its
+    /// last (415), thirteen of them, in both games (the sheet's first line, 116, stays blank, as the original left it).
     /// </summary>
-    public static (int Top, int Shown) ListLines(bool nitro) => nitro ? (208, 5) : (277, 6);
+    public static (int Top, int Shown) ListLines(bool nitro) => (139, 13);
 
-    /// <summary>The port's rows, in the list's order (a check row, or a value row stepped by a click).</summary>
+    public const string Difficulty = "Difficulty Level";
+
+    /// <summary>The port's rows, in the list's order after the original's (a check row, or a value row stepped by a click).</summary>
     public static readonly string[] PortRows =
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
         "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
         "Turrets",
     ];
+
+    /// <summary>Every row of the list, in order: the original's check rows (Nitro's two), Difficulty, then the port's rows.</summary>
+    public static string[] ListRows(bool nitro) =>
+        [.. Checks.Where(c => !nitro || (c.Bit & PlayProfile.NitroMask) != 0).Select(c => c.Label), Difficulty, .. PortRows];
 
     protected override void Build()
     {
@@ -275,25 +280,10 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedTurrets1997 = s.Turrets1997;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
-        // the original's six check rows on consecutive ruled lines. The sheet prints a check box only on every other line (where
-        // the original's rows were): the others get Arcade Phys.'s box copied
-        if (!nitro) foreach (int y in new[] { 162, 208, 254 }) Frame.CopyBackground(200, 139, 22, 18, 200, y);
-        // Nitro's table has three rows: Arcade Phys. (222,139), Unlim. Wiper Fluid (222,185), Difficulty (222,323);
-        // the salvage-management and cheat rows are the base game's
-        foreach (var (y, label, bit) in Rows)
-        {
-            if (nitro && (bit & PlayProfile.NitroMask) == 0) continue;
-            int ry = nitro && bit == 0x20 ? 185 : y;
-            Add(222, ry, label, null);
-            // the check strip, x 205..404, y+1..y+12; a set bit shows "x" at (205, y+1)
-            Add(205, ry + 1, () => Check((s.PlayOptions & bit) != 0), () => s.PlayOptions ^= bit, Small, w: 200, h: 12);
-        }
-        int dy = nitro ? 323 : 415;
-        Add(222, dy, "Difficulty Level", null);
-        Add(205, dy + 1, () => "", () => s.Difficulty = s.Difficulty >= 2 ? 0 : s.Difficulty + 1, Small, w: 300, h: 12);
-        Add(398, dy + 2, () => Levels[Math.Clamp(s.Difficulty, 0, 2)], null);
 
-        // the port's own rows, one to a line, scrolling in the free lines
+        // every row in one list, one to a ruled line: a check row (its label, and the check strip x 205..404, y+1..y+12, "x" at
+        // (205, y+1) when set; the sheet's printed box drawn on its line wherever it scrolls to, PrepareLines) or a value row (its
+        // label, a click strip, the value at 398). To add a row, add it here in its place (and its label to PortRows)
         int slot = 0;
         void Toggle(string label, Func<bool> get, Action flip)
         {
@@ -309,6 +299,13 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
             Listed(Add(398, 0, value, null), slot, 2);
             slot++;
         }
+        // the original's six check rows (Nitro's sheet: Arcade Phys. and Unlim. Wiper Fluid; the salvage-management and cheat rows
+        // are the base game's), then Difficulty, the original's last row
+        foreach (var (label, bit) in Checks)
+            if (!nitro || (bit & PlayProfile.NitroMask) != 0) Toggle(label, () => (s.PlayOptions & bit) != 0, () => s.PlayOptions ^= bit);
+        Step(Difficulty, () => s.Difficulty = s.Difficulty >= 2 ? 0 : s.Difficulty + 1, () => Levels[Math.Clamp(s.Difficulty, 0, 2)]);
+
+        // the port's own rows
         // Hidden Weapons & Cars (docs/hidden-content.md)
         Toggle(PortRows[0], () => s.HiddenContent, () => s.HiddenContent = !s.HiddenContent);
         Toggle(PortRows[1], () => s.ModernPhysics, () => s.ModernPhysics = !s.ModernPhysics);   // Ctrl+F7 flips it in play
@@ -340,14 +337,17 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         Add(402, 438, "Cancel", Cancel, Small);
     }
 
-    /// <summary>Each visible line of the list gets the sheet's check box when a check row is on it and blank paper when a value row is (or none).</summary>
+    /// <summary>
+    /// Each visible line of the list is wiped to blank paper (the sheet prints check boxes only on some lines, on Nitro's sheet
+    /// fewer) and gets the sheet's printed check box (Arcade Phys.'s, copied) when a check row is on it, so a row's box moves with it.
+    /// </summary>
     protected override void PrepareLines()
     {
         for (int line = 0; line < List.Shown; line++)
         {
             int y = List.Top + List.LineH * line;
             Frame.CopyBackground(300, y, 22, 18, 200, y);
-            if (_checks.Contains(List.SlotOn(line))) Frame.CopyBackground(200, 139, 22, 18, 200, y);
+            if (_checks.Contains(List.SlotOn(line))) Frame.CopyOriginal(200, 139, 22, 18, 200, y);   // the line it comes from may be wiped by now
         }
     }
 

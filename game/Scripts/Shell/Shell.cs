@@ -837,6 +837,7 @@ public partial class Shell : CanvasLayer
             if (kind == "overlay" && arg == "controls") Overlay(new ControlsScreen());
             if (kind == "overlay" && arg == "mouse") Overlay(new MouseOptionsScreen());
             if (kind == "overlay" && arg == "graphics") Overlay(new GraphicsScreen());
+            if (kind == "overlay" && arg == "play") Overlay(new PlayOptionsScreen());
             if (kind == "overlay" && arg == "audio") Overlay(new AudioScreen());
             if (kind == "type") _typed.Append(arg);
             // capture hook: "keyev:Semicolon,58,shift@frame" a key press as the window delivers it (keycode, Unicode, modifiers; Unicode 0 for none)

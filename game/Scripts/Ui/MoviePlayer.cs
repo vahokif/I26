@@ -25,6 +25,26 @@ public partial class MoviePlayer : CanvasLayer
     public bool Skippable { get; init; } = true;
     /// <summary>The Nitro Pack's movie (HiFi Audio's movies/nitro/ wins then; both games have a CREDF01 and an INTROF01).</summary>
     public bool Nitro { get; init; }
+    /// <summary>
+    /// Played while a mission loads on the main thread under it (a briefing over its build, Main.LoadUnderBriefing), whose steps
+    /// hold the picture for up to a second or two: the movie's own sound is decoded and queued further ahead, so it plays on through
+    /// them (the picture catches up after, by the clock).
+    /// </summary>
+    public bool OverLoad { get; init; }
+    /// <summary>
+    /// While true (a briefing played while its mission loads, until the mission can start): <see cref="WaitingTag"/> over the
+    /// picture, the skip keys do nothing (not kept for later), and a movie that runs out holds its last frame until it turns
+    /// false, then ends.
+    /// </summary>
+    public Func<bool>? Waiting { get; init; }
+    /// <summary>Shown over the picture while <see cref="Waiting"/> (the boot screen's "please stand by", small, in a corner: StandByTag).</summary>
+    public StandByTag? WaitingTag { get; init; }
+    private bool IsWaiting => Waiting?.Invoke() == true;
+    private StandByTag? _tag;
+    /// <summary>The movie ran out while <see cref="Waiting"/>: its last frame stays up until the mission can start.</summary>
+    private bool _held;
+    /// <summary>Capture hook: I76_MOVIE_END=N runs the movie out N drawn frames after its first, as its end would (held while waiting).</summary>
+    private int _endAfter = int.TryParse(System.Environment.GetEnvironmentVariable("I76_MOVIE_END"), out int ea) ? ea : -1;
     public event Action? Finished;
 
     private Smacker _movie = null!;
@@ -33,12 +53,14 @@ public partial class MoviePlayer : CanvasLayer
     private volatile bool _decoded;
     private readonly ConcurrentQueue<(int Index, byte[] Rgba, byte[]? Pal)> _frames = new();
     private readonly ConcurrentQueue<Vector2[]> _sound = new();
-    private const int Ahead = 20;          // frames decoded ahead of the picture
+    private int Ahead => OverLoad ? 60 : 20;   // frames decoded ahead of the picture (4 s over a load, its sound with them)
     private TextureRect _view = null!;
     private ImageTexture? _tex, _palTex, _blkTex;
     /// <summary>Palette-constrained debanding and deblocking in shaders: off by default (smooth-scaled raw frames); I76_MOVIE_DEBAND=1 turns it on.</summary>
     private bool _deband;
     private int _hold = int.TryParse(System.Environment.GetEnvironmentVariable("I76_MOVIE_HOLD"), out int h) ? h : -1;
+    /// <summary>Capture hook: I76_MOVIE_SKIP=N skips the movie N drawn frames after its first, as a key would (a briefing ended early).</summary>
+    private int _skipAfter = int.TryParse(System.Environment.GetEnvironmentVariable("I76_MOVIE_SKIP"), out int sk) ? sk : -1;
     private SubViewport? _pass;
     private ColorRect? _debandRect;
     private AudioStreamGeneratorPlayback? _out;
@@ -112,11 +134,16 @@ public partial class MoviePlayer : CanvasLayer
         }
         if (_movie.HasAudio(0) && _hifi is null)
         {
-            var gen = new AudioStreamGenerator { MixRate = _movie.SampleRate(0), BufferLength = 0.5f };
+            var gen = new AudioStreamGenerator { MixRate = _movie.SampleRate(0), BufferLength = OverLoad ? 4.5f : 0.5f };
             var player = new AudioStreamPlayer { Stream = gen, Name = "Sound" };
             AddChild(player);
             player.Play();
             _out = (AudioStreamGeneratorPlayback)player.GetStreamPlayback();
+        }
+        if (WaitingTag is { } tag)
+        {
+            tag.Picture = new Vector2(_movie.Width, _movie.Height);
+            AddChild(_tag = tag);
         }
         _thread = new Thread(Decode) { IsBackground = true, Name = "smacker" };
         _thread.Start();
@@ -174,6 +201,8 @@ public partial class MoviePlayer : CanvasLayer
 
     public override void _Process(double delta)
     {
+        if (_tag is not null && !IsWaiting) _tag.FadeOut();   // (and from then on a skip ends the movie)
+        if (_held) { if (!IsWaiting) Finish(); return; }
         if (_done || _movie is null) return;
         // the clock starts with the first frame, so a slow first decode does not eat into the picture
         // (a decoder that died or never delivers ends the movie instead: nothing else would ever start the clock, and the
@@ -182,13 +211,16 @@ public partial class MoviePlayer : CanvasLayer
         {
             if (_frames.IsEmpty)
             {
-                if (Watch(0) == MovieStep.NoFirstFrame) { GiveUp("no first frame"); Finish(); }
+                if (Watch(0) == MovieStep.NoFirstFrame) { GiveUp("no first frame"); RunOut(); }
                 return;
             }
             _started = true;
+            I76.Game.World.MissionBuilder.Trace($"movie: first frame of {System.IO.Path.GetFileName(Path)}");
             if (_hifi is not null) { _hifi.Play(); _hifiStart = System.Diagnostics.Stopwatch.GetTimestamp(); }
         }
         else _clock.Step(delta, Heard());
+        if (_skipAfter >= 0 && _skipAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_SKIP skips it{(IsWaiting ? " (ignored: the mission is not ready)" : "")}"); if (!IsWaiting) { Finish(); return; } }
+        if (_endAfter >= 0 && _endAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_END runs it out"); RunOut(); return; }
         // capture hook: I76_MOVIE_HOLD=N freezes the picture on frame N, so shots of different runs compare
         if (_hold >= 0 && _frames.IsEmpty && !_decoded) _clock.Set(_clock.Seconds - delta);   // (a capture runs faster than real time: wait for the decoder)
         if (_hold >= 0 && _clock.Seconds >= _hold * _movie.FrameDuration) _clock.Set(_hold * _movie.FrameDuration);
@@ -222,8 +254,8 @@ public partial class MoviePlayer : CanvasLayer
         }
         switch (Watch(want))
         {
-            case MovieStep.Over: Finish(); break;
-            case MovieStep.Stalled: GiveUp("the decoder stopped making frames"); Finish(); break;   // stuck part way: it ends there
+            case MovieStep.Over: RunOut(); break;
+            case MovieStep.Stalled: GiveUp("the decoder stopped making frames"); RunOut(); break;   // stuck part way: it ends there
         }
     }
 
@@ -278,10 +310,25 @@ public partial class MoviePlayer : CanvasLayer
             || e is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.A or JoyButton.B or JoyButton.Start };   // any pad: A, B, Start (not only one the pad list knows yet: the intro plays before it has looked)
         if (!skip) return;
         GetViewport().SetInputAsHandled();
+        if (IsWaiting) return;   // the mission cannot start yet: the press does nothing (and nothing else sees it)
         Finish();
     }
 
+    /// <summary>The movie is over by itself: it ends, or, while <see cref="Waiting"/>, its last frame stays up under the stand-by line until the mission can start.</summary>
+    private void RunOut()
+    {
+        if (!IsWaiting) { Finish(); return; }
+        if (_held) return;
+        _held = true;
+        _stop = true;   // (the decoder is done with: only the last frame stays)
+        _hifi?.Stop();
+        GD.Print($"movie {System.IO.Path.GetFileName(Path)}: over, its last frame held until the mission can start");
+    }
+
     private void GiveUp(string why) => GD.PrintErr($"movie {Path}: {why}, ending it");
+
+    /// <summary>Ends the movie at once, as a skip does (what follows it runs): a mission whose build under its briefing failed.</summary>
+    public void End() => Finish();
 
     private void Finish()
     {

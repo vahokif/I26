@@ -32,6 +32,13 @@ public partial class OilSlicks : Node3D
 
     public override void _Ready()
     {
+        Prebake();
+        (_ribbon, _puddle, _orm, _normal) = (_ribbonS!, _puddleS!, _ormS!, _normalS!);
+    }
+
+    /// <summary>The run's textures, baked once (on any thread: a mission building under its briefing makes them ahead of the view).</summary>
+    public static void Prebake()
+    {
         if (_ribbonS is null || _puddleS is null || _ormS is null || _normalS is null)
         {
             var rnd = new Random(7601);
@@ -41,7 +48,6 @@ public partial class OilSlicks : Node3D
             Bake(false, 1, out _ormS, out _normalS); // the ORM and the ripple are shared by every shape
             _ribbonS = ribbons;
         }
-        (_ribbon, _puddle, _orm, _normal) = (_ribbonS, _puddleS, _ormS, _normalS);
     }
 
     private static float Hash(int x, int y, int s)

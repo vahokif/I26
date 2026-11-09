@@ -1189,6 +1189,8 @@ public sealed class ShellSettings
     public bool MouseCockpit { get; set; }
     /// <summary>The port's own: a 3D-projected aiming crosshair in the F2 chase view (shell.cfg [port] chase_crosshair; off).</summary>
     public bool ChaseCrosshair { get; set; }
+    /// <summary>The port's own: a mission's briefing plays while the mission builds, in either look (Play Options' Load During Briefing; [port] briefing_while_loading, on, written only when off). Off: the build behind the loading card, then the briefing, as the original's.</summary>
+    public bool BriefingWhileLoading { get; set; } = true;
     /// <summary>The port's own: the mouse wheel cycles weapons instead of zooming the external views (shell.cfg [port] wheel_cycle_weapon; off).</summary>
     public bool WheelCycleWeapon { get; set; }
     /// <summary>The port's own: Graphic Detail's Max FPS, a choice of <see cref="I76.Sim.Views.FrameLimit"/> (shell.cfg [port] max_fps in frames a second, 0 none). Unlimited unless the player chose.</summary>
@@ -1326,6 +1328,7 @@ public sealed class ShellSettings
         s.MouseInvertY = (bool)c.GetValue("port", "mouse_invert_y", false);
         s.MouseCockpit = (bool)c.GetValue("port", "mouse_cockpit", false);
         s.ChaseCrosshair = (bool)c.GetValue("port", "chase_crosshair", false);
+        s.BriefingWhileLoading = (bool)c.GetValue("port", "briefing_while_loading", true);
         s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
         // no version step: absent, no cap and vsync on, as before the keys
         s.MaxFps = I76.Sim.Views.FrameLimit.Parse(c.HasSectionKey("port", "max_fps") ? (int)c.GetValue("port", "max_fps") : null);
@@ -1391,6 +1394,7 @@ public sealed class ShellSettings
         if (MouseInvertY) c.SetValue("port", "mouse_invert_y", true);
         if (MouseCockpit) c.SetValue("port", "mouse_cockpit", true);
         if (ChaseCrosshair) c.SetValue("port", "chase_crosshair", true);
+        if (!BriefingWhileLoading) c.SetValue("port", "briefing_while_loading", false);
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
         c.SetValue("port", "max_fps", I76.Sim.Views.FrameLimit.Fps(MaxFps));
         c.SetValue("port", "vsync", VSync);

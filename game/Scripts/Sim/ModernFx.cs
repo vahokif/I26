@@ -50,7 +50,16 @@ public partial class ModernFx : Node3D
 
     private static readonly Aabb Everywhere = new(new Vector3(-1e5f, -1e5f, -1e5f), new Vector3(2e5f, 2e5f, 2e5f));
 
+    /// <summary>Made by <see cref="ReadySteps"/>, a step at a time, by whoever added it (a mission loading under its briefing), not all in <see cref="_Ready"/>.</summary>
+    public bool Staged { get; init; }
+
     public override void _Ready()
+    {
+        if (!Staged) foreach (var _ in ReadySteps()) { }
+    }
+
+    /// <summary>What <see cref="_Ready"/> makes (the flipbooks, the sparks', puffs' and smoke's materials), a null between the costly parts.</summary>
+    public IEnumerable<object?> ReadySteps()
     {
         _tracer = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/tracer.gdshader") };
         _quad = new QuadMesh { Size = Vector2.One };
@@ -59,6 +68,7 @@ public partial class ModernFx : Node3D
         _explosion = LoadBook(shader, "Explosion01_5x5.tga", 5, 5, false);
         _fireball = LoadBook(shader, "FireBall02_8x8.tga", 8, 8, true);
         _smoke = LoadBook(shader, "WispySmoke01_8x8.tga", 8, 8, false);
+        yield return null;
         SceneLight = _sceneLight;
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
@@ -87,6 +97,7 @@ public partial class ModernFx : Node3D
             ScaleCurve = Curve1((0, 1), (1, 0.3f)),
         };
         _sparkProc.SetParticleFlag(ParticleProcessMaterial.ParticleFlags.AlignYToVelocity, true);
+        yield return null;
 
         // dust and smoke: soft lit puffs
         var soft = new GradientTexture2D
@@ -101,6 +112,7 @@ public partial class ModernFx : Node3D
             ProximityFadeEnabled = true, ProximityFadeDistance = 0.6f, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
         };
         _puffMesh = new QuadMesh { Size = Vector2.One, Material = puffMat };
+        yield return null;
         _dustProc = new ParticleProcessMaterial
         {
             Direction = Vector3.Up, Spread = 35, InitialVelocityMin = 1.5f, InitialVelocityMax = 4,
@@ -355,6 +367,14 @@ public partial class ModernFx : Node3D
 
     private static readonly Dictionary<string, Texture2D?> VfxCache = [];
 
+    /// <summary>The flipbooks' textures, loaded once for the run (on any thread while no view uses them: a mission building under its briefing).</summary>
+    public static void PrepareVfx()
+    {
+        foreach (var f in (string[])["Explosion02HD_5x5.tga", "Explosion01_5x5.tga", "FireBall02_8x8.tga", "WispySmoke01_8x8.tga"]) LoadVfx(f);
+        GD.Load<Shader>("res://Shaders/flipbook.gdshader");
+        GD.Load<Shader>("res://Shaders/tracer.gdshader");
+    }
+
     /// <summary>A flipbook from game/vfx (<see cref="LoadVfx"/>) and its material.</summary>
     private static Flipbook? LoadBook(Shader shader, string file, int cols, int rows, bool additive)
     {
@@ -428,8 +448,16 @@ public partial class ModernFx : Node3D
     /// </summary>
     public void Warm(Vector3 at)
     {
+        foreach (var _ in WarmSteps(at)) { }
+    }
+
+    /// <summary><see cref="Warm"/> as steps, a null after each effect (a mission loading under its briefing: the renderer makes each one's pipelines in a frame of its own).</summary>
+    public IEnumerable<object?> WarmSteps(Vector3 at)
+    {
         Explode(at, 6f, 1.0, new Color(0.3f, 0.3f, 0.3f), 1f);
+        yield return null;
         FireBurst(at);
+        yield return null;
         GunSmoke(at, Vector3.Up, 2f);
         foreach (var sp in _sprites) { sp.Start = _t; sp.Life = 10; }   // the delayed ones too: every one is drawn
     }

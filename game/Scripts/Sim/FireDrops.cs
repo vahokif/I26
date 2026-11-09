@@ -43,12 +43,7 @@ public partial class FireDrops : Node3D
     public override void _Ready()
     {
         for (int i = 0; i < MaxPatches; i++) _patches[i] = new Patch();
-        if (_glowPuddleS is null)
-        {
-            var rnd = new Random(7611);
-            _ribbonS = Bake(false, rnd.Next(), false); _puddleS = Bake(true, rnd.Next(), false);
-            _glowRibbonS = Bake(false, rnd.Next(), true); _glowPuddleS = Bake(true, rnd.Next(), true);
-        }
+        Prebake();
         (_ribbon, _puddle, _glowRibbon, _glowPuddle) = (_ribbonS!, _puddleS!, _glowRibbonS!, _glowPuddleS);
 
         var flame = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/fire_patch.gdshader") };
@@ -111,6 +106,15 @@ public partial class FireDrops : Node3D
         };
         AddChild(p);
         return p;
+    }
+
+    /// <summary>The run's textures, baked once (on any thread: a mission building under its briefing makes them ahead of the view).</summary>
+    public static void Prebake()
+    {
+        if (_glowPuddleS is not null) return;
+        var rnd = new Random(7611);
+        _ribbonS = Bake(false, rnd.Next(), false); _puddleS = Bake(true, rnd.Next(), false);
+        _glowRibbonS = Bake(false, rnd.Next(), true); _glowPuddleS = Bake(true, rnd.Next(), true);
     }
 
     private static CurveTexture Curve1(params (float X, float Y)[] pts)

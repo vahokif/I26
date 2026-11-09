@@ -39,6 +39,8 @@ public static class BootSplash
 
     /// <summary>The boot screen's line (I76's or Nitro's): its box and fit, for other "please stand by" moments to match it.</summary>
     internal static (Rect2I Box, ImpactLabels.Spec Spec) StandBy(bool nitro) => (Lines[nitro ? 1 : 0].Box, Lines[nitro ? 1 : 0].Spec);
+    /// <summary>Where the boot screen's own line is drawn in its picture (I76's or Nitro's loadgame.pcx).</summary>
+    internal static Rect2I StandByInk(bool nitro) => Lines[nitro ? 1 : 0].Ink;
 
     private static CanvasLayer? _overlay;
     private static bool _shown;

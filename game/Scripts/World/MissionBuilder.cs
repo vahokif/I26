@@ -307,6 +307,17 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// <summary>The distant terrain computed off the main thread (its meshes still to make: <see cref="HorizonTerrain.Finish"/>).</summary>
     public System.Threading.Tasks.Task<HorizonTerrain>? HorizonBuild { get; private set; }
 
+    /// <summary>
+    /// <see cref="Build"/> runs on a thread of its own (Main.BuildUnderBriefing): nothing it makes is in the tree or reachable from
+    /// another thread until it returns, and nothing is left for the end of a frame (the props' maps wait for the caller's
+    /// <see cref="MaterialLibrary.FlushPropMaps"/> on the main thread).
+    /// </summary>
+    public bool OffMainThread { get; set; }
+    /// <summary>Asked between the build's stages: the build stops there with an <see cref="OperationCanceledException"/> (a build under the briefing whose scene went away).</summary>
+    public System.Threading.CancellationToken Cancel { get; set; }
+    /// <summary>The world's root once <see cref="Build"/> has made it: the caller's to free when the build stops part way (outside the tree).</summary>
+    public Node3D? Root { get; private set; }
+
     /// <summary>Leave vehicle placements out: the simulation draws them.</summary>
     public bool SkipVehicles { get; set; }
     /// <summary>Called with the mission's world as soon as it is read, before anything is built from it: the map editor puts its heights in here.</summary>
@@ -317,7 +328,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
 
     public Node3D Build(string msnPath)
     {
-        Trace("build start");
+        Stage("build start");
         var asm = Assembler = new ModelAssembler(vfs);
         var world = World = new MissionWorld(vfs, asm, msnPath);
         WorldLoaded?.Invoke(world);
@@ -333,11 +344,11 @@ public sealed class MissionBuilder(AssetVfs vfs)
 
         var resolver = Resolver = new TextureResolver(vfs);
         var textures = Textures = new TextureFactory(resolver, pal);
-        var materials = Materials = new MaterialLibrary(textures);
+        var materials = Materials = new MaterialLibrary(textures) { HoldFlush = OffMainThread };
         Meshes = new MeshBuilder(resolver, materials);
         _carParts = null;
 
-        var root = new Node3D { Name = world.Mission.Name };
+        var root = Root = new Node3D { Name = world.Mission.Name };
 
         // Ground: WDEF names the ground family ("tp041db6.map" for
         // TP04<level>DB6). The members are one image at five resolutions, a
@@ -413,7 +424,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 return h;
             });
         }
-        Trace("ground, sky, horizon");
+        Stage("ground, sky, horizon");
         TerrainMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/terrain_faithful.gdshader") };
         var l = Light.Direction;
         TerrainMaterial.SetShaderParameter("light_game", new Vector3(l.X, l.Y, l.Z));
@@ -472,7 +483,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             // a painted ground has no hollows to fill
             cavities = ground is not null && !painted && TerrainMaterials.Get() is not null;
         }
-        Trace("roads flattened");
+        Stage("roads flattened");
         var origins = TerrainNode.ChunkOrigins(world.Terrain);   // all of them: the road bake needs the whole map's
         System.Threading.Tasks.Task<TerrainNode.Prepared>? early = null;
         System.Threading.Tasks.Task<bool>? matsHit = null;
@@ -492,9 +503,9 @@ public sealed class MissionBuilder(AssetVfs vfs)
         var sw = System.Diagnostics.Stopwatch.StartNew();
         // Rasterise every chunk's layer in parallel (pure C#); textures are
         // read once up front so the workers only read.
-        Trace("road textures");
+        Stage("road textures");
         for (int i = 0; i < roadNames.Length; i++) RoadTex(i);
-        Trace("road pieces");
+        Stage("road pieces");
         // road-piece objects (ODEF types 0x50–0x5f, the intersections): their tops painted over the roads,
         // their textures numbered after the road set's
         var (pieceTris, pieceTex) = RoadPieceTops(world, asm, resolver, textures);
@@ -515,14 +526,14 @@ public sealed class MissionBuilder(AssetVfs vfs)
         bool Fills(int x0, int z0) => fills.Any(q => q.Max.X >= x0 * 5f && q.Max.Y >= z0 * 5f && q.Min.X < x0 * 5f + chunkSize && q.Min.Y < z0 * 5f + chunkSize);
         // (a map that fills the grid paints each chunk's layer as it streams in: LazyRoad, below)
         var origins97 = huge ? [] : origins.Where(o => Fills(o.X0, o.Z0)).ToList();
-        Trace("road bake");
+        Stage("road bake");
         var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTex, origins);
         var layers97 = huge || origins97.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, origins97);
         List<RoadRaster.FlatQuad> flatFilled = huge ? [.. flat, .. fills] : [];
         RoadRaster.Index? indexFilled = huge ? new RoadRaster.Index(flatFilled, pieceTris, TerrainNode.Chunk * 5f) : null;
         RoadRaster.Index? indexPlain = huge && fills.Count > 0 ? new RoadRaster.Index(flat, pieceTris, TerrainNode.Chunk * 5f) : null;
         var lazyRoad = new System.Collections.Concurrent.ConcurrentDictionary<(int, int), (Image? Modern, Image? Faithful, bool Own)>();
-        Trace("road bake done");
+        Stage("road bake done");
         // the ground materials, staged meanwhile: made here, then the shared modern material that uses them
         if (!defer)
         {
@@ -532,7 +543,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 TerrainMaterials.Complete();
             }
             foreach (var step in MakeSharedModernSteps()) if (step is System.Threading.Tasks.Task t) t.Wait();
-            Trace("ground materials");
+            Stage("ground materials");
         }
         var layerTex = new Dictionary<(int, int), ImageTexture>();
         ImageTexture? Layer(int x0, int z0)
@@ -562,11 +573,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
             return t;
         }
         var cavityImages = new Dictionary<(int, int), Image>();
+        StringName[]? modernParams = null, faithfulParams = null;
         Material ModernFor(int x0, int z0)
         {
             var t = Layer(x0, z0);
             if (t is null && !cavities) return sharedModern!;
-            var m = (ShaderMaterial)sharedModern!.Duplicate();
+            var m = Copy(sharedModern!, ref modernParams);
             if (t is not null)
             {
                 m.SetShaderParameter("road_layer", t);
@@ -587,7 +599,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         Material FaithfulFor(int x0, int z0)
         {
             if (Layer97(x0, z0) is not { } t) return TerrainMaterial;
-            var m = (ShaderMaterial)TerrainMaterial.Duplicate();
+            var m = Copy(TerrainMaterial, ref faithfulParams);
             m.SetShaderParameter("road_layer", t);
             m.SetShaderParameter("has_road", true);
             m.SetShaderParameter("road_light_y", Light.Direction.Y * Light.Intensity);
@@ -614,10 +626,10 @@ public sealed class MissionBuilder(AssetVfs vfs)
             // ModernSteps' own work, on the pieces this method made
             _modernSteps = () => ModernStepsFor(world, ground, MakeSharedModernSteps, () => cavities, cavityImages);
         }
-        Trace("terrain build");
+        Stage("terrain build");
         Terrain.Build(world);
         if (I76.Game.Editor.SwitchTimer.On) GD.Print($"switch: terrain content {world.Terrain.ContentHash():x16}");
-        Trace("terrain built");
+        Stage("terrain built");
         root.AddChild(Terrain);
         if (world.Outside is not null && System.Environment.GetEnvironmentVariable("I76_OUTSIDE_CHUNKS") != "0")   // I76_OUTSIDE_CHUNKS=0: the ring alone out there (A/B)
         {
@@ -628,7 +640,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         RoadBakeMs = sw.ElapsedMilliseconds;
 
         Roads = new RoadNode { Name = "Roads", Visible = false, LightY = Light.Direction.Y * Light.Intensity, Ambient = Light.Ambient };
-        Trace("roads build");
+        Stage("roads build");
         Roads.Build(pieces, roadNames, resolver, textures);
         root.AddChild(Roads);
         if (huge)
@@ -647,14 +659,36 @@ public sealed class MissionBuilder(AssetVfs vfs)
         }
 
         Scenery = new ScenerySpawner { Name = "Placements" };
-        Trace("scenery spawn");
+        Stage("scenery spawn");
         Scenery.Spawn(world, asm, Meshes, SkipVehicles);
         root.AddChild(Scenery);
-        Trace("done");
+        Stage("done");
         return root;
     }
 
     private Func<IEnumerable<object?>>? _modernSteps;
+
+    /// <summary>
+    /// A chunk's own copy of the shared terrain material: its shader and the parameters set on it (<paramref name="names"/>, the
+    /// shader's uniforms, asked of the renderer once). Not <see cref="Resource.Duplicate"/>, which asks the renderer for the
+    /// shader's uniforms and every unset one's default on each copy: calls that, from the thread of a build under the briefing,
+    /// wait for a drawn frame each (thousands for a map's chunks). The unset ones keep the shader's defaults, as a copy's would.
+    /// </summary>
+    private static ShaderMaterial Copy(ShaderMaterial shared, ref StringName[]? names)
+    {
+        names ??= [.. RenderingServer.GetShaderParameterList(shared.Shader.GetRid()).Select(u => (StringName)(string)u["name"])];
+        var m = new ShaderMaterial { Shader = shared.Shader, RenderPriority = shared.RenderPriority, NextPass = shared.NextPass };
+        foreach (var n in names)
+            if (shared.GetShaderParameter(n) is { VariantType: not Variant.Type.Nil } v) m.SetShaderParameter(n, v);
+        return m;
+    }
+
+    /// <summary>A stage of <see cref="Build"/> reached: stamped (<see cref="Trace"/>), and the build stops here if it was called off.</summary>
+    private void Stage(string stage)
+    {
+        Trace(stage);
+        Cancel.ThrowIfCancellationRequested();
+    }
 
     /// <summary>
     /// The modern terrain's deferred share, as steps for the caller to run a few milliseconds a frame on the main
@@ -741,5 +775,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public static readonly bool HashOn = System.Environment.GetEnvironmentVariable("I76_BUILD_TRACE") == "hash";
     private static readonly System.Diagnostics.Stopwatch TraceClock = System.Diagnostics.Stopwatch.StartNew();
     /// <summary>I76_BUILD_TRACE=1: stamps each build stage on stdout, to see where a stuck load stopped.</summary>
-    public static void Trace(string stage) { if (TraceOn) GD.Print($"build trace: {stage} @{TraceClock.ElapsedMilliseconds} ms"); I76.Game.Editor.SwitchTimer.Mark(stage); }
+    public static void Trace(string stage) { LastStage = stage; if (TraceOn) GD.Print($"build trace: {stage} @{TraceClock.ElapsedMilliseconds} ms"); I76.Game.Editor.SwitchTimer.Mark(stage); }
+    /// <summary>The last stage stamped (on any thread): what a slice of the load under a briefing was doing (Main.EndSlice).</summary>
+    public static string LastStage { get; private set; } = "";
 }

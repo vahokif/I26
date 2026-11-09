@@ -14,7 +14,7 @@ namespace I76.Game.Assets;
 public static class HiFiAudio
 {
     private static AudioPack? _pack;
-    private static bool _probed;
+    private static volatile bool _probed;
     private static readonly HashSet<string> _told = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The player's switch (ShellSettings.HiFiAudio): sounds and movies started after a change follow it.</summary>
@@ -29,10 +29,22 @@ public static class HiFiAudio
     private static readonly bool Tracing = System.Environment.GetEnvironmentVariable("I76_SND_TRACE") == "1";
 
     /// <summary>Finds the pack once and logs what was found (Main calls it at start).</summary>
+    /// <summary>The pack is read from the main thread (a movie's track) and a mission's build thread (its sounds, under a briefing) at once.</summary>
+    private static readonly object Gate = new();
+
     public static void Probe()
     {
         if (_probed) return;
-        _probed = true;
+        lock (Gate)
+        {
+            if (_probed) return;
+            ProbeOnce();
+            _probed = true;
+        }
+    }
+
+    private static void ProbeOnce()
+    {
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var env = System.Environment.GetEnvironmentVariable("I76_SND_DIR");
         var user = ProjectSettings.GlobalizePath("user://snd/");
@@ -95,7 +107,7 @@ public static class HiFiAudio
     private static (AudioStreamOggVorbis, OggVorbisInfo, int)? Open(AudioPack pack, string entry)
     {
         byte[]? bytes;
-        try { bytes = pack.ReadEntry(entry); }
+        try { lock (Gate) bytes = pack.ReadEntry(entry); }
         catch (System.Exception e) when (e is IOException or InvalidDataException or System.UnauthorizedAccessException) { Tell(entry, $"HiFi Audio: {entry} unreadable ({e.Message}), the original plays"); return null; }
         if (bytes is null || OggVorbisInfo.Read(bytes) is not { } ogg) { Tell(entry, $"HiFi Audio: {entry} is not Ogg Vorbis, the original plays"); return null; }
         var s = AudioStreamOggVorbis.LoadFromBuffer(bytes);
@@ -106,5 +118,5 @@ public static class HiFiAudio
     private static int _loaded;
     private static long _bytes, _ticks;
 
-    private static void Tell(string entry, string line) { if (_told.Add(entry)) GD.PushWarning(line); }
+    private static void Tell(string entry, string line) { lock (Gate) if (!_told.Add(entry)) return; GD.PushWarning(line); }
 }

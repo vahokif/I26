@@ -458,21 +458,39 @@ public partial class VegetationNode : Node3D
     /// <summary>Every chunk within reach of the camera placed and attached now (behind the loading card), on every core.</summary>
     public void Prewarm()
     {
-        if (!Visible || _placer is null || CameraGame() is not { } eye) return;
+        foreach (var step in PrewarmSteps(sliced: false)) if (step is Task t) t.Wait();
+    }
+
+    /// <summary>
+    /// <see cref="Prewarm"/> as steps (a mission loading under its briefing): the placing off the main thread (a Task to wait for),
+    /// then the chunks attached a few at a time, a null between.
+    /// </summary>
+    public IEnumerable<object?> PrewarmSteps(bool sliced = true)
+    {
+        if (!Visible || _placer is null || CameraGame() is not { } eye) yield break;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         // the sward is usually made by now; a slow machine's comes in a moment later, eased in
-        _swardJob?.Wait(1500);
+        if (sliced && _swardJob is { } sj) yield return Task.WhenAny(sj, Task.Delay(1500));
+        else _swardJob?.Wait(1500);
         UpdateSward(0, now: true);
+        yield return null;
         var want = Wanted(eye, 0f).Where(k => !_chunks.ContainsKey(k)).ToList();
         var made = new Chunk[want.Count];
-        Parallel.For(0, want.Count, i =>
+        void PlaceAll() => Parallel.For(0, want.Count, i =>
         {
             var (cx, cz, layer) = want[i];
             var c = new Chunk { Cx = cx, Cz = cz, Layer = layer };
             c.Job = Task.FromResult(Place(c));
             made[i] = c;
         });
-        foreach (var c in made) { _chunks[(c.Cx, c.Cz, c.Layer)] = c; Attach(c, eye); }
+        if (sliced) yield return Task.Run(PlaceAll); else PlaceAll();
+        var slice = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var c in made)
+        {
+            _chunks[(c.Cx, c.Cz, c.Layer)] = c; Attach(c, eye);
+            if (sliced && slice.Elapsed.TotalMilliseconds > 15) { yield return null; slice.Restart(); }
+        }
+        yield return null;
         Update(eye, attachAll: true);
         GD.Print($"vegetation: {made.Length} chunks placed and attached in {sw.ElapsedMilliseconds} ms, {Instances} plants");
         if (System.Environment.GetEnvironmentVariable("I76_VEG_STATS") == "1")

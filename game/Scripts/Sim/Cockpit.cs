@@ -50,22 +50,35 @@ public partial class Cockpit : Node
     /// <summary>The radar's current frame, as the 2D panel shows it (rows bottom-up), or null before the first sweep.</summary>
     public Texture2D? RadarTexture => _radarTex;
 
+    /// <summary>Made by <see cref="ReadySteps"/>, a step at a time, by whoever added it (a mission loading under its briefing), not all in <see cref="_Ready"/>.</summary>
+    public bool Staged { get; init; }
+
     public override void _Ready()
     {
+        if (!Staged) foreach (var _ in ReadySteps()) { }
+    }
+
+    /// <summary>What <see cref="_Ready"/> makes (the animated panels' frames, the radar's, the mirror), a null between the costly parts.</summary>
+    public IEnumerable<object?> ReadySteps()
+    {
         _wheelFrames = Frames("zswls{0}{1:00}", 36);
+        yield return null;
         _armR = Frames("zhr45{0}{1:00}", 6);
         _armL = Frames("zhl45{0}{1:00}", 6);
         _shotR = Frames("zsr45{0}{1:00}", 3);
         _shotL = Frames("zsl45{0}{1:00}", 3);
+        yield return null;
         for (int i = 0; i <= 30; i++)
         {
             _radarF[i] = Image("zradf" + i.ToString("000"));
             _radarB[i] = Image("zradb" + i.ToString("000"));
+            if (i % 10 == 9) yield return null;
         }
         _radarMember = Resolver.FindByStem("zradf000");
         _radarMask = Image("zradmask");
         if (Resolver.FindByStem("zradmask") is { } mm && Resolver.Load(mm) is { } mt && mt.Width == 256) _radarClear = I76.Sim.Weapons.RadarScope.WeaponCameraClear(mt.Indices);
         _rng = new System.Random();
+        yield return null;
         SetupMirror();
     }
 

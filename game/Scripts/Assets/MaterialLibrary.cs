@@ -118,9 +118,19 @@ public sealed class MaterialLibrary(TextureFactory textures)
     /// <summary>Switches every material between the modern and 1997 shader variants.</summary>
     public void SetMode1997(bool on)
     {
+        foreach (var _ in SetMode1997Steps(on)) { }
+    }
+
+    /// <summary><see cref="SetMode1997"/> as steps, a null after every 10 ms or so of shader swaps (a mission loading under its briefing).</summary>
+    public IEnumerable<object?> SetMode1997Steps(bool on)
+    {
         Mode1997 = on;
-        foreach (var m in _cache.Values.OfType<ShaderMaterial>())
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var m in _cache.Values.OfType<ShaderMaterial>().ToList())
+        {
             m.Shader = _oneSided1997.TryGetValue(m, out var pair) ? (on ? pair.Faithful : pair.Modern) : Swap(m.Shader, on);
+            if (sw.Elapsed.TotalMilliseconds > 10) { yield return null; sw.Restart(); }
+        }
     }
 
     /// <summary>How a GEO face draws (its draw mode).</summary>
@@ -289,6 +299,12 @@ public sealed class MaterialLibrary(TextureFactory textures)
     private readonly Dictionary<string, Task<I76.Formats.Imaging.PropMaterial.Maps>> _propJobs = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(ShaderMaterial Mat, string Member)> _propPending = [];
     private bool _propFlushQueued;
+    /// <summary>
+    /// The library is filled on a thread other than the main one (a mission built under its briefing, Main.BuildUnderBriefing): the
+    /// maps wait for the owner's <see cref="FlushPropMaps"/> on the main thread once the build is over, instead of the end of a
+    /// frame, which would come in the middle of the build.
+    /// </summary>
+    public bool HoldFlush { get; set; }
 
     /// <summary>
     /// A prop's material maps: made on worker threads while the mission goes on building, and put on the
@@ -308,7 +324,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
             _propJobs[job] = Task.Run(() => I76.Formats.Imaging.PropMaterial.Build(rgba, w, h, stem, family));
         }
         _propPending.Add((mat, job));
-        if (!_propFlushQueued)
+        if (!_propFlushQueued && !HoldFlush)
         {
             _propFlushQueued = true;
             Callable.From(FlushPropMaps).CallDeferred();

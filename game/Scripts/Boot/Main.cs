@@ -370,6 +370,9 @@ public partial class Main : Node3D
             _lastResult = I76.Game.Shell.MissionResult.FirstEntry;
             return;
         }
+        // a mission's briefing while its world builds ([port] briefing_while_loading, docs/deviations.md): the card up first, the
+        // build on a thread of its own under the movie, the card again after it only while the build is still going (a skipped movie)
+        string? briefing = loading is null ? BriefingDuringLoad() : null;
         // up, and drawn once, before the build
         if (_opt.Install is not null && _opt.Mission is not null)
         {
@@ -412,58 +415,18 @@ public partial class Main : Node3D
             AddChild(new InstallerScreen { Message = _status, OnInstalled = _ => GetTree().ReloadCurrentScene() });
             return;
         }
+        if (briefing is not null && loading is not null)
+        {
+            if (!await LoadUnderBriefing(briefing, loading)) return;
+            StartMissionMusic();   // its briefing played over the build
+            return;
+        }
         // the build is one long frame behind the loading card: timed as a phase, so its hitch line says what it was
         var load = Hitch.Time(Hitch.Phase.Load);
         try { LoadMission(); }
-        catch (System.Exception ex)
-        {
-            _status = $"failed to load: {ex.Message}";
-            GD.PrintErr(ex.ToString());
-            // from the shell, back to it saying why, rather than an empty world (a custom map missing its terrain)
-            if (_launch is { Kind: not I76.Game.Shell.GameKind.Multiplayer })
-            {
-                load.Dispose();
-                if (loading is not null) loading.QueueFree();
-                _loading = false;
-                BackFromLoadFailure(ex is System.IO.FileNotFoundException ? ex.Message : $"{_opt.Mission} could not be loaded: {ex.Message}");
-                return;
-            }
-        }
-        MissionBuilder.Trace("mission loaded");
-        AddDropShadows();
-        MissionBuilder.Trace("drop shadows");
-        var loaded = I76.Game.Shell.ShellSettings.Load();
-        _drawDistance = DrawDistanceHook(loaded.DrawDistance);
-        _vegetation = loaded.Vegetation;   // SpawnCar applies all the settings; a mission without a car has only this
-        SetMode1997(_opt.Mode1997);
-        MissionBuilder.Trace("look set");
-        if (_opt.Drive is not null && _builder?.World is not null)
-        {
-            SpawnCar(_opt.Drive);
-            MissionBuilder.Trace("car spawned");
-            if (_car is { } drv && _damageView is not null) _damageView.Prewarm(drv);   // as a mission's own car gets it (the capture path)
-            MissionBuilder.Trace("damage view prewarmed");
-            if (_builder.Scenery is { } sc) sc.Markers.Visible = false;   // the original draws no marker for its keywords
-        }
-        if (_editorMode && _builder?.World is not null) { StartEditor(); StartRingBuild(); }
-        // From the menu the scene is rebuilt after the frame's _Process calls and that frame is still
-        // drawn, so tick 0 and the camera choice happen here, or the chase view flashes before a cut-scene.
-        if (_sim is not null)
-        {
-            if (_resumed) { _sim.Resume(); _sim.Hold = System.Environment.GetEnvironmentVariable("I76_CHECKPOINT_HOLD") == "1"; }
-            else { if (_net is null) _sim.Session.SettleCars(); _sim.FirstTick(); }
-            UpdateScriptCamera();
-        }
-        // the plants about the first view, behind the loading card
-        _loaded = true;
-        MissionBuilder.Trace("first tick done");
-        _veg?.Prewarm();
-        MissionBuilder.Trace("vegetation prewarmed");
-        _builder?.Scenery?.Trees.Prewarm();
-        MissionBuilder.Trace("trees prewarmed");
+        catch (System.Exception ex) { if (LoadFailed(ex, loading, load)) return; }
+        await RunSteps(FinishSteps(sliced: false), sliced: false);
         load.Dispose();
-        MissionBuilder.Trace("car, first tick");
-        if (MissionBuilder.TraceOn) TraceFrames(6);
         if (loading is not null) await WarmEffects();
         if (loading is not null)
         {
@@ -485,6 +448,84 @@ public partial class Main : Node3D
         if (_builder?.Settings is { Briefing.Length: > 0 } ws && !_opt.SkipMovies && _net is null && MoviePlayer.Find(new GameInstall(_opt.Install), ws.Briefing) is not null)
             MissionMovie(new GameInstall(_opt.Install), ws.Briefing);
         else StartMissionMusic();
+    }
+
+    /// <summary>
+    /// A mission's build failed: from the shell, back to it saying why, rather than an empty world (a custom map missing its
+    /// terrain), and true; otherwise (the command line, a network game) the error stands in the status line and the start goes on.
+    /// </summary>
+    private bool LoadFailed(System.Exception ex, LoadingScreen? loading, Hitch.Scope? load = null)
+    {
+        _status = $"failed to load: {ex.Message}";
+        GD.PrintErr(ex.ToString());
+        if (_launch is not { Kind: not I76.Game.Shell.GameKind.Multiplayer }) return false;
+        load?.Dispose();
+        if (loading is not null) loading.QueueFree();
+        _loading = false;
+        BackFromLoadFailure(ex is System.IO.FileNotFoundException ? ex.Message : $"{_opt.Mission} could not be loaded: {ex.Message}");
+        return true;
+    }
+
+    /// <summary>
+    /// The load after the world is built and in the tree, as steps for <see cref="RunSteps"/>: behind the card at once, or,
+    /// <paramref name="sliced"/>, under the briefing with the tree paused, a frame between its steps so the movie keeps playing: the
+    /// drop shadows, the look, the car and the first tick, the plants (the effects' rehearsal follows). The same work in the same order
+    /// either way, so the mission starts the same.
+    /// </summary>
+    private IEnumerable<object?> FinishSteps(bool sliced)
+    {
+        MissionBuilder.Trace("mission loaded");
+        yield return null;
+        foreach (var step in AddDropShadowsSteps(staged: sliced)) yield return step;
+        MissionBuilder.Trace("drop shadows");
+        yield return null;
+        var loaded = I76.Game.Shell.ShellSettings.Load();
+        _drawDistance = DrawDistanceHook(loaded.DrawDistance);
+        _vegetation = loaded.Vegetation;   // SpawnCar applies all the settings; a mission without a car has only this
+        // under the briefing the modern terrain's levels about the camera are made first, off the main thread and a few meshes a
+        // slice, so that the look's switch finds them made instead of making them all at once
+        if (sliced && !_opt.Mode1997 && _builder?.Terrain is { } terrain)
+        {
+            foreach (var step in terrain.PrewarmSteps()) yield return step;
+            MissionBuilder.Trace("terrain levels about the camera");
+        }
+        foreach (var step in SetMode1997Steps(_opt.Mode1997)) yield return step;
+        MissionBuilder.Trace("look set");
+        if (_opt.Drive is not null && _builder?.World is not null)
+        {
+            yield return null;
+            foreach (var step in SpawnCarSteps(_opt.Drive, sliced)) yield return step;
+            MissionBuilder.Trace("car spawned");
+            yield return null;
+            if (_car is { } drv && _damageView is not null) _damageView.Prewarm(drv);   // as a mission's own car gets it (the capture path)
+            MissionBuilder.Trace("damage view prewarmed");
+            if (_builder.Scenery is { } sc) sc.Markers.Visible = false;   // the original draws no marker for its keywords
+        }
+        if (_editorMode && _builder?.World is not null) { StartEditor(); StartRingBuild(); }
+        // From the menu the scene is rebuilt after the frame's _Process calls and that frame is still
+        // drawn, so tick 0 and the camera choice happen here, or the chase view flashes before a cut-scene.
+        if (_sim is not null)
+        {
+            if (_resumed) { _sim.Resume(); _sim.Hold = System.Environment.GetEnvironmentVariable("I76_CHECKPOINT_HOLD") == "1"; }
+            else
+            {
+                if (_net is null) _sim.Session.SettleCars();
+                MissionBuilder.Trace("cars settled");
+                yield return null;
+                _sim.FirstTick();
+            }
+            UpdateScriptCamera();
+        }
+        // the plants about the first view, behind the loading card
+        _loaded = true;
+        MissionBuilder.Trace("first tick done");
+        yield return null;
+        if (_veg is { } veg) foreach (var step in veg.PrewarmSteps(sliced)) yield return step;
+        MissionBuilder.Trace("vegetation prewarmed");
+        _builder?.Scenery?.Trees.Prewarm();
+        MissionBuilder.Trace("trees prewarmed");
+        MissionBuilder.Trace("car, first tick");
+        if (MissionBuilder.TraceOn) TraceFrames(6);
     }
 
     /// <summary>
@@ -752,7 +793,7 @@ public partial class Main : Node3D
         if (_veg is null)
         {
             if (_builder is not { ModernReady: true } b || b.Terrain?.Surface is null) return;
-            _veg = VegetationNode.Create(b, level);
+            _veg = TakeAheadVeg(level) ?? VegetationNode.Create(b, level);   // (under a briefing, made ahead on the build thread)
             if (_veg is null) return;
             _worldRoot.AddChild(_veg);
             _vegLevel = level;
@@ -851,30 +892,63 @@ public partial class Main : Node3D
     /// </summary>
     private void SpawnCar(string requested)
     {
-        if (_net is not null && _netAccept is { } accept) { SpawnNetwork(accept); return; }
+        foreach (var _ in SpawnCarSteps(requested, sliced: false)) { }
+    }
+
+    /// <summary>The capture hooks that change a car's files (I76_ADDON_CARS, I76_VCF_SWAP), before the simulation is set up.</summary>
+    private static void ApplyCarHooks(MissionBuilder builder)
+    {
         // capture hook I76_ADDON_CARS=a.vcf,b.vcf (paths): those car files in the addon overlay under their file names (a saved variant to --drive)
         if (System.Environment.GetEnvironmentVariable("I76_ADDON_CARS") is { Length: > 0 } addons)
             foreach (var path in addons.Split(',', System.StringSplitOptions.RemoveEmptyEntries)) AssetVfs.Addon[System.IO.Path.GetFileName(path)] = System.IO.File.ReadAllBytes(path);
         // capture hook I76_VCF_SWAP=car.vcf:old=new,old=new (weapon files without the .gdf): that car with other weapons
-        if (System.Environment.GetEnvironmentVariable("I76_VCF_SWAP")?.Split(':', 2) is { Length: 2 } swap && _builder!.Vfs.TryRead(swap[0]) is { } swapped)
+        if (System.Environment.GetEnvironmentVariable("I76_VCF_SWAP")?.Split(':', 2) is { Length: 2 } swap && builder.Vfs.TryRead(swap[0]) is { } swapped)
         {
             var text = System.Text.Encoding.Latin1.GetString(swapped);
             foreach (var pair in swap[1].Split(',', System.StringSplitOptions.RemoveEmptyEntries).Select(x => x.Split('=')).Where(x => x.Length == 2))
                 text = text.Replace(pair[0] + ".gdf", pair[1] + ".gdf", System.StringComparison.OrdinalIgnoreCase);
             AssetVfs.Addon[swap[0]] = System.Text.Encoding.Latin1.GetBytes(text);
         }
-        var w = _builder!.World!;
-        // srand(time(NULL)) at each mission's start, as the original (RandSeed); --seed N or [port] seed fixes it
+    }
+
+    /// <summary>
+    /// The simulation's setup for a single-player start (plain C#: on the main thread, or the build thread under a briefing, the same
+    /// call from the same origin): the seed (srand(time(NULL)) at each mission's start, as the original (RandSeed); --seed N or
+    /// [port] seed fixes it) and the melee roster with it.
+    /// </summary>
+    private (I76.Sim.Missions.MissionSetup Setup, uint Seed, List<string>? Roster) MakeSetup(MissionBuilder builder, I76.Formats.Assembly.MissionWorld w, string requested, System.Numerics.Vector3 origin)
+    {
         uint randSeed = I76.Sim.Rng.RandSeed.Pick(_opt.FixedSeed);
-        GD.Print($"mission {_opt.Mission}: rand seed {randSeed}{(_opt.FixedSeed is null ? " (clock)" : "")}");
-        System.Collections.Generic.List<string>? roster = _launch is { Kind: I76.Game.Shell.GameKind.AutoMelee } ml ? ml.Opponents.Select(o => o.Car).ToList()
+        List<string>? roster = _launch is { Kind: I76.Game.Shell.GameKind.AutoMelee } ml ? ml.Opponents.Select(o => o.Car).ToList()
             // I76_MELEE_OPPONENTS=a.vcf,b.vcf: --melee with those opponents, for captures of a fight
             : _opt.Melee ? [.. (System.Environment.GetEnvironmentVariable("I76_MELEE_OPPONENTS") ?? "").Split(',', System.StringSplitOptions.RemoveEmptyEntries)] : null;
-        var setup = I76.Sim.Missions.MissionSetup.Build(_builder.Vfs, w, _builder.Assembler!, requested, _origin, script: _opt.Ai == "script",
+        var setup = I76.Sim.Missions.MissionSetup.Build(builder.Vfs, w, builder.Assembler!, requested, origin, script: _opt.Ai == "script",
             rand: new I76.Sim.Rng.CrtRand(randSeed), melee: roster,
             // one player at one machine: the poems may come in any order (from the same seed, so a run repeats)
             seed: unchecked((int)randSeed));
+        return (setup, randSeed, roster);
+    }
+
+    /// <summary>
+    /// <see cref="SpawnCar"/> as steps, a null between them: a mission loading under its briefing (<paramref name="sliced"/>) draws a
+    /// frame of the movie at each, and takes what the build thread made ahead (the setup, the cars' meshes, the sounds).
+    /// </summary>
+    private IEnumerable<object?> SpawnCarSteps(string requested, bool sliced)
+    {
+        if (_net is not null && _netAccept is { } accept) { SpawnNetwork(accept); yield break; }
+        var w = _builder!.World!;
+        I76.Sim.Missions.MissionSetup setup;
+        uint randSeed;
+        List<string>? roster;
+        if (_ahead is { Setup: { } made } ahead && ahead.Requested == requested) { (setup, randSeed, roster) = (made, ahead.Seed, ahead.Roster); ahead.Setup = null; }
+        else
+        {
+            ApplyCarHooks(_builder);
+            (setup, randSeed, roster) = MakeSetup(_builder, w, requested, _origin);
+        }
+        GD.Print($"mission {_opt.Mission}: rand seed {randSeed}{(_opt.FixedSeed is null ? " (clock)" : "")}");
         MissionBuilder.Trace("spawn: sim world set up");
+        yield return null;
         var world = setup.World;
         _devStart = world.Player is { } startCar ? (startCar.Pos.X, startCar.Pos.Z, I76.Sim.Session.DevTools.HeadingOf(startCar.Rot.Forward)) : null;
         var session = new I76.Sim.Session.SimSession(setup, I76.Sim.Session.SessionOptions.SinglePlayer,
@@ -900,8 +974,11 @@ public partial class Main : Node3D
             if (setup.Script is { } salvScript) { var pool = _salvage; salvScript.Host.Salvaged += f => pool.Add(f, -1, true); }
         }
         MissionBuilder.Trace("spawn: session");
+        yield return null;
         var ground = setup.Ground;
-        var audio = new I76.Game.Assets.AudioBank(_builder.Vfs);
+        var audio = _ahead?.Audio ?? new I76.Game.Assets.AudioBank(_builder.Vfs);
+        var sprites = _ahead?.Sprites;
+        if (_ahead is { } took) (took.Audio, took.Sprites) = (null, null);
         _script = setup.Script;
         if (_script is not null) _script.Host.Movie += name => MissionMovie(new GameInstall(_opt.Install!), name);
         _objectives = setup.ObjectiveText;
@@ -926,30 +1003,44 @@ public partial class Main : Node3D
         ApplyPlayOptions(playSettings);
         ApplyGraphics(playSettings);
         MissionBuilder.Trace("spawn: settings applied");
+        yield return null;
         var carNodes = _carNodes = new System.Collections.Generic.Dictionary<I76.Sim.Vehicles.Vehicle, CarNode>();
         _audio = audio;
-        AddCombatView(setup.Combat);
+        AddCombatView(setup.Combat, sprites: sprites, staged: sliced);
+        if (sliced) foreach (var step in _combatView!.ReadySteps()) yield return step;
         MissionBuilder.Trace("spawn: combat view");
+        yield return null;
         System.Numerics.Vector3 pos = default;
         string def = "";
         CarNode MakeNode(I76.Sim.Vehicles.Vehicle vehicle, string carDef) => MakeCarNode(vehicle, carDef, ground);
         foreach (var (p, carDef, vehicle) in setup.Cars)
         {
             var node = MakeNode(vehicle, carDef);
-            if (vehicle != world.Player) continue;
-            pos = vehicle.Pos.ToVector3(); def = carDef;
-            SetupPlayerCar(node, vehicle, carDef, setup.Combat, handguns: true);
+            if (vehicle == world.Player)
+            {
+                yield return null;
+                pos = vehicle.Pos.ToVector3(); def = carDef;
+                foreach (var step in SetupPlayerCarSteps(node, vehicle, carDef, setup.Combat, handguns: true, _ahead?.Player, staged: sliced)) yield return step;
+            }
+            yield return null;
         }
         MissionBuilder.Trace("spawn: cars made");
-        if (_car is null) { _status += "\nno drivable car"; return; }
-        var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = carNodes, PlacementOf = setup.PlacementOf, Audio = audio, Ground = setup.Ground, Name = "Damage" };
+        if (_car is null) { _status += "\nno drivable car"; yield break; }
+        var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = carNodes, PlacementOf = setup.PlacementOf, Audio = audio, Ground = setup.Ground, Name = "Damage", Wrecks = _ahead?.Wrecks };
         AddChild(damageView);
         _damageView = damageView;
         MissionBuilder.Trace("spawn: damage view");
         if (_car is { } warm) damageView.Prewarm(warm);
         MissionBuilder.Trace("spawn: car prewarmed");
-        damageView.PrewarmWrecks(setup.Cars.Where(c => !c.Item3.IsHeli).Select(c => c.Item2), _car?.Modern ?? true);   // and the other cars' wrecks, built once
+        yield return null;
+        // and the other cars' wrecks, built once (a kind a slice under the briefing)
+        foreach (var wreck in setup.Cars.Where(c => !c.Item3.IsHeli).Select(c => c.Item2).Distinct(System.StringComparer.OrdinalIgnoreCase))
+        {
+            damageView.PrewarmWrecks([wreck], _car?.Modern ?? true);
+            yield return null;
+        }
         MissionBuilder.Trace("spawn: wrecks prewarmed");
+        yield return null;
         // the gates the script slides (type-7 nodes): their meshes follow the sim's colliders
         if (_builder.Scenery is { } gateScenery)
         {
@@ -1017,8 +1108,13 @@ public partial class Main : Node3D
             pos = world.Player!.Pos.ToVector3();
             ApplyPlayOptions(playSettings);   // the options as they are now, over the checkpoint's copies
         }
-        Rebase(pos);
-        AddPlayerViews(world, setup.Combat);
+        yield return null;
+        if (!sliced || pos != _origin) Rebase(pos);
+        MissionBuilder.Trace("spawn: rebased on the car");
+        yield return null;
+        foreach (var step in AddPlayerViewsSteps(world, setup.Combat, staged: sliced)) yield return step;
+        MissionBuilder.Trace("spawn: player's views");
+        yield return null;
         ResumeViews();
         // the optional modern physics for the player's car (--modern-physics, or the setting; F7 flips it in play)
         _modernSetup = () => new I76.Game.Sim.Modern.ModernPhysics
@@ -1064,9 +1160,9 @@ public partial class Main : Node3D
     /// <summary>Combat's looks and sounds for the session's rounds and events.</summary>
     private CombatView? _combatView;
 
-    private void AddCombatView(I76.Sim.Weapons.Combat combat, Func<float>? predictedAlpha = null)
+    private void AddCombatView(I76.Sim.Weapons.Combat combat, Func<float>? predictedAlpha = null, EffectSprites? sprites = null, bool staged = false)
     {
-        AddChild(_combatView = new CombatView { Combat = combat, Origin = () => _origin, Audio = _audio, Sprites = new EffectSprites(_builder!), CarOf = v => _carNodes.GetValueOrDefault(v),
+        AddChild(_combatView = new CombatView { Combat = combat, Origin = () => _origin, Audio = _audio, Sprites = sprites ?? new EffectSprites(_builder!), Staged = staged, CarOf = v => _carNodes.GetValueOrDefault(v),
             Alpha = () => _sim?.Alpha ?? 1f, PredictedAlpha = predictedAlpha, Modern = () => !_mode1997, Builder = _builder, Name = "Combat",
             Inside = v => _car is { } c && c.Sim == v && c.CockpitCamera?.Current == true,
             SceneLight = Mathf.Clamp(_builder!.Light.Intensity * 1.5f, 0.25f, 1f) });
@@ -1077,20 +1173,33 @@ public partial class Main : Node3D
     /// (and the game the first run of the code behind them): hundreds of milliseconds in the frame that showed them. Rehearsed here
     /// for a few frames, behind the loading card (the world is paused and drawn under it), then taken away: nothing of it is left.
     /// </summary>
-    private async System.Threading.Tasks.Task WarmEffects()
+    private System.Threading.Tasks.Task WarmEffects() => RunSteps(WarmSteps(sliced: false), sliced: false);
+
+    /// <summary>
+    /// <see cref="WarmEffects"/> as steps: behind the card at once and four frames; <paramref name="sliced"/> (under the briefing), a
+    /// slice for each kind of effect, and the views' first run one view a frame before the four frames of all of them.
+    /// </summary>
+    private IEnumerable<object?> WarmSteps(bool sliced)
     {
-        if (System.Environment.GetEnvironmentVariable("I76_NO_WARMUP") == "1" || GetViewport().GetCamera3D() is not { } cam) return;
+        if (System.Environment.GetEnvironmentVariable("I76_NO_WARMUP") == "1" || GetViewport().GetCamera3D() is not { } cam) yield break;
         // a second playtest in a run: the renderer has made these pipelines and the views' code has run, in this look, once already
-        if (I76.Game.Editor.EditorSession.Playtest && (_warmedLooks & (_mode1997 ? 2 : 1)) != 0 && System.Environment.GetEnvironmentVariable("I76_WARM_AGAIN") != "1") { GD.Print("effects warm-up: done already in this look"); return; }
+        if (I76.Game.Editor.EditorSession.Playtest && (_warmedLooks & (_mode1997 ? 2 : 1)) != 0 && System.Environment.GetEnvironmentVariable("I76_WARM_AGAIN") != "1") { GD.Print("effects warm-up: done already in this look"); yield break; }
         _warmedLooks |= _mode1997 ? 2 : 1;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool paused = GetTree().Paused;   // (under a briefing the tree is held still already, and stays so)
         GetTree().Paused = true;
         // all of it at a spot far below the world, out of sight (the renderer makes a material's pipelines when its instance is made, seen
         // or not), and on stand-ins of its own: nothing of the game's is touched, nothing is left to take away but what was made
         var away = cam.GlobalPosition + Vector3.Down * 400f;
-        _combatView?.Warm(away);
+        if (_combatView is { } cv) foreach (var step in cv.WarmSteps(away)) yield return step;
+        MissionBuilder.Trace("warm-up: blasts");
+        yield return null;
         _combatView?.WarmImpacts(away);
+        MissionBuilder.Trace("warm-up: impacts");
+        yield return null;
         _combatView?.WarmExplosions();
+        MissionBuilder.Trace("warm-up: explosions");
+        yield return null;
         // the death is rehearsed on a stand-in for the player's car (never in the sim's list, freed after)
         // so the real car is never burnt and restored
         CarNode? stage = null;
@@ -1100,7 +1209,11 @@ public partial class Main : Node3D
             AddChild(stage);
             stage.Init(sv, sp.Body);
             stage.GlobalPosition = away;
+            MissionBuilder.Trace("warm-up: a stand-in car");
+            yield return null;
             _damageView?.Warm(stage);
+            MissionBuilder.Trace("warm-up: its death");
+            yield return null;
         }
         // the views' own per-frame code (the cockpit's panels, the HUD, the shadows, the weeds, the combat and damage views) runs for these
         // frames too: its first run is the first frame of play, a 150 ms stall (the code compiled, the panels' textures made)
@@ -1116,12 +1229,23 @@ public partial class Main : Node3D
         }
         Collect(this);
         var was = views.Select(v => v.ProcessMode).ToList();
-        foreach (var v in views) v.ProcessMode = Node.ProcessModeEnum.Always;
-        for (int i = 0; i < 4; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (sliced && _drops is { } drops) drops.GrowPerFrame = 24;   // the first view's drop shadows over a few frames
+        foreach (var v in views)
+        {
+            v.ProcessMode = Node.ProcessModeEnum.Always;
+            // under the briefing each view's first run (its code compiled, its textures made) has a frame of its own
+            if (sliced) { MissionBuilder.Trace($"warm-up: {v.Name}'s first frame"); yield return NextFrame; }
+        }
+        if (sliced && _drops is { } grow)
+        {
+            for (int i = 0; i < 60 && grow.Growing; i++) yield return NextFrame;
+            grow.GrowPerFrame = int.MaxValue;
+        }
+        for (int i = 0; i < 4; i++) yield return NextFrame;
         for (int i = 0; i < views.Count; i++) if (IsInstanceValid(views[i])) views[i].ProcessMode = was[i];
         if (stage is not null) { _damageView?.EndWarm(stage); stage.QueueFree(); }
         _combatView?.EndWarm();
-        GetTree().Paused = false;
+        GetTree().Paused = paused;
         GD.Print($"effects warmed up in {(System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0} ms");
     }
 
@@ -1239,37 +1363,44 @@ public partial class Main : Node3D
     /// </summary>
     private void SetupPlayerCar(CarNode node, I76.Sim.Vehicles.Vehicle vehicle, string carDef, I76.Sim.Weapons.Combat combat, bool handguns)
     {
-        var builder = _builder!;
+        foreach (var _ in SetupPlayerCarSteps(node, vehicle, carDef, combat, handguns, null, staged: false)) { }
+    }
+
+    /// <summary>
+    /// The player's car's models and the in-car view's meshes (the interior, the gauge rings and needles) and its dashboard layout:
+    /// assembling and meshes only, made on the build thread under a briefing (<see cref="MakeAhead"/>) or in <see cref="SetupPlayerCar"/>.
+    /// </summary>
+    private sealed record PlayerCarParts(string CarDef, I76.Formats.Assembly.AssembledModel Model, I76.Formats.Assembly.AssembledModel? Interior, System.Numerics.Vector3 Eye,
+        Mesh? Cockpit, Mesh? Ring1, Mesh? Ring6, Mesh? Needle, I76.Formats.Cockpit.EltLayout? Layout);
+
+    private static bool CabRing(I76.Formats.Assembly.ModelPart p, char n) => p.NodeName.Length == 8 && p.NodeName[4..7].Equals("RTC", System.StringComparison.OrdinalIgnoreCase) && p.NodeName[7] == n;
+    // the hood (V5 FT TP, the front zone's damage texture) apart, to be rebuilt as the front is hit
+    private static bool CabHood(I76.Formats.Assembly.ModelPart p) => p.Mesh.Faces.Any(f => I76.Formats.Assembly.DamageTextures.Zone(f.Texture) >= 0);
+
+    private static PlayerCarParts MakePlayerCarParts(MissionBuilder builder, string carDef)
+    {
         var model = new I76.Formats.Assembly.ModelAssembler(builder.Vfs) { SkipParts = [] }.Assemble(carDef)!;
-        _car = node; _sim!.Player = node;
-        _playerCollider = Collider(model, vehicle);
-        if (System.Environment.GetEnvironmentVariable("I76_DEBUG_CAM") is not null)
-        {
-            GD.Print($"collider centre {_playerCollider.Centre} radius {_playerCollider.Radius}");
-        }
         var interior = new I76.Formats.Assembly.ModelAssembler(builder.Vfs) { Detail = '5' }.Assemble(carDef);
         var vloc = model.Locations.FirstOrDefault(l => l.Tag == "VLOC" && l.Index == 40) ?? model.Locations.FirstOrDefault(l => l.Tag == "VLOC");
         var eye = vloc is null ? new System.Numerics.Vector3(-0.4f, 1.25f, 0) : new System.Numerics.Vector3(vloc.Transform.Translation[0], vloc.Transform.Translation[1], vloc.Transform.Translation[2]);
-        static bool Ring(I76.Formats.Assembly.ModelPart p, char n) => p.NodeName.Length == 8 && p.NodeName[4..7].Equals("RTC", System.StringComparison.OrdinalIgnoreCase) && p.NodeName[7] == n;
         // the roof panels (weapons, specials, damage, radar) drawn nearer than the body: see I76.Formats.Assembly.PanelPriority
         if (interior is not null)
             for (int i = 0; i < interior.Parts.Count; i++)
                 if (I76.Formats.Assembly.PanelPriority.PullForward(interior.Parts[i], eye))
                     interior.Parts[i] = interior.Parts[i] with { ToModel = interior.Parts[i].ToModel.ScaledAbout(eye, I76.Formats.Assembly.PanelPriority.Scale) };
-        // the hood (V5 FT TP, the front zone's damage texture) apart, to be rebuilt as the front is hit
-        static bool Hood(I76.Formats.Assembly.ModelPart p) => p.Mesh.Faces.Any(f => I76.Formats.Assembly.DamageTextures.Zone(f.Texture) >= 0);
-        node.AddCockpit(interior is null ? null : builder.Meshes!.Build(interior, wheels: false, include: p => !LowResTwin(interior, p.NodeName) && !HandgunMuzzle(p.NodeName) && !Ring(p, '6') && !Hood(p)), eye,
-            interior is null ? null : builder.Meshes!.Build(interior, wheels: false, include: p => Ring(p, '1')),
-            interior is null ? null : builder.Meshes!.Build(interior, wheels: false, include: p => Ring(p, '6')),
-            interior is null ? null : frameOf => builder.Meshes!.Build(interior, wheels: false, include: p => !LowResTwin(interior, p.NodeName) && Hood(p), frameOf: frameOf));
-        // the gauge needles: needle.geo at the VLOCs of kind 35 (speedo) and 36 (tacho), turned every frame
-        if (interior is not null && builder.Assembler?.Geo("needle") is { } needleGeo)
+        Mesh? cab = null, ring1 = null, ring6 = null, needle = null;
+        if (interior is not null)
         {
-            var nm = new I76.Formats.Assembly.AssembledModel { Definition = "needle", Kind = "sdf", ObjectCode = interior.ObjectCode };
-            nm.Parts.Add(new I76.Formats.Assembly.ModelPart("needle", needleGeo, I76.Formats.Assembly.Affine.Identity));
-            var needleMesh = builder.Meshes!.Build(nm, wheels: false);
-            foreach (var l in model.Locations.Where(l => l.Tag == "VLOC" && l.Index is 35 or 36))
-                node.AddNeedle(l.Index - 35, needleMesh, Coords.ToGodot(I76.Formats.Assembly.Affine.From(l.Transform)));
+            cab = builder.Meshes!.Build(interior, wheels: false, include: p => !LowResTwin(interior, p.NodeName) && !HandgunMuzzle(p.NodeName) && !CabRing(p, '6') && !CabHood(p));
+            ring1 = builder.Meshes!.Build(interior, wheels: false, include: p => CabRing(p, '1'));
+            ring6 = builder.Meshes!.Build(interior, wheels: false, include: p => CabRing(p, '6'));
+            // the gauge needles: needle.geo at the VLOCs of kind 35 (speedo) and 36 (tacho), turned every frame
+            if (builder.Assembler?.Geo("needle") is { } needleGeo)
+            {
+                var nm = new I76.Formats.Assembly.AssembledModel { Definition = "needle", Kind = "sdf", ObjectCode = interior.ObjectCode };
+                nm.Parts.Add(new I76.Formats.Assembly.ModelPart("needle", needleGeo, I76.Formats.Assembly.Affine.Identity));
+                needle = builder.Meshes!.Build(nm, wheels: false);
+            }
         }
         // the live dashboard: the layout the car's VDF names at VDFC +0x40, vpit_1.elt for every car
         string eltName = "vpit_1.elt";
@@ -1277,19 +1408,46 @@ public partial class Main : Node3D
             && builder.Vfs.TryRead(I76.Formats.Bin.CStr(vcfData, vc.PayloadOffset + 0x10, 13)) is { } vdfData
             && new I76.Formats.Bwd2.Bwd2File(vdfData).First("VDFC") is { } vd && I76.Formats.Bin.CStr(vdfData, vd.PayloadOffset + 0x40, 13) is { Length: > 0 } named)
             eltName = named;
-        if (builder.Vfs.TryRead(eltName.Length > 0 ? eltName : "vpit_1.elt") is { } eltData && builder.Resolver is { } res && builder.Textures is { } texf && builder.Materials is { } mats)
+        var layout = builder.Vfs.TryRead(eltName.Length > 0 ? eltName : "vpit_1.elt") is { } eltData ? I76.Formats.Cockpit.EltLayout.Parse(System.Text.Encoding.Latin1.GetString(eltData)) : null;
+        return new PlayerCarParts(carDef, model, interior, eye, cab, ring1, ring6, needle, layout);
+    }
+
+    /// <summary>
+    /// <see cref="SetupPlayerCar"/> as steps, a null between them, from <paramref name="made"/> when the build thread made it for this car;
+    /// <paramref name="staged"/>, the cockpit's own making a step at a time too (Cockpit.ReadySteps).
+    /// </summary>
+    private IEnumerable<object?> SetupPlayerCarSteps(CarNode node, I76.Sim.Vehicles.Vehicle vehicle, string carDef, I76.Sim.Weapons.Combat combat, bool handguns, PlayerCarParts? made, bool staged)
+    {
+        var builder = _builder!;
+        var parts = made is not null && made.CarDef.Equals(carDef, System.StringComparison.OrdinalIgnoreCase) ? made : MakePlayerCarParts(builder, carDef);
+        var model = parts.Model;
+        _car = node; _sim!.Player = node;
+        _playerCollider = Collider(model, vehicle);
+        if (System.Environment.GetEnvironmentVariable("I76_DEBUG_CAM") is not null)
         {
-            var layout = I76.Formats.Cockpit.EltLayout.Parse(System.Text.Encoding.Latin1.GetString(eltData));
+            GD.Print($"collider centre {_playerCollider.Centre} radius {_playerCollider.Radius}");
+        }
+        var interior = parts.Interior;
+        node.AddCockpit(parts.Cockpit, parts.Eye, parts.Ring1, parts.Ring6,
+            interior is null ? null : frameOf => builder.Meshes!.Build(interior, wheels: false, include: p => !LowResTwin(interior, p.NodeName) && CabHood(p), frameOf: frameOf));
+        if (interior is not null && parts.Needle is { } needleMesh)
+            foreach (var l in model.Locations.Where(l => l.Tag == "VLOC" && l.Index is 35 or 36))
+                node.AddNeedle(l.Index - 35, needleMesh, Coords.ToGodot(I76.Formats.Assembly.Affine.From(l.Transform)));
+        MissionBuilder.Trace("player's car: the in-car view");
+        yield return null;
+        if (parts.Layout is { } layout && builder.Resolver is { } res && builder.Textures is { } texf && builder.Materials is { } mats)
+        {
             var pit = new I76.Game.Sim.Cockpit
             {
                 Car = vehicle, Node3D = node, Panels = new I76.Game.Sim.CockpitPanels(layout, res, texf, mats),
                 Resolver = res, Textures = texf, Materials = mats, Combat = combat, Palette = builder.ActPalette, Audio = _audio, Name = "Cockpit",
-                LightVariant = DriverVariant(), Instruments = () => _extInstruments,
+                LightVariant = DriverVariant(), Instruments = () => _extInstruments, Staged = staged,
                 MirrorBackground = builder.ActPalette is { } ap ? Color.Color8(ap[0xea].R, ap[0xea].G, ap[0xea].B) : Colors.Black,
             };
             pit.MirrorSetting = I76.Game.Shell.ShellSettings.Load().Graphics[0xd];
             node.Dash3D = I76.Game.Shell.ShellSettings.Load().Dash3D;
             AddChild(pit);
+            if (staged) foreach (var step in pit.ReadySteps()) yield return step;
             pit.Faithful = _mode1997;
             _pit = pit;
             _sim.InCockpit = () => node.CockpitCamera?.Current == true;
@@ -1311,13 +1469,23 @@ public partial class Main : Node3D
 
     private void AddPlayerViews(I76.Sim.SimWorld world, I76.Sim.Weapons.Combat combat)
     {
+        foreach (var _ in AddPlayerViewsSteps(world, combat)) { }
+    }
+
+    /// <summary><see cref="AddPlayerViews"/> as steps, a null between them (under the briefing, a slice each).</summary>
+    private IEnumerable<object?> AddPlayerViewsSteps(I76.Sim.SimWorld world, I76.Sim.Weapons.Combat combat, bool staged = false)
+    {
         AddChild(new CabClip { Name = "CabClip", Player = () => _car, Cars = () => _carNodes.Values });
         var wiggle = new Wiggle { Name = "Wiggle", InCockpit = () => _car?.CockpitCamera?.Current == true, Player = () => _car?.Sim };
         AddChild(wiggle);
         if (combat.Damage is I76.Sim.Damage.DamageModel wdm) wdm.Damaging += wiggle.Damaging;
-        AddChild(new Hud { Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Network = () => _net is not null, HostAllowsCrosshair = () => _net?.Client.CrosshairAllowed == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
-            Texture = n => _builder?.Resolver?.FindByStem(n) is { } m ? _builder.Textures?.Get(m)?.Texture : null, Faithful = () => _mode1997, Palette = _builder?.ActPalette, Variant = DriverVariant(), ReadFile = n => _builder?.Vfs.TryRead(n) });
+        yield return null;
+        var hud = new Hud { Staged = staged, Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Network = () => _net is not null, HostAllowsCrosshair = () => _net?.Client.CrosshairAllowed == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
+            Texture = n => _builder?.Resolver?.FindByStem(n) is { } m ? _builder.Textures?.Get(m)?.Texture : null, Faithful = () => _mode1997, Palette = _builder?.ActPalette, Variant = DriverVariant(), ReadFile = n => _builder?.Vfs.TryRead(n) };
+        AddChild(hud);
+        if (staged) foreach (var step in hud.ReadySteps()) yield return step;
         AddMirrorTarget(combat);
+        yield return null;
         // a mission (or, with View Zoom Reset, a respawn) starts every view at the original's framing
         if (!MouseCamera.KeepZoom || _zoomMission != _opt.Mission) { MouseCamera.ResetAllZooms(); _zoomMission = _opt.Mission; }
         _zoomView = null;
@@ -1328,6 +1496,7 @@ public partial class Main : Node3D
             // the death orbit; in a network game the winner's too (the original's start-up: camera 0xfefe, mode 8)
             Orbit = () => _car is { } c && ((c.Sim.Flags & I76.Sim.Vehicles.VehicleFlags.Dead) != 0 || _netWinOrbit) };
         AddChild(_chase);
+        yield return null;
         _preset = new PresetCamera { Target = _car, Name = "Preset", LocalCentre = _chase.LocalCentre, Radius = _chase.Radius, Ground = _chase.Ground, Head = () => _pit?.HeadAngles ?? default };
         AddChild(_preset);
         _tv = new TargetViewCamera
@@ -1337,6 +1506,7 @@ public partial class Main : Node3D
             Expired = PopViewStack,
         };
         AddChild(_tv);
+        yield return null;
         _chase.Position = _car!.Position + new Vector3(0, 4, 9);
         _chase.MakeCurrent();
         // the engine's one projection (the original's camera projection, fov π/2 across a 4:3 view): 73.7° high
@@ -1430,40 +1600,67 @@ public partial class Main : Node3D
         }
     }
 
-    private void LoadMission()
+    /// <summary>A mission load begun: the builder made, its world still to build from <see cref="Msn"/>.</summary>
+    private sealed record Load(GameInstall Install, AssetVfs Vfs, string Msn, System.Diagnostics.Stopwatch Clock, MissionBuilder Builder);
+
+    private Load StartLoad()
     {
         var install = new GameInstall(_opt.Install!);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var vfs = new AssetVfs(install);
         var msn = MissionPath(install);
-        _builder = new MissionBuilder(vfs) { SkipVehicles = _opt.Drive is not null, DeferModern = _opt.Mode1997, EarlyHorizon = Horizon3D, WorldLoaded = I76.Game.Editor.EditorSession.Active ? w => I76.Game.Editor.EditorSession.Prepare(w, _builder!.Assembler!.ResolveDefinition) : null };
-        var world = _builder.Build(msn);
+        var builder = new MissionBuilder(vfs) { SkipVehicles = _opt.Drive is not null, DeferModern = _opt.Mode1997, EarlyHorizon = Horizon3D, WorldLoaded = I76.Game.Editor.EditorSession.Active ? w => I76.Game.Editor.EditorSession.Prepare(w, _builder!.Assembler!.ResolveDefinition) : null };
+        return new Load(install, vfs, msn, sw, builder);
+    }
+
+    private void LoadMission()
+    {
+        var start = StartLoad();
+        _builder = start.Builder;
+        AttachWorld(start, _builder.Build(start.Msn));
+    }
+
+    /// <summary>The rest of the build on the main thread: the built world into the tree, the sky, the music made, the camera.</summary>
+    private void AttachWorld(Load start, Node3D world)
+    {
+        foreach (var _ in AttachSteps(start, world)) { }
+    }
+
+    /// <summary>The camera's place at the start, in game units: over the terrain's centre, or where --cam says (and the simulation's origin until the car is placed).</summary>
+    private System.Numerics.Vector3 StartOrigin(I76.Formats.Assembly.MissionWorld w)
+    {
+        if (_opt.Cam is { Length: >= 3 } cam) return new System.Numerics.Vector3(cam[0], cam[1], cam[2]);
+        var c = w.Centre();
+        return new System.Numerics.Vector3(c.X, c.Y + 60, c.Z);
+    }
+
+    /// <summary><see cref="AttachWorld"/> as steps, a null between them (under the briefing, a slice each).</summary>
+    private IEnumerable<object?> AttachSteps(Load start, Node3D world)
+    {
+        var install = start.Install;
+        var sw = start.Clock;
+        var vfs = start.Vfs;
         _worldRoot.AddChild(world);
         MissionBuilder.Trace("world in tree");
-        _builder.Scenery!.Modern = !_mode1997;
+        _builder!.Scenery!.Modern = !_mode1997;
         var w = _builder.World!;
         _status = $"{w.Mission.Name}: {sw.ElapsedMilliseconds} ms, {_builder.Terrain!.ChunkCount} chunks, " +
                   $"{_builder.Roads!.Quads} road quads ({_builder.RoadChunks} chunks painted, {_builder.RoadBakeMs} ms), {_builder.Scenery!.Loaded}/{w.Placements.Count + w.LinePlacements.Count} placements incl. {w.LinePlacements.Count} fence links ({_builder.Scenery.Keywords} keywords, {_builder.Scenery.Failed} failed)";
         GD.Print(_status);
-        ApplySky();
+        yield return null;
+        foreach (var step in ApplySkySteps()) yield return step;
+        yield return null;
         AddSoftwareLook(install, vfs);   // MainSoftware.cs
         MissionBuilder.Trace("sky");
+        yield return null;
         if (!_opt.NoMusic) PlayMusic(install, _builder.Settings);   // started after the card and the briefing
 
-        // Start over the terrain centre, or where --cam says.
-        var c = w.Centre();
-        if (_opt.Cam is { Length: >= 3 } cam)
-        {
-            Rebase(new System.Numerics.Vector3(cam[0], cam[1], cam[2]));
-            _cam.Position = Vector3.Zero;
-            _cam.SetYawPitch(cam.Length > 3 ? cam[3] : 0, cam.Length > 4 ? cam[4] : 0);
-        }
-        else
-        {
-            Rebase(new System.Numerics.Vector3(c.X, c.Y + 60, c.Z));
-            _cam.Position = Vector3.Zero;
-            _cam.SetYawPitch(0, -15);
-        }
+        // Start over the terrain centre, or where --cam says (under a briefing, on the car the build thread placed: the scene moved
+        // once, not again when the car is made)
+        Rebase(_opt.Cam is null && _ahead?.Setup?.World.Player is { } startCar ? startCar.Pos.ToVector3() : StartOrigin(w));
+        _cam.Position = Vector3.Zero;
+        if (_opt.Cam is { Length: >= 3 } cam) _cam.SetYawPitch(cam.Length > 3 ? cam[3] : 0, cam.Length > 4 ? cam[4] : 0);
+        else _cam.SetYawPitch(0, -15);
         // I76_CAM_AT_LIGHT=1: looking at the mission's sun or moon instead (a capture of the sky's light)
         if (System.Environment.GetEnvironmentVariable("I76_CAM_AT_LIGHT") == "1")
         {
@@ -1473,14 +1670,15 @@ public partial class Main : Node3D
     }
 
     /// <summary>Plays the named movies from smk/ one after another (any missing are passed over), then runs <paramref name="then"/>.</summary>
-    private void PlayMovies(GameInstall install, IReadOnlyList<string> names, System.Action then, int i = 0)
+    private void PlayMovies(GameInstall install, IReadOnlyList<string> names, System.Action then, int i = 0, bool overLoad = false, System.Func<bool>? waiting = null)
     {
         while (i < names.Count && MoviePlayer.Find(install, names[i]) is null) i++;
         if (i >= names.Count) { then(); BootSplash.Dismiss(); return; }
         DropMenuMusic();   // a briefing or cut-scene has its own sound; the menu track carried over the loading card ends here
-        var player = new MoviePlayer { Path = MoviePlayer.Find(install, names[i])!, Faithful = _opt.Mode1997, Nitro = install.IsNitro, Name = "Movie" };
+        var player = new MoviePlayer { Path = MoviePlayer.Find(install, names[i])!, Faithful = _opt.Mode1997, Nitro = install.IsNitro, OverLoad = overLoad, Waiting = waiting, Name = "Movie",
+            WaitingTag = waiting is null ? null : new StandByTag { Install = install, Name = "StandBy" } };
         GD.Print($"movie: {names[i]}");
-        player.Finished += () => { GD.Print($"movie: {names[i]} over"); PlayMovies(install, names, then, i + 1); };
+        player.Finished += () => { GD.Print($"movie: {names[i]} over"); PlayMovies(install, names, then, i + 1, overLoad, waiting); };
         AddChild(player);
         BootSplash.Dismiss();
     }
@@ -1499,6 +1697,7 @@ public partial class Main : Node3D
         if (_net is null) GetTree().Paused = true;
         void Resume()
         {
+            MissionBuilder.Trace($"movie {name} over: the mission goes on");
             GetTree().Paused = false;
             if (music is null || !IsInstanceValid(music)) return;
             music.StreamPaused = false;
@@ -1609,7 +1808,13 @@ public partial class Main : Node3D
     /// <summary>The mission's sky texture on the engine's dome, in both modes; modern fogs toward its average colour.</summary>
     private void ApplySky()
     {
-        if (_builder?.SkyTexture is not { } tex) return;
+        foreach (var _ in ApplySkySteps()) { }
+    }
+
+    /// <summary><see cref="ApplySky"/> as steps, a null between them (under the briefing, a slice each).</summary>
+    private IEnumerable<object?> ApplySkySteps()
+    {
+        if (_builder?.SkyTexture is not { } tex) yield break;
         var mat = _sky1997 = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sky_dome.gdshader") };
         mat.SetShaderParameter("clouds", tex);
         mat.SetShaderParameter("far_clip", Far1997);
@@ -1638,8 +1843,11 @@ public partial class Main : Node3D
         I76.Game.World.ObjectLight.Set("i76_fade", new Vector2(I76.Formats.Mission.Lighting.FadeA, I76.Formats.Mission.Lighting.FadeB));
         I76.Game.World.ObjectLight.SetRamp(_cardRamp = LumaRamp());
         var sky = new Sky { SkyMaterial = mat, ProcessMode = Sky.ProcessModeEnum.Realtime };
+        yield return null;
         var modernSky = ModernSky(mat, light);
+        yield return null;
         AddHorizonTerrain(modernSky, light);
+        yield return null;
         // the modern sky's clouds move (TIME), so its radiance (ambient light and reflections) is redone all the
         // time: Incremental spreads each redo over a few frames (0.45 ms a frame less than Realtime's every frame);
         // the sky itself is drawn every frame either way. I76_SKY_REALTIME=1 for the old way.
@@ -2092,7 +2300,13 @@ public partial class Main : Node3D
     /// </summary>
     private void AddDropShadows()
     {
-        if (_builder?.World is not { } w) return;
+        foreach (var _ in AddDropShadowsSteps(staged: false)) { }
+    }
+
+    /// <summary><see cref="AddDropShadows"/> as steps (<paramref name="staged"/>: the shadows' materials a layer a step, DropShadows.ReadySteps).</summary>
+    private IEnumerable<object?> AddDropShadowsSteps(bool staged)
+    {
+        if (_builder?.World is not { } w) yield break;
         // the bare ground the cars stand on (the outside ground's past the map's tiles), else the map's own
         float Bare(double x, double z) => _sim?.Session?.World.Ground is { } sg ? sg.BareHeight(x, z) : (float)w.BilinearHeight(x, z);
         // a night preset: the cars' lights (NightLights), which also pick the shadows' light near them
@@ -2108,11 +2322,13 @@ public partial class Main : Node3D
         }
         _drops = new DropShadows
         {
+            Staged = staged,
             Name = "DropShadows", Ground = (x, z) => Bare(x, z), Origin = () => _origin,
             Casters = Casters, Light = () => _lightDir,
             Surface = (x, y, z) => _sim?.Session?.World.Ground is { } g ? g.Query(x, y, z).Height : (float)w.BilinearHeight(x, z), LightAt = night is null ? null : night.ShadowLight,
         };
         AddChild(_drops);
+        if (staged) foreach (var step in _drops.ReadySteps()) yield return step;
         UpdateDrops();
     }
 
@@ -2217,6 +2433,12 @@ public partial class Main : Node3D
 
     private void SetMode1997(bool on)
     {
+        foreach (var _ in SetMode1997Steps(on)) { }
+    }
+
+    /// <summary><see cref="SetMode1997"/> as steps, a null between them (a mission loading under its briefing draws a frame at each).</summary>
+    private IEnumerable<object?> SetMode1997Steps(bool on)
+    {
         // the modern look not built yet (a 1997 start builds none of it): build it now, showing 1997 meanwhile
         _wantModern = false;
         if (!on && (_modernJob is not null || _builder is { DeferModern: true, ModernReady: false }))
@@ -2225,12 +2447,14 @@ public partial class Main : Node3D
             _wantModern = true;
             GD.Print("modern look asked for while it builds: standing by");
             ShowStandBy();
-            return;
+            yield break;
         }
         _standBy?.QueueFree(); _standBy = null;
         _mode1997 = on;
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
         _builder?.Terrain?.UseModern(!on);
+        MissionBuilder.Trace("look: terrain");
+        yield return null;
         _builder?.OutsideNode?.UseModern(!on);
         _builder?.Roads?.SetMode1997(on);
         _builder?.RoadsOffGround?.SetMode1997(on);
@@ -2251,15 +2475,20 @@ public partial class Main : Node3D
         _sun.ShadowBlur = on ? 0f : 1f;
         _sun.DirectionalShadowMaxDistance = on ? 600 : 1500;
         MissionBuilder.Trace("look: shadows, draw distance");
-        _builder?.Materials?.SetMode1997(on);
+        yield return null;
+        if (_builder?.Materials is { } materials) foreach (var step in materials.SetMode1997Steps(on)) yield return step;
+        yield return null;
         if (_builder?.Scenery is { } scenery) scenery.Modern = !on;
         MissionBuilder.Trace("look: materials, scenery");
+        yield return null;
         if (_pit is not null) _pit.Faithful = on;
         if (_sim is not null) foreach (var c in _sim.Cars) { c.Modern = !on; if (c.Wrecked) _damageView?.Rebuild(c); }   // the wreck's shape: modern shell or the 1997 box
         GetViewport().Msaa3D = on ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa4X;
         MissionBuilder.Trace("look: msaa");
+        yield return null;
         ApplyModernQuality();
         MissionBuilder.Trace("look: modern quality");
+        yield return null;
         ApplySoftware();   // MainSoftware.cs
         if (on) UpdateVegetation();   // ApplyModernQuality leaves the 1997 look alone: hide the plants here
     }
@@ -2347,6 +2576,7 @@ public partial class Main : Node3D
     /// </summary>
     public override void _ExitTree()
     {
+        _buildJob?.GiveUp();   // a mission building under its briefing: the thread stops at its next stage
         if (Controls.Held == _held) Controls.Held = null;   // (a reloaded scene may have set its own already)
         if (I76.Game.ForceFeedback.Held?.Target == this) I76.Game.ForceFeedback.Held = null;   // it would keep this scene, and all it built, alive
         MouseCamera.Active = false;

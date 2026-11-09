@@ -44,10 +44,16 @@ public static class MainThread
     /// <summary>Called once on the main thread (Main._Ready).</summary>
     public static void Mark() => _id = System.Environment.CurrentManagedThreadId;
 
+    /// <summary>
+    /// This thread builds a scene of its own outside the tree (a mission built under its briefing, Main.BuildUnderBriefing): its
+    /// nodes and resources are the engine's to make on any thread while no other thread can reach them, so the check passes.
+    /// </summary>
+    [System.ThreadStatic] public static bool OwnsItsScene;
+
     [System.Diagnostics.Conditional("DEBUG")]
     public static void Check(string what)
     {
-        if (_id != 0 && System.Environment.CurrentManagedThreadId != _id)
+        if (_id != 0 && System.Environment.CurrentManagedThreadId != _id && !OwnsItsScene)
             throw new System.InvalidOperationException($"{what}: engine work off the main thread (thread {System.Environment.CurrentManagedThreadId})");
     }
 }

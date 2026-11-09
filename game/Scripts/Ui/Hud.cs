@@ -49,20 +49,32 @@ public partial class Hud : CanvasLayer
     public Func<string, byte[]?>? ReadFile { get; set; }
     private ColorRect? _binoMask;
 
+    /// <summary>Made by <see cref="ReadySteps"/>, a step at a time, by whoever added it (a mission loading under its briefing), not all in <see cref="_Ready"/>.</summary>
+    public bool Staged { get; init; }
+
     public override void _Ready()
+    {
+        if (!Staged) foreach (var _ in ReadySteps()) { }
+    }
+
+    /// <summary>What <see cref="_Ready"/> makes (the crosshair, the 2D instruments, the target brackets, the binoculars), a null between them.</summary>
+    public IEnumerable<object?> ReadySteps()
     {
         // the crosshair under the 2D instrument panels, the target brackets over them, the handset over all
         if (Combat is not null && Origin is not null)
             AddChild(new ChaseCrosshair { Player = () => Car?.Invoke(), Combat = Combat, Origin = Origin, CarOf = CarOf, Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Faithful = () => Faithful?.Invoke() == true, Name = "Crosshair" });
+        yield return null;
         if (Pit is not null) AddChild(_instruments = new ExtInstruments { Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Name = "ExtInstruments", Visible = false });
         _cb = Label(18);
         _cb.HorizontalAlignment = HorizontalAlignment.Left;
         _cb.AnchorTop = _cb.AnchorBottom = 1;
         _cb.OffsetLeft = 244; _cb.OffsetTop = -60;
         AddChild(_cb);
+        yield return null;
         if (Combat is not null && Origin is not null)
             AddChild(new TargetIndicator { Player = () => Car?.Invoke(), Combat = Combat, Origin = Origin, CarOf = CarOf, Name = "Target",
                 Look1997 = new TargetIndicator1997 { On = () => Faithful?.Invoke() == true, Combat = Combat, Origin = Origin, CarOf = CarOf, Texture = n => Texture?.Invoke(n), Palette = Palette } });
+        yield return null;
         // the binoculars' frame: over the view, the brackets and the handset, under the text (drawn after the
         // frame and before the text panes)
         if (BinocularMaskMaterial() is { } bm)

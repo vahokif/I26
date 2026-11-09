@@ -118,6 +118,8 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_NO_OVERLAY` | capture | Leave the debug overlay out. |
 | `I76_NO_SCRIPT_CAM` | capture | `1`: ignore the mission script's camera moves (keep the cockpit view). |
 | `I76_MOVIE_HOLD` | capture | Hold a movie on a frame number. |
+| `I76_MOVIE_SKIP` | capture | `N`: skip a movie N drawn frames after its first, as a key would (with Load During Briefing a press before the mission is ready does nothing). |
+| `I76_MOVIE_END` | capture | `N`: the movie runs out N drawn frames after its first, as at its end (with Load During Briefing, its last frame held under "PLEASE STAND BY" until the mission is ready). |
 
 ## Map editor (docs/map-editor.md)
 
@@ -276,9 +278,11 @@ Turn off Cheater Options clears it. Not there yet: freezing the AI and spawning 
 
 | Variable | Kind | What it does |
 |---|---|---|
-| `I76_BUILD_TRACE` | debug | `1`: stamp each mission build stage on stdout (and the first frames drawn after it); `hash`: also hash what the bakes made (road layers, ground materials, distant terrain), to compare two builds or a cached bake with a fresh one bit for bit. |
+| `I76_BUILD_TRACE` | debug | `1`: stamp each mission build stage on stdout (and the first frames drawn after it; under a briefing, Load During Briefing, the main thread's slices over 10 ms, `slice: N ms after STAGE`, with the GC's pauses in them); `hash`: also hash what the bakes made (road layers, ground materials, distant terrain), to compare two builds or a cached bake with a fresh one bit for bit. |
 | `I76_STREAM_DEBUG` | capture | `1`: a map that fills the grid streams its terrain chunks (TerrainNode, docs/deviations.md): prints each look at the camera (chunks held, jobs in flight) and the mean cost of a chunk's parts every 100 made. |
 | `I76_VEG_STATS`, `I76_VEG_PROBE` | debug | `1`: the vegetation's placement cell counts after the first chunks, and once a second the plants attached, nodes and plants per detail tier; the tumbleweeds' count, bursts, catches on shrubs, restarts, the CPU time a frame and the nearest one; with `I76_VEG_PROBE=x0,z0,x1,z1`, the plants of each layer in that game rectangle. |
+| `I76_STATE_HASH` | debug | `N`: log the simulation's state hash every 100 ticks up to tick N (`state hash: tick T HASH`), to compare two starts of a mission with the same `--seed` (Load During Briefing on and off start the same game). |
+| `I76_BUILD_PACE` | debug | `0`: a mission built under its briefing (Load During Briefing) keeps the player's frame cap and VSync instead of up to 240 frames a second under Mailbox VSync; the build then waits a drawn frame for each call to the renderer that returns a value (two to three times as long). |
 | `I76_DEBUG_CAM`, `I76_DEBUG_PLAYER` | debug | Scripted camera and player debug lines (`SimDriver`), with each change of the player's tyre sounds. |
 | `I76_MUSIC_PROBE` | debug | `1`: log every music player four times a second. |
 | `I76_MUSIC_SEQUENCE` | setting | `retail`: the 1997 game's mission music (N..14, then 2..14, each restart on a 60 s poll); `gog`: the 1998 GOG build's (the mission's track, then track 2 on a 60 s poll). Default: on to the next track at once, wrapping to track 2 after the last. |

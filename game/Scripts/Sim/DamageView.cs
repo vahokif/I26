@@ -151,34 +151,65 @@ public partial class DamageView : Node3D
     }
 
     /// <summary>
-    /// The burnt look of these kinds of car, made now: the first death of each kind cost 15 to 20 ms of assembling and building its
-    /// wreck, a stall in the frame its explosion went up. The player's car and a melee's whole roster, behind the loading card.
+    /// The wrecks' and the tyres' meshes, made once a kind of car: a view's own, or one made ahead of it on another thread (a mission
+    /// building under its briefing: <see cref="Prewarm"/> there, nothing of it reachable from the main thread until the view takes it).
     /// </summary>
-    private readonly Dictionary<(string, int, bool), ArrayMesh?> _tyres = new();
-
-    /// <summary>A wheel's mesh, whole or blown, made once per kind of car: a dying car's tyres go flat in the frame of its death (7 ms for the first, 4 for each after).</summary>
-    private ArrayMesh? TyreMesh(string def, int slot, bool blown, ref AssembledModel? model)
+    public sealed class WreckMeshes(World.MissionBuilder builder)
     {
-        if (_tyres.TryGetValue((def, slot, blown), out var mesh)) return mesh;
-        mesh = (model ??= Builder.Assembler!.Assemble(def)) is { } am ? Builder.Meshes!.BuildWheel(am, slot, blown) : null;
-        return _tyres[(def, slot, blown)] = mesh;
-    }
+        private readonly Dictionary<(string, int, bool), ArrayMesh?> _tyres = new();
+        /// <summary>A model's burnt look (its body and lamp meshes), made once: the key is the car's kind and the parts the wreck keeps.</summary>
+        private readonly Dictionary<string, (ArrayMesh? Body, CarNode.LampMeshes Lamps)> _wrecks = new();
+        private readonly HashSet<(string, bool)> _prewarmed = [];
 
-    public void PrewarmWrecks(IEnumerable<string> defs, bool modern)
-    {
-        foreach (var def in defs.Distinct(System.StringComparer.OrdinalIgnoreCase))
+        /// <summary>A wheel's mesh, whole or blown, made once per kind of car: a dying car's tyres go flat in the frame of its death (7 ms for the first, 4 for each after).</summary>
+        public ArrayMesh? TyreMesh(string def, int slot, bool blown, ref AssembledModel? model)
         {
-            // as Rebuild will ask for it at the death of a car with nothing damaged before
-            var asm = new ModelAssembler(Builder.Vfs) { PartCondition = _ => '1', SkipParts = [], Wrecked = true, WreckShape = modern };
-            try
+            if (_tyres.TryGetValue((def, slot, blown), out var mesh)) return mesh;
+            mesh = (model ??= builder.Assembler!.Assemble(def)) is { } am ? builder.Meshes!.BuildWheel(am, slot, blown) : null;
+            return _tyres[(def, slot, blown)] = mesh;
+        }
+
+        public (ArrayMesh? Body, CarNode.LampMeshes Lamps) WreckLook(string def, bool modern, AssembledModel m)
+        {
+            string key = def + "|" + modern + "|" + string.Join(',', m.Parts.Select(p => p.NodeName));
+            if (_wrecks.TryGetValue(key, out var look)) return look;
+            // the wreck's texture frames do not depend on the car (CarNode.TexFrame, wrecked), so every car of the kind shares them
+            var body = builder.Meshes!.Build(m, wheels: false, include: CarNode.BodyParts(m), bothSides: modern,
+                frameOf: t => DamageTextures.Zone(t) >= 0 ? (modern ? 2 : DamageTextures.WreckFrame) : 0);
+            var lamps = CarNode.BuildLamps(builder.Meshes, m, new ModelAssembler(builder.Vfs) { SkipParts = [] }.Assemble(def));
+            return _wrecks[key] = (body, lamps);
+        }
+
+        /// <summary>
+        /// The burnt look of these kinds of car, made now: the first death of each kind cost 15 to 20 ms of assembling and building its
+        /// wreck, a stall in the frame its explosion went up. The player's car and a melee's whole roster, behind the loading card.
+        /// </summary>
+        public void Prewarm(IEnumerable<string> defs, bool modern)
+        {
+            foreach (var def in defs.Distinct(System.StringComparer.OrdinalIgnoreCase))
             {
-                if (asm.Assemble(def) is { } m) WreckLook(def, modern, m);
-                AssembledModel? whole = null;
-                for (int slot = 0; slot < 6; slot++) TyreMesh(def, slot, true, ref whole);
+                if (!_prewarmed.Add((def.ToLowerInvariant(), modern))) continue;
+                // as Rebuild will ask for it at the death of a car with nothing damaged before
+                var asm = new ModelAssembler(builder.Vfs) { PartCondition = _ => '1', SkipParts = [], Wrecked = true, WreckShape = modern };
+                try
+                {
+                    if (asm.Assemble(def) is { } m) WreckLook(def, modern, m);
+                    AssembledModel? whole = null;
+                    for (int slot = 0; slot < 6; slot++) TyreMesh(def, slot, true, ref whole);
+                }
+                catch (System.Exception e) { GD.Print($"wreck prewarm {def}: {e.Message}"); }
             }
-            catch (System.Exception e) { GD.Print($"wreck prewarm {def}: {e.Message}"); }
         }
     }
+
+    /// <summary>The wrecks' meshes made ahead (<see cref="WreckMeshes"/>), or null: the view makes its own.</summary>
+    public WreckMeshes? Wrecks { get; init; }
+    private WreckMeshes? _wreckMeshes;
+    private WreckMeshes WreckCache => _wreckMeshes ??= Wrecks ?? new WreckMeshes(Builder);
+
+    private ArrayMesh? TyreMesh(string def, int slot, bool blown, ref AssembledModel? model) => WreckCache.TyreMesh(def, slot, blown, ref model);
+
+    public void PrewarmWrecks(IEnumerable<string> defs, bool modern) => WreckCache.Prewarm(defs, modern);
 
     /// <summary>
     /// A rehearsal of a death behind the loading card, on a stand-in for a car: burnt out and its fire lit, kept alive while the tree is paused so the
@@ -220,19 +251,7 @@ public partial class DamageView : Node3D
 
     private static bool IsHeli(CarNode car) => car.Sim?.IsHeli == true;
 
-    /// <summary>A model's burnt look (its body and lamp meshes), made once: the key is the car's kind and the parts the wreck keeps.</summary>
-    private readonly Dictionary<string, (ArrayMesh? Body, CarNode.LampMeshes Lamps)> _wrecks = new();
-
-    private (ArrayMesh? Body, CarNode.LampMeshes Lamps) WreckLook(string def, bool modern, AssembledModel m)
-    {
-        string key = def + "|" + modern + "|" + string.Join(',', m.Parts.Select(p => p.NodeName));
-        if (_wrecks.TryGetValue(key, out var look)) return look;
-        // the wreck's texture frames do not depend on the car (CarNode.TexFrame, wrecked), so every car of the kind shares them
-        var body = Builder.Meshes!.Build(m, wheels: false, include: CarNode.BodyParts(m), bothSides: modern,
-            frameOf: t => DamageTextures.Zone(t) >= 0 ? (modern ? 2 : DamageTextures.WreckFrame) : 0);
-        var lamps = CarNode.BuildLamps(Builder.Meshes, m, new ModelAssembler(Builder.Vfs) { SkipParts = [] }.Assemble(def));
-        return _wrecks[key] = (body, lamps);
-    }
+    private (ArrayMesh? Body, CarNode.LampMeshes Lamps) WreckLook(string def, bool modern, AssembledModel m) => WreckCache.WreckLook(def, modern, m);
 
     public void Rebuild(CarNode car)
     {

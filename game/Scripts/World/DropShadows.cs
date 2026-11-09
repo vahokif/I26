@@ -86,19 +86,40 @@ public partial class DropShadows : Node3D
     private static Shader[]? _layerShaders;
     private static Shader? _farShader;
 
+    /// <summary>
+    /// The shaders (one per layer, as the stencil reference is in the code), made once for the run: a new Shader is compiled again,
+    /// tens of ms for the set. On any thread (a mission building under its briefing makes them ahead of the node).
+    /// </summary>
+    public static void PrepareShaders()
+    {
+        if (_layerShaders is { } done && done.All(s => s is not null) && _farShader is not null) return;
+        var code = GD.Load<Shader>("res://Shaders/drop_shadow_soft.gdshader").Code;
+        var layers = _layerShaders ?? new Shader[Layers];
+        for (int i = 0; i < Layers; i++) layers[i] ??= new Shader { Code = code.Replace("compare_not_equal, 1;", $"compare_not_equal, {i + 1};") };
+        _farShader ??= new Shader { Code = code };
+        _layerShaders = layers;
+    }
+
+    /// <summary>Made by <see cref="ReadySteps"/>, a step at a time, by whoever added it (a mission loading under its briefing), not all in <see cref="_Ready"/>.</summary>
+    public bool Staged { get; init; }
+
     public override void _Ready()
     {
+        if (!Staged) foreach (var _ in ReadySteps()) { }
+    }
+
+    /// <summary>What <see cref="_Ready"/> makes (the layers' materials), a null after each; all of it before the node is processed.</summary>
+    public IEnumerable<object?> ReadySteps()
+    {
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/drop_shadow_1997.gdshader") };
-        var code = GD.Load<Shader>("res://Shaders/drop_shadow_soft.gdshader").Code;
-        // the shaders (one per layer, as the stencil reference is in the code) are made once for the run: a new Shader is compiled again, tens of ms for the set
-        _layerShaders ??= new Shader[Layers];
-        _farShader ??= new Shader { Code = code };
+        PrepareShaders();
+        yield return null;
         for (int i = 0; i < Layers; i++)
         {
             // a Vogel disc: layer i at radius sqrt((i + .5) / n), turned by the golden angle
             float r = Mathf.Sqrt((i + 0.5f) / Layers), a = i * 2.39996f;
             // the stencil reference is a literal in the shader, so one shader per layer
-            var m = new ShaderMaterial { Shader = _layerShaders[i] ??= new Shader { Code = code.Replace("compare_not_equal, 1;", $"compare_not_equal, {i + 1};") } };
+            var m = new ShaderMaterial { Shader = _layerShaders![i] };
             m.SetShaderParameter(Jitter, new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
             m.SetShaderParameter(SpreadName, Spread);
             // the layer's own stencil reference: one pixel is covered once per layer
@@ -106,6 +127,7 @@ public partial class DropShadows : Node3D
             m.RenderPriority = -100 + i;
             if (i > 0) _softMats[i - 1].NextPass = m;
             _softMats[i] = m;
+            yield return null;
         }
         _far = new ShaderMaterial { Shader = _farShader };   // one layer, with the first one's stencil reference
         _far.SetShaderParameter(Jitter, Vector2.Zero);
@@ -122,9 +144,18 @@ public partial class DropShadows : Node3D
         return Ground(g.X, g.Z) - o.Y;
     }
 
+    /// <summary>
+    /// The most shadow instances a frame adds to the pool (the casters past it are left for the next frames: <see cref="Growing"/>).
+    /// A mission loading under its briefing grows the first view's pool over a few frames instead of all in one; unlimited otherwise.
+    /// </summary>
+    public int GrowPerFrame { get; set; } = int.MaxValue;
+    /// <summary>The last frame stopped at <see cref="GrowPerFrame"/>.</summary>
+    public bool Growing { get; private set; }
+
     public override void _Process(double delta)
     {
-        int used = 0;
+        int used = 0, grown = 0;
+        Growing = false;
         var origin = Origin();
         var light = Light().Normalized();
         if (origin != _drapedOrigin || light.DistanceTo(_drapedLight) > 0.002f) { _draped.Clear(); _drapedOrigin = origin; _drapedLight = light; }   // the floating origin or the light moved
@@ -162,6 +193,7 @@ public partial class DropShadows : Node3D
                 if (Plane(centre, cl, !isStatic) is not { } plane) continue;
                 if (used == _pool.Count)
                 {
+                    if (grown++ >= GrowPerFrame) { Growing = true; break; }
                     var mi = new MeshInstance3D { MaterialOverride = _soft ? _soft0 : _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
                     AddChild(mi);
                     _pool.Add(mi);

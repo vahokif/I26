@@ -221,7 +221,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private int _savedFlags;
     private I76.Formats.Input.RumbleMode _savedRumble;
     private int _savedRumbleStrength;
-    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair;
+    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing;
     private int _savedRate, _savedDownloads;
     private static readonly (int Y, string Label, int Bit)[] Rows =
     [
@@ -249,7 +249,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     public static readonly string[] PortRows =
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
-        "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength",
+        "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
     ];
 
     protected override void Build()
@@ -269,6 +269,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedCrosshair = s.ChaseCrosshair;
         _savedRumble = s.RumbleMode;
         _savedRumbleStrength = s.RumbleStrength;
+        _savedBriefing = s.BriefingWhileLoading;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
         // the original's six check rows on consecutive ruled lines. The sheet prints a check box only on every other line (where
@@ -326,6 +327,9 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         // Rumble (docs/playing.md): the game's own effects, with the port's pulses added, or off; and the strength of every level
         Step(PortRows[11], () => s.RumbleMode = (I76.Formats.Input.RumbleMode)(((int)s.RumbleMode + 1) % 3), () => s.RumbleMode.ToString());
         Step(PortRows[12], () => s.RumbleStrength = I76.Formats.Input.RumbleStrength.Next(s.RumbleStrength), () => s.RumbleStrength + " %");
+        // Load During Briefing (docs/deviations.md): a mission's briefing plays while the mission builds, the loading card before it
+        // (and after it, while the build finishes, if it is skipped); off, the original's order: the load, then the briefing
+        Toggle(PortRows[13], () => s.BriefingWhileLoading, () => s.BriefingWhileLoading = !s.BriefingWhileLoading);
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
         // Check for Updates (upstream's row, under the port's own): whether the next start asks GitHub if a newer release exists (a line under the version says so)
@@ -368,7 +372,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private void Cancel()
     {
         var s = Shell.Settings;
-        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength;
+        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored
         Shell.Overlay(new OptionsScreen());

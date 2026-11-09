@@ -157,6 +157,12 @@ Play Options' list the Rumble row steps Original (those effects only, the defaul
 gear changes, the starter, each kind of weapon's shot and a light engine growl) and Off; Rumble Strength sets 25 to 150 % on
 every level. Both apply when a mission starts.
 
+**Briefings while loading.** A mission's briefing plays while the mission loads (Play Options' Load During Briefing, the
+last row of its list; on by default, in both looks): the loading card shows first, then the briefing, and a briefing
+watched to its end goes straight into the mission. While "PLEASE STAND BY . . ." shows in the movie's corner the mission
+is not ready yet and the briefing cannot be skipped; once it fades, a skip goes straight in (a briefing that ends first waits
+on its last frame). Off, the mission loads behind the card first and the briefing plays after, as in the original.
+
 **Joysticks.** A flight stick, wheel or any other USB device that is not a game pad is found too (it is joystick 1 when
 there is no game pad). Out of the box the stick steers sideways and accelerates (forward) or brakes (back), the trigger
 fires, buttons 2 to 10 cycle, target, brake, link, map, horn, view and reverse, and the hat looks. Calibrate opens the

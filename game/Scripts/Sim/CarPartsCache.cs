@@ -35,12 +35,33 @@ public sealed class CarPartsCache(I76.Formats.Vfs.AssetVfs vfs, Func<Assets.Mesh
     public Parts Get(string carDef, bool heli = false)
     {
         if (!heli && _parts.TryGetValue(carDef, out var hit)) return hit;
+        lock (_ahead) if (heli && _ahead.TryGetValue(carDef, out var q) && q.TryDequeue(out var made)) return made;
         var meshes = meshSource();
         var model = new ModelAssembler(vfs) { SkipParts = [] }.Assemble(carDef)!;
         var parts = new Parts { Model = model };
         Fill(parts, meshes, model, heli, CarNode.BuildLamps(meshes, model, null));
         if (!heli) _parts[carDef] = parts;
         return parts;
+    }
+
+    private readonly Dictionary<string, Queue<Parts>> _ahead = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A car's parts made ahead of its node, on any thread while no node is being made (a mission building under its briefing): kept
+    /// as <see cref="Get"/> keeps them, a helicopter's (made for each one) queued for the next of its kind.
+    /// </summary>
+    public void MakeAhead(string carDef, bool heli)
+    {
+        if (!heli) { Get(carDef); return; }
+        var meshes = meshSource();
+        var model = new ModelAssembler(vfs) { SkipParts = [] }.Assemble(carDef)!;
+        var parts = new Parts { Model = model };
+        Fill(parts, meshes, model, heli, CarNode.BuildLamps(meshes, model, null));
+        lock (_ahead)
+        {
+            if (!_ahead.TryGetValue(carDef, out var q)) _ahead[carDef] = q = new Queue<Parts>();
+            q.Enqueue(parts);
+        }
     }
 
     /// <summary>Parts for a model assembled some other way (the damage-look hook's), not kept.</summary>

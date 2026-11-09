@@ -238,7 +238,11 @@ public sealed partial class SimSession
         _drivers.AddRange(drivers);
 
         r.Tag("STAT");
-        for (int k = r.Count(); k > 0; k--) refs.ReadStatic(r.Int()).Load(r);
+        // what the snapshot left out was pristine then: one hit since (a restore into the same session) goes back
+        var loaded = new HashSet<Collision.StaticObject>();
+        for (int k = r.Count(); k > 0; k--) { var so = refs.ReadStatic(r.Int()); so.Load(r); loaded.Add(so); }
+        if (World.Ground is IHasStatics shs)
+            foreach (var o in shs.World.Objects) if (!loaded.Contains(o) && !o.Pristine) o.ResetToPristine();
 
         r.Tag("WRLD");
         World.Load(r);

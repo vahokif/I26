@@ -263,4 +263,28 @@ public class DevToolsTests
         var second = Go(300);
         for (int k = 0; k < first.Count; k++) Assert.True(first[k] == second[k], $"tick {k} after the restore: the run went its own way");
     }
+
+    /// <summary>
+    /// A snapshot leaves out the structures still pristine when it was taken; restored into the same session, one hit or
+    /// broken since is put back as it was built (its nodes' HP and its geometry), not left as the run after left it.
+    /// </summary>
+    [Fact]
+    public void ARestoreInPlacePutsBackAStructureHitSinceTheSnapshot()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var l = new SnapshotRig.Loaded(dir);
+        var (s, _) = SnapshotRig.Make(l, SnapshotRig.BuildOf(dir, "t14"), SimRate.R20, 2);
+        for (int i = 0; i < 10; i++) { SnapshotRig.Tick(s); SnapshotRig.TakeEvents(s); }
+        var o = ((I76.Sim.Collision.IHasStatics)s.World.Ground).World.Objects.First(x => x.Nodes.Count > 1 && x.Boxes.Count + x.Polys.Count > 1);
+        int boxes = o.Boxes.Count, polys = o.Polys.Count;
+        var centre = o.Centre;
+        var snap = s.Snapshot();
+        o.Nodes[0].Hp -= 10;
+        o.Nodes[0].Destroyed = true;
+        o.Refresh();
+        Assert.False(o.Pristine);
+        s.Restore(snap);
+        Assert.True(o.Pristine);
+        Assert.Equal((boxes, polys, centre), (o.Boxes.Count, o.Polys.Count, o.Centre));
+    }
 }

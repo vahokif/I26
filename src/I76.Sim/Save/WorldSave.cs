@@ -61,7 +61,7 @@ namespace I76.Sim.Collision
                 .Saved(nameof(Destroyed), nameof(Hp), nameof(MaxHp), nameof(Nodes), nameof(NetId), nameof(Collapsed), nameof(Revision), nameof(_gates))
                 // the bounds too: a Refresh that leaves no geometry keeps the last ones (they still place the root for a splash)
                 .Saved(nameof(Centre), nameof(Radius), nameof(BoundRadius))
-                .Derived(geometry, nameof(_intact), nameof(Polys), nameof(Surfaces), nameof(Boxes), nameof(Spheres), nameof(MeshBounds))
+                .Derived(geometry, nameof(_intact), nameof(_uncollapsed), nameof(Polys), nameof(Surfaces), nameof(Boxes), nameof(Spheres), nameof(MeshBounds))
                 .Structural("the placement's, from the install", nameof(Name), nameof(Type), nameof(Owner), nameof(Vehicle), nameof(Marker), nameof(SphereRadius),
                     nameof(Explosion), nameof(Sound), nameof(Remains), nameof(Deck));
             a.For<StructureNode>()
@@ -80,6 +80,29 @@ namespace I76.Sim.Collision
         internal bool Pristine =>
             Hp == MaxHp && !Destroyed && !Collapsed && Revision == 0 && !_gates && _intact is null
             && Nodes.All(n => n.Hp == n.MaxHp && !n.Destroyed && (n.Gate is not { } g || (g.X == 0 && g.Target == 1 && !g.Moving)));
+
+        /// <summary>
+        /// Back to <see cref="Pristine"/>: a snapshot leaves out what was pristine when it was taken, so a restore into the
+        /// same session puts back one hit, destroyed, swapped or slid since.
+        /// </summary>
+        internal void ResetToPristine()
+        {
+            Hp = MaxHp; Destroyed = false;
+            foreach (var n in Nodes)
+            {
+                n.Hp = n.MaxHp; n.Destroyed = false;
+                if (n.Gate is { } g) { g.X = 0; g.Target = 1; g.Moving = false; }
+            }
+            if ((_intact ?? _uncollapsed) is { } i)
+            {
+                Polys.Clear(); Polys.AddRange(i.Polys); Surfaces.Clear(); Surfaces.AddRange(i.Surfaces);
+                Boxes.Clear(); Boxes.AddRange(i.Boxes); Spheres.Clear(); Spheres.AddRange(i.Spheres);
+                MeshBounds.Clear(); MeshBounds.AddRange(i.MeshBounds);
+                (Centre, Radius, BoundRadius) = (i.Centre, i.Radius, i.BoundRadius);
+            }
+            _intact = null; _uncollapsed = null; _gates = false;
+            Collapsed = false; Revision = 0;
+        }
 
         internal void Save(SaveWriter w)
         {

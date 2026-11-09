@@ -157,6 +157,7 @@ public sealed partial class StaticObject
     public void Collapse()
     {
         if (Remains is not { } r || Collapsed) return;
+        _uncollapsed ??= _intact ?? ([.. Polys], [.. Surfaces], [.. Boxes], [.. Spheres], [.. MeshBounds], Centre, Radius, BoundRadius);
         Polys.Clear(); Polys.AddRange(r.Polys);
         Surfaces.Clear(); Surfaces.AddRange(r.Surfaces);
         Boxes.Clear(); Boxes.AddRange(r.Boxes);
@@ -168,6 +169,8 @@ public sealed partial class StaticObject
     }
 
     private (Poly[] Polys, Poly[] Surfaces, NodeBox[] Boxes, NodeSphere[] Spheres, NodeBox[] MeshBounds, Vector3 Centre, float Radius, float BoundRadius)? _intact;
+    /// <summary>The geometry as built, kept by the first <see cref="Collapse"/>, for a restore into the same session.</summary>
+    private (Poly[] Polys, Poly[] Surfaces, NodeBox[] Boxes, NodeSphere[] Spheres, NodeBox[] MeshBounds, Vector3 Centre, float Radius, float BoundRadius)? _uncollapsed;
 
     /// <summary>
     /// The geometry after nodes died (and the rebuild):

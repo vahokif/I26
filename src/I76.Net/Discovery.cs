@@ -26,7 +26,7 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
     I76.Sim.Missions.MeleeKind Kind = I76.Sim.Missions.MeleeKind.Combat, I76.Sim.Missions.MeleeGoal Goal = I76.Sim.Missions.MeleeGoal.None, int GoalValue = 0, byte Teams = 2,
     byte[]? MapHash = null, bool MapShared = false, uint MapSize = 0, bool Locked = false,
     I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true, bool Crosshair = false,
-    string ArenaName = "", float CoopDamage = 1f, int CoopScale = 0, bool RollingStart = false, bool IgnitionStaysOn = false)
+    string ArenaName = "", float CoopDamage = 1f, int CoopScale = 0, bool RollingStart = false, bool IgnitionStaysOn = false, bool Turrets1997 = false)
 {
     /// <summary>
     /// Whether a joiner's own check lets hidden cars and weapons through: the game allows them, or it does not say
@@ -94,6 +94,8 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         u.Bool(RollingStart);
         // the engine stays on in this game (the host's ignition lock, #108); an older host says nothing: no
         u.Bool(IgnitionStaysOn);
+        // the turrets turn as the 1997 CD build's (the host's Turrets); an older host says nothing: the 1998 build's
+        u.Bool(Turrets1997);
         // (the drivers' makes and models follow the tail, a count byte and a string each)
         var shown = Shown(AnswerBytes - w.Length - 1 - t.Length - 1 - u.Length);
         w.U8((byte)shown.Count);
@@ -168,8 +170,9 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
             int coopScale = r.Remaining >= 1 ? r.U8() : 0;
             bool rolling = r.Remaining >= 1 && r.Bool();
             bool ignition = r.Remaining >= 1 && r.Bool();
+            bool turrets1997 = r.Remaining >= 1 && r.Bool();
             return new SessionInfo(id, version, name, arena, players, max, team, invite, score, limit, over, drivers, kind, goal, value, teams, hash, shared, size, locked,
-                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName, CoopDamage: coopDamage, CoopScale: coopScale, RollingStart: rolling, IgnitionStaysOn: ignition);
+                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName, CoopDamage: coopDamage, CoopScale: coopScale, RollingStart: rolling, IgnitionStaysOn: ignition, Turrets1997: turrets1997);
         }
         catch (WireException) { return null; }
         catch (IndexOutOfRangeException) { return null; }

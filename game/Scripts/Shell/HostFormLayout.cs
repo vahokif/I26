@@ -64,6 +64,8 @@ public static class HostFormLayout
         public bool RollingStart { get; init; }
         /// <summary>The host's ignition lock: nobody switches their engine off.</summary>
         public bool IgnitionLock { get; init; }
+        /// <summary>The host's Turrets: the 1997 CD build's slew rather than the 1998 build's.</summary>
+        public bool Turrets1997 { get; init; }
         public string MakeModel { get; init; } = "";
         public string Variant { get; init; } = "";
     }
@@ -75,6 +77,12 @@ public static class HostFormLayout
     public sealed record Row(bool Right, int Index, string Label, IReadOnlyList<Cell> Cells, int RowId = -1);
 
     private static string OnOff(bool on) => on ? "On" : "Off";
+
+    /// <summary>The Turrets setting's words (Play Options' and the host form's): the build whose turret slew the game plays.</summary>
+    public static string TurretsText(bool cd1997) => cd1997 ? "1997 CD" : "1998 (GOG/Nitro)";
+
+    /// <summary>The same in a short value column (Play Options' sheet, the Nitro form's game options): the builds by their years.</summary>
+    public static string TurretsShort(bool cd1997) => cd1997 ? "1997 CD" : "1998";
 
     /// <summary>The rows for these settings. A co-op game has no team play, score limit, bots or maps to share: those rows are left out and the rest close up.</summary>
     public static List<Row> RowsOf(State s)
@@ -113,6 +121,7 @@ public static class HostFormLayout
         }
         // the port's game rules a melee and a co-op game share (docs/deviations.md)
         Left("Ignition Lock", OnOff(s.IgnitionLock), 43);
+        Left("Turrets", TurretsText(s.Turrets1997), 44);
         k = 0;
         void Right(string label, string value, int id) => rows.Add(new(true, k++, label, [new(RDiv, R1, value)], id));
         Right("Sim Rate", $"{s.Rate} Hz", 33);

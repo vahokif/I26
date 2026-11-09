@@ -119,6 +119,7 @@ public sealed class ClientWorld
     {
         Setup = setup;
         setup.Combat.RemoteSim = true;   // the server decides who jams: a car's flag is the truth here
+        setup.Combat.TurretSlew1997 = accept.Turrets1997;   // the host's turret rule, for the prediction
         _cars = cars ?? new MeleeMirrorCars(setup.Melee ?? throw new ArgumentException("the mirror must be set up as a network melee"));
         // the session numbers the structures (and a mission's own cars) as the server's does; it is never ticked
         Session = new SimSession(setup, SessionOptions.Network, accept.Rate) { IgnitionStaysOn = accept.IgnitionStaysOn };   // the host's rule, for the prediction

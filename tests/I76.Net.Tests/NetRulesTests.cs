@@ -267,6 +267,30 @@ public class NetRulesTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.False(new ServerOptions { Install = install }.AllowCrosshair);
     }
 
+    /// <summary>
+    /// The host's Turrets (the 1997 CD build's slew, or the 1998 build's by default) is the server's turret rule, reaches the players
+    /// in the join accept (their mirror's prediction takes it) and the game's listing, and goes across a host migration with the options.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheHostsTurretRuleIsTheServersAndReachesTheClients(bool cd1997)
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        using var server = new NetMeleeServer(new ServerOptions { Install = install, Arena = "m01", Port = 0, Turrets1997 = cd1997 });
+        Assert.Equal(cd1997, server.Host.Setup.Combat.TurretSlew1997);
+        server.Start();
+        using var a = Connect(server, "Alice");
+        Pump(() => a.State == ClientState.Joined, a);
+        Assert.Equal(ClientState.Joined, a.State);
+        Assert.Equal(cd1997, a.Accept!.Turrets1997);
+        Assert.Equal(cd1997, new ClientWorld(HostTests.Mirror("m01"), a.Accept).Setup.Combat.TurretSlew1997);
+        Assert.Equal(cd1997, server.Host.Info().Turrets1997);
+        var json = new System.Text.Json.JsonSerializerOptions { IncludeFields = true };
+        Assert.Equal(cd1997, System.Text.Json.JsonSerializer.Deserialize<ServerOptions>(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(server.Options with { Install = "" }, json), json)!.Turrets1997);
+        Assert.False(new ServerOptions { Install = install }.Turrets1997);
+    }
+
     private static MeleeClient Connect(NetMeleeServer server, string name)
     {
         var c = new MeleeClient();

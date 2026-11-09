@@ -75,6 +75,8 @@ public sealed record NetLaunch(int Mode)
     public bool Cb { get; init; } = true;
     /// <summary>Hosting: the chase crosshair may show for the players who have it on (the form's Chase Crosshair; off).</summary>
     public bool Crosshair { get; init; }
+    /// <summary>Hosting: the turrets turn as the 1997 CD build's (the form's Turrets; off: the 1998 build's).</summary>
+    public bool Turrets1997 { get; init; }
     /// <summary>Hosting: the form's Bots, players the server drives (up to the free seats), and how well.</summary>
     public int Bots { get; init; }
     public I76.Sim.Missions.BotSkill BotSkill { get; init; } = I76.Sim.Missions.BotSkill.Normal;
@@ -1197,6 +1199,12 @@ public sealed class ShellSettings
     public bool MouseCockpit { get; set; }
     /// <summary>The port's own: a 3D-projected aiming crosshair in the F2 chase view (shell.cfg [port] chase_crosshair; off).</summary>
     public bool ChaseCrosshair { get; set; }
+    /// <summary>
+    /// The port's own: the turrets turn as the 1997 CD build's, 1.5 rad/s times their health ratio, rather than the 1998 build's (GOG's
+    /// and the Nitro Pack's) 1.7 times 0.75 + 0.25 of it (Play Options' Turrets; shell.cfg [port] turret_slew = 1997, written only then).
+    /// Offline only: a network game's is the host's (<see cref="HostTurrets1997"/>).
+    /// </summary>
+    public bool Turrets1997 { get; set; }
     /// <summary>The port's own: a mission's briefing plays while the mission builds, in either look (Play Options' Load During Briefing; [port] briefing_while_loading, on, written only when off). Off: the build behind the loading card, then the briefing, as the original's.</summary>
     public bool BriefingWhileLoading { get; set; } = true;
     /// <summary>The port's own: the mouse wheel cycles weapons instead of zooming the external views (shell.cfg [port] wheel_cycle_weapon; off).</summary>
@@ -1232,6 +1240,8 @@ public sealed class ShellSettings
     public bool CbRadio { get; set; } = true;
     /// <summary>The port's own: a hosted game allows the chase crosshair (the host form's Chase Crosshair; shell.cfg [port] host_crosshair, written only when on).</summary>
     public bool HostCrosshair { get; set; }
+    /// <summary>The port's own: a hosted game's turrets turn as the 1997 CD build's (the host form's Turrets; shell.cfg [port] host_turret_slew = 1997, written only then).</summary>
+    public bool HostTurrets1997 { get; set; }
     /// <summary>The port's own: CB Voice (Play Options; shell.cfg [port] cb_voice, written only when off): push-to-talk voice in network games. Off neither sends nor plays it.</summary>
     public bool CbVoice { get; set; } = true;
     /// <summary>The port's own: the microphone CB Voice uses (shell.cfg [port] cb_mic; Play Options steps through the sound system's list). Empty is the system default.</summary>
@@ -1282,7 +1292,7 @@ public sealed class ShellSettings
 
     /// <summary>
     /// The Play Options the simulation reads, onto a mission's combat: Unlim. Ammo (0x04), Unlim. Armor (0x08) and
-    /// Unlim. Chas. Rein. (0x10), and the difficulty, the factor on the player's own rounds and flame. Ammo and the
+    /// Unlim. Chas. Rein. (0x10), the difficulty, the factor on the player's own rounds and flame, and the port's Turrets. Ammo and the
     /// difficulty stay out of a network game, as the original keeps them (a network game plays Champion's ×1).
     /// The mission runs it at its start, on resuming from the pad and over a restored checkpoint's copies.
     /// </summary>
@@ -1295,6 +1305,8 @@ public sealed class ShellSettings
             dm.UnlimitedChassis = (PlayOptions & 0x10) != 0;
         }
         c.Difficulty = c.NetworkGame ? 1 : Math.Clamp(Difficulty, 0, 2);
+        // Turrets: a network game's is the host's (the server's build, a client's join accept)
+        if (!c.NetSession && !c.RemoteSim) c.TurretSlew1997 = Turrets1997;
     }
 
     public static ShellSettings Load()
@@ -1372,6 +1384,9 @@ public sealed class ShellSettings
         s.IgnitionStaysOn = (bool)c.GetValue("port", "ignition_stays_on", false);
         s.CbRadio = (bool)c.GetValue("port", "cb_radio", true);
         s.HostCrosshair = (bool)c.GetValue("port", "host_crosshair", false);
+        // no version step: absent, the 1998 build's turrets
+        s.Turrets1997 = (int)c.GetValue("port", "turret_slew", 1998) == 1997;
+        s.HostTurrets1997 = (int)c.GetValue("port", "host_turret_slew", 1998) == 1997;
         s.CbVoice = (bool)c.GetValue("port", "cb_voice", true);
         // no version step: absent (never chosen, or the old implicit default) is none; a saved device stays
         s.CbMic = (string)c.GetValue("port", "cb_mic", "");
@@ -1464,6 +1479,8 @@ public sealed class ShellSettings
         if (IgnitionStaysOn) c.SetValue("port", "ignition_stays_on", true);
         if (!CbRadio) c.SetValue("port", "cb_radio", false);
         if (HostCrosshair) c.SetValue("port", "host_crosshair", true);
+        if (Turrets1997) c.SetValue("port", "turret_slew", 1997);
+        if (HostTurrets1997) c.SetValue("port", "host_turret_slew", 1997);
         if (!CbVoice) c.SetValue("port", "cb_voice", false);
         if (CbMic.Length > 0) c.SetValue("port", "cb_mic", CbMic);
         if (HiddenContent) c.SetValue("port", "hidden_content", true);

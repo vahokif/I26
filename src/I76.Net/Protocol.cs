@@ -350,7 +350,12 @@ public sealed record JoinAccept(byte Slot, int CarSerial, string Arena, uint Ser
         w.Bool(Crosshair);
         // protocol 23: the engine stays on in this game (the host's ignition lock), for the client's prediction
         w.Bool(IgnitionStaysOn);
+        // protocol 23: the turrets turn as the 1997 CD build's (the host's Turrets), for the client's prediction
+        w.Bool(Turrets1997);
     }
+
+    /// <summary>The host's Turrets: the 1997 CD build's turret slew rather than the 1998 build's (protocol 23; the host form's Turrets, i26-server's --turrets-1997).</summary>
+    public bool Turrets1997 { get; init; }
 
     /// <summary>The host's rule that nobody switches their engine off (protocol 23; the host form's Ignition Lock, i26-server's --no-ignition-off).</summary>
     public bool IgnitionStaysOn { get; init; }
@@ -398,7 +403,8 @@ public sealed record JoinAccept(byte Slot, int CarSerial, string Arena, uint Ser
         bool cb = r.Bool();
         bool crosshair = r.Bool();
         bool ignition = r.Bool();
-        return new JoinAccept(slot, car, arena, tick, def, team, max, limit, respawn, cars, dead, kind, goal, value, teams, hz, mapSize, mapCrc, terSize, terCrc, mapHash) { Coop = coop, Cb = cb, Crosshair = crosshair, IgnitionStaysOn = ignition };
+        bool turrets1997 = r.Bool();
+        return new JoinAccept(slot, car, arena, tick, def, team, max, limit, respawn, cars, dead, kind, goal, value, teams, hz, mapSize, mapCrc, terSize, terCrc, mapHash) { Coop = coop, Cb = cb, Crosshair = crosshair, IgnitionStaysOn = ignition, Turrets1997 = turrets1997 };
     }
 
     /// <summary>The server's simulation rate, which every client runs at.</summary>

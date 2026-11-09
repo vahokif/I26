@@ -31,6 +31,11 @@ public class WireTests
             r.U8();
             Assert.Equal(on, JoinAccept.Read(ref r).IgnitionStaysOn);
             w.Clear();
+            (acc with { Turrets1997 = on }).Write(w);
+            var r2 = new NetReader(w.Span);
+            r2.U8();
+            Assert.Equal(on, JoinAccept.Read(ref r2).Turrets1997);
+            w.Clear();
             var info = new SessionInfo(7, Protocol.Version, "Night", "M05.MSN", 1, 8, false, false, 0, 0, false, [], IgnitionStaysOn: on);
             info.Write(w);
             Assert.Equal(on, SessionInfo.TryRead(w.Span)!.IgnitionStaysOn);

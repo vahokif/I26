@@ -222,7 +222,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private int _savedFlags;
     private I76.Formats.Input.RumbleMode _savedRumble;
     private int _savedRumbleStrength;
-    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing;
+    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997;
     private int _savedRate, _savedDownloads;
     private static readonly (int Y, string Label, int Bit)[] Rows =
     [
@@ -251,6 +251,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
         "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
+        "Turrets",
     ];
 
     protected override void Build()
@@ -271,6 +272,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedRumble = s.RumbleMode;
         _savedRumbleStrength = s.RumbleStrength;
         _savedBriefing = s.BriefingWhileLoading;
+        _savedTurrets1997 = s.Turrets1997;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
         // the original's six check rows on consecutive ruled lines. The sheet prints a check box only on every other line (where
@@ -331,6 +333,9 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         // Load During Briefing (docs/deviations.md): a mission's briefing plays while the mission builds, the loading card before it
         // (and after it, while the build finishes, if it is skipped); off, the original's order: the load, then the briefing
         Toggle(PortRows[13], () => s.BriefingWhileLoading, () => s.BriefingWhileLoading = !s.BriefingWhileLoading);
+        // Turrets (docs/deviations.md): the turret slew of the 1998 build (GOG's and the Nitro Pack's, the default) or the 1997 CD
+        // build's; a network game plays the host's
+        Step(PortRows[14], () => s.Turrets1997 = !s.Turrets1997, () => HostFormLayout.TurretsShort(s.Turrets1997));
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
         // Check for Updates (upstream's row, under the port's own): whether the next start asks GitHub if a newer release exists (a line under the version says so)
@@ -373,7 +378,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private void Cancel()
     {
         var s = Shell.Settings;
-        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing;
+        s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing; s.Turrets1997 = _savedTurrets1997;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored
         Shell.Overlay(new OptionsScreen());

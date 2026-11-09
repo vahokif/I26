@@ -440,6 +440,13 @@ public sealed partial class MeleeScreen
         Shell.Settings.Save();
     }
 
+    /// <summary>The host form's Turrets (the port's): the game's turrets turn as the 1997 CD build's or the 1998 build's (GOG's and the Nitro Pack's, the default).</summary>
+    private void ToggleTurrets1997()
+    {
+        Shell.Settings.HostTurrets1997 = !Shell.Settings.HostTurrets1997;
+        Shell.Settings.Save();
+    }
+
     /// <summary>The host form's Car Reset (the port's): whether the game's players may press the reset-upright key (X) to put their car back on the terrain, upright and still.</summary>
     private void ToggleCarReset()
     {
@@ -629,6 +636,7 @@ public sealed partial class MeleeScreen
         _coopScaleWas = Shell.Settings.CoopScale;
         _rollingWas = Shell.Settings.CoopRollingStart;
         _ignitionWas = Shell.Settings.IgnitionStaysOn;
+        _turrets1997Was = Shell.Settings.HostTurrets1997;
         var was = (_teamPlay, _limit, _limitAt, _inviteOnly, _bots, _botSkill, Shell.Settings.ShareMaps, Shell.Settings.HiddenContent, Shell.Settings.CarReset, Shell.Settings.CbRadio, Shell.Settings.HostCrosshair);
         int wasRate = _rate;
         var wasCars = new List<string>(_botCars);
@@ -638,7 +646,7 @@ public sealed partial class MeleeScreen
     private bool _turretsWas;
     private float _coopDamageWas;
     private int _coopScaleWas;
-    private bool _rollingWas, _ignitionWas;
+    private bool _rollingWas, _ignitionWas, _turrets1997Was;
 
     private void OptionsPopupWith((bool, int, int, bool, int, I76.Sim.Missions.BotSkill, bool, bool, bool, bool, bool) was, int wasRate, List<string> wasCars)
     {
@@ -664,6 +672,7 @@ public sealed partial class MeleeScreen
                     if (Shell.Settings.CoopScale != _coopScaleWas) { Shell.Settings.CoopScale = _coopScaleWas; Shell.Settings.Save(); }
                     if (Shell.Settings.CoopRollingStart != _rollingWas) ToggleRollingStart();
                     if (Shell.Settings.IgnitionStaysOn != _ignitionWas) ToggleIgnition();
+                    if (Shell.Settings.HostTurrets1997 != _turrets1997Was) ToggleTurrets1997();
                 }
                 Draw();
             },
@@ -694,6 +703,9 @@ public sealed partial class MeleeScreen
     /// <summary>Modern Physics is not a game option: the server runs the original's model for everyone (docs/multiplayer.md), shown as a box that is ticked and cannot be changed.</summary>
     private static readonly OptionRow PhysicsRow = new("ORIGINAL PHYSICS", false, true, "", _ => { }, Locked: true);
 
+    /// <summary>GAME OPTIONS' TURRETS: the build whose turret slew the game plays (the popup's value line is short: 1998 or 1997 CD).</summary>
+    private OptionRow TurretsRow => new("TURRETS:", true, false, HostFormLayout.TurretsShort(Shell.Settings.HostTurrets1997), _ => ToggleTurrets1997());
+
     private IReadOnlyList<OptionRow> OptionRows()
     {
         // a co-op game: no team play, limit or Bots; the car rules (hidden weapons and cars) and who may join
@@ -714,6 +726,7 @@ public sealed partial class MeleeScreen
                 new("ROLLING START", false, Shell.Settings.CoopRollingStart, "", _ => ToggleRollingStart()),
                 // the port's: nobody switches their engine off (#108)
                 new("IGNITION STAYS ON", false, Shell.Settings.IgnitionStaysOn, "", _ => ToggleIgnition()),
+                TurretsRow,
                 new("SIM RATE:", true, false, $"{_rate} Hz", d => _rate = StepRate(_rate, d)),
                 PhysicsRow,
             ];
@@ -746,6 +759,8 @@ public sealed partial class MeleeScreen
         rows.Add(new("CHASE CROSSHAIR", false, Shell.Settings.HostCrosshair, "", _ => ToggleCrosshair()));
         // the port's: nobody switches their engine off, so no car hides from turrets that way (#108; off by default)
         rows.Add(new("IGNITION STAYS ON", false, Shell.Settings.IgnitionStaysOn, "", _ => ToggleIgnition()));
+        // the port's: the turrets turn as the 1997 CD build's or the 1998 build's (the default)
+        rows.Add(TurretsRow);
         // the port's: players the server drives (docs/multiplayer.md "Bots"), up to the free seats, and how well
         rows.Add(new("BOTS:", true, false, $"{Math.Min(_bots, MaxBots):00}", d => _bots = Math.Clamp(Math.Min(_bots, MaxBots) + d, 0, MaxBots)));
         rows.Add(new("BOT SKILL:", true, false, _botSkill.ToString(), d => _botSkill = (I76.Sim.Missions.BotSkill)(((int)_botSkill + d + 3) % 3)));
@@ -812,6 +827,7 @@ public sealed partial class MeleeScreen
             case 41 when Hosting: StepCoopScale(1); return true;
             case 42 when Hosting: ToggleRollingStart(); return true;
             case 43 when Hosting: ToggleIgnition(); return true;
+            case 44 when Hosting: ToggleTurrets1997(); return true;
             case 35 when Hosting: SetTurrets(!_turrets); return true;
             case 27 when Hosting: AskPassword(null, _password, pw => _password = pw ?? _password); return true;
             case 24 when Hosting && Nitro: OpenRestrictions(); return true;
@@ -856,7 +872,7 @@ public sealed partial class MeleeScreen
                     Kind = Nitro && !Coop ? Types[_kind].Kind : null, Goal = NitroGoal.Goal, GoalValue = NitroGoal.Value, Minutes = NitroGoal.Minutes, CtfTeams = Types[_kind].Teams,
                     Restrictions = Nitro ? _restrictions : WeaponRestrictions.None, Hidden = Shell.Settings.HiddenContent, Turrets = _turrets, CarReset = Shell.Settings.CarReset, Cb = Shell.Settings.CbRadio, Crosshair = Shell.Settings.HostCrosshair,
                     Bots = Math.Min(_bots, MaxBots), BotSkill = _botSkill, BotCars = [.. _botCars.Take(Math.Min(_bots, MaxBots))], Rate = _rate,
-                    Coop = Coop, StoryCar = Coop && Shell.Settings.CoopOwnCar, CoopDamage = Coop ? Shell.Settings.CoopDamage : 1f, CoopScale = Coop ? Shell.Settings.CoopScale : 0, CoopRollingStart = Coop && Shell.Settings.CoopRollingStart, IgnitionStaysOn = Shell.Settings.IgnitionStaysOn,
+                    Coop = Coop, StoryCar = Coop && Shell.Settings.CoopOwnCar, CoopDamage = Coop ? Shell.Settings.CoopDamage : 1f, CoopScale = Coop ? Shell.Settings.CoopScale : 0, CoopRollingStart = Coop && Shell.Settings.CoopRollingStart, IgnitionStaysOn = Shell.Settings.IgnitionStaysOn, Turrets1997 = Shell.Settings.HostTurrets1997,
                 },
             });
         }
@@ -875,6 +891,7 @@ public sealed partial class MeleeScreen
         if (!g.Cb) parts.Add("CB radio off");
         if (g.Crosshair) parts.Add("Chase crosshair allowed");
         if (g.IgnitionStaysOn) parts.Add("Ignition stays on");
+        if (g.Turrets1997) parts.Add("Turrets as on the 1997 CD");
         if (g.Coop && g.CoopDamage != 1f) parts.Add($"Co-op damage {FactorText(g.CoopDamage)}");
         if (g.Coop && g.CoopScale > 0) parts.Add($"Co-op scaling up to +{g.CoopScale}");
         if (g.Coop && g.RollingStart) parts.Add("Rolling start");
@@ -898,6 +915,7 @@ public sealed partial class MeleeScreen
         if (!g.Cb) rows.Add("CB radio off");
         if (g.Crosshair) rows.Add("Crosshair allowed");
         if (g.IgnitionStaysOn) rows.Add("Ignition stays on");
+        if (g.Turrets1997) rows.Add("1997 CD turrets");
         if (g.Coop && g.CoopDamage != 1f) rows.Add($"Co-op damage {FactorText(g.CoopDamage)}");
         if (g.Coop && g.CoopScale > 0) rows.Add($"Co-op scaling +{g.CoopScale}");
         if (g.Coop && g.RollingStart) rows.Add("Rolling start");

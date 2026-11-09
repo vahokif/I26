@@ -16,8 +16,8 @@ public class HostFormLayoutTests(ITestOutputHelper output)
     private static readonly HostFormLayout.State Coop = Melee with { Coop = true };
 
     // the ids the form had before it was drawn by the port (less 7, the original's driver box, which on a host form only showed the host's own car again)
-    private static readonly int[] MeleeIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 43];
-    private static readonly int[] CoopIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 22, 27, 28, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43];
+    private static readonly int[] MeleeIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 43, 44];
+    private static readonly int[] CoopIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 22, 27, 28, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44];
 
     private static string Value(List<HostFormLayout.Row> rows, string label) =>
         string.Join(" ", rows.Single(r => r.Label == label).Cells.Select(c => c.Text));
@@ -29,7 +29,7 @@ public class HostFormLayoutTests(ITestOutputHelper output)
         string[] labels =
         [
             "Local Driver", "Game Type", "Area of Play", "Game Name", "No. Drivers", "Team Play", "Invite Only", "Max Score", "Password", "Bots",
-            "Bot Skill", "A.I. Cars", "Ignition Lock", "Sim Rate", "Share Maps", "Hidden Weapons & Cars", "Unlimited Turrets", "Car Reset", "CB Radio",
+            "Bot Skill", "A.I. Cars", "Ignition Lock", "Turrets", "Sim Rate", "Share Maps", "Hidden Weapons & Cars", "Unlimited Turrets", "Car Reset", "CB Radio",
             "Chase Crosshair", "Make / Model", "Variant",
         ];
         Assert.Equal(labels.Order(), rows.Select(r => r.Label).Order());
@@ -41,7 +41,7 @@ public class HostFormLayoutTests(ITestOutputHelper output)
             Assert.All(at, k => Assert.InRange(k, 0, HostFormLayout.Rows - 1));
         }
         Assert.True(rows.Where(r => r.Right).Where(r => r.Label is not ("Make / Model" or "Variant")).All(r => r.Index < HostFormLayout.CarRow));
-        Assert.True(HostFormLayout.Rows - 1 - rows.Where(r => !r.Right).Max(r => r.Index) >= 4, "the left table keeps rows for more options");
+        Assert.True(HostFormLayout.Rows - 1 - rows.Where(r => !r.Right).Max(r => r.Index) >= 3, "the left table keeps rows for more options");
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class HostFormLayoutTests(ITestOutputHelper output)
     {
         var labels = HostFormLayout.RowsOf(Coop).Select(r => r.Label).ToList();
         foreach (var gone in new[] { "Team Play", "Max Score", "Bots", "Bot Skill", "A.I. Cars", "Share Maps" }) Assert.DoesNotContain(gone, labels);
-        foreach (var kept in new[] { "Invite Only", "Password", "Hidden Weapons & Cars", "Unlimited Turrets", "Car Reset", "CB Radio", "Chase Crosshair", "Sim Rate", "Ignition Lock" }) Assert.Contains(kept, labels);
+        foreach (var kept in new[] { "Invite Only", "Password", "Hidden Weapons & Cars", "Unlimited Turrets", "Car Reset", "CB Radio", "Chase Crosshair", "Sim Rate", "Ignition Lock", "Turrets" }) Assert.Contains(kept, labels);
         // and has the co-op rules a melee has not
         var melee = HostFormLayout.RowsOf(Melee).Select(r => r.Label).ToList();
         foreach (var coop in new[] { "Co-op Damage", "Co-op Scaling", "Rolling Start" }) { Assert.Contains(coop, labels); Assert.DoesNotContain(coop, melee); }
@@ -114,6 +114,8 @@ public class HostFormLayoutTests(ITestOutputHelper output)
         Assert.Equal("x0.75", Value(HostFormLayout.RowsOf(Coop with { CoopDamage = "x0.75" }), "Co-op Damage"));
         Assert.Equal("Off", Value(HostFormLayout.RowsOf(Coop), "Co-op Scaling"));
         Assert.Equal("On", Value(HostFormLayout.RowsOf(Coop with { RollingStart = true }), "Rolling Start"));
+        Assert.Equal("1998 (GOG/Nitro)", Value(HostFormLayout.RowsOf(Melee), "Turrets"));
+        Assert.Equal("1997 CD", Value(HostFormLayout.RowsOf(Coop with { Turrets1997 = true }), "Turrets"));
         Assert.Equal("Melee", Value(HostFormLayout.RowsOf(Melee), "Game Type"));
         Assert.Equal("Bob_", Value(HostFormLayout.RowsOf(Melee with { GameName = "Bob", Naming = true }), "Game Name"));
     }

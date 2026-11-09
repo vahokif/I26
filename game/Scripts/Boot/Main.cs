@@ -236,7 +236,9 @@ public partial class Main : Node3D
             GetTree().Quit(1);
             return;
         }
-        FrameLimiter.Apply(I76.Game.Shell.ShellSettings.Load());   // Max FPS and VSync, from the first frame
+        var first = I76.Game.Shell.ShellSettings.Load();
+        FrameLimiter.Apply(first);   // Max FPS and VSync, from the first frame
+        WindowApplier.Apply(first, atStart: true);   // Resolution: a saved window size
         if (ShaderSmoke.Requested) { SetProcess(false); AddChild(new ShaderSmoke()); return; }
         SwitchProbe.Install(GetTree());
         // --from-installer: the game data out of a GOG offline installer first, then this scene again on it

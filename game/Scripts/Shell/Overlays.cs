@@ -477,8 +477,10 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
     private int _savedBlur;
     private int _savedVeg, _savedDraw, _savedMaxFps;
     private I76.Game.Boot.RendererChoice _savedRenderer;
+    private string _savedRes = "";
     private bool _savedVSync, _savedLog, _saved3D, _savedInteriors;
-    // only the settings this port honours: resolution, draw distance and most detail levels of the 1997 renderer are gone
+    // only the settings this port honours: the original's draw distance and most detail levels of the 1997 renderer are gone (the
+    // resolution is the port's window size)
     private static readonly (string Label, int Byte, string[] Values)[] Rows =
     [
         ("Monitor Brightness", 0xc, ["0.00", "1.00", "2.00", "3.00", "4.00", "5.00", "6.00", "7.00", "8.00", "9.00", "10.00"]),
@@ -525,10 +527,19 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         _savedRenderer = Shell.Settings.Renderer;
         _saved3D = Shell.Settings.Garage3D;
         _savedInteriors = Shell.Settings.CarInteriors;
+        _savedRes = Shell.Settings.Resolution;
         foreach (var (label, b, values) in Rows)
             Row(label, () => values[Math.Min(g[b], values.Length - 1)], () => g[b] = (byte)((g[b] + 1) % values.Length));
         var st = Shell.Settings;
-        // the port's own rows: the menu art pack's (only when one is installed), with the pack's name beside it
+        // the port's own rows, first the window's size: Desktop (fullscreen, as the game starts) or a window of that size, applied at once
+        Row("Resolution", () => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(st.Resolution)), () =>
+        {
+            var (dw, dh) = I76.Game.Boot.WindowApplier.Desktop;
+            var n = I76.Game.Boot.WindowSizes.Next(I76.Game.Boot.WindowSizes.Parse(st.Resolution), dw, dh);
+            st.Resolution = n is { } z ? I76.Game.Boot.WindowSizes.Format(z.W, z.H) : "";
+            I76.Game.Boot.WindowApplier.Apply(st);
+        });
+        // the menu art pack's (only when one is installed), with the pack's name beside it
         if (HdAssets.Installed)
         {
             Row("HD Menu Art", () => st.HdMenuArt ? "On" : "Off", () => Apply(!st.HdMenuArt));
@@ -566,9 +577,9 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
                 : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };
             st.Renderer = all[(Math.Max(0, Array.IndexOf(all, st.Renderer)) + 1) % all.Length];
         });
-        Add(288, 438, "Reset", () => { Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
+        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
         Add(350, 438, "Done", () => { Shell.Settings.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
+        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
     }
 }
 

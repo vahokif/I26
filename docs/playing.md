@@ -94,6 +94,8 @@ map whose terrain file is missing is still listed, as in the original, but choos
 with a note naming the file. Interstate '82 maps (`.msa`)
 are for another game and are not listed.
 
+**Resolution.** Graphic Detail's **Resolution** row steps through Desktop (the game's borderless fullscreen at the desktop's size, as it starts) and the common window sizes that fit the screen; a size is a centred window, applied at once with no restart, and is kept for the next start. Alt+Enter still toggles fullscreen. A `--windowed`, `--fullscreen` or `--resolution` on the command line decides that start. Exclusive fullscreen is not offered.
+
 ### Controls
 
 Controls follow the original's keys, as set in Options > Control Configuration (which edits keys, the mouse

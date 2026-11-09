@@ -302,11 +302,15 @@ public sealed partial class EscapeMenu : Control
             Action("I'm a swinger", 13, () => Switch(_play)),
         ];
 
-        // Graphic Detail: only the settings this port honours (resolution, visibility and the 1997 renderer's detail levels are gone),
+        // Graphic Detail: only the settings this port honours (visibility and the 1997 renderer's detail levels are gone; the resolution is the port's window size),
         // every row in one list that scrolls over the pad's rows, the original's first; Reset, Done and Cancel stay put
         Item G(int flags, string label, int row, int n, string[]? names, int at) =>
             Scrolling(row, flags, label, n, names, s => s.Graphics[at], (s, v) => s.Graphics[at] = (byte)v, apply: () => Live?.Invoke(Settings));
         string[] offOn = ["Off", "On"], offLowHigh = ["Off", "Low", "High"];
+        // Resolution's choices: the desktop (""), the window sizes that fit it, and a saved size from another screen
+        var (dw, dh) = I76.Game.Boot.WindowApplier.Desktop;
+        var sizes = I76.Game.Boot.WindowSizes.Offered(dw, dh).Select(z => I76.Game.Boot.WindowSizes.Format(z.W, z.H)).Prepend("").ToList();
+        if (!sizes.Contains(Settings.Resolution)) sizes.Add(Settings.Resolution);
         _graphics.Items = [
             G(Numeric | Min1 | WrapAround | OneIsNumber, "Monitor Brightness", 1, 11, null, 0xc),
             G(Cycle, "Ext. Instrum. Disp.", 2, 2, offOn, 0xe),
@@ -314,19 +318,22 @@ public sealed partial class EscapeMenu : Control
             G(Cycle, "Shadow Detail", 4, 3, offLowHigh, 0x6),
             G(Cycle, "Terrain Detail", 5, 2, ["Low", "High"], 0x2),
             G(Cycle, "Anti-Aliasing", 6, 3, ["Off", "2x", "4x"], 0x8),
-            // the port's own, from row 7: the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
-            Scrolling(7, Cycle, "1997 Mode", 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false),
+            // the port's own, from row 7: the window's size, Desktop (fullscreen, as the game starts) or a window of that size, applied at once
+            Scrolling(7, Cycle, "Resolution", sizes.Count, [.. sizes.Select(r => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(r)))],
+                s => Math.Max(0, sizes.IndexOf(s.Resolution)), (s, v) => s.Resolution = sizes[v], apply: () => I76.Game.Boot.WindowApplier.Apply(Settings)),
+            // the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
+            Scrolling(8, Cycle, "1997 Mode", 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false),
             // the modern look's palette grade (SoftwareLook), live
-            Scrolling(8, Cycle, "Palette Grade", 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(9, Cycle, "Palette Grade", 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: () => Live?.Invoke(Settings)),
             // the software renderer's double image on a big cockpit hit (the original's in the 1997 look, smooth in the modern look), live
-            Scrolling(9, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(10, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
             // the modern look's plants
-            Scrolling(10, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(11, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
-            Scrolling(11, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(12, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(12, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(13, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(13, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(14, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -397,6 +404,8 @@ public sealed partial class EscapeMenu : Control
     private void ResetGraphics()
     {
         Array.Copy(ShellSettings.DefaultGraphics, Settings.Graphics, 16);
+        Settings.Resolution = "";
+        I76.Game.Boot.WindowApplier.Apply(Settings);
         Settings.Look1997 = false;
         Settings.SoftwareRenderer = false;
         Settings.PaletteGrade = false;

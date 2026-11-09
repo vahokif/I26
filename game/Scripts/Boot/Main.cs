@@ -240,6 +240,7 @@ public partial class Main : Node3D
         FrameLimiter.Apply(first);   // Max FPS and VSync, from the first frame
         WindowApplier.Apply(first, atStart: true);   // Resolution: a saved window size
         RenderScale.Apply(first);   // Render Scale: the 3D view's scale
+        I76.Sim.Views.ViewFov.Apply(first.FieldOfView);
         if (ShaderSmoke.Requested) { SetProcess(false); AddChild(new ShaderSmoke()); return; }
         SwitchProbe.Install(GetTree());
         // --from-installer: the game data out of a GOG offline installer first, then this scene again on it
@@ -744,6 +745,7 @@ public partial class Main : Node3D
         MouseCamera.Apply(s);
         FrameLimiter.Apply(s);
         RenderScale.Apply(s);
+        I76.Sim.Views.ViewFov.Apply(s.FieldOfView);
         _vegetation = s.Vegetation;
         _drawDistance = DrawDistanceHook(s.DrawDistance);
         ApplyDrawDistance();

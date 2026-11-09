@@ -79,6 +79,7 @@ public partial class TargetViewCamera : Camera3D
     public override void _Process(double delta)
     {
         if (!Current || Player is not { } pn) return;
+        Fov = ViewFov.Main;
         float dt0 = Mathf.Clamp((float)delta, 0.001f, 0.2f);
         if (_epoch != MouseCamera.ZoomEpoch) { _epoch = MouseCamera.ZoomEpoch; _wheelTarget = MouseCamera.ZoomOf(ViewZoom.Kind.Target); _wheelRound = MouseCamera.ZoomOf(ViewZoom.Kind.Projectile); }
         _wheelTarget = ChaseZoom.Ease(_wheelTarget, MouseCamera.ZoomOf(ViewZoom.Kind.Target), dt0);

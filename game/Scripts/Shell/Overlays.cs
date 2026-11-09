@@ -478,7 +478,7 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
     private int _savedVeg, _savedDraw, _savedMaxFps;
     private I76.Game.Boot.RendererChoice _savedRenderer;
     private string _savedRes = "";
-    private int _savedScale;
+    private int _savedScale, _savedFov;
     private bool _savedVSync, _savedLog, _saved3D, _savedInteriors;
     // only the settings this port honours: the original's draw distance and most detail levels of the 1997 renderer are gone (the
     // resolution is the port's window size)
@@ -530,6 +530,7 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         _savedInteriors = Shell.Settings.CarInteriors;
         _savedRes = Shell.Settings.Resolution;
         _savedScale = Shell.Settings.RenderScale;
+        _savedFov = Shell.Settings.FieldOfView;
         foreach (var (label, b, values) in Rows)
             Row(label, () => values[Math.Min(g[b], values.Length - 1)], () => g[b] = (byte)((g[b] + 1) % values.Length));
         var st = Shell.Settings;
@@ -543,6 +544,8 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         });
         // the 3D view supersampled at 100, 150 or 200 % of the window, live (the HUD and menus are not scaled)
         Row("Render Scale", () => I76.Game.Boot.RenderScale.Names[Math.Clamp(st.RenderScale, 0, I76.Game.Boot.RenderScale.Names.Length - 1)], () => { st.RenderScale = (st.RenderScale + 1) % I76.Game.Boot.RenderScale.Names.Length; I76.Game.Boot.RenderScale.Apply(st); });
+        // the main 3D views' field of view, degrees across a 4:3 view (the original's is 90); the mirror and binoculars keep their own, live
+        Row("Field of View", () => I76.Sim.Views.ViewFov.Names[Math.Clamp(st.FieldOfView, 0, I76.Sim.Views.ViewFov.Names.Length - 1)], () => { st.FieldOfView = (st.FieldOfView + 1) % I76.Sim.Views.ViewFov.Names.Length; I76.Sim.Views.ViewFov.Apply(st.FieldOfView); });
         // the menu art pack's (only when one is installed), with the pack's name beside it
         if (HdAssets.Installed)
         {
@@ -581,9 +584,9 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
                 : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };
             st.Renderer = all[(Math.Max(0, Array.IndexOf(all, st.Renderer)) + 1) % all.Length];
         });
-        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
+        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = 0; I76.Sim.Views.ViewFov.Apply(0); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
         Add(350, 438, "Done", () => { Shell.Settings.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
+        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = _savedFov; I76.Sim.Views.ViewFov.Apply(_savedFov); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
     }
 }
 

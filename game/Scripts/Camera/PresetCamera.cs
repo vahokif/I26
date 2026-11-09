@@ -48,7 +48,7 @@ public partial class PresetCamera : Camera3D
     {
         Mode = mode;
         if (mode == View.Overhead) { _zoom.Reset(); _zoomAcc = 0; }
-        Fov = mode == View.Orbit ? Mathf.RadToDeg(2 * Mathf.Atan(Mathf.Tan(Mathf.DegToRad(60)) * Four3)) : 73.74f;
+        Fov = mode == View.Orbit ? Mathf.RadToDeg(2 * Mathf.Atan(Mathf.Tan(Mathf.DegToRad(60)) * Four3)) : ViewFov.Main;
         if (mode == View.Orbit && Head?.Invoke() is { } h) (_yaw, _pitch, _roll) = h;
         else (_yaw, _pitch, _roll) = (0, 0, 0);
     }
@@ -59,6 +59,7 @@ public partial class PresetCamera : Camera3D
     {
         if (Target is null) return;
         float dt = Mathf.Clamp((float)delta, 0.001f, 0.2f);
+        if (Mode != View.Orbit) Fov = ViewFov.Main;   // live from Graphic Detail
         var t = Target.GlobalTransform;
         if (_epoch != MouseCamera.ZoomEpoch) { _epoch = MouseCamera.ZoomEpoch; _wheelSide = MouseCamera.ZoomOf(ViewZoom.Kind.Side); _wheelBumper = MouseCamera.ZoomOf(ViewZoom.Kind.Bumper); _wheelOver = MouseCamera.ZoomOf(ViewZoom.Kind.Overhead); }
         _wheelSide = ChaseZoom.Ease(_wheelSide, MouseCamera.ZoomOf(ViewZoom.Kind.Side), dt);

@@ -96,6 +96,8 @@ are for another game and are not listed.
 
 **Resolution.** Graphic Detail's **Resolution** row steps through Desktop (the game's borderless fullscreen at the desktop's size, as it starts) and the common window sizes that fit the screen; a size is a centred window, applied at once with no restart, and is kept for the next start. Alt+Enter still toggles fullscreen. A `--windowed`, `--fullscreen` or `--resolution` on the command line decides that start. Exclusive fullscreen is not offered.
 
+**Field of view.** Graphic Detail's **Field of View** row (Original, 80, 100, 110) sets how wide the main 3D views look, in degrees across a 4:3 view (the original's is 90, and a wider window shows more to the sides at any choice); it applies at once to the outside views and the cockpit's view (the 2D dash's gunsight moves with it, so it stays on the gun line). The binoculars, the mirror, the radar and the cut-scenes keep their own framing.
+
 ### Controls
 
 Controls follow the original's keys, as set in Options > Control Configuration (which edits keys, the mouse

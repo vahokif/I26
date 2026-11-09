@@ -1197,6 +1197,8 @@ public sealed class ShellSettings
     public string Resolution { get; set; } = "";
     /// <summary>The port's own: Graphic Detail's Render Scale (index into <see cref="I76.Game.Boot.RenderScale.Percents"/>: 100, 150, 200 %; shell.cfg [port] render_scale, written only when not 100).</summary>
     public int RenderScale { get; set; }
+    /// <summary>The port's own: Graphic Detail's Field of View for the main 3D views (index into <see cref="I76.Sim.Views.ViewFov.Across"/>; shell.cfg [port] fov, degrees across a 4:3 view, written only when not the original's 90).</summary>
+    public int FieldOfView { get; set; }
     /// <summary>The port's own: Graphic Detail's Max FPS, a choice of <see cref="I76.Sim.Views.FrameLimit"/> (shell.cfg [port] max_fps in frames a second, 0 none). Unlimited unless the player chose.</summary>
     public int MaxFps { get; set; } = I76.Sim.Views.FrameLimit.Unlimited;
     /// <summary>The port's own: Graphic Detail's VSync (shell.cfg [port] vsync). On, as the window has always run, unless the player chose.</summary>
@@ -1338,6 +1340,8 @@ public sealed class ShellSettings
         s.Resolution = I76.Game.Boot.WindowSizes.Parse((string)c.GetValue("port", "resolution", "")) is { } rs ? I76.Game.Boot.WindowSizes.Format(rs.W, rs.H) : "";
         // no version step: absent, 100 %
         s.RenderScale = I76.Game.Boot.RenderScale.Parse((int)c.GetValue("port", "render_scale", 100));
+        // no version step: absent, the original's 90 across 4:3
+        s.FieldOfView = I76.Sim.Views.ViewFov.Parse((int)c.GetValue("port", "fov", 90));
         // no version step: absent, no cap and vsync on, as before the keys
         s.MaxFps = I76.Sim.Views.FrameLimit.Parse(c.HasSectionKey("port", "max_fps") ? (int)c.GetValue("port", "max_fps") : null);
         s.VSync = (bool)c.GetValue("port", "vsync", true);
@@ -1406,6 +1410,7 @@ public sealed class ShellSettings
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
         if (Resolution.Length > 0) c.SetValue("port", "resolution", Resolution);
         if (RenderScale != 0) c.SetValue("port", "render_scale", I76.Game.Boot.RenderScale.Percents[Math.Clamp(RenderScale, 0, I76.Game.Boot.RenderScale.Percents.Length - 1)]);
+        if (FieldOfView != 0) c.SetValue("port", "fov", I76.Sim.Views.ViewFov.Across[Math.Clamp(FieldOfView, 0, I76.Sim.Views.ViewFov.Across.Length - 1)]);
         c.SetValue("port", "max_fps", I76.Sim.Views.FrameLimit.Fps(MaxFps));
         c.SetValue("port", "vsync", VSync);
         if (KeepMouseInWindow) c.SetValue("port", "keep_mouse_in_window", true);

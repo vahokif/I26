@@ -323,19 +323,21 @@ public sealed partial class EscapeMenu : Control
                 s => Math.Max(0, sizes.IndexOf(s.Resolution)), (s, v) => s.Resolution = sizes[v], apply: () => I76.Game.Boot.WindowApplier.Apply(Settings)),
             // the 3D view supersampled at 100, 150 or 200 % of the window, live
             Scrolling(8, Cycle, "Render Scale", I76.Game.Boot.RenderScale.Names.Length, I76.Game.Boot.RenderScale.Names, s => Math.Clamp(s.RenderScale, 0, I76.Game.Boot.RenderScale.Names.Length - 1), (s, v) => s.RenderScale = v, apply: () => Live?.Invoke(Settings)),
+            // the main 3D views' field of view (the original's 90 across 4:3, or 80, 100, 110), live
+            Scrolling(9, Cycle, "Field of View", I76.Sim.Views.ViewFov.Names.Length, I76.Sim.Views.ViewFov.Names, s => Math.Clamp(s.FieldOfView, 0, I76.Sim.Views.ViewFov.Names.Length - 1), (s, v) => s.FieldOfView = v, apply: () => Live?.Invoke(Settings)),
             // the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
-            Scrolling(9, Cycle, "1997 Mode", 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false),
+            Scrolling(10, Cycle, "1997 Mode", 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false),
             // the modern look's palette grade (SoftwareLook), live
-            Scrolling(10, Cycle, "Palette Grade", 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(11, Cycle, "Palette Grade", 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: () => Live?.Invoke(Settings)),
             // the software renderer's double image on a big cockpit hit (the original's in the 1997 look, smooth in the modern look), live
-            Scrolling(11, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(12, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
             // the modern look's plants
-            Scrolling(12, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(13, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
-            Scrolling(13, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(14, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(14, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(15, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(15, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(16, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -409,6 +411,7 @@ public sealed partial class EscapeMenu : Control
         Settings.Resolution = "";
         I76.Game.Boot.WindowApplier.Apply(Settings);
         Settings.RenderScale = 0;
+        Settings.FieldOfView = 0;
         Settings.Look1997 = false;
         Settings.SoftwareRenderer = false;
         Settings.PaletteGrade = false;

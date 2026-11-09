@@ -178,7 +178,7 @@ public partial class Cockpit : Node
         _state = 2;
         if (Node3D.Rtc1 is { } r1) r1.Visible = !on;
         if (Node3D.Rtc6 is { } r6) r6.Visible = on;
-        if (!on && Node3D.CockpitCamera is { } cam) { cam.Basis = Basis.FromEuler(new Vector3(-_pitch, 0, 0), EulerOrder.Yxz); cam.Fov = 73.74f; }
+        if (!on && Node3D.CockpitCamera is { } cam) { cam.Basis = Basis.FromEuler(new Vector3(-_pitch, 0, 0), EulerOrder.Yxz); cam.Fov = I76.Sim.Views.ViewFov.Main; }
     }
 
     /// <summary>The glance in mode 2, per frame (a sim tick; 30 a second on the original's reference machine): yaw in integer degrees; pitch and roll stay 0.</summary>
@@ -238,15 +238,21 @@ public partial class Cockpit : Node
     /// <summary>
     /// The reticle zretc_1 (32x32) the 2D dash draws, with its top-left on the 640x480 frame: the side reticle at (300, 240) when
     /// an arm is raised or busy and the head has turned to its window (yaw beyond 88° right or -83° left), else the forward gunsight at
-    /// (306, 300) with both arms idle and the head within 4° of straight ahead. Not in the binoculars.
+    /// (306, 300) with both arms idle and the head within 4° of straight ahead. Not in the binoculars. Those are the places for the
+    /// original's view; with another Field of View the gun line projects elsewhere, so the sprite's centre moves with it.
     /// </summary>
-    public (Texture2D Tex, int X, int Y)? Reticle()
+    public (Texture2D Tex, float X, float Y)? Reticle()
     {
         if (Binoculars) return null;
         if (ReticleTexture is not { } tex) return null;
         bool Up(int ch) => Car.Arms[ch].Busy || Car.Arms.Ready(ch);
-        if ((Up(1) && _yaw > 1.5359f) || (Up(2) && _yaw < -1.4486f)) return (tex, 300, 240);
-        if (Car.Arms.Idle(1) && Car.Arms.Idle(2) && MathF.Abs(_yaw) < 0.0698f) return (tex, 306, 300);
+        (Texture2D, float, float) At(int x, int y)
+        {
+            var (cx, cy) = I76.Sim.Views.ViewFov.ScreenPoint(x + 16, y + 16, I76.Sim.Views.ViewFov.Main);
+            return (tex, cx - 16, cy - 16);
+        }
+        if ((Up(1) && _yaw > 1.5359f) || (Up(2) && _yaw < -1.4486f)) return At(300, 240);
+        if (Car.Arms.Idle(1) && Car.Arms.Idle(2) && MathF.Abs(_yaw) < 0.0698f) return At(306, 300);
         return null;
     }
 
@@ -343,7 +349,7 @@ public partial class Cockpit : Node
         {
             // game yaw is to the right and Godot's Z is mirrored: a right turn is a negative Y rotation here
             cam.Basis = Sway(dt) * Basis.FromEuler(new Vector3(-_pitch, -_yaw, _roll), EulerOrder.Yxz);   // the Z mirror negates pitch and yaw, not roll
-            cam.Fov = 73.74f;
+            cam.Fov = I76.Sim.Views.ViewFov.Main;
         }
         // arms rise past ±58° / 53° to the side windows (the handguns): the sim moves them with the next tick
         _wantArm[0] = (_state == 4 || _mouseHead.HasOffset) && _yaw > 1.0123f;

@@ -93,6 +93,66 @@ public class DifficultyTests
         Assert.Equal(15, Total(c.RoundPacket(Shot(ai, mg))));
     }
 
+    /// <summary>The driver's .45 (kind 0x12) is never scaled: its one point a round at Wimp (not 2) and Badass (not 0) as at Champion, though the player's other rounds are.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void TheHandgunIsNeverScaled(int difficulty)
+    {
+        var world = new SimWorld(new Flat(), new CrtRand(1));
+        var player = new Vehicle { Flags = VehicleFlags.EngineOn };
+        world.Vehicles.Add(player);
+        world.Player = player;
+        var c = new Combat(world, _ => null) { Difficulty = difficulty };
+        Assert.NotEqual(1f, c.DifficultyFactor(player));
+        var gun = Armory.HandgunDef(1);
+        var p = c.RoundPacket(new Round { Kind = gun.Kind, Shooter = player, Def = gun, Ord = gun.Ordnance!, Damage = (int)gun.Damage });
+        Assert.Equal(1u, gun.Damage);
+        Assert.Equal(1, Total(p));
+    }
+
+    /// <summary>
+    /// The flame takes the same factor as the rounds: the Napalm Hose's stream, held at a car 7 m behind the Piranha at a
+    /// fixed 50 ms step, burns each packet's ch2 = max(1, trunc(damage · factor · dt)): ×2 at Wimp and ×0.75 at Badass
+    /// for the player's flame, ×1 for the computer's and in a network game.
+    /// </summary>
+    [Theory]
+    [InlineData(0, "player", 2f)]
+    [InlineData(1, "player", 1f)]
+    [InlineData(2, "player", 0.75f)]
+    [InlineData(0, "ai", 1f)]
+    [InlineData(0, "net", 1f)]
+    public void TheFlameTakesTheSameFactor(int difficulty, string who, float factor)
+    {
+        if (InstallDir is null) return;
+        var vfs = new AssetVfs(new GameInstall(InstallDir));
+        var world = new SimWorld(new Flat(), new CrtRand(1));
+        var shooter = VehicleFactory.Create(vfs, "vppirna2.vcf");
+        var target = VehicleFactory.Create(vfs, "vppirna1.vcf");
+        target.Pos = new Double3(0, 0, -7);
+        world.Vehicles.Add(shooter); world.Vehicles.Add(target);
+        world.Player = who == "ai" ? target : shooter;
+        var hits = new List<DamagePacket>();
+        var combat = new Combat(world, n => vfs.TryRead(n) is { } d ? I76.Formats.Bwd2.EffectDef.Read(n, d) : null)
+        {
+            Damage = new Sink(hits, target), Difficulty = difficulty, NetSession = who == "net",
+        };
+        var a = shooter.Armory!;
+        int hose = a.Weapons.FindIndex(w => w.Def.Kind is 9 or 10 or 11);
+        Assert.True(hose >= 0);
+        var keys = new bool[5]; keys[hose] = true;
+        const float dt = 0.05f;
+        for (int f = 0; f < 12; f++) { a.PlayerTriggers(false, keys); combat.Frame(dt); }
+        Assert.NotEmpty(hits);
+        int ch = System.Math.Max(1, (int)(a.Weapons[hose].Damage * factor * dt));
+        Assert.All(hits, h => Assert.Equal(ch, h.Ch[2]));
+    }
+
+    private sealed class Sink(List<DamagePacket> hits, Vehicle target) : IDamageSink
+    {
+        public void Apply(object victim, DamagePacket p, Vector3 hitLocal) { if (victim == target) hits.Add(p); }
+    }
+
     /// <summary>
     /// T08's Huey (t08uc01), its pool set to 800, pinned broadside 30 m ahead of the braked car before and after every
     /// tick at 28 fps; the car fires one weapon until the Huey is shot down. Returns the packets that reached it while it

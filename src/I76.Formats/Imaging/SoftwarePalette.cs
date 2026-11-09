@@ -136,6 +136,17 @@ public static class SoftwarePalette
         return Nearest(palette, (int)MathF.Round(r * 255), (int)MathF.Round(g * 255), (int)MathF.Round(b * 255));
     }
 
+    /// <summary>
+    /// An untextured .geo face's colour on screen: the original's loader keeps a palette entry for the face's RGB, not the
+    /// RGB. Its lookup answers by 5-bit cell (r, g, b each >> 3) from a cache that the first query into that cell fills
+    /// with the entry nearest that query; for needle.geo's (252, 0, 103) the original showed entry 160 of T01's palette
+    /// (232, 48, 88), where the entry nearest the RGB itself is 220 (250, 0, 50). The cell's first query is not known
+    /// here (no other .geo face falls in that cell), so the cell's centre stands for it: the entry nearest
+    /// (r | 4, g | 4, b | 4), which gives 160 on T01's palettes.
+    /// </summary>
+    public static (byte R, byte G, byte B) FlatColour(Palette palette, byte r, byte g, byte b) =>
+        palette[Nearest(palette, r | 4, g | 4, b | 4)];
+
     /// <summary>The palette entry nearest (r, g, b), squared RGB distance, the lowest index on a tie.</summary>
     public static int Nearest(Palette palette, int r, int g, int b)
     {

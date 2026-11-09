@@ -1404,8 +1404,23 @@ public partial class Main : Node3D
             if (builder.Assembler?.Geo("needle") is { } needleGeo)
             {
                 var nm = new I76.Formats.Assembly.AssembledModel { Definition = "needle", Kind = "sdf", ObjectCode = interior.ObjectCode };
+                // turned about the geometry's own origin, as the data has it (the GOG data's needle is centred on it, the 1997 CD's
+                // has the reading side the longer; each turns as in its own game)
                 nm.Parts.Add(new I76.Formats.Assembly.ModelPart("needle", needleGeo, I76.Formats.Assembly.Affine.Identity));
-                needle = builder.Meshes!.Build(nm, wheels: false);
+                var needleMesh = builder.Meshes!.Build(nm, wheels: false);
+                // under the 1997 look's Software renderer, in the palette colour the original's software renderer draws for the file's
+                // RGB (entry 160 on T01, a dark red, not the hot pink nearest the RGB); the 3D card and the modern look keep the RGB
+                if (needleMesh is not null && builder.ActPalette is { } np && needleGeo.Faces.Length > 0)
+                {
+                    var (nr, ng, nb) = I76.Formats.Imaging.SoftwarePalette.FlatColour(np, needleGeo.Faces[0].R, needleGeo.Faces[0].G, needleGeo.Faces[0].B);
+                    for (int si = 0; si < needleMesh.GetSurfaceCount(); si++)
+                        if (needleMesh.SurfaceGetMaterial(si) is ShaderMaterial needleMat && builder.Materials?.StripCopy(needleMat) is { } own)
+                        {
+                            own.SetShaderParameter("albedo_color_software", Color.Color8(nr, ng, nb));
+                            needleMesh.SurfaceSetMaterial(si, own);
+                        }
+                }
+                needle = needleMesh;
             }
         }
         // the live dashboard: the layout the car's VDF names at VDFC +0x40, vpit_1.elt for every car

@@ -156,7 +156,7 @@ public sealed class GarageRoom
         m.SetShaderParameter("base_roughness", roughness);
         m.SetShaderParameter("base_metallic", metallic);
         m.SetShaderParameter("base_specular", specular);
-        if (lamp) { m.SetShaderParameter("prelit", true); m.SetShaderParameter("albedo_nearest", tex); }
+        if (lamp) { m.SetShaderParameter("prelit", true); m.SetShaderParameter("albedo_cockpit", tex); }
         _materials.Add((m, lamp));
         return m;
     }

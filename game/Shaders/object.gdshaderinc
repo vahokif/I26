@@ -24,8 +24,18 @@ global uniform sampler2D i76_night_lights : filter_nearest;
 #include "res://Shaders/software.gdshaderinc"
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
-uniform sampler2D albedo_nearest : source_color, filter_nearest_mipmap, repeat_disable;   // the cockpit art, pixels kept; clamped, so a face edge sampled a hair past 1.0 (MSAA) never wraps to the far row (the steering wheel quad drew its rim as a 1px line)
+uniform sampler2D albedo_cockpit : source_color, filter_linear_mipmap, repeat_disable;   // the cockpit art; clamped, so a face edge sampled a hair past 1.0 (MSAA) never wraps to the far row (the steering wheel quad drew its rim as a 1px line)
+// The cockpit's art as drawn. The game's own low-resolution art (the 3D card takes no texture over 256 texels a side, so
+// none of it is larger) is point-sampled from its full-size level, its pixels kept as the original's software renderer
+// shows them (its 3D card filtered them): the dials' lettering stays sharp, where a mipmap level greyed it whenever the
+// dash was smaller on screen than its texels. Larger art (a high-resolution replacement) is filtered, bilinear with its mipmaps.
+vec4 i76_cockpit(vec2 uv) {
+	ivec2 sz = textureSize(albedo_cockpit, 0);
+	if (max(sz.x, sz.y) > 256) return texture(albedo_cockpit, uv);
+	return texelFetch(albedo_cockpit, clamp(ivec2(floor(uv * vec2(sz))), ivec2(0), sz - 1), 0);
+}
 uniform vec4 albedo_color : source_color = vec4(1.0);
+uniform vec4 albedo_color_software : source_color = vec4(0.0);   // with alpha 1, a flat face's colour under the Software renderer, where it is not albedo_color's nearest entry (the gauge needles: the palette entry the original's software renderer draws)
 uniform bool use_texture = false;
 uniform bool alpha_key = false;
 uniform bool round_key = false;   // the face is a disc inscribed in its square (a wheel): edged by an analytic circle, not the texture's alpha
@@ -492,9 +502,9 @@ void fragment() {
 	}
 #endif
 #ifdef FAITHFUL
-	vec4 c = use_texture ? i76_tex(prelit ? texture(albedo_nearest, tuv) : i76_software ? i76_point(albedo_tex, tuv) : texture(albedo_tex, tuv)) : albedo_color;
+	vec4 c = use_texture ? i76_tex(prelit ? i76_cockpit(tuv) : i76_software ? i76_point(albedo_tex, tuv) : texture(albedo_tex, tuv)) : (i76_software && albedo_color_software.a > 0.5 ? albedo_color_software : albedo_color);
 #else
-	vec4 c = use_texture ? (prelit ? texture(albedo_nearest, tuv) : texture(albedo_tex, tuv)) : albedo_color;
+	vec4 c = use_texture ? (prelit ? i76_cockpit(tuv) : texture(albedo_tex, tuv)) : albedo_color;
 #endif
 	// a respray: the scheme's paint texels (the mask) take the car's own colours; pf_metal / pf_matte the finish where they did
 	float pf_metal = 0.0;

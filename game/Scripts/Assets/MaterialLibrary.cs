@@ -36,7 +36,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         : (s == Translucent97 ? Translucent : s == Both97 ? Both : s == Open97 ? Open : s == Back97 ? Back : s);
 
     /// <summary>The animated textures' materials (a .tmt with header flag 1): each steps through its frames at its rate.</summary>
-    private readonly List<(ShaderMaterial Mat, Texture2D[] Frames, float Fps, bool Nearest)> _animated = [];
+    private readonly List<(ShaderMaterial Mat, Texture2D[] Frames, float Fps, bool Cockpit)> _animated = [];
 
     /// <summary>
     /// An animated .tmt's material (the default texture animation tick): frame 0's material, its
@@ -51,7 +51,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
             return _cache[key] = ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit);
         var mat = (ShaderMaterial)first.Duplicate();
         var tex = frames.Select(f => TextureOf(f, mode)).OfType<Texture2D>().ToArray();
-        if (tex.Length == frames.Length) _animated.Add((mat, tex, fps, mat.GetShaderParameter("albedo_nearest").VariantType != Variant.Type.Nil));
+        if (tex.Length == frames.Length) _animated.Add((mat, tex, fps, mat.GetShaderParameter("albedo_cockpit").VariantType != Variant.Type.Nil));
         return _cache[key] = mat;
     }
 
@@ -62,11 +62,11 @@ public sealed class MaterialLibrary(TextureFactory textures)
     public void Animate(double seconds)
     {
         Clock = seconds;
-        foreach (var (mat, frames, fps, nearest) in _animated)
+        foreach (var (mat, frames, fps, cockpit) in _animated)
         {
             var t = frames[(int)(seconds * fps) % frames.Length];
             mat.SetShaderParameter("albedo_tex", t);
-            if (nearest) mat.SetShaderParameter("albedo_nearest", t);
+            if (cockpit) mat.SetShaderParameter("albedo_cockpit", t);
         }
     }
 
@@ -94,11 +94,11 @@ public sealed class MaterialLibrary(TextureFactory textures)
         return copy;
     }
 
-    /// <summary>Shows <paramref name="t"/> on a material (its nearest-neighbour copy too, where it has one).</summary>
+    /// <summary>Shows <paramref name="t"/> on a material (its cockpit sampler too, where it has one).</summary>
     public static void ShowFrame(ShaderMaterial m, Texture2D t)
     {
         m.SetShaderParameter("albedo_tex", t);
-        if (m.GetShaderParameter("albedo_nearest").VariantType != Variant.Type.Nil) m.SetShaderParameter("albedo_nearest", t);
+        if (m.GetShaderParameter("albedo_cockpit").VariantType != Variant.Type.Nil) m.SetShaderParameter("albedo_cockpit", t);
     }
 
     /// <summary>A material drawn from both sides: itself if it already is, is a back-to-back face's or is not an object material, else a copy, made once and kept.</summary>
@@ -187,9 +187,9 @@ public sealed class MaterialLibrary(TextureFactory textures)
         string stem = member[(member.LastIndexOfAny(['/', '\\', ':']) + 1)..];
         if (stem.StartsWith('z') || stem.StartsWith('Z'))
         {
-            // drawn nearest-neighbour, as the dash's pixel art was
+            // point-sampled from its full-size level, pixels kept; a high-resolution replacement filtered (object.gdshaderinc: i76_cockpit)
             mat.SetShaderParameter("prelit", true);
-            if (t is not null) mat.SetShaderParameter("albedo_nearest", Albedo(t, mode));
+            if (t is not null) mat.SetShaderParameter("albedo_cockpit", Albedo(t, mode));
         }
         // a car's, in the modern look: the material maps made from the texture (CarMaterial), or for now one
         // clear-coated paint over the whole car
@@ -653,7 +653,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
             if (m is ShaderMaterial sm && key.StartsWith(member + "|", StringComparison.OrdinalIgnoreCase))
             {
                 sm.SetShaderParameter("albedo_tex", texture);
-                sm.SetShaderParameter("albedo_nearest", texture);
+                sm.SetShaderParameter("albedo_cockpit", texture);
             }
     }
 

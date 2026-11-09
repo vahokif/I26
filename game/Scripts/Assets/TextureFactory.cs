@@ -11,7 +11,19 @@ namespace I76.Game.Assets;
 /// </summary>
 public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
 {
-    public sealed record Entry(ImageTexture Texture, bool HasKey, int Width, int Height, byte[] Rgba);
+    /// <summary>
+    /// A texture member. <see cref="Texture"/> and <see cref="Rgba"/> are as a keyed draw shows it: the keyed texels' colour
+    /// bled from their neighbours, so filtering and mipmaps pull no key colour into the edges. <see cref="Opaque"/> is as an
+    /// unkeyed (opaque) draw shows it: the key is only a colour there, and the original draws index 255 in its palette
+    /// colour, black past the end of the palette (the bus's stripes and lettering, most of the black limo's paint).
+    /// </summary>
+    public sealed record Entry(ImageTexture Texture, bool HasKey, int Width, int Height, byte[] Rgba)
+    {
+        internal Lazy<ImageTexture>? Unkeyed { get; init; }
+
+        /// <summary>The texture as an opaque face draws it: <see cref="Texture"/> itself when it has no key.</summary>
+        public ImageTexture Opaque => Unkeyed?.Value ?? Texture;
+    }
 
     private readonly Dictionary<string, I76.Formats.Assembly.RoadRaster.Tex?> _rgba = new(StringComparer.OrdinalIgnoreCase);
 
@@ -33,7 +45,7 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     public Entry? Get(string member)
     {
         if (_cache.TryGetValue(member, out var e)) return e;
-        e = I76.Formats.Vfs.SessionStore.GetOrAdd("tex|" + _scope + member, () => Make(member), x => x is null ? 0 : x.Rgba.LongLength * 5 / 2);
+        e = I76.Formats.Vfs.SessionStore.GetOrAdd("tex|" + _scope + member, () => Make(member), x => x is null ? 0 : x.Rgba.LongLength * (x.HasKey ? 7 : 5) / 2);   // a keyed one also keeps its unkeyed colours
         _cache[member] = e;
         return e;
     }
@@ -43,44 +55,21 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
         Entry? e = null;
         if (resolver.Load(member) is { } t)
         {
-            var rgba = TextureReader.ToRgba(t, palette);
-            bool key = false;
-            for (int i = 3; i < rgba.Length; i += 4) if (rgba[i] == 0) { key = true; break; }
-            if (key) BleedUnderKey(rgba, t.Width, t.Height);
-            var img = Image.CreateFromData(t.Width, t.Height, false, Image.Format.Rgba8, rgba);
-            img.GenerateMipmaps();
-            e = new Entry(ImageTexture.CreateFromImage(img), key, t.Width, t.Height, rgba);
+            var plain = TextureReader.ToRgba(t, palette);
+            bool key = TextureReader.HasKey(plain);
+            var rgba = plain;
+            if (key) { rgba = (byte[])plain.Clone(); TextureReader.BleedUnderKey(rgba, t.Width, t.Height); }
+            // the opaque faces' copy is made when one first asks for it (most keyed textures are only drawn keyed)
+            Lazy<ImageTexture>? unkeyed = key ? new(() => Upload(plain, t.Width, t.Height)) : null;
+            e = new Entry(Upload(rgba, t.Width, t.Height), key, t.Width, t.Height, rgba) { Unkeyed = unkeyed };
         }
         return e;
     }
 
-    /// <summary>
-    /// Give keyed texels the colour of an opaque neighbour, so filtering and
-    /// mipmaps do not pull the key colour into the edges. Alpha is untouched.
-    /// </summary>
-    private static void BleedUnderKey(byte[] p, int w, int h)
+    private static ImageTexture Upload(byte[] rgba, int w, int h)
     {
-        for (int pass = 0; pass < 4; pass++)
-        {
-            var src = (byte[])p.Clone();
-            for (int y = 0; y < h; y++)
-                for (int x = 0; x < w; x++)
-                {
-                    int i = (y * w + x) * 4;
-                    if (src[i + 3] != 0 || (pass > 0 && (src[i] | src[i + 1] | src[i + 2]) != 0)) continue;
-                    int n = 0, r = 0, g = 0, b = 0;
-                    for (int dy = -1; dy <= 1; dy++)
-                        for (int dx = -1; dx <= 1; dx++)
-                        {
-                            int xx = x + dx, yy = y + dy;
-                            if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
-                            int j = (yy * w + xx) * 4;
-                            if (src[j + 3] == 0 && (pass == 0 || (src[j] | src[j + 1] | src[j + 2]) == 0)) continue;
-                            r += src[j]; g += src[j + 1]; b += src[j + 2]; n++;
-                        }
-                    if (n == 0) { if (pass == 0) { p[i] = p[i + 1] = p[i + 2] = 0; } continue; }
-                    p[i] = (byte)(r / n); p[i + 1] = (byte)(g / n); p[i + 2] = (byte)(b / n);
-                }
-        }
+        var img = Image.CreateFromData(w, h, false, Image.Format.Rgba8, rgba);
+        img.GenerateMipmaps();
+        return ImageTexture.CreateFromImage(img);
     }
 }

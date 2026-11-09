@@ -50,7 +50,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         if (ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit) is not ShaderMaterial first)
             return _cache[key] = ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit);
         var mat = (ShaderMaterial)first.Duplicate();
-        var tex = frames.Select(f => textures.Get(f)?.Texture).OfType<Texture2D>().ToArray();
+        var tex = frames.Select(f => TextureOf(f, mode)).OfType<Texture2D>().ToArray();
         if (tex.Length == frames.Length) _animated.Add((mat, tex, fps, mat.GetShaderParameter("albedo_nearest").VariantType != Variant.Type.Nil));
         return _cache[key] = mat;
     }
@@ -70,8 +70,15 @@ public sealed class MaterialLibrary(TextureFactory textures)
         }
     }
 
-    /// <summary>A texture member's Godot texture (null if it does not load).</summary>
-    public Texture2D? TextureOf(string member) => textures.Get(member)?.Texture;
+    /// <summary>A texture member's Godot texture as a face of <paramref name="mode"/> draws it (null if it does not load).</summary>
+    public Texture2D? TextureOf(string member, FaceMode mode = FaceMode.Cutout) => textures.Get(member) is { } t ? Albedo(t, mode) : null;
+
+    /// <summary>
+    /// The texture a face of <paramref name="mode"/> samples: a keyed draw's (cut-out, translucent) has the key's texels bled from their
+    /// neighbours; an opaque face draws index 255 as a colour, as the original's unkeyed draws do (its 3D card keys only the
+    /// blended primitives; the software renderer likewise).
+    /// </summary>
+    private static ImageTexture Albedo(TextureFactory.Entry t, FaceMode mode) => mode == FaceMode.Opaque ? t.Opaque : t.Texture;
 
     private int _strips;
 
@@ -168,7 +175,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         }
         if (t is not null)
         {
-            mat.SetShaderParameter("albedo_tex", t.Texture);
+            mat.SetShaderParameter("albedo_tex", Albedo(t, mode));
             mat.SetShaderParameter("use_texture", true);
             mat.SetShaderParameter("alpha_key", keyed);
             // a wheel's face (WA<dd><ll><dd>): a disc filling its square, in the modern look edged by a true circle
@@ -182,7 +189,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         {
             // drawn nearest-neighbour, as the dash's pixel art was
             mat.SetShaderParameter("prelit", true);
-            if (t is not null) mat.SetShaderParameter("albedo_nearest", t.Texture);
+            if (t is not null) mat.SetShaderParameter("albedo_nearest", Albedo(t, mode));
         }
         // a car's, in the modern look: the material maps made from the texture (CarMaterial), or for now one
         // clear-coated paint over the whole car

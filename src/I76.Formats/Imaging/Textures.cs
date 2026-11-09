@@ -84,6 +84,57 @@ public static class TextureReader
         }
         return o;
     }
+
+    /// <summary>Whether an RGBA8 image from <see cref="ToRgba"/> has any keyed (alpha 0) texel.</summary>
+    public static bool HasKey(byte[] rgba)
+    {
+        for (int i = 3; i < rgba.Length; i += 4) if (rgba[i] == 0) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// RGBA8 as a face draws the texture. A keyed draw (cut-out, translucent) drops index 255, so its texels take their
+    /// neighbours' colour (<see cref="BleedUnderKey"/>). An opaque (unkeyed) draw shows index 255 as a colour like any
+    /// other, black past the end of the palette: the original keys only its blended primitives, and draws the rest of a
+    /// texture's index-255 texels as they are (a school bus's black stripes and lettering, most of the limo's paint).
+    /// </summary>
+    public static byte[] DrawRgba(IndexedTexture t, Palette? act, bool keyed)
+    {
+        var o = ToRgba(t, act);
+        if (keyed && HasKey(o)) BleedUnderKey(o, t.Width, t.Height);
+        return o;
+    }
+
+    /// <summary>
+    /// Give keyed texels (alpha 0) the colour of an opaque neighbour, up to four texels in, so filtering and mipmaps do
+    /// not pull the key colour into the edges of a keyed draw. Alpha is untouched. Only for keyed draws: an opaque face
+    /// shows the key's texels in their own colour (<see cref="DrawRgba"/>).
+    /// </summary>
+    public static void BleedUnderKey(byte[] p, int w, int h)
+    {
+        for (int pass = 0; pass < 4; pass++)
+        {
+            var src = (byte[])p.Clone();
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int i = (y * w + x) * 4;
+                    if (src[i + 3] != 0 || (pass > 0 && (src[i] | src[i + 1] | src[i + 2]) != 0)) continue;
+                    int n = 0, r = 0, g = 0, b = 0;
+                    for (int dy = -1; dy <= 1; dy++)
+                        for (int dx = -1; dx <= 1; dx++)
+                        {
+                            int xx = x + dx, yy = y + dy;
+                            if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+                            int j = (yy * w + xx) * 4;
+                            if (src[j + 3] == 0 && (pass == 0 || (src[j] | src[j + 1] | src[j + 2]) == 0)) continue;
+                            r += src[j]; g += src[j + 1]; b += src[j + 2]; n++;
+                        }
+                    if (n == 0) { if (pass == 0) { p[i] = p[i + 1] = p[i + 2] = 0; } continue; }
+                    p[i] = (byte)(r / n); p[i + 1] = (byte)(g / n); p[i + 2] = (byte)(b / n);
+                }
+        }
+    }
 }
 
 /// <summary>A .act palette: 256 RGB triples, 768 bytes.</summary>

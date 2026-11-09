@@ -99,7 +99,7 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
     public (Texture2D[] Frames, float Fps)? AnimatedTextures(string faceTexture)
     {
         if (resolver.AnimatedFace(faceTexture) is not { } a) return null;
-        var t = a.Frames.Select(materials.TextureOf).OfType<Texture2D>().ToArray();
+        var t = a.Frames.Select(f => materials.TextureOf(f)).OfType<Texture2D>().ToArray();
         return t.Length == a.Frames.Length ? (t, a.Fps) : null;
     }
 
@@ -432,7 +432,7 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
             if (resolver.TmtFrames(f.Texture) is not { Length: > 1 } names) continue;
             if (resolver.ResolveFace(f.Texture, part.ObjectCode, part.TmtNames, vtfMaps: part.VtfMaps) is not { } member) continue;
             var shared = materials.ForTexture(member, MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21), paint, family, unlit: I76.Formats.Geo.FaceLight.Unlit(f));
-            var tex = names.Select(materials.TextureOf).ToArray();
+            var tex = names.Select(n => materials.TextureOf(n, MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21))).ToArray();
             if (tex.All(t => t is not null)) frames.TryAdd(shared, tex!);
         }
         var o = new List<(ShaderMaterial, Texture2D[])>();

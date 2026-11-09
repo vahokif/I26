@@ -35,7 +35,7 @@ public sealed partial class EscapeMenu : Control
         public int Value;
         /// <summary>The item's callback (msg 2/3 own step, 4 activate, 6 opened, 7 changed, 8 done, 9 cancel); null = not selectable.</summary>
         public Action<Item, int>? Cb;
-        /// <summary>One of the port's rows in the scrolling part of a pad: Pair is its place in the list, the pad row is Pair minus the screen's scroll.</summary>
+        /// <summary>A row of a pad's scrolling list (Graphic Detail's, every row): Pair is its place in the list, the pad row is Pair minus the screen's scroll.</summary>
         public bool Scrolls;
         public int Type => Flags & 0x3ff;
     }
@@ -48,8 +48,8 @@ public sealed partial class EscapeMenu : Control
         public required string Art;
         public List<Item> Items = [];
         public int Order;
-        /// <summary>The scrolling rows' first pad row, how many show at once, and how far they are scrolled (in rows).</summary>
-        public const int FirstRow = 7, VisibleRows = 8;
+        /// <summary>The scrolling rows' first pad row, how many show at once (the pad's fourteen ruled rows), and how far they are scrolled (in rows).</summary>
+        public const int FirstRow = 1, VisibleRows = 14;
         public int Scroll;
         public int Scrollable => Items.Count(i => i.Scrolls);
         public int MaxScroll => Math.Max(0, Scrollable - VisibleRows);
@@ -159,7 +159,7 @@ public sealed partial class EscapeMenu : Control
         };
     }
 
-    /// <summary>A Setting in the scrolling part of the pad (<paramref name="at"/> counts from the first scrolling row, 7).</summary>
+    /// <summary>A Setting in the pad's scrolling list (<paramref name="at"/> is its place in the list, from 1, the pad row it has unscrolled).</summary>
     private Item Scrolling(int at, int flags, string label, int n, string[]? names, Func<ShellSettings, int> get, Action<ShellSettings, int> put,
         bool live = true, Action? apply = null)
     {
@@ -302,9 +302,10 @@ public sealed partial class EscapeMenu : Control
             Action("I'm a swinger", 13, () => Switch(_play)),
         ];
 
-        // Graphic Detail: only the settings this port honours (resolution, visibility and the 1997 renderer's detail levels are gone)
+        // Graphic Detail: only the settings this port honours (resolution, visibility and the 1997 renderer's detail levels are gone),
+        // every row in one list that scrolls over the pad's rows, the original's first; Reset, Done and Cancel stay put
         Item G(int flags, string label, int row, int n, string[]? names, int at) =>
-            Setting(flags, label, row, n, names, s => s.Graphics[at], (s, v) => s.Graphics[at] = (byte)v, apply: () => Live?.Invoke(Settings));
+            Scrolling(row, flags, label, n, names, s => s.Graphics[at], (s, v) => s.Graphics[at] = (byte)v, apply: () => Live?.Invoke(Settings));
         string[] offOn = ["Off", "On"], offLowHigh = ["Off", "Low", "High"];
         _graphics.Items = [
             G(Numeric | Min1 | WrapAround | OneIsNumber, "Monitor Brightness", 1, 11, null, 0xc),
@@ -313,13 +314,13 @@ public sealed partial class EscapeMenu : Control
             G(Cycle, "Shadow Detail", 4, 3, offLowHigh, 0x6),
             G(Cycle, "Terrain Detail", 5, 2, ["Low", "High"], 0x2),
             G(Cycle, "Anti-Aliasing", 6, 3, ["Off", "2x", "4x"], 0x8),
-            // the port's own, on the free row 7: the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
+            // the port's own, from row 7: the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
             Scrolling(7, Cycle, "1997 Mode", 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false),
-            // and on row 8: the modern look's palette grade (SoftwareLook), live
+            // the modern look's palette grade (SoftwareLook), live
             Scrolling(8, Cycle, "Palette Grade", 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: () => Live?.Invoke(Settings)),
             // the software renderer's double image on a big cockpit hit (the original's in the 1997 look, smooth in the modern look), live
             Scrolling(9, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
-            // and the modern look's plants on the next free row
+            // the modern look's plants
             Scrolling(10, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
             Scrolling(11, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
@@ -835,12 +836,13 @@ public sealed partial class EscapeMenu : Control
         DrawScrollMark();
     }
 
-    /// <summary>The port's scrolling rows: a thin track down the pad's left edge with a thumb, and an arrow at an end where there is more.</summary>
+    /// <summary>The scrolling list: a thin track before the value column with a thumb, and an arrow at an end where there is more.</summary>
     private void DrawScrollMark()
     {
         int max = _screen.MaxScroll;
         if (max <= 0) return;
-        float top = RowY(Screen.FirstRow) + 2, bottom = RowY(Screen.FirstRow + Screen.VisibleRows - 1) + 22, h = bottom - top;
+        // the track starts lower than the first row's top, so the arrow over it stays on that row, clear of the pad's header
+        float top = RowY(Screen.FirstRow) + 11, bottom = RowY(Screen.FirstRow + Screen.VisibleRows - 1) + 22, h = bottom - top;
         const float x = 212;
         float thumb = h * Screen.VisibleRows / _screen.Scrollable, at = top + (h - thumb) * _screen.Scroll / max;
         DrawRect(new Rect2(At(x + 2, top), new Vector2(1, h) * _s), Ink with { A = 0.35f });
@@ -849,7 +851,7 @@ public sealed partial class EscapeMenu : Control
         if (_screen.Scroll < max) DrawColoredPolygon([At(x + 2.5f, bottom + 9), At(x - 1, bottom + 3), At(x + 6, bottom + 3)], Ink);
     }
 
-    /// <summary>Scroll the port's rows so the selected one shows.</summary>
+    /// <summary>Scroll the list so the selected row shows.</summary>
     private void EnsureVisible()
     {
         var s = _screen;

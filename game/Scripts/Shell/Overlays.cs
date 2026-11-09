@@ -152,9 +152,10 @@ public sealed class OptionsScreen : OverlayScreen
 }
 
 /// <summary>
-/// An overlay whose port rows scroll in the sheet's free lines under the original's (Graphic Detail, Play Options): the mouse
-/// wheel, Up/Down and Page Up/Down, or the pad past the first or last visible row move the list; a thin bar in the sheet's ink,
-/// with an arrow at an end where there is more, marks it. The rest of the sheet (the original's rows, Done, Cancel) stays put.
+/// An overlay with a scrolling list of rows on the sheet's ruled lines (Graphic Detail: every row, the original's and the port's;
+/// Play Options: the port's rows in the free lines under the original's): the mouse wheel, Up/Down and Page Up/Down, or the pad
+/// past the first or last visible row move the list; a thin bar in the sheet's ink, with an arrow at an end where there is more,
+/// marks it. The rest of the sheet (the rows outside the list, Done, Cancel) stays put.
 /// </summary>
 public abstract class ScrollingOverlayScreen : OverlayScreen
 {
@@ -478,36 +479,38 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
     private I76.Game.Boot.RendererChoice _savedRenderer;
     private bool _savedVSync, _savedLog, _saved3D, _savedInteriors;
     // only the settings this port honours: resolution, draw distance and most detail levels of the 1997 renderer are gone
-    private static readonly (int Y, string Label, int Byte, string[] Values)[] Rows =
+    private static readonly (string Label, int Byte, string[] Values)[] Rows =
     [
-        (118, "Monitor Brightness", 0xc, ["0.00", "1.00", "2.00", "3.00", "4.00", "5.00", "6.00", "7.00", "8.00", "9.00", "10.00"]),
-        (141, "Ext. Instrum. Disp", 0xe, ["Off", "On"]),
-        (164, "Rear Mirror", 0xd, ["Off", "Low", "High"]),
+        ("Monitor Brightness", 0xc, ["0.00", "1.00", "2.00", "3.00", "4.00", "5.00", "6.00", "7.00", "8.00", "9.00", "10.00"]),
+        ("Ext. Instrum. Disp", 0xe, ["Off", "On"]),
+        ("Rear Mirror", 0xd, ["Off", "Low", "High"]),
         // the modern look's cost (Main.ApplyModernQuality); the first two are the original's own rows and bytes
-        (187, "Shadow Detail", 0x6, ["Off", "Low", "High"]),
-        (210, "Terrain Detail", 0x2, ["Low", "High"]),
-        (233, "Anti-Aliasing", 0x8, ["Off", "2x", "4x"]),
+        ("Shadow Detail", 0x6, ["Off", "Low", "High"]),
+        ("Terrain Detail", 0x2, ["Low", "High"]),
+        ("Anti-Aliasing", 0x8, ["Off", "2x", "4x"]),
     ];
 
     private void Apply(bool on) { Shell.Settings.HdMenuArt = on; HdAssets.Enabled = on; }
 
-    // the port's own rows scroll in the sheet's free space under the original's: eight rows show of twelve, on the original's 23 px line
-    private const int ListY = 256, Shown = 8;
+    // every row, the original's six and then the port's own, one to a ruled line in one list over the sheet's fourteen lines
+    // (the original's first, from its first line at 118, on the original's 23 px line)
+    private const int ListY = 118, Shown = 14;
     protected override int MarkX => 386;    // in the gap before the value column
+    private int _slot;
 
-    /// <summary>One of the scrolling rows: its label and its value (a click on the value is <paramref name="click"/>), in list slot <paramref name="slot"/>.</summary>
-    private void Row(int slot, string label, Func<string> value, Action click)
+    /// <summary>The next row of the list: its label and its value (a click on the value is <paramref name="click"/>).</summary>
+    private void Row(string label, Func<string> value, Action click)
     {
-        // the menu-art row (slot 0) is there only when an art pack is installed; without one the rest move up a line
-        if (!HdAssets.Installed) { if (slot == 0) return; slot--; }
-        Listed(Add(200, ListY, label, null), slot);
-        Listed(Add(397, ListY, value, click), slot);
+        Listed(Add(200, ListY, label, null), _slot);
+        Listed(Add(397, ListY, value, click), _slot);
+        _slot++;
     }
 
     protected override void Build()
     {
         var g = Shell.Settings.Graphics;
         (List.Top, List.Shown) = (ListY, Shown);
+        _slot = 0;
         _saved = (byte[])g.Clone();
         _savedHd = Shell.Settings.HdMenuArt;
         _savedLook = Shell.Settings.Look1997;
@@ -522,42 +525,42 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         _savedRenderer = Shell.Settings.Renderer;
         _saved3D = Shell.Settings.Garage3D;
         _savedInteriors = Shell.Settings.CarInteriors;
-        foreach (var (y, label, b, values) in Rows)
-        {
-            Add(200, y, label, null);
-            Add(397, y, () => values[Math.Min(g[b], values.Length - 1)], () => g[b] = (byte)((g[b] + 1) % values.Length));
-        }
+        foreach (var (label, b, values) in Rows)
+            Row(label, () => values[Math.Min(g[b], values.Length - 1)], () => g[b] = (byte)((g[b] + 1) % values.Length));
         var st = Shell.Settings;
-        // the port's own rows, one to a line: the menu art pack's (only when one is installed), with the pack's name beside it
-        Row(0, "HD Menu Art", () => st.HdMenuArt ? "On" : "Off", () => Apply(!st.HdMenuArt));
-        if (HdAssets.Installed) Listed(Add(318, ListY + 3, () => HdAssets.Label ?? "", null, Small), 0, 3);
+        // the port's own rows: the menu art pack's (only when one is installed), with the pack's name beside it
+        if (HdAssets.Installed)
+        {
+            Row("HD Menu Art", () => st.HdMenuArt ? "On" : "Off", () => Apply(!st.HdMenuArt));
+            Listed(Add(318, ListY + 3, () => HdAssets.Label ?? "", null, Small), _slot - 1, 3);
+        }
         // the 1997 look: off, the original's 3D card or its software renderer (the shell keeps the look it started in; a change shows
         // from the next start or mission), with the modern look's palette grade (SoftwareLook) after it
         string[] modes = ["Off", "3D Card", "Software"];
-        Row(1, "1997 Mode", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
+        Row("1997 Mode", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
         {
             int m = ((!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1) + 1) % 3;
             st.Look1997 = m != 0; st.SoftwareRenderer = m == 2;
         });
-        Row(2, "Palette Grade", () => st.PaletteGrade ? "On" : "Off", () => st.PaletteGrade = !st.PaletteGrade);
+        Row("Palette Grade", () => st.PaletteGrade ? "On" : "Off", () => st.PaletteGrade = !st.PaletteGrade);
         // the software renderer's double image on a big cockpit hit: Auto, Off, On
-        Row(3, "Crash Blur", () => I76.Sim.Views.CrashBlurMode.Names[Math.Clamp(st.CrashBlur, 0, 1)], () => st.CrashBlur = 1 - Math.Clamp(st.CrashBlur, 0, 1));
+        Row("Crash Blur", () => I76.Sim.Views.CrashBlurMode.Names[Math.Clamp(st.CrashBlur, 0, 1)], () => st.CrashBlur = 1 - Math.Clamp(st.CrashBlur, 0, 1));
         // the modern look's plants (docs/modern-vegetation.md)
         string[] veg = ["Off", "Low", "High"];
-        Row(4, "Vegetation", () => veg[Math.Clamp(st.Vegetation, 0, 2)], () => st.Vegetation = (st.Vegetation + 1) % 3);
+        Row("Vegetation", () => veg[Math.Clamp(st.Vegetation, 0, 2)], () => st.Vegetation = (st.Vegetation + 1) % 3);
         // how far the world is drawn, in either look
-        Row(5, "Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
+        Row("Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
         // the frame rate limiter and vsync: drawing only, the simulation keeps the Play Options rate; both live (the engine's, so the shell shows it too)
-        Row(6, "Max FPS", () => I76.Sim.Views.FrameLimit.Names[Math.Clamp(st.MaxFps, 0, I76.Sim.Views.FrameLimit.Names.Length - 1)], () => { st.MaxFps = (st.MaxFps + 1) % I76.Sim.Views.FrameLimit.Names.Length; I76.Game.FrameLimiter.Apply(st); });
-        Row(7, "VSync", () => st.VSync ? "On" : "Off", () => { st.VSync = !st.VSync; I76.Game.FrameLimiter.Apply(st); });
+        Row("Max FPS", () => I76.Sim.Views.FrameLimit.Names[Math.Clamp(st.MaxFps, 0, I76.Sim.Views.FrameLimit.Names.Length - 1)], () => { st.MaxFps = (st.MaxFps + 1) % I76.Sim.Views.FrameLimit.Names.Length; I76.Game.FrameLimiter.Apply(st); });
+        Row("VSync", () => st.VSync ? "On" : "Off", () => { st.VSync = !st.VSync; I76.Game.FrameLimiter.Apply(st); });
         // the log file: Godot reads it only at start, so a change shows from the next start (docs/dev-hooks.md: --log forces it for a run)
-        Row(8, "Log (restart)", () => st.LogFile ? "On" : "Off", () => st.LogFile = !st.LogFile);
+        Row("Log (restart)", () => st.LogFile ? "On" : "Off", () => st.LogFile = !st.LogFile);
         // CONFIGURE CHASSIS as the 3D garage (on) or the original's 2D form (off)
-        Row(9, "3D Garage", () => st.Garage3D ? "On" : "Off", () => st.Garage3D = !st.Garage3D);
+        Row("3D Garage", () => st.Garage3D ? "On" : "Off", () => st.Garage3D = !st.Garage3D);
         // the modern look's cabin and driver behind a car's windows (off: plain reflective glass), live
-        Row(10, "Car Interiors", () => st.CarInteriors ? "On" : "Off", () => { st.CarInteriors = !st.CarInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(st.CarInteriors); });
+        Row("Car Interiors", () => st.CarInteriors ? "On" : "Off", () => { st.CarInteriors = !st.CarInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(st.CarInteriors); });
         // the renderer: Auto, Vulkan, D3D12 (Windows only) or OpenGL, read by Godot at start (an unavailable choice falls back there)
-        Row(11, "Renderer (restart)", () => st.Renderer == I76.Game.Boot.RendererChoice.D3D12 && !I76.Game.Boot.StartupSettings.D3D12Offered ? "Auto" : st.Renderer.ToString(), () =>
+        Row("Renderer (restart)", () => st.Renderer == I76.Game.Boot.RendererChoice.D3D12 && !I76.Game.Boot.StartupSettings.D3D12Offered ? "Auto" : st.Renderer.ToString(), () =>
         {
             var all = I76.Game.Boot.StartupSettings.D3D12Offered ? new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.D3D12, I76.Game.Boot.RendererChoice.OpenGL }
                 : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };

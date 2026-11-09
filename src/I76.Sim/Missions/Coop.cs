@@ -33,6 +33,12 @@ public sealed record CoopSetup(IReadOnlyList<string?> Cars)
     /// <summary>The cap on <see cref="ExtraEnemies"/>: three, an extra per joiner of a four-player game.</summary>
     public const int MaxExtraEnemies = 3;
 
+    /// <summary>
+    /// The host's Co-op Rolling Start (the port's; docs/deviations.md): a respawn or a joiner comes in beside a teammate who
+    /// is driving along at that teammate's speed and heading, rather than standing still. Off by default.
+    /// </summary>
+    public bool RollingStart { get; init; }
+
     /// <summary>A co-op game of <paramref name="humans"/> players, each in the mission's own car.</summary>
     public static CoopSetup Of(int humans) => new(Enumerable.Repeat<string?>(null, humans).ToList());
 }
@@ -78,6 +84,8 @@ public sealed class CoopGroup
     /// <summary>Co-op Scaling made a copy of an enemy car (its car and .vcf): the server names it to the clients.</summary>
     public event Action<Vehicle, string>? Spawned;
     internal void RaiseSpawned(Vehicle v, string def) => Spawned?.Invoke(v, def);
+    /// <summary>A fresh car beside a moving teammate takes its speed (<see cref="CoopSetup.RollingStart"/>).</summary>
+    public bool RollingStart { get; init; }
     /// <summary>Builds a fresh car from its .vcf for a seat (health, handguns, lights), not placed.</summary>
     internal Func<string, int, Vehicle> Build { get; }
     /// <summary>A human came back, or was warned off the map edge.</summary>
@@ -197,6 +205,28 @@ public sealed partial class ScriptHost
         v.Steer = v.Throttle = 0;
     }
 
+    /// <summary>The slowest a teammate a Rolling Start matches goes (m/s); slower, the fresh car stands still.</summary>
+    public const float RollingMinSpeed = 1f;
+    /// <summary>The most the teammate's way may be off its heading (a slide) for a Rolling Start to match it, degrees.</summary>
+    public const float RollingMaxSlip = 15f;
+
+    /// <summary>
+    /// The velocity a Rolling Start gives a fresh car beside <paramref name="anchor"/> (which it faces as): along the anchor's
+    /// heading at its speed over the ground. Null (stand still) with the anchor slower than <see cref="RollingMinSpeed"/>, in
+    /// the air, reversing or sliding more than <see cref="RollingMaxSlip"/> off its heading.
+    /// </summary>
+    internal static (System.Numerics.Vector3 Vel, float Speed)? Rolling(Vehicle anchor)
+    {
+        if ((anchor.Flags & VehicleFlags.Airborne) != 0) return null;
+        var ground = new System.Numerics.Vector3(anchor.Vel.X, 0, anchor.Vel.Z);
+        var heading = new System.Numerics.Vector3(anchor.Rot.Forward.X, 0, anchor.Rot.Forward.Z);
+        float speed = ground.Length();
+        if (speed < RollingMinSpeed || heading.LengthSquared() < 1e-6f) return null;
+        heading = System.Numerics.Vector3.Normalize(heading);
+        if (System.Numerics.Vector3.Dot(ground / speed, heading) < MathF.Cos(RollingMaxSlip * MathF.PI / 180)) return null;
+        return (heading * speed, speed);
+    }
+
     /// <summary>The living teammate a seat comes back beside: the lead, else the first other living human (that <paramref name="ok"/> takes); null with none.</summary>
     private static CoopSeat? Teammate(CoopGroup c, int seat, Func<int, bool>? ok = null)
     {
@@ -291,7 +321,9 @@ public sealed partial class ScriptHost
         e.ShotTick = e.RammedTick = e.AttackedTick = -10;
         if (Combat is { } cb) { cb.RadarTarget.Remove(v); cb.RadarCamera.Remove(v); cb.StructureTarget.Remove(v); }
         World.Ai.Remove(v);
-        PutBeside(s, mate.Car, System.Numerics.Vector3.Zero, 0);
+        // standing still, as the melee's respawn; with Rolling Start, moving as a teammate driving along does
+        var (vel, speed) = c.RollingStart && Rolling(mate.Car) is { } roll ? roll : (System.Numerics.Vector3.Zero, 0f);
+        PutBeside(s, mate.Car, vel, speed);
         VehicleStep.PrimeWheels(v, World.Ground);   // a fresh car: its wheels' history from the ground it now stands on
         EndPersonalScene(s.Index);
         StartCar(e);   // its engine turns over, as the script's startCar would

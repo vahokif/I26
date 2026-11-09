@@ -407,7 +407,7 @@ public sealed partial class MissionSetup
                     return v;
                 })
                 {
-                    Paths = coopPaths, ExtraEnemies = System.Math.Clamp(coop.ExtraEnemies, 0, CoopSetup.MaxExtraEnemies),
+                    Paths = coopPaths, ExtraEnemies = System.Math.Clamp(coop.ExtraEnemies, 0, CoopSetup.MaxExtraEnemies), RollingStart = coop.RollingStart,
                     // Co-op Scaling's copy of an enemy car: as the mission's own cars are built (an AI car's damage state, the night's lights)
                     BuildEnemy = vcf =>
                     {

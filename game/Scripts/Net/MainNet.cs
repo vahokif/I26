@@ -93,6 +93,7 @@ public partial class Main
                     Lobby = _opt.CoopLobby,
                     CoopDamage = _opt.CoopDamage ?? I76.Game.Shell.ShellSettings.Load().CoopDamage,
                     CoopScale = _opt.CoopScale ?? I76.Game.Shell.ShellSettings.Load().CoopScale,
+                    CoopRollingStart = _opt.CoopRollingStart ?? I76.Game.Shell.ShellSettings.Load().CoopRollingStart,
                 };
             GD.Print($"listen server: {o.Arena}, {o.MaxPlayers} seats (about {I76.Game.Shell.MeleeScreen.UploadMbit(o.MaxPlayers):0.#} Mbit/s up when full), rand seed {(uint)o.Seed}{(_opt.FixedSeed is null ? " (clock)" : "")}{(o.Restrictions.IsEmpty ? "" : $", restricted weapons {o.Restrictions}")}{(o.AllowHidden ? ", hidden weapons and cars allowed" : "")}{(o.AllowTurrets ? ", several turrets allowed" : "")}");
             try { await _net.Host(o); }
@@ -412,6 +413,7 @@ public partial class Main
         _opt.CoopLobby = _opt.Coop is not null;
         _opt.CoopDamage = n.CoopDamage;
         _opt.CoopScale = n.CoopScale;
+        _opt.CoopRollingStart = n.CoopRollingStart;
         // a LAN host takes the first free port of the ones a LAN search asks (a second game on one machine)
         _opt.Port = n.Mode == 3 ? FreePort(n.Port, Discovery.PortsSearched) : n.Port;
         _opt.Fill = 0;

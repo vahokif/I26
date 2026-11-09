@@ -26,7 +26,7 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
     I76.Sim.Missions.MeleeKind Kind = I76.Sim.Missions.MeleeKind.Combat, I76.Sim.Missions.MeleeGoal Goal = I76.Sim.Missions.MeleeGoal.None, int GoalValue = 0, byte Teams = 2,
     byte[]? MapHash = null, bool MapShared = false, uint MapSize = 0, bool Locked = false,
     I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true, bool Crosshair = false,
-    string ArenaName = "", float CoopDamage = 1f, int CoopScale = 0)
+    string ArenaName = "", float CoopDamage = 1f, int CoopScale = 0, bool RollingStart = false)
 {
     /// <summary>
     /// Whether a joiner's own check lets hidden cars and weapons through: the game allows them, or it does not say
@@ -90,6 +90,8 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         u.U8((byte)Math.Clamp((int)MathF.Round(CoopDamage * 100), 0, 255));
         // a co-op game's Co-op Scaling, the most extra copies of each enemy car; an older host says nothing: none
         u.U8((byte)Math.Clamp(CoopScale, 0, 255));
+        // a co-op game's Rolling Start; an older host says nothing: off
+        u.Bool(RollingStart);
         // (the drivers' makes and models follow the tail, a count byte and a string each)
         var shown = Shown(AnswerBytes - w.Length - 1 - t.Length - 1 - u.Length);
         w.U8((byte)shown.Count);
@@ -162,8 +164,9 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
             }
             float coopDamage = r.Remaining >= 1 ? r.U8() / 100f : 1f;
             int coopScale = r.Remaining >= 1 ? r.U8() : 0;
+            bool rolling = r.Remaining >= 1 && r.Bool();
             return new SessionInfo(id, version, name, arena, players, max, team, invite, score, limit, over, drivers, kind, goal, value, teams, hash, shared, size, locked,
-                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName, CoopDamage: coopDamage, CoopScale: coopScale);
+                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName, CoopDamage: coopDamage, CoopScale: coopScale, RollingStart: rolling);
         }
         catch (WireException) { return null; }
         catch (IndexOutOfRangeException) { return null; }

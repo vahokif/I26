@@ -88,6 +88,8 @@ public sealed record NetLaunch(int Mode)
     public float CoopDamage { get; init; } = 1f;
     /// <summary>Hosting a co-op game: the form's Co-op Scaling, the most extra copies of each enemy car (0 off).</summary>
     public int CoopScale { get; init; }
+    /// <summary>Hosting a co-op game: the form's Rolling Start, a respawn or joiner at a moving teammate's speed (off: standing still).</summary>
+    public bool CoopRollingStart { get; init; }
     /// <summary>Joining a co-op game the roster showed in its lobby: the briefing plays when the host starts the mission, not before the join. Hosting a co-op game always opens the lobby.</summary>
     public bool InLobby { get; init; }
 }
@@ -1251,6 +1253,8 @@ public sealed class ShellSettings
     public float CoopDamage { get; set; } = 1f;
     /// <summary>The port's own: a hosted co-op game's Co-op Scaling (the host form's; shell.cfg [port] coop_scale, written only when on): each enemy car gets a copy per player past the first, up to this many.</summary>
     public int CoopScale { get; set; }
+    /// <summary>The port's own: a hosted co-op game's Rolling Start (the host form's; shell.cfg [port] coop_rolling_start, written only when on).</summary>
+    public bool CoopRollingStart { get; set; }
     /// <summary>The port's own: CONFIGURE CHASSIS as a 3D garage (Graphic Detail's 3D Garage; shell.cfg [port] garage_3d, written only when off). On unless the player turned it off; off is the original's 2D form.</summary>
     public bool Garage3D { get; set; } = true;
     /// <summary>The port's own: the modern look's cars show a cabin and driver behind their glass (Graphic Detail's Car Interiors; shell.cfg [port] car_interiors, written only when off). Off: the windows are plain reflective glass.</summary>
@@ -1375,6 +1379,8 @@ public sealed class ShellSettings
         s.CoopDamage = (float)(double)c.GetValue("port", "coop_damage", 1.0) is var cd && System.Array.IndexOf(I76.Sim.Missions.CoopSetup.DamageFactors, cd) >= 0 ? cd : 1f;
         // no version step: absent, off (the mission's own cars alone)
         s.CoopScale = Math.Clamp((int)c.GetValue("port", "coop_scale", 0), 0, I76.Sim.Missions.CoopSetup.MaxExtraEnemies);
+        // no version step: absent, off (a fresh car stands still)
+        s.CoopRollingStart = (bool)c.GetValue("port", "coop_rolling_start", false);
         // no version step: absent, the 3D garage is on
         s.Garage3D = (bool)c.GetValue("port", "garage_3d", true);
         s.CarInteriors = (bool)c.GetValue("port", "car_interiors", true) && System.Environment.GetEnvironmentVariable("I76_CAR_INTERIORS") != "0";
@@ -1460,6 +1466,7 @@ public sealed class ShellSettings
         if (!CoopOwnCar) c.SetValue("port", "coop_own_car", false);
         if (CoopDamage != 1f) c.SetValue("port", "coop_damage", (double)CoopDamage);
         if (CoopScale != 0) c.SetValue("port", "coop_scale", CoopScale);
+        if (CoopRollingStart) c.SetValue("port", "coop_rolling_start", true);
         if (!Garage3D) c.SetValue("port", "garage_3d", false);
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);
         if (!CameraReturn) c.SetValue("port", "camera_return", false);

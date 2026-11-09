@@ -60,6 +60,8 @@ public static class HostFormLayout
         public string CoopDamage { get; init; } = "x1";
         /// <summary>A co-op game's Co-op Scaling as the row shows it ("Off", "Up to +2").</summary>
         public string CoopScale { get; init; } = "Off";
+        /// <summary>A co-op game's Rolling Start.</summary>
+        public bool RollingStart { get; init; }
         public string MakeModel { get; init; } = "";
         public string Variant { get; init; } = "";
     }
@@ -99,6 +101,7 @@ public static class HostFormLayout
         {
             Left("Co-op Damage", s.CoopDamage, 40);
             Left("Co-op Scaling", s.CoopScale, 41);
+            Left("Rolling Start", OnOff(s.RollingStart), 42);
         }
         if (!s.Coop)
         {

@@ -77,12 +77,14 @@ public class AiStructureTargetTests
     /// T01 played through as a player would: follow Taurus to Seagraves, blow up the fireworks stand with the car's own
     /// guns, follow him on to the Wagon Wheel. Nothing is forced: the stand goes to the player's rounds and data[29] is set
     /// by Taurus's arrival, so the attackers' threads order `attack(enemy, wagon, 1)` from wherever their ring round the
-    /// diner (nav 9) has brought them, 60-110 m off. Their bearings, ranges and steering take the diner's own routine
-    /// point, its collider centre, 53 m from its placement; taken from the placement they drove past it with their guns
-    /// 30-60 degrees off and barely hit it. Whether a run's tactics bring them round to face it in the three seconds the
-    /// script gives each attack is the dice, so eight seeds are run and the attackers must hurt it in half of them. (Since
-    /// Taurus corners on load-based grip he reaches the diner later in these runs, the order coming at 297 s rather than
-    /// 286 s, and over seeds 1-16 the attackers hurt it in 7 rather than 13: four seeds needing three no longer held.)
+    /// diner (nav 9) has brought them, 60-300 m off. Their bearings, ranges and steering take the diner's own routine
+    /// point, the centre of its bounds (its lot left out), 6 m east of its deck; taken from the placement they drove past
+    /// it with their guns 30-60 degrees off and barely hit it. The script gives each attack three seconds and then 15 on
+    /// the nearest enemy, so the window is the first two attacks (the order plus 25 s). Measured in the original, played
+    /// the same way (the stand destroyed when the player's rounds take it here, the player's car kept 30 m behind Taurus):
+    /// the order came at 297 s as here; in the first attack t01al01 fired 27-40 times from about 100 m and never hit, and
+    /// in the second (19-22 s after the order) t01fc01 hit it 11 and 17 times with its MG and rockets in two seeds of
+    /// three and nothing in the third. Here over seeds 1-16 they hurt it in 7, so sixteen seeds are run and six must.
     /// </summary>
     [Fact]
     public void T01sAttackersShootTheDinerWhenTaurusGetsThere()
@@ -90,7 +92,7 @@ public class AiStructureTargetTests
         if (InstallDir is null) return;
         int hurt = 0;
         var log = new List<string>();
-        foreach (uint seed in (uint[])[1, 2, 3, 4, 5, 6, 7, 8])
+        foreach (uint seed in (uint[])[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
         {
             var (ordered, shots, damage, fireworks, data29) = PlayT01ToTheDiner(seed);
             Assert.True(fireworks, $"seed {seed}: the player's rounds took the fireworks stand");
@@ -98,12 +100,12 @@ public class AiStructureTargetTests
             if (shots >= 10 && damage >= 100) hurt++;
             log.Add($"seed {seed}: ordered at {ordered:0}s, {shots} shots, diner -{damage}");
         }
-        Assert.True(hurt >= 4, string.Join("; ", log));
+        Assert.True(hurt >= 6, string.Join("; ", log));
     }
 
     /// <summary>
-    /// Plays T01 from the start with a driver at the player's wheel until the attackers' first round on the diner is over
-    /// (their order on it plus 20 s): the attack order's time, the attackers' shots while ordered at the diner, the diner's
+    /// Plays T01 from the start with a driver at the player's wheel until the attackers' first two rounds on the diner are
+    /// over (their order on it plus 25 s): the attack order's time, the attackers' shots while ordered at the diner, the diner's
     /// loss, whether the fireworks stand went and the script's data[29].
     /// </summary>
     private static (float Ordered, int Shots, int Damage, bool Fireworks, int Data29) PlayT01ToTheDiner(uint seed)
@@ -117,7 +119,7 @@ public class AiStructureTargetTests
         int hp0 = HitPoints(diner);
         float orderedAt = -1;
         int shots = 0;
-        while (setup.Script.Result is null && h.Now < (orderedAt < 0 ? 360 : orderedAt + 20))
+        while (setup.Script.Result is null && h.Now < (orderedAt < 0 ? 360 : orderedAt + 25))
         {
             var hd = player.Health!;
             Array.Copy(hd.ArmourMax, hd.Armour, 4); Array.Copy(hd.ChassisMax, hd.Chassis, 4);
@@ -235,6 +237,87 @@ public class AiStructureTargetTests
             foreach (var c in attackers) if (back[c] < 0 && c.OrderTarget == station) back[c] = h.Now - hit;
         });
         Assert.All(back.Values, b => Assert.True(b is > 59 and < 62, $"back on the station after {b:0.0} s"));
+    }
+
+    /// <summary>
+    /// The point the AI aims at on a structure is the centre of its bounds, and a lot (the paved ground a building stands
+    /// on, its own node) is no part of those: the original takes it out of the placement when it loads and draws it with
+    /// the ground. Measured in the original: T02's Jim Bowie school's point is (8351.5, 21.85, 49468.96), inside the
+    /// building; with its 55 x 70 m lot counted it was the lot's middle, 4 m beside the building, where T02's gang put all
+    /// their rounds. T01's Wagon Wheel diner's is (3602.03, 12.20, 40179.28).
+    /// </summary>
+    [Theory]
+    [InlineData("t02.msn", "bhschol1", 8351.5f, 21.85f, 49468.96f)]
+    [InlineData("t01.msn", "bdwgnwl1", 3602.03f, 12.20f, 40179.28f)]
+    public void AStructuresAimPointLeavesItsLotOut(string mission, string name, float x, float y, float z)
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = Mission("miss16", mission);
+        var c = setup.Entities.First(e => e.Name == name).Static!.Centre;
+        Assert.True(Vector3.Distance(c, new Vector3(x, y, z)) < 0.1f, $"{name} centre {c}");
+    }
+
+    /// <summary>
+    /// T02 played as far as the Leadsled gang's run at the school: the player's car follows Taurus through the race until
+    /// the script sends the gang (data[68]), then waits 250 m west of the school out of their way. The three race there and
+    /// are ordered at it from 150 m; within 60 s of the first order the school must be destroyed in each of four seeds (11-36 s here). A
+    /// tester found their gunfire always right beside it: they aimed at its lot's middle, and it lost 0-45 in those seeds.
+    /// </summary>
+    [Fact]
+    public void T02sGangShootsTheSchool()
+    {
+        if (InstallDir is null) return;
+        var log = new List<string>();
+        int hurt = 0;
+        foreach (uint seed in (uint[])[1, 2, 3, 4])
+        {
+            var (setup, s) = Mission("miss16", "t02.msn", seed);
+            var h = setup.Script!.Host;
+            var school = setup.Entities.First(e => e.Name == "bhschol1");
+            var taurus = setup.Entities.First(e => e.Name == "t03js01");
+            var player = setup.World.Player!;
+            int hp0 = HitPoints(school), shots = 0;
+            float orderedAt = -1;
+            bool parked = false; float destroyedAt = -1;
+            while (setup.Script.Result is null && h.Now < (orderedAt < 0 ? 900 : orderedAt + 60))
+            {
+                var hd = player.Health!;
+                Array.Copy(hd.ArmourMax, hd.Armour, 4); Array.Copy(hd.ChassisMax, hd.Chassis, 4);
+                var input = new CarInput();
+                if (setup.Script.Vm!.Data[68] == 1)
+                {
+                    if (!parked)
+                    {
+                        var at = school.Position - new Vector3(250, 0, 0);
+                        player.Pos = new Double3(at.X, setup.Ground.BareHeight(at.X, at.Z), at.Z);
+                        player.Vel = default;
+                        parked = true;
+                    }
+                }
+                else if (!h.View.Active)
+                {
+                    // 15 m behind Taurus
+                    var to = taurus.Position - taurus.Rot.Forward * 15 - player.Pos.ToVector3();
+                    float err = MathF.Atan2(to.X, to.Z) - MathF.Atan2(player.Rot.Forward.X, player.Rot.Forward.Z);
+                    while (err > MathF.PI) err -= 2 * MathF.PI;
+                    while (err < -MathF.PI) err += 2 * MathF.PI;
+                    float want = taurus.Vehicle!.Speed + System.Math.Clamp(new Vector2(to.X, to.Z).Length() * 0.5f, -15f, 20f);
+                    input.Buttons = CarButtons.Analog;
+                    input.Steer = (short)(System.Math.Clamp(-err * 1.5f, -1f, 1f) * 32767);
+                    input.Throttle = (short)(System.Math.Clamp((want - player.Speed) * 0.3f, -1f, 1f) * 32767);
+                }
+                s.Tick([input]);
+                if (orderedAt < 0 && setup.Entities.Any(e => e.Name.StartsWith("t02f") && e.OrderTarget == school)) orderedAt = h.Now;
+                shots += setup.Combat.Events.OfType<ShotFired>().Count(e => h.Of(e.Shooter) is { } a && a.OrderTarget == school);
+                setup.Combat.Events.Clear();
+                setup.Damage.Events.Clear();
+                if (destroyedAt < 0 && school.Static!.Destroyed) destroyedAt = h.Now - orderedAt;
+            }
+            int loss = hp0 - HitPoints(school);
+            if (orderedAt >= 0 && school.Static!.Destroyed) hurt++;
+            log.Add($"seed {seed}: ordered at {orderedAt:0}s, {shots} shots, school -{loss}, destroyed {(destroyedAt >= 0 ? $"{destroyedAt:0.0} s after the order" : "no")}");
+        }
+        Assert.True(hurt == 4, string.Join("; ", log));
     }
 
     /// <summary>T08: with the player at Fletcher &amp; Sons, its attackers turn their guns on the warehouse between rounds on the player.</summary>

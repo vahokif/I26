@@ -354,6 +354,9 @@ public sealed class StaticWorld
     /// <summary>Node class default by object type: 0x2000 box, 0x3000 mesh, 0x5000 sphere.</summary>
     public static uint DefaultClass(uint type) => type switch { 2 or 7 or 8 or 10 => 0x2000, 4 => 0x5000, _ => 0x3000 };
 
+    /// <summary>The SGEO node type of a lot, the paved ground round a building (50 of the stock structures have one).</summary>
+    public const uint Lot = 0x51;
+
     /// <summary>
     /// Registers a placement. <paramref name="nodeClass"/> gives a node's own
     /// class (the SGEO flags &amp; 0xf000, 0 for none), which wins over the type's
@@ -389,6 +392,10 @@ public sealed class StaticWorld
         {
             var g = part.Mesh;
             if (g.Vertices.Length <= 2) continue;
+            // a lot (the flat paved ground round a building) leaves the placement when it loads and is drawn with the
+            // ground: it is no part of the structure, neither in its bounds (whose centre the AI aims at: with its lot in,
+            // T02's school's centre was 4 m beside the building) nor among its colliders
+            if (nodeType?.Invoke(part.NodeName) == Lot) continue;
             var world = g.Vertices.Select(v => place.Apply(part.ToModel.Apply(v))).ToArray();
             all.AddRange(world);
             Rows Frame() => new(Vector3.Normalize(place.Rotate(part.ToModel.Rotate(Vector3.UnitX))),

@@ -74,6 +74,7 @@ public partial class Main
                 AllowCarReset = _opt.CarReset ?? I76.Game.Shell.ShellSettings.Load().CarReset,
                 AllowCb = _opt.Cb ?? I76.Game.Shell.ShellSettings.Load().CbRadio,
                 AllowCrosshair = _opt.Crosshair ?? I76.Game.Shell.ShellSettings.Load().HostCrosshair,
+                IgnitionStaysOn = _opt.IgnitionStaysOn ?? I76.Game.Shell.ShellSettings.Load().IgnitionStaysOn,
             };
             if (_opt.Restrict is { Length: > 0 } spec)
             {
@@ -437,6 +438,7 @@ public partial class Main
         _opt.Hidden = n.Hidden;
         _opt.Turrets = n.Turrets;
         _opt.CarReset = n.CarReset;
+        _opt.IgnitionStaysOn = n.IgnitionStaysOn;
         _opt.Cb = n.Cb;
         _opt.Crosshair = n.Crosshair;
         _opt.Bots = n.Bots;

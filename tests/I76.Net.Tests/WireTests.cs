@@ -18,6 +18,31 @@ public class WireTests
         Assert.Equal(16, I76.Sim.Save.SnapshotHeader.CurrentVersion);
     }
 
+    /// <summary>The host's ignition lock (protocol 23): the join accept's last byte and one of the listing's host rules; an older listing without them reads as off.</summary>
+    [Fact]
+    public void TheIgnitionLockRidesInTheAcceptAndTheListing()
+    {
+        var acc = new JoinAccept(2, 17, "m05", 1234, "vppirna1.vcf", false, 0, 0, 5, [], []);
+        foreach (bool on in new[] { false, true })
+        {
+            var w = new NetWriter();
+            (acc with { IgnitionStaysOn = on }).Write(w);
+            var r = new NetReader(w.Span);
+            r.U8();
+            Assert.Equal(on, JoinAccept.Read(ref r).IgnitionStaysOn);
+            w.Clear();
+            var info = new SessionInfo(7, Protocol.Version, "Night", "M05.MSN", 1, 8, false, false, 0, 0, false, [], IgnitionStaysOn: on);
+            info.Write(w);
+            Assert.Equal(on, SessionInfo.TryRead(w.Span)!.IgnitionStaysOn);
+            if (!on) continue;
+            // a listing that ends before the host's rules (an older host): off
+            var older = w.Span[..^DiscoveryTests.Rules].ToArray();
+            var back = SessionInfo.TryRead(older)!;
+            Assert.False(back.IgnitionStaysOn);
+            Assert.True(back.Cb);
+        }
+    }
+
     [Fact]
     public void ACarPaintRoundTripsAsBytesAndBadBytesAreNone()
     {

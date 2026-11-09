@@ -21,6 +21,7 @@ using I76.Server;
 //       [--coop-rolling-start]    with --coop: a respawn or a joiner beside a teammate driving along comes in at the teammate's speed (off: standing still).
 //       [--no-car-reset]          the reset-upright key (U) does not work in this game (on by default, as the original's F12 trick worked online).
 //       [--crosshair]             the chase crosshair (an aiming aid the original does not have) may show for players who have it on (off by default).
+//       [--no-ignition-off]       the engine stays on: the ignition key (S) starts an engine but never switches one off in this game (off by default).
 //       [--hidden]                Hidden Weapons & Cars: the complete hidden models and weapons may play (off: a car with any is refused).
 //       [--invite-only]           INVITE ONLY: each join waits for an answer on this console ("Let NAME join the game?": y, n, or
 //                                 s to ask about the next first); one unanswered for 30 s is turned away, as the original's.
@@ -63,7 +64,7 @@ string? Arg(string name) => a.IndexOf(name) is >= 0 and var i && i + 1 < a.Count
 int IntArg(string name, int d) => Arg(name) is { } s ? int.Parse(s, CultureInfo.InvariantCulture) : d;
 if (a.Contains("--help") || a.Contains("-h"))
 {
-    Console.WriteLine("i26-server [--install DIR] [--game i76|nitro] [--coop MISSION] [--arena m05] [--port 7676] [--max 32] [--autostart] [--start-when N] [--ai N] [--teams] [--max-score S] [--time-limit SECONDS] [--name NAME] [--kind combat|race|ctf] [--goal laps|captures|points|kills] [--goal-value N|unlimited] [--ctf-teams 2-4] [--rate 20|24|25|28|30|40|60] [--upload MBIT] [--seed N] [--password WORD] [--restrict a,b,c] [--hidden] [--bot-car N=MODEL[:VARIANT]]... [--bot-cars-file PATH] [--invite-only] [--rotate a,b,c] [--once] [--round-pause 15] [--anet HOST[:PORT]]... [--share-maps|--no-share-maps] [--no-car-reset] [--no-cb] [--crosshair] [--coop-damage F] [--coop-scale N] [--coop-rolling-start] [--map-max-mb 16] [--map-rate 256]");
+    Console.WriteLine("i26-server [--install DIR] [--game i76|nitro] [--coop MISSION] [--arena m05] [--port 7676] [--max 32] [--autostart] [--start-when N] [--ai N] [--teams] [--max-score S] [--time-limit SECONDS] [--name NAME] [--kind combat|race|ctf] [--goal laps|captures|points|kills] [--goal-value N|unlimited] [--ctf-teams 2-4] [--rate 20|24|25|28|30|40|60] [--upload MBIT] [--seed N] [--password WORD] [--restrict a,b,c] [--hidden] [--bot-car N=MODEL[:VARIANT]]... [--bot-cars-file PATH] [--invite-only] [--rotate a,b,c] [--once] [--round-pause 15] [--anet HOST[:PORT]]... [--share-maps|--no-share-maps] [--no-car-reset] [--no-cb] [--crosshair] [--coop-damage F] [--coop-scale N] [--coop-rolling-start] [--no-ignition-off] [--map-max-mb 16] [--map-rate 256]");
     return 0;
 }
 // testing: only the headless players, joining a game on this machine (a listen server's: --bots-to PORT --bots N)
@@ -164,6 +165,7 @@ var o = new ServerOptions
     CoopDamage = Arg("--coop-damage") is { } cd ? I76.Sim.Missions.CoopSetup.ParseDamageFactor(cd) ?? throw new ArgumentException($"--coop-damage {cd}: one of 0.5, 0.75, 1, 1.5") : 1f,
     CoopScale = Math.Clamp(IntArg("--coop-scale", 0), 0, I76.Sim.Missions.CoopSetup.MaxExtraEnemies),
     CoopRollingStart = a.Contains("--coop-rolling-start"),
+    IgnitionStaysOn = a.Contains("--no-ignition-off"),
     InviteOnly = a.Contains("--invite-only"),
     Rate = I76.Sim.Session.SimRate.FromLabel(IntArg("--rate", I76.Sim.Session.SimRate.Default.Label)),
     ShareMaps = !a.Contains("--no-share-maps"),

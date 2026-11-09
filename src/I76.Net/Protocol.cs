@@ -348,7 +348,12 @@ public sealed record JoinAccept(byte Slot, int CarSerial, string Arena, uint Ser
         w.Bool(Cb);
         // protocol 22: the chase crosshair is allowed in this game (the host's Chase Crosshair option)
         w.Bool(Crosshair);
+        // protocol 23: the engine stays on in this game (the host's ignition lock), for the client's prediction
+        w.Bool(IgnitionStaysOn);
     }
+
+    /// <summary>The host's rule that nobody switches their engine off (protocol 23; the host form's Ignition Lock, i26-server's --no-ignition-off).</summary>
+    public bool IgnitionStaysOn { get; init; }
 
     /// <summary>The CB radio is allowed in this game (the host form's CB Radio, i26-server's --no-cb turns it off); off, the server relays no voice and the client neither sends nor opens the microphone.</summary>
     public bool Cb { get; init; } = true;
@@ -392,7 +397,8 @@ public sealed record JoinAccept(byte Slot, int CarSerial, string Arena, uint Ser
         var coop = r.Bool() ? CoopInfo.Read(ref r) : null;
         bool cb = r.Bool();
         bool crosshair = r.Bool();
-        return new JoinAccept(slot, car, arena, tick, def, team, max, limit, respawn, cars, dead, kind, goal, value, teams, hz, mapSize, mapCrc, terSize, terCrc, mapHash) { Coop = coop, Cb = cb, Crosshair = crosshair };
+        bool ignition = r.Bool();
+        return new JoinAccept(slot, car, arena, tick, def, team, max, limit, respawn, cars, dead, kind, goal, value, teams, hz, mapSize, mapCrc, terSize, terCrc, mapHash) { Coop = coop, Cb = cb, Crosshair = crosshair, IgnitionStaysOn = ignition };
     }
 
     /// <summary>The server's simulation rate, which every client runs at.</summary>

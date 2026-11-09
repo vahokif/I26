@@ -121,7 +121,7 @@ public sealed class ClientWorld
         setup.Combat.RemoteSim = true;   // the server decides who jams: a car's flag is the truth here
         _cars = cars ?? new MeleeMirrorCars(setup.Melee ?? throw new ArgumentException("the mirror must be set up as a network melee"));
         // the session numbers the structures (and a mission's own cars) as the server's does; it is never ticked
-        Session = new SimSession(setup, SessionOptions.Network, accept.Rate);
+        Session = new SimSession(setup, SessionOptions.Network, accept.Rate) { IgnitionStaysOn = accept.IgnitionStaysOn };   // the host's rule, for the prediction
         _cars.Prepare(Session);
         if (setup.World.Ground is IHasStatics hs)
             foreach (var o in hs.World.Objects) _structures[o.NetId & 0xffffff] = o;

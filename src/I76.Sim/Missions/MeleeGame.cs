@@ -38,6 +38,11 @@ public sealed record MeleeRules
     /// refused (the death time + 5 s). There is no automatic respawn for a player in the original.
     /// </summary>
     public float RespawnDelay { get; init; } = 5f;
+    /// <summary>
+    /// The host's rule that nobody switches their engine off in this game (the port's, #108; the host form's Ignition Lock,
+    /// i26-server's --no-ignition-off): the ignition key only starts an engine that is off. The original has no such rule.
+    /// </summary>
+    public bool IgnitionStaysOn { get; init; }
 
     /// <summary>The original's single-player melee.</summary>
     public static MeleeRules SinglePlayer { get; } = new();

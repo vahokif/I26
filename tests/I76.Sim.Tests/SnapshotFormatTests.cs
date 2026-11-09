@@ -93,7 +93,7 @@ public class SnapshotFormatTests
     [Fact]
     public void TheHeaderSaysWhatToBuildAndCarriesTheHostsData()
     {
-        var build = new SessionBuild { Mission = "t07", Install = 0x1234, Car = "vppirna1.vcf", Melee = ["a.vcf", "b.vcf"], Rules = new Missions.MeleeRules { Network = true, GoalValue = 5 } };
+        var build = new SessionBuild { Mission = "t07", Install = 0x1234, Car = "vppirna1.vcf", Melee = ["a.vcf", "b.vcf"], Rules = new Missions.MeleeRules { Network = true, GoalValue = 5, IgnitionStaysOn = true } };
         var s = World(1, build, SimRate.R28);
         Run(s, 30);
         var snap = s.Snapshot([1, 2, 3]);
@@ -104,6 +104,7 @@ public class SnapshotFormatTests
         Assert.Equal(build.Car, h.Build.Car);
         Assert.Equal(build.Melee, h.Build.Melee);
         Assert.Equal(build.Rules, h.Build.Rules);
+        Assert.True(h.Build.Rules!.IgnitionStaysOn);   // the host's ignition lock (format 16)
         Assert.Equal(SimRate.R28, h.Rate);
         Assert.Equal(30, h.Ticks);
         Assert.Equal([1, 2, 3], h.Host);

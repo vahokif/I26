@@ -166,6 +166,12 @@ public sealed record ServerOptions
     /// joiner beside a teammate driving along comes in at the teammate's speed and heading. Off by default; a melee ignores it.
     /// </summary>
     public bool CoopRollingStart { get; init; }
+    /// <summary>
+    /// The engine stays on: nobody switches theirs off in this game (the port's, #108; the host form's Ignition Lock, i26-server's
+    /// --no-ignition-off), so no car hides from turrets with its engine off. Off by default; a melee's rules carry it
+    /// (<see cref="MeleeRules.IgnitionStaysOn"/>), and it is listed in <see cref="SessionInfo.IgnitionStaysOn"/> and carried in <see cref="JoinAccept.IgnitionStaysOn"/>.
+    /// </summary>
+    public bool IgnitionStaysOn { get; init; }
     /// <summary>Snapshots as deltas against the one each client acknowledged (protocol 13); off sends each in full (A/B, debugging).</summary>
     public bool DeltaSnapshots { get; init; } = true;
     /// <summary>Far cars sent less often (<see cref="Interest"/>; needs <see cref="DeltaSnapshots"/>); off sends every car every tick.</summary>
@@ -340,6 +346,7 @@ public sealed partial class MeleeHost : IModeHost
             // what the arena was built from, which its snapshots carry (docs/savestate.md)
             Build = Mode.Build,
             ResetUprightAllowed = o.AllowCarReset,
+            IgnitionStaysOn = o.IgnitionStaysOn,
         };
         if (Setup.World.Ground is IHasStatics hs)
             foreach (var so in hs.World.Objects) _structureSerial[so] = so.NetId & 0xffffff;
@@ -578,7 +585,7 @@ public sealed partial class MeleeHost : IModeHost
         [.. _seats.Select(s => Listed(s.Name, s.Actor.CarFile, s.Actor.Team)), .. Mode.Bots.Select(b => Listed(b.Name, b.Player.CarFile, b.Player.Team))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams,
         MapOffer?.Hash, MapOffer?.Shared ?? false, (uint)(MapOffer?.TotalSize ?? 0), Options.Password.Length > 0,
-        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair, CoopDamage: Options.Coop is null ? 1f : Options.CoopDamage, CoopScale: Options.Coop is null ? 0 : Math.Clamp(Options.CoopScale, 0, CoopSetup.MaxExtraEnemies), RollingStart: Options.Coop is not null && Options.CoopRollingStart,
+        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair, CoopDamage: Options.Coop is null ? 1f : Options.CoopDamage, CoopScale: Options.Coop is null ? 0 : Math.Clamp(Options.CoopScale, 0, CoopSetup.MaxExtraEnemies), RollingStart: Options.Coop is not null && Options.CoopRollingStart, IgnitionStaysOn: Options.IgnitionStaysOn,
         ArenaName: ArenaTitle);
 
     private string? _arenaTitle;
@@ -708,7 +715,7 @@ public sealed partial class MeleeHost : IModeHost
         [.. Setup.World.Vehicles.Select(Info)],
         [.. _structureSerial.Where(kv => kv.Key.Destroyed || kv.Key.Nodes.Any(n => n.Destroyed)).Select(kv => new StructureState(kv.Value, kv.Key.DestroyedMask()))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams, (byte)Session.Rate.Label,
-        Map?.MissionSize ?? 0, Map?.MissionCrc ?? 0, Map?.TerrainSize ?? 0, Map?.TerrainCrc ?? 0, MapSet?.Hash) { Coop = Mode.JoinState(s), Cb = Options.AllowCb, Crosshair = Options.AllowCrosshair };
+        Map?.MissionSize ?? 0, Map?.MissionCrc ?? 0, Map?.TerrainSize ?? 0, Map?.TerrainCrc ?? 0, MapSet?.Hash) { Coop = Mode.JoinState(s), Cb = Options.AllowCb, Crosshair = Options.AllowCrosshair, IgnitionStaysOn = Options.IgnitionStaysOn };
 
     private CarInfo Info(Vehicle v)
     {

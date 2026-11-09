@@ -62,6 +62,8 @@ public static class HostFormLayout
         public string CoopScale { get; init; } = "Off";
         /// <summary>A co-op game's Rolling Start.</summary>
         public bool RollingStart { get; init; }
+        /// <summary>The host's ignition lock: nobody switches their engine off.</summary>
+        public bool IgnitionLock { get; init; }
         public string MakeModel { get; init; } = "";
         public string Variant { get; init; } = "";
     }
@@ -109,6 +111,8 @@ public static class HostFormLayout
             Left("Bot Skill", s.BotSkill, 31);
             Left("A.I. Cars", s.BotCars, 34);
         }
+        // the port's game rules a melee and a co-op game share (docs/deviations.md)
+        Left("Ignition Lock", OnOff(s.IgnitionLock), 43);
         k = 0;
         void Right(string label, string value, int id) => rows.Add(new(true, k++, label, [new(RDiv, R1, value)], id));
         Right("Sim Rate", $"{s.Rate} Hz", 33);

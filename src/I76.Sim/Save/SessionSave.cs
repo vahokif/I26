@@ -28,6 +28,7 @@ public sealed partial class SimSession
             .Structural("the session's settings, checked against the snapshot's header", nameof(Rate), nameof(Options), nameof(Build))
             .Structural("a debug hook (I76_BOOM) the host sets again", nameof(DebugBoom))
             .Structural("the host's rule for the reset-upright key (its Car Reset option), set again by the host that resumes", nameof(ResetUprightAllowed))
+            .Structural("the host's ignition rule outside a melee's rules (a co-op host's, a client mirror's from its join accept), set again by the host that resumes", nameof(_ignitionStaysOn))
             .Transient("a per-tick output (the broken weapons' clicks), cleared at the next tick", nameof(Misfires))
             .Transient("the host's hooks", nameof(FrameStarting), nameof(FrameDone))
             .Transient("a network client's copy of the server's end, set by its prediction before each predicted tick (a server's is its melee's own)", nameof(NetEndTick));

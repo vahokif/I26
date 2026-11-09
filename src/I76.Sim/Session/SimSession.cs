@@ -130,6 +130,14 @@ public sealed partial class SimSession
     /// </summary>
     public bool ResetUprightAllowed { get; set; } = true;
 
+    /// <summary>
+    /// The host's rule that the engine stays on (#108): the ignition key starts an engine that is off but never switches one off.
+    /// A melee's rules carry it (<see cref="MeleeRules.IgnitionStaysOn"/>); a co-op host and a client's mirror (from the join
+    /// accept, for its prediction) set it here.
+    /// </summary>
+    public bool IgnitionStaysOn { get => _ignitionStaysOn || Melee?.Rules.IgnitionStaysOn == true; set => _ignitionStaysOn = value; }
+    private bool _ignitionStaysOn;
+
     /// <summary>In a cut-scene the script drives the player's car too; otherwise the keys do.</summary>
     public bool Cutscene => Script?.Host.View.Active == true;
 
@@ -242,6 +250,8 @@ public sealed partial class SimSession
         if (predict) c &= CarCommands.StartEngine | CarCommands.Lights | CarCommands.ShiftUp | CarCommands.ShiftDown | CarCommands.Reverse
             | CarCommands.Special1 | CarCommands.Special2 | CarCommands.Special3 | CarCommands.WeaponCycle | CarCommands.WeaponCyclePrev | CarCommands.WeaponLink;
         p.StartEngineKey = (c & CarCommands.StartEngine) != 0 ? 1 : 0;   // rewrites it every frame
+        // the host's rule (#108): the key does not switch a running engine off
+        if (IgnitionStaysOn && (p.Flags & VehicleFlags.EngineOn) != 0) p.StartEngineKey = 0;
         if (c == 0) return;
         // the weapon cycle and link keys are read after the triggers, in Select
         if ((c & CarCommands.Lights) != 0) p.Flags ^= VehicleFlags.Lights;

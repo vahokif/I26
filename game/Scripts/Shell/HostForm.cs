@@ -53,6 +53,7 @@ public sealed partial class MeleeScreen
             CoopDamage = CoopDamageText,
             CoopScale = ScaleText(Shell.Settings.CoopScale),
             RollingStart = Shell.Settings.CoopRollingStart,
+            IgnitionLock = Shell.Settings.IgnitionStaysOn,
             MakeModel = StoryCar ? "Mission's own car" : m?.MakeModel ?? "",
             Variant = StoryCar ? "the story's own" : m is null ? "" : m.Variants[Math.Clamp(variant - 1, 0, m.Variants.Count - 1)],
         };

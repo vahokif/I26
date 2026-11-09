@@ -403,6 +403,19 @@ public sealed partial class MeleeScreen
         Shell.Settings.Save();
     }
 
+    /// <summary>The host form's Co-op Damage (the port's; docs/deviations.md): the factor on what the players' cars take, stepped through the list (x1 the original's).</summary>
+    private void StepCoopDamage(int d)
+    {
+        var f = I76.Sim.Missions.CoopSetup.DamageFactors;
+        int i = Math.Max(0, System.Array.IndexOf(f, Shell.Settings.CoopDamage));
+        Shell.Settings.CoopDamage = f[(i + d + f.Length) % f.Length];
+        Shell.Settings.Save();
+    }
+
+    private static string FactorText(float f) => $"x{f.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}";
+
+    private string CoopDamageText => FactorText(Shell.Settings.CoopDamage);
+
     /// <summary>The host form's Car Reset (the port's): whether the game's players may press the reset-upright key (X) to put their car back on the terrain, upright and still.</summary>
     private void ToggleCarReset()
     {
@@ -588,6 +601,7 @@ public sealed partial class MeleeScreen
     private void OptionsPopup()
     {
         _turretsWas = _turrets;
+        _coopDamageWas = Shell.Settings.CoopDamage;
         var was = (_teamPlay, _limit, _limitAt, _inviteOnly, _bots, _botSkill, Shell.Settings.ShareMaps, Shell.Settings.HiddenContent, Shell.Settings.CarReset, Shell.Settings.CbRadio, Shell.Settings.HostCrosshair);
         int wasRate = _rate;
         var wasCars = new List<string>(_botCars);
@@ -595,6 +609,7 @@ public sealed partial class MeleeScreen
     }
 
     private bool _turretsWas;
+    private float _coopDamageWas;
 
     private void OptionsPopupWith((bool, int, int, bool, int, I76.Sim.Missions.BotSkill, bool, bool, bool, bool, bool) was, int wasRate, List<string> wasCars)
     {
@@ -616,6 +631,7 @@ public sealed partial class MeleeScreen
                     if (Shell.Settings.CarReset != was.Item9) ToggleCarReset();
                     if (Shell.Settings.CbRadio != was.Item10) ToggleCb();
                     if (Shell.Settings.HostCrosshair != was.Item11) ToggleCrosshair();
+                    if (Shell.Settings.CoopDamage != _coopDamageWas) { Shell.Settings.CoopDamage = _coopDamageWas; Shell.Settings.Save(); }
                 }
                 Draw();
             },
@@ -658,6 +674,8 @@ public sealed partial class MeleeScreen
                 new("CAR RESET", false, Shell.Settings.CarReset, "", _ => ToggleCarReset()),
                 new("CB RADIO", false, Shell.Settings.CbRadio, "", _ => ToggleCb()),
                 new("CHASE CROSSHAIR", false, Shell.Settings.HostCrosshair, "", _ => ToggleCrosshair()),
+                // the port's: the players' cars take more or less damage (docs/deviations.md)
+                new("CO-OP DAMAGE:", true, false, CoopDamageText, StepCoopDamage),
                 new("SIM RATE:", true, false, $"{_rate} Hz", d => _rate = StepRate(_rate, d)),
                 PhysicsRow,
             ];
@@ -750,6 +768,7 @@ public sealed partial class MeleeScreen
             case 36 when Hosting: ToggleCarReset(); return true;
             case 37 when Hosting: ToggleCb(); return true;
             case 38 when Hosting: ToggleCrosshair(); return true;
+            case 40 when Hosting: StepCoopDamage(1); return true;
             case 35 when Hosting: SetTurrets(!_turrets); return true;
             case 27 when Hosting: AskPassword(null, _password, pw => _password = pw ?? _password); return true;
             case 24 when Hosting && Nitro: OpenRestrictions(); return true;
@@ -794,7 +813,7 @@ public sealed partial class MeleeScreen
                     Kind = Nitro && !Coop ? Types[_kind].Kind : null, Goal = NitroGoal.Goal, GoalValue = NitroGoal.Value, Minutes = NitroGoal.Minutes, CtfTeams = Types[_kind].Teams,
                     Restrictions = Nitro ? _restrictions : WeaponRestrictions.None, Hidden = Shell.Settings.HiddenContent, Turrets = _turrets, CarReset = Shell.Settings.CarReset, Cb = Shell.Settings.CbRadio, Crosshair = Shell.Settings.HostCrosshair,
                     Bots = Math.Min(_bots, MaxBots), BotSkill = _botSkill, BotCars = [.. _botCars.Take(Math.Min(_bots, MaxBots))], Rate = _rate,
-                    Coop = Coop, StoryCar = Coop && Shell.Settings.CoopOwnCar,
+                    Coop = Coop, StoryCar = Coop && Shell.Settings.CoopOwnCar, CoopDamage = Coop ? Shell.Settings.CoopDamage : 1f,
                 },
             });
         }
@@ -812,6 +831,7 @@ public sealed partial class MeleeScreen
         if (!g.CarReset) parts.Add("No car reset");
         if (!g.Cb) parts.Add("CB radio off");
         if (g.Crosshair) parts.Add("Chase crosshair allowed");
+        if (g.Coop && g.CoopDamage != 1f) parts.Add($"Co-op damage {FactorText(g.CoopDamage)}");
         return parts.Count > 0 ? string.Join(". ", parts) : null;
     }
 
@@ -831,6 +851,7 @@ public sealed partial class MeleeScreen
         if (!g.CarReset) rows.Add("No car reset");
         if (!g.Cb) rows.Add("CB radio off");
         if (g.Crosshair) rows.Add("Crosshair allowed");
+        if (g.Coop && g.CoopDamage != 1f) rows.Add($"Co-op damage {FactorText(g.CoopDamage)}");
         return rows;
     }
 

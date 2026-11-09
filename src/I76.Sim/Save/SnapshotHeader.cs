@@ -25,7 +25,7 @@ public sealed record SessionBuild
     public IReadOnlyList<string>? Melee { get; init; }
     /// <summary>The melee's rules, null for the single-player melee's.</summary>
     public MeleeRules? Rules { get; init; }
-    /// <summary>A co-op story mission's seats (their cars) and respawn delay; null for single player.</summary>
+    /// <summary>A co-op story mission's seats (their cars), respawn delay and damage factor; null for single player.</summary>
     public CoopSetup? Coop { get; init; }
 
     /// <summary>
@@ -60,7 +60,7 @@ public sealed record SessionBuild
             w.U8((byte)r.Goal); w.Int(r.GoalValue); w.F32(r.TimeLimit); w.F32(r.RespawnDelay);
         }
         w.Bool(Coop is not null);
-        if (Coop is { } c) { w.VarU((ulong)c.Cars.Count); foreach (var car in c.Cars) w.Str(car); w.F32(c.RespawnDelay); }
+        if (Coop is { } c) { w.VarU((ulong)c.Cars.Count); foreach (var car in c.Cars) w.Str(car); w.F32(c.RespawnDelay); w.F32(c.DamageFactor); }
     }
 
     internal static SessionBuild Read(SaveReader r)
@@ -83,7 +83,7 @@ public sealed record SessionBuild
         {
             int n = r.Count(); var cars = new List<string?>();
             for (int i = 0; i < n; i++) cars.Add(r.Str());
-            coop = new CoopSetup(cars) { RespawnDelay = r.F32() };
+            coop = new CoopSetup(cars) { RespawnDelay = r.F32(), DamageFactor = r.F32() };
         }
         return new SessionBuild { Mission = mission, Install = install, Car = car, Script = script, Melee = melee, Rules = rules, Coop = coop };
     }
@@ -101,6 +101,7 @@ public sealed record SessionBuild
         if ((Coop is null) != (other.Coop is null) || Coop is { } c && (c.RespawnDelay != other.Coop!.RespawnDelay
                 || !c.Cars.Select(x => x ?? "").SequenceEqual(other.Coop.Cars.Select(x => x ?? ""), StringComparer.OrdinalIgnoreCase)))
             return "the snapshot's co-op seats are not the session's";
+        if (Coop is { } cd && cd.DamageFactor != other.Coop!.DamageFactor) return $"the snapshot's co-op damage is x{cd.DamageFactor}, the session's x{other.Coop.DamageFactor}";
         return null;
     }
 }

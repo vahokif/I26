@@ -15,6 +15,7 @@ namespace I76.Game.Boot;
 ///   --connect HOST:PORT [--name N] [--car X.vcf] [--team T]   (a network melee)
 ///   --host-listen [--arena m05] [--port 7676] [--rate 20|24|25|28|30|40|60] [--fill N] [--bots-ai N] [--bot-skill easy|normal|hard] [--teams] [--max-score S] [--time-limit SECONDS] [--anet HOST[:PORT]]
 ///   --host-listen --coop MISSION [--max-players 8] [--port 7676]   (a co-op story mission for up to eight instead of a melee: t01, s03, p05, ...)
+///   --coop-damage 0.5|0.75|1|1.5   (with --host-listen --coop: the players' cars take that times the damage; else the host form's Co-op Damage)
 ///   --password WORD   (with --host-listen: the game needs it; with --connect or --join-anet: the one to join with; never saved)
 ///   --restrict a,b,c   (with --host-listen: WEAPON RESTRICTIONS, as i26-server's: all, slugs, mortars, missiles, flames, droppers, a .gdf, class:tier)
 ///   --turrets  (with --host-listen: cars may carry several roof turrets; else the host form's setting)
@@ -94,6 +95,8 @@ public sealed class LaunchOptions
     public string? Coop { get; set; }
     /// <summary>--coop-lobby with --host-listen --coop: the game opens in its lobby, as a host form's co-op game does (the command line starts the mission at once without it).</summary>
     public bool CoopLobby { get; set; }
+    /// <summary>--coop-damage F with --host-listen --coop: the players' cars take F times the damage (docs/deviations.md); null: the host form's setting.</summary>
+    public float? CoopDamage { get; set; }
     /// <summary>--anet HOST[:PORT] with --host-listen: list the game on that anet server (repeatable).</summary>
     public List<string> AnetServers { get; set; } = [];
     /// <summary>--join-anet HOST[:PORT]: join a game listed there, through its introduction and the hole punch (--session NAME picks it; the shell gives the record itself).</summary>
@@ -275,6 +278,7 @@ public sealed class LaunchOptions
                 case "--host-listen": o.HostListen = true; break;
                 case "--coop": o.Coop = Next(); break;
                 case "--coop-lobby": o.CoopLobby = true; break;
+                case "--coop-damage": o.CoopDamage = I76.Sim.Missions.CoopSetup.ParseDamageFactor(Next()); break;
                 case "--anet": o.AnetServers.Add(Next()); break;
                 case "--join-anet": o.JoinAnet = Next(); break;
                 case "--session": o.SessionName = Next(); break;

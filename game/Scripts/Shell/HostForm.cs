@@ -50,6 +50,7 @@ public sealed partial class MeleeScreen
             CarReset = Shell.Settings.CarReset,
             Cb = Shell.Settings.CbRadio,
             Crosshair = Shell.Settings.HostCrosshair,
+            CoopDamage = CoopDamageText,
             MakeModel = StoryCar ? "Mission's own car" : m?.MakeModel ?? "",
             Variant = StoryCar ? "the story's own" : m is null ? "" : m.Variants[Math.Clamp(variant - 1, 0, m.Variants.Count - 1)],
         };

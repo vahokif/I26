@@ -472,6 +472,7 @@ public sealed partial class MissionSetup
                 }
             }
         var damage = new I76.Sim.Damage.DamageModel(world, combat);
+        if (coop is not null && seatCars.Count > 0) damage.CoopDamageFactor = coop.DamageFactor;
         if (ms is not null)
         {
             var host = ms.Host;

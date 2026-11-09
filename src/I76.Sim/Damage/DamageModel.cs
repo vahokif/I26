@@ -74,6 +74,23 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// <summary>Play Options Unlim. Chas. Rein. (bit 0x10): the player's side chassis never shrinks and impacts are absorbed whole.</summary>
     public bool UnlimitedChassis { get; set; }
 
+    /// <summary>
+    /// A co-op game's Co-op Damage (the port's; docs/deviations.md, <see cref="Missions.CoopSetup.DamageFactor"/>): what the
+    /// humans' cars take is scaled by it. 1 everywhere else: single player, a melee, a co-op game left at the original's.
+    /// </summary>
+    public float CoopDamageFactor { get; set; } = 1f;
+
+    /// <summary>The factor on what <paramref name="v"/> takes: <see cref="CoopDamageFactor"/> on a co-op human's car, else 1.</summary>
+    private float IncomingFactor(Vehicle v) => CoopDamageFactor != 1f && World.Coop && World.IsHuman(v) ? CoopDamageFactor : 1f;
+
+    /// <summary>A copy of the packet with each channel scaled and truncated (a splash's packet may go on to other victims).</summary>
+    private static DamagePacket Scaled(DamagePacket p, float f)
+    {
+        var q = new DamagePacket { Attacker = p.Attacker, Mask = p.Mask, Flags = p.Flags, Kind = p.Kind };
+        for (int i = 0; i < 4; i++) q.Ch[i] = (int)(p.Ch[i] * f);
+        return q;
+    }
+
     /// <summary>The cheats as the original tests them: the option, the victim is the player, no network session.</summary>
     private int ArmourStep(VehicleDamage d, int zone, DamagePacket p)
     {
@@ -128,6 +145,7 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// <summary>The vehicle damage slot (class slot [10]). pkt null: straight to the death check (the vehicle death routine's call).</summary>
     public void VehicleSlot(Vehicle v, DamagePacket? p, Vector3 hitLocal)
     {
+        if (p is not null && IncomingFactor(v) is var f && f != 1f) p = Scaled(p, f);
         if (p is not null) Damaging?.Invoke(v, p);
         if (v.Heli is { } heli) { HeliSlot(v, heli, p); return; }
         if (v.Emplacement is not null) { if (p is not null) EmplacementSlot(v, p); return; }
@@ -520,7 +538,7 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     public void Rough(Vehicle v, float dt)
     {
         if (IsDead(v) || v.Health is not { } d) return;
-        float amount = World.Ground.Surface(v.Surface).Damage * dt;
+        float amount = World.Ground.Surface(v.Surface).Damage * dt * IncomingFactor(v);
         d.RoughCarry += amount;
         int n = (int)d.RoughCarry;
         d.RoughCarry -= n;

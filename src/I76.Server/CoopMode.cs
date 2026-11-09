@@ -64,7 +64,7 @@ public sealed class CoopMode : IHostMode
         _o = c.Options;
         int seats = Math.Clamp(_o.MaxPlayers, 1, Protocol.MaxCoopSeats);
         _cars = Enumerable.Repeat<string?>(null, seats).ToList();
-        var coop = new CoopSetup(_cars) { RespawnDelay = _o.RespawnDelay };
+        var coop = new CoopSetup(_cars) { RespawnDelay = _o.RespawnDelay, DamageFactor = _o.CoopDamage };
         Setup = CoopMission.Build(c.Vfs, c.World, c.Asm, coop, new CrtRand(unchecked((uint)_o.Seed)), _o.Seed);
         Group = Setup.Script?.Host.Coop ?? throw new InvalidDataException($"{c.Arena} has no mission script: it is not a story mission");
         Build = new SessionBuild { Mission = c.Arena.ToLowerInvariant(), Install = SessionBuild.InstallIdentity(c.Install, c.Arena), Coop = coop };

@@ -8,12 +8,15 @@ namespace I76.Net.Tests;
 /// <summary>Finding games: the session query and answer, the address book's addresses, a server answering on the LAN.</summary>
 public class DiscoveryTests
 {
-    /// <summary>What a listing with no drivers and no arena name ends with after the crosshair byte: the arena name's length and the drivers' names' count (protocol 22).</summary>
-    internal const int Names = 2;
+    /// <summary>The host's rules a listing ends with after the makes and models (protocol 23): Co-op Damage.</summary>
+    internal const int Rules = 1;
 
-    /// <summary>The same for a listing as written: the arena name's length and text, the count, and each listed driver's make and model with its length.</summary>
+    /// <summary>What a listing with no drivers and no arena name ends with after the crosshair byte: the arena name's length and the drivers' names' count (protocol 22), then <see cref="Rules"/>.</summary>
+    internal const int Names = 2 + Rules;
+
+    /// <summary>The same for a listing as written: the arena name's length and text, the count, each listed driver's make and model with its length, and <see cref="Rules"/>.</summary>
     internal static int NamesOf(SessionInfo i) =>
-        2 + System.Text.Encoding.UTF8.GetByteCount(i.ArenaName) + i.Drivers.Sum(d => 1 + System.Text.Encoding.UTF8.GetByteCount(d.Model));
+        2 + Rules + System.Text.Encoding.UTF8.GetByteCount(i.ArenaName) + i.Drivers.Sum(d => 1 + System.Text.Encoding.UTF8.GetByteCount(d.Model));
 
     [Fact]
     public void TheGamesSimulationRateIsListed()
@@ -81,6 +84,19 @@ public class DiscoveryTests
         var older = SessionInfo.TryRead(old.Span[..^(1 + Names)])!;
         Assert.False(older.Crosshair);
         Assert.False(older.Cb);
+    }
+
+    /// <summary>The host's rules after the makes and models are listed; a build that did not say has the original's.</summary>
+    [Fact]
+    public void TheGamesHostRulesAreListed()
+    {
+        var info = new SessionInfo(1, Protocol.Version, "g", "t01", 1, 4, false, false, 0, 0, false, [], Coop: true, CoopDamage: 0.75f);
+        var w = new NetWriter();
+        info.Write(w);
+        var back = SessionInfo.TryRead(w.Span)!;
+        Assert.Equal(0.75f, back.CoopDamage);
+        var older = SessionInfo.TryRead(w.Span[..^Rules])!;
+        Assert.Equal(1f, older.CoopDamage);
     }
 
     [Fact]

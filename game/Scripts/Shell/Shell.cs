@@ -84,6 +84,8 @@ public sealed record NetLaunch(int Mode)
     public bool Coop { get; init; }
     /// <summary>A co-op game's seat in the mission's own car (the launch's car is not used); joining a melee, ignored.</summary>
     public bool StoryCar { get; init; }
+    /// <summary>Hosting a co-op game: the form's Co-op Damage, the factor on what the players' cars take (1, the original's).</summary>
+    public float CoopDamage { get; init; } = 1f;
     /// <summary>Joining a co-op game the roster showed in its lobby: the briefing plays when the host starts the mission, not before the join. Hosting a co-op game always opens the lobby.</summary>
     public bool InLobby { get; init; }
 }
@@ -1243,6 +1245,8 @@ public sealed class ShellSettings
     public I76.Game.Boot.RendererChoice Renderer { get; set; }
     /// <summary>A co-op seat is in the mission's own car (the default) rather than the player's pick on the melee forms' car panel.</summary>
     public bool CoopOwnCar { get; set; } = true;
+    /// <summary>The port's own: a hosted co-op game's Co-op Damage (the host form's; shell.cfg [port] coop_damage, written only when not 1): the players' cars take this times the damage.</summary>
+    public float CoopDamage { get; set; } = 1f;
     /// <summary>The port's own: CONFIGURE CHASSIS as a 3D garage (Graphic Detail's 3D Garage; shell.cfg [port] garage_3d, written only when off). On unless the player turned it off; off is the original's 2D form.</summary>
     public bool Garage3D { get; set; } = true;
     /// <summary>The port's own: the modern look's cars show a cabin and driver behind their glass (Graphic Detail's Car Interiors; shell.cfg [port] car_interiors, written only when off). Off: the windows are plain reflective glass.</summary>
@@ -1363,6 +1367,8 @@ public sealed class ShellSettings
         s.UnlimTurrets = (bool)c.GetValue("port", "unlim_turrets", false) || System.Environment.GetEnvironmentVariable("I76_UNLIM_TURRETS") == "1";
         s.UpdateCheck = (bool)c.GetValue("port", "update_check", true);
         s.CoopOwnCar = (bool)c.GetValue("port", "coop_own_car", true);
+        // no version step: absent, the original's damage
+        s.CoopDamage = (float)(double)c.GetValue("port", "coop_damage", 1.0) is var cd && System.Array.IndexOf(I76.Sim.Missions.CoopSetup.DamageFactors, cd) >= 0 ? cd : 1f;
         // no version step: absent, the 3D garage is on
         s.Garage3D = (bool)c.GetValue("port", "garage_3d", true);
         s.CarInteriors = (bool)c.GetValue("port", "car_interiors", true) && System.Environment.GetEnvironmentVariable("I76_CAR_INTERIORS") != "0";
@@ -1446,6 +1452,7 @@ public sealed class ShellSettings
         if (UnlimTurrets) c.SetValue("port", "unlim_turrets", true);
         if (!UpdateCheck) c.SetValue("port", "update_check", false);
         if (!CoopOwnCar) c.SetValue("port", "coop_own_car", false);
+        if (CoopDamage != 1f) c.SetValue("port", "coop_damage", (double)CoopDamage);
         if (!Garage3D) c.SetValue("port", "garage_3d", false);
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);
         if (!CameraReturn) c.SetValue("port", "camera_return", false);

@@ -210,7 +210,7 @@ public class RosterNamesTests(ITestOutputHelper output)
         // an answer that ends after the crosshair byte (before these names) still reads, with none
         var w = new NetWriter();
         info.Write(w);
-        int names = 1 + "Mojave Sprint".Length + 1 + drivers.Sum(d => 1 + d.Model.Length);
+        int names = 1 + "Mojave Sprint".Length + 1 + drivers.Sum(d => 1 + d.Model.Length) + DiscoveryTests.Rules;
         var cut = SessionInfo.TryRead(w.Span[..^names])!;
         Assert.True(cut.Crosshair);
         Assert.Equal("", cut.ArenaName);

@@ -26,7 +26,7 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
     I76.Sim.Missions.MeleeKind Kind = I76.Sim.Missions.MeleeKind.Combat, I76.Sim.Missions.MeleeGoal Goal = I76.Sim.Missions.MeleeGoal.None, int GoalValue = 0, byte Teams = 2,
     byte[]? MapHash = null, bool MapShared = false, uint MapSize = 0, bool Locked = false,
     I76.Sim.Trip.WeaponRestrictions? Restrictions = null, bool Hidden = false, bool HiddenKnown = true, bool Coop = false, byte RateHz = 0, bool Lobby = false, bool Turrets = false, bool CarReset = false, bool Cb = true, bool Crosshair = false,
-    string ArenaName = "")
+    string ArenaName = "", float CoopDamage = 1f)
 {
     /// <summary>
     /// Whether a joiner's own check lets hidden cars and weapons through: the game allows them, or it does not say
@@ -84,14 +84,19 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         t.Bool(Crosshair);
         // the arena's name as the host's lists give it (its AREA OF PLAY; an asker without a custom map has no other), appended the same way (protocol 22)
         t.Str(Clip(ArenaName, MaxArenaName));
+        // the host's rules of the port's that came after the makes and models (protocol 23), appended after them the same way
+        var u = new NetWriter(64);
+        // a co-op game's Co-op Damage in hundredths (100: the original's damage); an older host says nothing: x1
+        u.U8((byte)Math.Clamp((int)MathF.Round(CoopDamage * 100), 0, 255));
         // (the drivers' makes and models follow the tail, a count byte and a string each)
-        var shown = Shown(AnswerBytes - w.Length - 1 - t.Length - 1);
+        var shown = Shown(AnswerBytes - w.Length - 1 - t.Length - 1 - u.Length);
         w.U8((byte)shown.Count);
         foreach (var d in shown) { w.Str(Clip(d.Name, Protocol.MaxName)); w.Str(Clip(d.Car, 32)); w.U8(d.Team); }
         w.Bytes(t.ToArray());
         // each driver's make and model where the host says it (a community car), else empty, appended the same way (protocol 22)
         w.U8((byte)shown.Count);
         foreach (var d in shown) w.Str(Clip(d.Model, MaxModel));
+        w.Bytes(u.ToArray());
     }
 
     /// <summary>The longest arena name and make and model listed: the files hold 16 and 20 bytes.</summary>
@@ -153,8 +158,9 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
                     if (i < drivers.Length) drivers[i] = drivers[i] with { Model = model };
                 }
             }
+            float coopDamage = r.Remaining >= 1 ? r.U8() / 100f : 1f;
             return new SessionInfo(id, version, name, arena, players, max, team, invite, score, limit, over, drivers, kind, goal, value, teams, hash, shared, size, locked,
-                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName);
+                restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName, CoopDamage: coopDamage);
         }
         catch (WireException) { return null; }
         catch (IndexOutOfRangeException) { return null; }

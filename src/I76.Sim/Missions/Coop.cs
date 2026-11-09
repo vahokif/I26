@@ -10,6 +10,20 @@ public sealed record CoopSetup(IReadOnlyList<string?> Cars)
     /// <summary>How long a destroyed human waits before coming back beside a living teammate (seconds of mission time).</summary>
     public float RespawnDelay { get; init; } = 5f;
 
+    /// <summary>
+    /// The host's Co-op Damage (the port's; docs/deviations.md): every damage the humans' cars take is scaled by this, the
+    /// channels truncated as the original truncates its own difficulty factor. 1 (the default) is the original's damage.
+    /// </summary>
+    public float DamageFactor { get; init; } = 1f;
+
+    /// <summary>The factors the host form and the servers offer.</summary>
+    public static readonly float[] DamageFactors = [0.5f, 0.75f, 1f, 1.5f];
+
+    /// <summary>A command line's factor ("0.5", "x0.75"): one of <see cref="DamageFactors"/>, else null.</summary>
+    public static float? ParseDamageFactor(string s) =>
+        float.TryParse(s.TrimStart('x', 'X'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f)
+        && System.Array.IndexOf(DamageFactors, f) >= 0 ? f : null;
+
     /// <summary>A co-op game of <paramref name="humans"/> players, each in the mission's own car.</summary>
     public static CoopSetup Of(int humans) => new(Enumerable.Repeat<string?>(null, humans).ToList());
 }

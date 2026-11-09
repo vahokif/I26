@@ -37,6 +37,8 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
     private GarageStage? _stage;
     private SwatchLayer? _swatches;
     private bool _built, _toCatalog;
+    /// <summary>Entered while the main menu's warm-up thread was still making the garage's assets: built once it is done (<see cref="GarageWarmup.Busy"/>).</summary>
+    private bool _awaitingWarmup;
     private ShellFont F45 = null!, F47 = null!;
     /// <summary>The modern look's overlay (GarageUi.cs): everything drawn from scratch at the window's resolution; the 1997 look draws into the frame as before.</summary>
     private GarageUiLayer? _ui;
@@ -147,6 +149,9 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
     {
         if (!_built)
         {
+            // the warm-up's thread owns the assets until it is done, and its engine calls need this thread's frames: wait for it a frame at a time
+            _awaitingWarmup = GarageWarmup.Busy;
+            if (_awaitingWarmup) { GD.Print("garage3d: waiting for the main menu's warm-up"); return; }
             try { Build(); }
             catch (Exception ex)
             {
@@ -1715,6 +1720,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
 
     public override void Tick()
     {
+        if (_awaitingWarmup) { if (!GarageWarmup.Busy) Enter(); return; }
         if (!_built || _stage is null) return;
         if (_samViews is not null) { SamTick(); return; }
         if (_tourDir is not null) { TourTick(); return; }

@@ -20,8 +20,15 @@ public sealed class GarageAssets
     /// <summary>The assets of this shell's install (rebuilt when the install changes, as a switch of game does).</summary>
     public static GarageAssets For(Shell shell)
     {
-        if (_held is { } h && h.Vfs == shell.Vfs) return h;
-        return _held = new GarageAssets(shell.Vfs);
+        if (GarageWarmup.Busy) throw new InvalidOperationException("the garage's assets are the warm-up thread's until it is done");
+        return Held(shell.Vfs);
+    }
+
+    /// <summary>The assets of this install, made if need be (the warm-up's thread calls this one).</summary>
+    internal static GarageAssets Held(AssetVfs vfs)
+    {
+        if (_held is { } h && h.Vfs == vfs) return h;
+        return _held = new GarageAssets(vfs);
     }
 
     public static void Forget() => _held = null;

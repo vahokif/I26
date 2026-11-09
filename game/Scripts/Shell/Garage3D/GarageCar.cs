@@ -31,12 +31,7 @@ public partial class GarageCar : Node3D
     /// <summary>Builds the car of <paramref name="car"/>'s file; the 1997 look draws the original's wheels and shaders, the modern the round ones.</summary>
     public static GarageCar Build(GarageAssets assets, TripCar car, bool mode1997, I76.Formats.Imaging.CarPaint? paint = null)
     {
-        var vcf = car.ToVcf();
-        string name = assets.NameOf(vcf);
-        I76.Sim.Vehicles.Vehicle vehicle;
-        using (assets.Serve(name, vcf)) vehicle = VehicleFactory.Create(assets.Vfs, name);
-        bool heli = vehicle.ObjectClass == 9;   // the vdf's class; the mission loader sets the flight state up on top, the garage has none
-        var parts = assets.PartsOf(name, vcf, heli);
+        var (name, vehicle, heli, parts) = Parts(assets, car);
         var node = new CarNode { Name = "Car", Definition = name };
         var g = new GarageCar { Name = "GarageCar", Node = node, Model = parts.Model, Name2 = name };
         g.IsHeli = heli;
@@ -63,6 +58,20 @@ public partial class GarageCar : Node3D
         g.Settle(parts, vdf is null ? [] : I76.Formats.Bwd2.Hardpoint.Read(new I76.Formats.Bwd2.Bwd2File(vdf)));
         return g;
     }
+
+    /// <summary>The car's simulation (for its node) and its parts, made into the assets' cache (the warm-up's thread makes them ahead: <see cref="Prepare"/>).</summary>
+    private static (string Name, I76.Sim.Vehicles.Vehicle Vehicle, bool Heli, CarPartsCache.Parts Parts) Parts(GarageAssets assets, TripCar car)
+    {
+        var vcf = car.ToVcf();
+        string name = assets.NameOf(vcf);
+        I76.Sim.Vehicles.Vehicle vehicle;
+        using (assets.Serve(name, vcf)) vehicle = VehicleFactory.Create(assets.Vfs, name);
+        bool heli = vehicle.ObjectClass == 9;   // the vdf's class; the mission loader sets the flight state up on top, the garage has none
+        return (name, vehicle, heli, assets.PartsOf(name, vcf, heli));
+    }
+
+    /// <summary>The car's parts (assembly, meshes, textures) made into the assets' cache, no node: on a thread that owns the assets.</summary>
+    public static void Prepare(GarageAssets assets, TripCar car) => Parts(assets, car);
 
     /// <summary>Lowers the car so its wheels (else its body) stand on y = 0, and measures it.</summary>
     private void Settle(CarPartsCache.Parts parts, IReadOnlyList<I76.Formats.Bwd2.Hardpoint> hardpoints)

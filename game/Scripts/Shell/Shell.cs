@@ -708,8 +708,15 @@ public partial class Shell : CanvasLayer
     /// <summary>Ends a carried menu track (the mission's music, a briefing, or the shell coming back has taken over).</summary>
     public static void DropCarriedMusic(SceneTree tree) => tree.Root.GetNodeOrNull(CarriedMusicName)?.QueueFree();
 
+    /// <summary>Real time (ms) since the player last moved the mouse, clicked, or pressed a key or a pad button (or a capture script acted).</summary>
+    public ulong SinceInput => Time.GetTicksMsec() - _lastInput;
+    private ulong _lastInput;
+
     public override void _Input(InputEvent e)
     {
+        if (e is InputEventMouseButton or InputEventMouseMotion { Relative: not { X: 0, Y: 0 } } or InputEventKey or InputEventJoypadButton
+            || e is InputEventJoypadMotion jm && Math.Abs(jm.AxisValue) > 0.5f)
+            _lastInput = Time.GetTicksMsec();
         if (e is InputEventMouse m)
         {
             Mouse = ToShell(m.Position);
@@ -800,6 +807,7 @@ public partial class Shell : CanvasLayer
         _frame++;
         foreach (var (f, kind, arg) in _script.Where(e => e.Frame == _frame))
         {
+            _lastInput = Time.GetTicksMsec();
             GD.Print($"shell: script {kind}:{arg}@{f} on {Current?.GetType().Name}");
             if (kind is "move" or "click" or "rclick" && arg.Split(',') is [var x, var y]) Mouse = new Vector2I(int.Parse(x), int.Parse(y));
             if (kind == "click") _clickPending = true;

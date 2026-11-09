@@ -84,6 +84,12 @@ public sealed class GarageRoom
     /// <summary>Starts making the room's pixels on a worker thread (once a run): the first visit no longer waits half a second for them.</summary>
     public static void Prepare() => _images ??= System.Threading.Tasks.Task.Run(() => Images.ToDictionary(i => i.Name, i => i.Make()));
 
+    /// <summary>Every texture of the room made now (the warm-up's thread), so the room's first build only finds them.</summary>
+    public static void MakeTextures()
+    {
+        foreach (var (name, _) in Images) T(name);
+    }
+
     private static ImageTexture T(string name)
     {
         if (_textures.TryGetValue(name, out var t)) return t;

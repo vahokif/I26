@@ -6,7 +6,7 @@ using I76.Game.Shell;
 namespace I76.Game.Ui;
 
 /// <summary>
-/// The boot screen's "PLEASE STAND BY . . ." (its line's lettering and fit, I76's or Nitro's), small and half clear in the
+/// The boot screen's "PLEASE STAND BY . . ." (its line's lettering and fit, I76's or Nitro's), small in the
 /// bottom-right corner of a movie's picture (the picture's own rect, not the bars beside it): a briefing played while its mission
 /// loads fades it in over <see cref="FadeSeconds"/> when the player waits on the mission (a skip asked for before the mission can
 /// start, or the movie run out), and goes with the movie when the mission starts (MoviePlayer.Waiting). Set again in
@@ -21,8 +21,8 @@ public partial class StandByTag : Control
 
     /// <summary>The tag's size against the boot screen's line, and its distance from the picture's corner in picture pixels.</summary>
     private const float Scale = 0.33f, Margin = 14f;
-    /// <summary>How opaque it is (its shadow fainter still), and how long it takes to fade out.</summary>
-    private const float Opacity = 0.55f;
+    /// <summary>How opaque it is once faded in (fully: its shadow stays faint), and how long the fade takes.</summary>
+    private const float Opacity = 1f;
     public const double FadeSeconds = 0.4;
     private bool _fading;
 

@@ -1092,6 +1092,25 @@ public sealed class SessionPopup : ShellScreen
 
     private int _scroll, _rulesScroll;
     private const int Rows = 8, RuleRowsShown = 4;
+    // the base popup's rules line: the rules a page at a time when they do not fit on it, the next every RulesPageMs
+    private int _rulesPage, _rulesPages = 1;
+    private long _rulesPageAt = System.Environment.TickCount64;
+    private const int RulesPageMs = 3000;
+
+    /// <summary>The rules ("A. B. C") as lines of at most <paramref name="width"/> pixels, whole rules to a line (one too long alone is fitted).</summary>
+    public static List<string> RulePages(string rules, int width, Func<string, int> measure)
+    {
+        var pages = new List<string>();
+        string line = "";
+        foreach (var part in rules.Split(". ", StringSplitOptions.RemoveEmptyEntries))
+        {
+            string next = line.Length == 0 ? part : line + ". " + part;
+            if (line.Length > 0 && measure(next) > width) { pages.Add(line); line = part; }
+            else line = next;
+        }
+        if (line.Length > 0) pages.Add(line);
+        return pages;
+    }
 
     public override void Enter()
     {
@@ -1141,7 +1160,13 @@ public sealed class SessionPopup : ShellScreen
         }
         bool paged = Info.Drivers.Count > Rows;
         int foot = NitroLayout ? Y + 322 : Y + 238;
-        if (!NitroLayout && Rules is { } r) Frame.Text(Font, X + 18, foot, AddressBookPopup.Fit(Font, r, paged ? 330 : 510));
+        if (!NitroLayout && Rules is { } r)
+        {
+            int width = paged ? 330 : 510;
+            var pages = RulePages(r, width, Font.Measure);
+            _rulesPages = Math.Max(1, pages.Count);
+            Frame.Text(Font, X + 18, foot, AddressBookPopup.Fit(Font, pages.Count > 0 ? pages[_rulesPage % _rulesPages] : "", width));
+        }
         // Nitro's art has no place for the rate: the foot's middle (the base popup's is the rules line)
         if (NitroLayout && Info.RateHz > 0) Frame.Text(Font, X + 210, foot, $"Sim rate {Info.RateHz} Hz");
         if (paged) Frame.Text(Font, X + (NitroLayout ? 18 : 380), foot, $"{_scroll + 1}-{Math.Min(_scroll + Rows, Info.Drivers.Count)} of {Info.Drivers.Count}");
@@ -1182,6 +1207,12 @@ public sealed class SessionPopup : ShellScreen
         {
             Info = now;
             _scroll = Math.Clamp(_scroll, 0, Math.Max(0, Info.Drivers.Count - Rows));
+            Draw();
+        }
+        if (_rulesPages > 1 && System.Environment.TickCount64 - _rulesPageAt >= RulesPageMs)
+        {
+            _rulesPage = (_rulesPage + 1) % _rulesPages;
+            _rulesPageAt = System.Environment.TickCount64;
             Draw();
         }
         if (Shell.Wheel != 0) Scroll(Shell.WheelRows);

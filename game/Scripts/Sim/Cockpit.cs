@@ -636,8 +636,11 @@ public partial class Cockpit : Node
         else if (locked is not null)
         {
             // flag 0x10 (a target selected): the sweep stops and the locked frame ZRADBnnn follows the target's bearing
+            // the frame is written into the sweep's current step, the step it left stays where the sweep stopped: the ping
+            // window below runs from there to the target's bearing, and the sweep resumes from the target's frame
             var d = Car.Rot.ToLocal(locked.Pos.ToVector3() - Car.Pos.ToVector3());
-            frame = _radarB[I76.Sim.Weapons.RadarScope.LockedFrame(d.X, d.Z)] ?? _radarF[30];
+            _radarCur = I76.Sim.Weapons.RadarScope.LockedFrame(d.X, d.Z);
+            frame = _radarB[_radarCur] ?? _radarF[30];
         }
         else
         {
@@ -665,8 +668,10 @@ public partial class Cockpit : Node
                 if (v.Wreck || !Combat.IsContact(Car, v)) continue;   // the contact list: 600 m on the ground, no dead or engine-off car
                 any = true;   // the LED and the growl: any listed car, on the scope or past its range circle
                 if (I76.Sim.Weapons.RadarScope.Project(Car.Rot, Car.Pos.ToVector3(), v.Pos.ToVector3(), R) is not var (nx, nz)) continue;
-                bool inWedge = locked is null && I76.Sim.Weapons.RadarScope.InPingWedge(_radarPrev, _radarCur, nx, nz);
-                if (inWedge) { if (!pinged) { Sound("cradar.wav"); pinged = true; } _sweptAt[v] = _t; }   // every pass pings; blips in one step share the sound
+                // the sweep pings at its steps; a locked radar every tick, for every car but the target in the window from the
+                // step the sweep stopped on to the target's bearing: the original's beeping while a target is held
+                bool inWedge = v != locked && (locked is null || _steps > 0) && I76.Sim.Weapons.RadarScope.InPingWedge(_radarPrev, _radarCur, nx, nz);
+                if (inWedge) { if (!pinged) { RadarPing(); pinged = true; } _sweptAt[v] = _t; }   // every pass pings; blips in one step share the sound
                 int px = System.Math.Clamp((int)(99 + 51 * nx), 0, img.GetWidth() - 2);
                 int py = System.Math.Clamp((int)(65 + 51 * nz), 0, img.GetHeight() - 2);   // a raw bitmap row: bottom-up, as the image stores it
                 // no team colours: palette index 0x69 when listed, 0 as the sweep passes or it is picked, +3 a second back to
@@ -692,6 +697,12 @@ public partial class Cockpit : Node
     }
 
     private Vehicle? _radarPicked;
+
+    /// <summary>CRADAR.WAV: its header's one voice, so a ping asked for while one sounds is dropped (a held target beeps at the sample's length).</summary>
+    private void RadarPing()
+    {
+        if (Audio?.Get("cradar.wav") is { } s) Node3D.OneShotSingle("cradar.wav", s);
+    }
     private readonly Color?[] _softBlips = new Color?[256];
 
     /// <summary>

@@ -37,15 +37,20 @@ public static class RadarScope
     public static int NextSweep(int cur) => (cur + 1) % SweepFrames;
 
     /// <summary>
-    /// The sweep's ping test: a blip at scope position (x, z) pings when its bearing lies between the step the beam left
-    /// (prev) and the one it reached (cur), each scaled by 2π/29. Every pass pings again.
+    /// The radar's ping test: a blip at scope position (x, z) pings when its bearing, atan2(x, z) in (-π, π], lies between the
+    /// step the beam left (prev) and the one it shows (cur), each scaled by 2π/29 and taken into (-π, π] on its own. The original
+    /// compares the two ends as they are, with no wrap: a window whose start is past its end (the 14 -> 15 step, where the beam
+    /// crosses the bottom of the scope) holds nothing. Every pass pings again. A locked radar runs the same test every tick,
+    /// with cur its target's frame and prev the step the sweep stopped on.
     /// </summary>
     public static bool InPingWedge(int prev, int cur, float x, float z)
     {
-        float a0 = prev * MathF.Tau / PingSteps, a1 = cur * MathF.Tau / PingSteps;
-        float ang = MathF.Atan2(x, z);
-        if (ang < 0) ang += MathF.Tau;
-        return a1 >= a0 ? ang >= a0 && ang <= a1 : ang >= a0 || ang <= a1;
+        float step = MathF.Tau / PingSteps;
+        float a0 = prev * step, a1 = cur * step;
+        if (a0 > MathF.PI) a0 -= MathF.Tau;
+        if (a1 > MathF.PI) a1 -= MathF.Tau;
+        float ang = MathF.Abs(x) < 1e-5f && MathF.Abs(z) < 1e-5f ? 0f : MathF.Atan2(x, z);
+        return ang >= a0 && ang <= a1;
     }
 
     public static (float X, float Z)? Project(Rows carRot, Vector3 carPos, Vector3 contactPos, float range)

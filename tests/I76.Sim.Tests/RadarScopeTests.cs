@@ -98,6 +98,28 @@ public class RadarScopeTests
     }
 
     [Fact]
+    public void AWindowWhoseStartIsPastItsEndHoldsNothing()
+    {
+        // each end is taken into (-π, π] on its own and compared as it is: the 14 -> 15 step crosses the bottom of the
+        // scope (15 steps of 2π/29 are past π) and pings nothing, whatever lies behind the car
+        Assert.False(RadarScope.InPingWedge(14, 15, 0.01f, -1));
+        Assert.False(RadarScope.InPingWedge(14, 15, -0.01f, -1));
+        Assert.True(RadarScope.InPingWedge(13, 14, 0.2f, -1));
+    }
+
+    [Fact]
+    public void ALockedRadarsWindowRunsFromTheStoppedSweepToTheTarget()
+    {
+        // the sweep stopped on step 2; the target just behind abeam right (frame 8): a car at 45 degrees lies in the window,
+        // one behind does not; with the target ahead-left (frame 24, past π) the window's start is past its end: nothing
+        int target = RadarScope.LockedFrame(1, -0.3f);
+        Assert.Equal(8, target);
+        Assert.True(RadarScope.InPingWedge(2, target, 0.3f, 0.3f));
+        Assert.False(RadarScope.InPingWedge(2, target, 0, -1));
+        Assert.False(RadarScope.InPingWedge(2, RadarScope.LockedFrame(-1, 0.5f), 0.3f, 0.3f));
+    }
+
+    [Fact]
     public void TheLedListsACarPastTheShortRangesCircle()
     {
         // at the 100 m range a car 300 m ahead is off the scope but on the 600 m list, which lights the LED and growls

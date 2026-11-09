@@ -8,8 +8,8 @@ namespace I76.Net.Tests;
 /// <summary>Finding games: the session query and answer, the address book's addresses, a server answering on the LAN.</summary>
 public class DiscoveryTests
 {
-    /// <summary>The host's rules a listing ends with after the makes and models (protocol 23): Co-op Damage.</summary>
-    internal const int Rules = 1;
+    /// <summary>The host's rules a listing ends with after the makes and models (protocol 23): Co-op Damage, Co-op Scaling.</summary>
+    internal const int Rules = 2;
 
     /// <summary>What a listing with no drivers and no arena name ends with after the crosshair byte: the arena name's length and the drivers' names' count (protocol 22), then <see cref="Rules"/>.</summary>
     internal const int Names = 2 + Rules;
@@ -90,13 +90,13 @@ public class DiscoveryTests
     [Fact]
     public void TheGamesHostRulesAreListed()
     {
-        var info = new SessionInfo(1, Protocol.Version, "g", "t01", 1, 4, false, false, 0, 0, false, [], Coop: true, CoopDamage: 0.75f);
+        var info = new SessionInfo(1, Protocol.Version, "g", "t01", 1, 4, false, false, 0, 0, false, [], Coop: true, CoopDamage: 0.75f, CoopScale: 2);
         var w = new NetWriter();
         info.Write(w);
         var back = SessionInfo.TryRead(w.Span)!;
-        Assert.Equal(0.75f, back.CoopDamage);
+        Assert.Equal((0.75f, 2), (back.CoopDamage, back.CoopScale));
         var older = SessionInfo.TryRead(w.Span[..^Rules])!;
-        Assert.Equal(1f, older.CoopDamage);
+        Assert.Equal((1f, 0), (older.CoopDamage, older.CoopScale));
     }
 
     [Fact]

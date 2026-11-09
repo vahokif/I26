@@ -106,6 +106,7 @@ public sealed partial class MissionScript
             // the original advances its counter right after the machines: what happens from here to the next machines
             // (this frame's rounds, the next frame's collisions) is stamped with the counter those machines will see
             if (Vm is not null) Host.FsmTick = Vm.TickCount;
+            Host.ExtrasFrame();
         }
         // The emplacements' fire pass, right after the FSM and before the weapons
         if (Combat is { } c) Vehicles.Emplacements.Frame(c.World, c, Melee?.Rules.Network == true);

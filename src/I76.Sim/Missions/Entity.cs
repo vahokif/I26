@@ -185,5 +185,12 @@ public sealed partial class Entity(string name, byte[] id, uint type, uint objec
     public Entity? CoopAim;
     public int KillerSeat = -1;
 
+    /// <summary>
+    /// Co-op Scaling (<see cref="ScriptHost.ExtrasOf"/>): the original enemy car this one is a copy of (null for every other entity);
+    /// and whether the copies of this one have been decided (at the script's first order to it).
+    /// </summary>
+    public Entity? ExtraOf;
+    public bool Scaled;
+
     public override string ToString() => Name;
 }

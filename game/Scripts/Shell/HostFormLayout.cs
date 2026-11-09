@@ -58,6 +58,8 @@ public static class HostFormLayout
         public bool Crosshair { get; init; }
         /// <summary>A co-op game's Co-op Damage as the row shows it ("x1").</summary>
         public string CoopDamage { get; init; } = "x1";
+        /// <summary>A co-op game's Co-op Scaling as the row shows it ("Off", "Up to +2").</summary>
+        public string CoopScale { get; init; } = "Off";
         public string MakeModel { get; init; } = "";
         public string Variant { get; init; } = "";
     }
@@ -93,7 +95,11 @@ public static class HostFormLayout
                 [new(LDiv, LDiv + 40, OnOff(s.ScoreOn), 18), new(LDiv + 40, LDiv + 66, "-", 20, true), new(LDiv + 66, LDiv + 122, s.MaxScore.ToString(), -1, true), new(LDiv + 122, LDiv + 148, "+", 21, true)]));
         Left("Password", s.Password ? "Set" : "None", 27);
         // the port's co-op rules (docs/deviations.md): only a co-op game has them
-        if (s.Coop) Left("Co-op Damage", s.CoopDamage, 40);
+        if (s.Coop)
+        {
+            Left("Co-op Damage", s.CoopDamage, 40);
+            Left("Co-op Scaling", s.CoopScale, 41);
+        }
         if (!s.Coop)
         {
             Steps("Bots", $"{s.Bots:00}", 29, 30);

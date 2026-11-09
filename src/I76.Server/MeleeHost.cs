@@ -156,6 +156,11 @@ public sealed record ServerOptions
     /// times the damage (<see cref="CoopSetup.DamageFactors"/>). 1, the original's, by default; a melee ignores it.
     /// </summary>
     public float CoopDamage { get; init; } = 1f;
+    /// <summary>
+    /// A co-op game's Co-op Scaling (the host form's, i26-server's --coop-scale N; docs/deviations.md): each enemy car the script sets
+    /// going gets a copy per human past the first, up to this many (<see cref="CoopSetup.MaxExtraEnemies"/>). 0, the original's, by default.
+    /// </summary>
+    public int CoopScale { get; init; }
     /// <summary>Snapshots as deltas against the one each client acknowledged (protocol 13); off sends each in full (A/B, debugging).</summary>
     public bool DeltaSnapshots { get; init; } = true;
     /// <summary>Far cars sent less often (<see cref="Interest"/>; needs <see cref="DeltaSnapshots"/>); off sends every car every tick.</summary>
@@ -568,7 +573,7 @@ public sealed partial class MeleeHost : IModeHost
         [.. _seats.Select(s => Listed(s.Name, s.Actor.CarFile, s.Actor.Team)), .. Mode.Bots.Select(b => Listed(b.Name, b.Player.CarFile, b.Player.Team))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams,
         MapOffer?.Hash, MapOffer?.Shared ?? false, (uint)(MapOffer?.TotalSize ?? 0), Options.Password.Length > 0,
-        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair, CoopDamage: Options.Coop is null ? 1f : Options.CoopDamage,
+        Options.Restrictions.IsEmpty ? null : Options.Restrictions, Options.AllowHidden, Coop: Options.Coop is not null, Turrets: Options.AllowTurrets, RateHz: (byte)Session.Rate.Label, CarReset: Options.AllowCarReset, Cb: Options.AllowCb, Crosshair: Options.AllowCrosshair, CoopDamage: Options.Coop is null ? 1f : Options.CoopDamage, CoopScale: Options.Coop is null ? 0 : Math.Clamp(Options.CoopScale, 0, CoopSetup.MaxExtraEnemies),
         ArenaName: ArenaTitle);
 
     private string? _arenaTitle;

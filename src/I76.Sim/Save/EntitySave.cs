@@ -24,7 +24,7 @@ public sealed partial class Entity
                 nameof(EscapeTimer), nameof(AvoidSkip), nameof(AvoidSpeed), nameof(BackSteer), nameof(AvoidStart), nameof(ImpactTime), nameof(Obstacle),
                 nameof(AvoidSteer), nameof(BackHeading), nameof(BackHeight), nameof(ClearanceRing), nameof(StallTime), nameof(BackStart), nameof(BackFarthest), nameof(PlanStamp), nameof(SnapshotPath),
                 nameof(WaypointBridge), nameof(Search), nameof(Controls), nameof(ControlDone), nameof(ScriptDriven), nameof(Lights), nameof(Siren),
-                nameof(CoopAim), nameof(KillerSeat));
+                nameof(CoopAim), nameof(KillerSeat), nameof(ExtraOf), nameof(Scaled));
         a.For<AiBlock>().Saved(nameof(AiBlock.Skill), nameof(AiBlock.AccelFactor), nameof(AiBlock.CommandSpeed), nameof(AiBlock.FireAccuracy), nameof(AiBlock.FireSkill));
         a.For<RoadPos>().Saved(nameof(RoadPos.Idx), nameof(RoadPos.Dir), nameof(RoadPos.Band), nameof(RoadPos.Cls), nameof(RoadPos.A960), nameof(RoadPos.Off),
             nameof(RoadPos.Heading), nameof(RoadPos.Seg));
@@ -59,7 +59,7 @@ public sealed partial class Entity
         Search?.Save(w);
         w.VarU((ulong)Controls.Count);
         foreach (var c in Controls) { w.F32(c.BrAccel); w.F32(c.Steer); w.F32(c.Reverse); w.Int(c.EBrake); }
-        w.Bool(ControlDone); w.Bool(ScriptDriven); w.Bool(Lights); w.Bool(Siren); w.Ent(CoopAim); w.Int(KillerSeat);
+        w.Bool(ControlDone); w.Bool(ScriptDriven); w.Bool(Lights); w.Bool(Siren); w.Ent(CoopAim); w.Int(KillerSeat); w.Ent(ExtraOf); w.Bool(Scaled);
     }
 
     private static int IndexOf(IReadOnlyList<RoadPiece> pieces, RoadPiece p)
@@ -94,6 +94,6 @@ public sealed partial class Entity
         Search = r.Bool() ? PathSearch.Load(r, links) : null;
         Controls.Clear();
         for (int k = r.Count(); k > 0; k--) Controls.Enqueue((r.F32(), r.F32(), r.F32(), r.Int()));
-        ControlDone = r.Bool(); ScriptDriven = r.Bool(); Lights = r.Bool(); Siren = r.Bool(); CoopAim = r.Ent(); KillerSeat = r.Int();
+        ControlDone = r.Bool(); ScriptDriven = r.Bool(); Lights = r.Bool(); Siren = r.Bool(); CoopAim = r.Ent(); KillerSeat = r.Int(); ExtraOf = r.Ent(); Scaled = r.Bool();
     }
 }

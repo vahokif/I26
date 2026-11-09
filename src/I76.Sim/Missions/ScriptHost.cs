@@ -92,9 +92,10 @@ public sealed partial class ScriptHost : IFsmHost
     public float HealthPercent(object o) => E(o).Health;
     public Vector3 Position(object o) => E(o).Position;
     public int Team(object o) => E(o).Team;
-    public IEnumerable<object> Vehicles => Entities.Where(e => e.Vehicle is not null && !e.Removed);
+    // (Co-op Scaling's copies are not the script's: CoopExtras)
+    public IEnumerable<object> Vehicles => Entities.Where(e => e.Vehicle is not null && !e.Removed && e.ExtraOf is null);
     public IEnumerable<object> Structures => Entities.Where(e => !e.Removed && IsStructure(e));
-    public IEnumerable<object> AiVehicles => Entities.Where(e => e.Vehicle is { IsEmplacement: false } && !e.Removed).OrderBy(e => e.Team);
+    public IEnumerable<object> AiVehicles => Entities.Where(e => e.Vehicle is { IsEmplacement: false } && !e.Removed && e.ExtraOf is null).OrderBy(e => e.Team);
 
     // ---- AI ----
     /// <summary>The frame delta the AI's controllers see (the frame delta).</summary>
@@ -130,6 +131,7 @@ public sealed partial class ScriptHost : IFsmHost
         bool reset = human && _playerDrivenTick != FsmTick - 1 && _playerDrivenTick != FsmTick;
         if (human) _playerDrivenTick = FsmTick;
         Ptable.Issue(e, t, order, resetAlways: reset);
+        if (!human) OrderExtras(e, t, order, path, speed, followFlag, f1, f2, reference);
     }
 
     /// <summary>
@@ -188,11 +190,11 @@ public sealed partial class ScriptHost : IFsmHost
     }
     public object? LastAttacker(object o, int kind) => kind switch { 0 => E(o).LastRammer, 1 => E(o).LastShooter, _ => E(o).LastAttacker };
     public bool KilledByPlayer(object o) => E(o).KilledByPlayer;
-    public void SetSkill(object o, int a, int b) { E(o).SkillA = a; E(o).SkillB = b; E(o).Ai.SetSkill(a, b); }
+    public void SetSkill(object o, int a, int b) { foreach (var e in WithExtras(o)) { e.SkillA = a; e.SkillB = b; e.Ai.SetSkill(a, b); } }
     /// <summary>setAgg: aggression n−1, and the next order re-chooses the tactic.</summary>
-    public void SetAggression(object o, int n) { E(o).Aggression = n - 1; E(o).Depth = -1; E(o).MaxAttackers = 1; }
-    public void SetAvoid(object o, int? on) => E(o).Avoid = on is null ? !E(o).Avoid : on != 0;
-    public void SetMaxAttackers(object o, int n) => E(o).MaxAttackers = n;
+    public void SetAggression(object o, int n) { foreach (var e in WithExtras(o)) { e.Aggression = n - 1; e.Depth = -1; e.MaxAttackers = 1; } }
+    public void SetAvoid(object o, int? on) { foreach (var e in WithExtras(o)) e.Avoid = on is null ? !e.Avoid : on != 0; }
+    public void SetMaxAttackers(object o, int n) { foreach (var e in WithExtras(o)) e.MaxAttackers = n; }
     public void SetHeliHeight(object o, int height)
     {
         if (E(o) is not { IsHeli: true, Vehicle: { IsHeli: true } v }) { Log("FSM - setHeliHeight has been called for something that was not a helicopter"); return; }
@@ -252,6 +254,7 @@ public sealed partial class ScriptHost : IFsmHost
         v.Speed = speed;
         v.AngVel = Vector3.Zero;
         if (IsHumanEntity(e)) { _playerDrivenTick = FsmTick; Moved(e); }   // the script moved the player
+        else TeleportExtras(e);
     }
 
     /// <summary>The damage model, which destroy and the deaths go through.</summary>
@@ -282,6 +285,7 @@ public sealed partial class ScriptHost : IFsmHost
 
     public void StartCar(object o)
     {
+        foreach (var x in WithExtras(o).Skip(1)) StartCar(x);
         var e = E(o);
         if (e.Vehicle is not { } v || ((uint)v.Flags & 9) != 0) return;
         // the engine-start sound plays and the timer runs its length then sets bit 0
@@ -293,11 +297,13 @@ public sealed partial class ScriptHost : IFsmHost
     /// <summary>setLights: toggle when the state differs.</summary>
     public void SetLights(object o, bool on)
     {
-        var e = E(o);
-        e.Lights = on;
-        if (e.Vehicle is { } v) v.Flags = on ? v.Flags | VehicleFlags.Lights : v.Flags & ~VehicleFlags.Lights;
+        foreach (var e in WithExtras(o))
+        {
+            e.Lights = on;
+            if (e.Vehicle is { } v) v.Flags = on ? v.Flags | VehicleFlags.Lights : v.Flags & ~VehicleFlags.Lights;
+        }
     }
-    public void SetSiren(object o, bool on) => E(o).Siren = on;
+    public void SetSiren(object o, bool on) { foreach (var e in WithExtras(o)) e.Siren = on; }
     /// <summary>triggerGate (opcode 63): the object's first type-7 node starts sliding.</summary>
     public void TriggerGate(object o)
     {

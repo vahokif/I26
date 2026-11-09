@@ -405,7 +405,18 @@ public sealed partial class MissionSetup
                     if (seat > 0) VehicleFactory.AddDriverHandguns(vfs, vcf, v);
                     if (night) v.Flags |= VehicleFlags.Lights;
                     return v;
-                }) { Paths = coopPaths };
+                })
+                {
+                    Paths = coopPaths, ExtraEnemies = System.Math.Clamp(coop.ExtraEnemies, 0, CoopSetup.MaxExtraEnemies),
+                    // Co-op Scaling's copy of an enemy car: as the mission's own cars are built (an AI car's damage state, the night's lights)
+                    BuildEnemy = vcf =>
+                    {
+                        var v = VehicleFactory.Create(vfs, vcf);
+                        if (v.Build is { } b) v.Health = I76.Sim.Damage.VehicleDamage.Create(v, b, false, rand);
+                        if (night) v.Flags |= VehicleFlags.Lights;
+                        return v;
+                    },
+                };
             }
             ms = new MissionScript(program, host, rand, seed, nitroDriver, i76Lines);
             MarkTaurus(ms.Vm!.Actors);

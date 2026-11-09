@@ -64,7 +64,7 @@ public sealed class CoopMode : IHostMode
         _o = c.Options;
         int seats = Math.Clamp(_o.MaxPlayers, 1, Protocol.MaxCoopSeats);
         _cars = Enumerable.Repeat<string?>(null, seats).ToList();
-        var coop = new CoopSetup(_cars) { RespawnDelay = _o.RespawnDelay, DamageFactor = _o.CoopDamage };
+        var coop = new CoopSetup(_cars) { RespawnDelay = _o.RespawnDelay, DamageFactor = _o.CoopDamage, ExtraEnemies = Math.Clamp(_o.CoopScale, 0, CoopSetup.MaxExtraEnemies) };
         Setup = CoopMission.Build(c.Vfs, c.World, c.Asm, coop, new CrtRand(unchecked((uint)_o.Seed)), _o.Seed);
         Group = Setup.Script?.Host.Coop ?? throw new InvalidDataException($"{c.Arena} has no mission script: it is not a story mission");
         Build = new SessionBuild { Mission = c.Arena.ToLowerInvariant(), Install = SessionBuild.InstallIdentity(c.Install, c.Arena), Coop = coop };
@@ -82,6 +82,8 @@ public sealed class CoopMode : IHostMode
     {
         _host = host;
         Group.Happened += e => _happened.Add(e);
+        // Co-op Scaling's copies of the enemy cars: named to the clients as they come (their mirrors build them from the file)
+        Group.Spawned += (v, def) => host.Spawned(v, def);
         // the radio's lines as they go on the air here (the queue and its priorities are the host's alone)
         Script.Cb.Started += l =>
         {

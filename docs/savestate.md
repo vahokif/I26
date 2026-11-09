@@ -67,7 +67,7 @@ The header (`SnapshotHeader`) is the magic `I76SNAP\0`, the format version, the 
 near/far policy, the tick, and the host's bytes; then the body's length and the body. **Any change to what a
 snapshot holds or how it is laid out bumps `SnapshotHeader.CurrentVersion`.** A snapshot of another version
 is refused with a clear message; there is no migration. Snapshots are for checkpoints within a session and
-quick saves, not archives. Version 13 added the cars' paint (the VTAB entries, the melee players). Version 14 added a co-op game's personal camera scenes (a camera per seat, and the seat a script thread's scene is in). Version 15 added a co-op script thread's hold on a gate it shuts behind the player (the test it waits at and since when). Version 16 added the paths whose node 0 a teleport has put on the ground, and each weapon's file to a car's make-up (the Developer panel swaps weapons in place), and a co-op game's damage factor to the build (Co-op Damage).
+quick saves, not archives. Version 13 added the cars' paint (the VTAB entries, the melee players). Version 14 added a co-op game's personal camera scenes (a camera per seat, and the seat a script thread's scene is in). Version 15 added a co-op script thread's hold on a gate it shuts behind the player (the test it waits at and since when). Version 16 added the paths whose node 0 a teleport has put on the ground, and each weapon's file to a car's make-up (the Developer panel swaps weapons in place), and a co-op game's damage factor to the build (Co-op Damage); and Co-op Scaling: the build's cap, and on each entity the original it is a copy of and whether its copies were made.
 
 ## The completeness guard
 

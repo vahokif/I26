@@ -17,7 +17,7 @@ public class HostFormLayoutTests(ITestOutputHelper output)
 
     // the ids the form had before it was drawn by the port (less 7, the original's driver box, which on a host form only showed the host's own car again)
     private static readonly int[] MeleeIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38];
-    private static readonly int[] CoopIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 22, 27, 28, 32, 33, 35, 36, 37, 38, 40];
+    private static readonly int[] CoopIds = [3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 17, 22, 27, 28, 32, 33, 35, 36, 37, 38, 40, 41];
 
     private static string Value(List<HostFormLayout.Row> rows, string label) =>
         string.Join(" ", rows.Single(r => r.Label == label).Cells.Select(c => c.Text));
@@ -52,7 +52,7 @@ public class HostFormLayoutTests(ITestOutputHelper output)
         foreach (var kept in new[] { "Invite Only", "Password", "Hidden Weapons & Cars", "Unlimited Turrets", "Car Reset", "CB Radio", "Chase Crosshair", "Sim Rate" }) Assert.Contains(kept, labels);
         // and has the co-op rules a melee has not
         var melee = HostFormLayout.RowsOf(Melee).Select(r => r.Label).ToList();
-        foreach (var coop in new[] { "Co-op Damage" }) { Assert.Contains(coop, labels); Assert.DoesNotContain(coop, melee); }
+        foreach (var coop in new[] { "Co-op Damage", "Co-op Scaling" }) { Assert.Contains(coop, labels); Assert.DoesNotContain(coop, melee); }
         // the rows close up: no gap in the left table under the area list
         var left = HostFormLayout.RowsOf(Coop).Where(r => !r.Right && r.Index > HostFormLayout.ListRow).Select(r => r.Index).Order().ToList();
         Assert.Equal(Enumerable.Range(HostFormLayout.ListRow + HostFormLayout.ListRows, left.Count), left);
@@ -111,6 +111,7 @@ public class HostFormLayoutTests(ITestOutputHelper output)
         Assert.Equal("Co-op", Value(HostFormLayout.RowsOf(Coop), "Game Type"));
         Assert.Equal("x1", Value(HostFormLayout.RowsOf(Coop), "Co-op Damage"));
         Assert.Equal("x0.75", Value(HostFormLayout.RowsOf(Coop with { CoopDamage = "x0.75" }), "Co-op Damage"));
+        Assert.Equal("Off", Value(HostFormLayout.RowsOf(Coop), "Co-op Scaling"));
         Assert.Equal("Melee", Value(HostFormLayout.RowsOf(Melee), "Game Type"));
         Assert.Equal("Bob_", Value(HostFormLayout.RowsOf(Melee with { GameName = "Bob", Naming = true }), "Game Name"));
     }

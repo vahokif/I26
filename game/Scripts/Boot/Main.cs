@@ -661,7 +661,7 @@ public partial class Main : Node3D
         I76.Game.Ui.ChaseCrosshair.Enabled = s.ChaseCrosshair;
         I76.Game.ForceFeedback.Mode = s.RumbleMode;
         I76.Game.ForceFeedback.Strength = s.RumbleStrength;
-        I76.Game.ForceFeedback.Held = () => _menu is not null || _picture is not null || _ended;
+        I76.Game.ForceFeedback.Held = () => _menu is not null || _picture is not null || _ended || _loading;     // and nothing behind the loading card
         // Modern Physics, flipped from Play Options as by F7 (EnableModern keeps a network session on the original's)
         if (_modernSetup is not null && s.ModernPhysics != (_modern?.Enabled == true)) EnableModern(s.ModernPhysics);
         // the cheats (Unlim. Ammo / Armor / Chas. Rein.) are for the player and never in a network session, as the original's

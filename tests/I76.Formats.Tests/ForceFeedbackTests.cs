@@ -16,7 +16,7 @@ public class ForceFeedbackTests
     }
 
     /// <summary>A force file of one periodic effect, built as the shipped ones are laid out.</summary>
-    private static byte[] Periodic(string name, int waveform, int ms, int cycles, int high = 100, int low = 0, int max = 100, int min = -100, int mag = 100)
+    internal static byte[] Periodic(string name, int waveform, int ms, int cycles, int high = 100, int low = 0, int max = 100, int min = -100, int mag = 100)
     {
         var rec = new List<byte>();
         void I(int v) => rec.AddRange(BitConverter.GetBytes(v));

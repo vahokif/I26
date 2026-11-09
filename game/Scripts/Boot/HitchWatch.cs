@@ -50,6 +50,17 @@ public static class Hitch
         return i >= 0 ? $"inside {Names[i]}" : $"outside the measured phases (render/engine/loading), last left: {(d >= 0 ? Names[d] : "none")}";
     }
 
+    /// <summary>
+    /// The time (ms) of the game's own measured work this frame: every phase but the rumble driver calls, and those taken out of
+    /// the force feedback tick they run inside too (another nested phase counts twice, which only makes the rumble guard surer).
+    /// </summary>
+    public static double OwnWorkMs()
+    {
+        long t = 0, rumble = Ticks[(int)Phase.Rumble];
+        for (int i = 0; i < (int)Phase.Count; i++) if (i != (int)Phase.Rumble) t += Ticks[i];
+        return Math.Max(0, t - rumble) * 1000.0 / Stopwatch.Frequency;
+    }
+
     /// <summary>The frame that ended after <paramref name="frameTicks"/> Stopwatch ticks: the line to print, or null if it was quick.</summary>
     public static string? Report(long frameTicks, bool reset = true)
     {
@@ -124,8 +135,9 @@ public partial class HitchWatch : Node
     public override void _Process(double delta)
     {
         long now = Stopwatch.GetTimestamp();
-        // the rumble guard: a long frame with a vibration sent since the frame before it began (Godot applies it a frame late)
-        if (_last != 0) GodotRumble.FrameEnded((now - _last) * 1000.0 / Stopwatch.Frequency, _prev);
+        // the rumble guard: a long frame with a vibration sent since the frame before it began (Godot applies it a frame late),
+        // less what the game's own measured work took (a mission build is one long frame of that)
+        if (_last != 0) GodotRumble.FrameEnded((now - _last) * 1000.0 / Stopwatch.Frequency, _prev, Hitch.OwnWorkMs());
         _prev = _last;
         Interlocked.Exchange(ref _frameStart, now);
         if (_last != 0 && Hitch.Report(now - _last) is { } line) GD.Print(line);

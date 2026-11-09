@@ -17,6 +17,11 @@ public sealed class ThrottledRumble(IRumbleSink inner, Func<double> clock) : IRu
 {
     public const int Steps = 16;
     public const double MinGap = 0.1, Renew = 0.5;
+    /// <summary>
+    /// How long (seconds) each level asks the pad's driver to hold the motors: renewed every <see cref="Renew"/> while it plays,
+    /// so a game that stops renewing (a hang, a long load, a crash) leaves the motors running this long at most.
+    /// </summary>
+    public const double Hold = 0.75;
     private float _weak, _strong;
     private double _at = double.NegativeInfinity;
     private bool _on;
@@ -53,6 +58,50 @@ public sealed class ThrottledRumble(IRumbleSink inner, Func<double> clock) : IRu
         _stopPending = false; _on = false; _at = double.NegativeInfinity;
         Calls++;
         inner.Stop();
+    }
+}
+
+/// <summary>
+/// The guard against a pad whose rumble blocks the game: some pads (Bluetooth clones on Linux) take seconds to answer a
+/// force-feedback upload, and the engine makes that upload on the main thread, so every vibration freezes the game. Such a pad
+/// stalls the game again and again as the effects are renewed; so rumble is switched off for the session only when a long frame
+/// that only the pad can explain comes twice close together. A frame counts when a vibration went to the pad just before it, it
+/// was in play from start to end (not loading, paused, under a menu or a movie, or out of focus: those make long frames of
+/// their own), and the time the game measured for its own work (the mission build, the sim, the shell) leaves at least
+/// <see cref="StallMs"/> unexplained. One such frame alone is only noted: a hitch of the machine's (a first shader, the system
+/// busy) can look like one. Nothing here touches the pad: the caller does what <see cref="Frame"/> says.
+/// </summary>
+public sealed class RumbleStallGuard
+{
+    /// <summary>A frame with this much (ms) unexplained after a vibration is a stall the pad may have caused.</summary>
+    public const double StallMs = 1500;
+    /// <summary>A second stall this soon (seconds, from the end of the first to the start of the second) switches rumble off.</summary>
+    public const double RepeatSeconds = 10;
+
+    public enum Verdict { None, Noted, Tripped }
+
+    /// <summary>Rumble has stalled the game twice this session: nothing more goes to the pad.</summary>
+    public bool Tripped { get; private set; }
+    private double _noted = double.NegativeInfinity;
+
+    /// <summary>
+    /// A frame ended at <paramref name="now"/> (seconds) after <paramref name="ms"/>, of which <paramref name="explainedMs"/> was the
+    /// game's own measured work; <paramref name="vibrated"/>: a vibration went to the pad since just before it began;
+    /// <paramref name="inPlay"/>: the game was in play at its start and at its end.
+    /// </summary>
+    public Verdict Frame(double now, double ms, double explainedMs, bool vibrated, bool inPlay)
+    {
+        if (Tripped || !vibrated || !inPlay || ms - Math.Max(explainedMs, 0) < StallMs) return Verdict.None;
+        if (now - ms / 1000 - _noted <= RepeatSeconds) { Tripped = true; return Verdict.Tripped; }
+        _noted = now;
+        return Verdict.Noted;
+    }
+
+    /// <summary>Forgotten: rumble on again (the player switched it back on in Play Options).</summary>
+    public void Reset()
+    {
+        Tripped = false;
+        _noted = double.NegativeInfinity;
     }
 }
 

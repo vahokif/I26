@@ -6,28 +6,36 @@ using I76.Sim.Weapons;
 namespace I76.Game;
 
 /// <summary>
-/// Godot's joypad vibration as the rumble sink: both motors on every connected pad. Godot applies a vibration later, in its
-/// own event processing on the main thread; on Linux that is a force-feedback upload to the device, which some pads
-/// (Bluetooth clones) answer only after seconds, freezing the game. So a frame that stalls right after a vibration was
-/// sent switches rumble off for the rest of the session (<see cref="Tripped"/>), with a line in the log.
+/// Godot's joypad vibration as the rumble sink: both motors on every connected pad, each level held for
+/// <see cref="ThrottledRumble.Hold"/> and renewed while it plays, so the motors stop by themselves when the game stops renewing.
+/// Godot applies a vibration later, in its own event processing on the main thread; on Linux that is a force-feedback upload to
+/// the device, which some pads (Bluetooth clones) answer only after seconds, freezing the game. <see cref="RumbleStallGuard"/>
+/// switches rumble off for the rest of the session when that keeps happening in play (<see cref="Tripped"/>), with a line in the
+/// log; a mission build, a pause, a movie or another window in front never counts.
 /// </summary>
 public sealed class GodotRumble : IRumbleSink
 {
-    /// <summary>A frame this long (ms) just after a vibration counts as the pad stalling the game.</summary>
-    public const double StallMs = 1500;
-    /// <summary>Rumble has stalled the game this session: nothing more is sent.</summary>
-    public static bool Tripped { get; private set; }
-    /// <summary>When the last vibration went to the engine (Stopwatch ticks; 0 none yet).</summary>
+    private static readonly RumbleStallGuard Guard = new();
+    private static readonly bool Log = System.Environment.GetEnvironmentVariable("I76_RUMBLE_LOG") == "1";
+    /// <summary>Rumble has stalled the game in play, twice close together, this session: nothing more is sent.</summary>
+    public static bool Tripped => Guard.Tripped;
+    /// <summary>When the last vibration went to a pad (Stopwatch ticks; 0 none yet). With the Developer panel's Signals watching and no pad it counts as gone, so the panel shows what a pad would get.</summary>
     public static long LastCall { get; private set; }
+    /// <summary>Whether the game was in play when the frame before ended.</summary>
+    private static bool _inPlayBefore;
 
     public void Rumble(float weak, float strong)
     {
+        if (Tripped) { I76.Game.Ui.DevSignals.Pad(0, 0); return; }
         I76.Game.Ui.DevSignals.Pad(weak, strong);
-        if (Tripped) return;
         using var _ = Hitch.Time(Hitch.Phase.Rumble);
+        bool sent = false;
         foreach (var d in Input.GetConnectedJoypads().Where(d => Input.IsJoyKnown(d)))
-            Input.StartJoyVibration(d, weak, strong, 0.75f);     // ThrottledRumble renews it before it runs out
-        LastCall = System.Diagnostics.Stopwatch.GetTimestamp();
+        {
+            Input.StartJoyVibration(d, weak, strong, (float)ThrottledRumble.Hold);     // ThrottledRumble renews it before it runs out
+            sent = true;
+        }
+        Sent(sent, $"{weak:0.000} {strong:0.000}");
     }
 
     public void Stop()
@@ -35,8 +43,16 @@ public sealed class GodotRumble : IRumbleSink
         I76.Game.Ui.DevSignals.Pad(0, 0);
         if (Tripped) return;
         using var _ = Hitch.Time(Hitch.Phase.Rumble);
-        foreach (var d in Input.GetConnectedJoypads()) Input.StopJoyVibration(d);
+        bool sent = false;
+        foreach (var d in Input.GetConnectedJoypads()) { Input.StopJoyVibration(d); sent = true; }
+        Sent(sent, "stop");
+    }
+
+    private static void Sent(bool toPad, string what)
+    {
+        if (!toPad && !I76.Game.Ui.DevSignals.Watching) return;
         LastCall = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (Log) GD.Print($"rumble: {what} (frame {Godot.Engine.GetProcessFrames()})");
     }
 
     /// <summary>Every pad's motors off at once, past the rate limit (leaving the game, switching the setting off): a stop held back there would never go out.</summary>
@@ -47,12 +63,33 @@ public sealed class GodotRumble : IRumbleSink
         foreach (var d in Input.GetConnectedJoypads()) Input.StopJoyVibration(d);
     }
 
-    /// <summary>HitchWatch's report of a frame that ran <paramref name="ms"/> and began at <paramref name="since"/>: a stall with a vibration sent since then trips the guard.</summary>
-    public static void FrameEnded(double ms, long since)
+    /// <summary>Rumble on again after the guard switched it off: the player changed Force Feedback or Rumble in Play Options.</summary>
+    public static void ResetGuard()
     {
-        if (Tripped || ms < StallMs || LastCall == 0 || LastCall < since) return;
-        Tripped = true;
-        GD.Print($"force feedback: the game stalled {ms:0} ms after a rumble was sent to the pad; rumble is off for this session (some Bluetooth pads block on it; Play Options > Force Feedback)");
+        if (!Tripped) return;
+        Guard.Reset();
+        GD.Print("force feedback: rumble is on again (the setting was changed)");
+    }
+
+    /// <summary>
+    /// HitchWatch's report of a frame that ran <paramref name="ms"/>, began at <paramref name="since"/> and had
+    /// <paramref name="explainedMs"/> of the game's own measured work: the guard's step.
+    /// </summary>
+    public static void FrameEnded(double ms, long since, double explainedMs)
+    {
+        bool inPlay = ForceFeedback.InPlay, wasInPlay = _inPlayBefore;
+        _inPlayBefore = inPlay;
+        if (Tripped || ms < RumbleStallGuard.StallMs) return;
+        double now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+        switch (Guard.Frame(now, ms, explainedMs, LastCall != 0 && LastCall >= since, inPlay && wasInPlay))
+        {
+            case RumbleStallGuard.Verdict.Noted:
+                GD.Print($"force feedback: the game stalled {ms:0} ms ({explainedMs:0} ms of it the game's own work) just after a rumble was sent to the pad; once more within {RumbleStallGuard.RepeatSeconds:0} s switches rumble off for this session");
+                break;
+            case RumbleStallGuard.Verdict.Tripped:
+                GD.Print($"force feedback: the game stalled {ms:0} ms again just after a rumble was sent to the pad; rumble is off for this session (some Bluetooth pads block on it; Play Options > Force Feedback or Rumble switches it back on)");
+                break;
+        }
     }
 }
 
@@ -72,6 +109,7 @@ public partial class ForceFeedback : Node
         get => _enabled;
         set
         {
+            if (value && !_enabled) GodotRumble.ResetGuard();     // switched back on: the player wants rumble again
             _enabled = value;
             if (!value) _instance?.Silence();     // switched off in the escape menu: quiet at once, not at the next frame
         }
@@ -83,8 +121,9 @@ public partial class ForceFeedback : Node
         get => _mode;
         set
         {
+            if (value != _mode && value != RumbleMode.Off) GodotRumble.ResetGuard();     // a new choice: the player wants rumble again
             _mode = value;
-            if (value != RumbleMode.Enhanced) _instance?._enhanced.Reset();
+            if (value != RumbleMode.Enhanced && _instance is { } i) { i._enhanced.Reset(); i._mix?.SetExtra(0, 0); }
             if (value == RumbleMode.Off) _instance?.Silence();
         }
     }
@@ -96,7 +135,7 @@ public partial class ForceFeedback : Node
         set { _strength = RumbleStrength.Clamp(value); if (_instance is { } i) i._mix.Strength = RumbleStrength.Factor(_strength); }
     }
     private static int _strength = RumbleStrength.Default;
-    /// <summary>True while something is over the game that does not pause it (a network game's escape menu, the map and notepad, the game over): nothing plays.</summary>
+    /// <summary>True while something is over the game that does not pause it (a network game's escape menu, the map and notepad, the game over, the loading card): nothing plays.</summary>
     public static Func<bool>? Held { get; set; }
     private static ForceFeedback? _instance;
     /// <summary>The player's car (hits, shots and blasts of anyone else are not felt).</summary>
@@ -114,6 +153,8 @@ public partial class ForceFeedback : Node
     private int _selected = -1, _group;
 
     private static bool Live => _instance is { _model: not null } i && Enabled && !i.GetTree().Paused && Held?.Invoke() != true && Device;
+    /// <summary>The game is in play with rumble on: the frames <see cref="RumbleStallGuard"/> may count (not a load, a pause, a menu, a movie, another window in front).</summary>
+    public static bool InPlay => Live && Controls.Focused();
     /// <summary>A pad to play on; or the Developer panel's Signals watching, where the effects run with nowhere to go.</summary>
     private static bool Device => (Controls.HasPad || I76.Game.Ui.DevSignals.Watching) && Mode != RumbleMode.Off;
 

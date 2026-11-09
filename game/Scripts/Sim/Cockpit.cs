@@ -230,9 +230,6 @@ public partial class Cockpit : Node
     /// <summary>The 3D dash is on; off, the interior model is hidden and the panels are drawn flat (ExtInstruments).</summary>
     public bool Dash3D => Node3D.Dash3D;
 
-    /// <summary>The ghost cockpit over the 3D dash: no interior, no mirror, the overlay's first three panels and the reticles.</summary>
-    public bool Ghost => Node3D.Dash3D && Node3D.GhostCockpit;
-
     private Texture2D? _reticle;
 
     /// <summary>The 32x32 gunsight reticle texture (<c>zretc_1</c>) from the game's archive.</summary>
@@ -942,8 +939,7 @@ public partial class Cockpit : Node
     private void Mirror()
     {
         if (_mirrorView is null || _mirrorCam is null) return;
-        // off with the ghost cockpit, as the original's
-        if (_mirrorMode == 0 || Ghost) { _mirrorView.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled; return; }
+        if (_mirrorMode == 0) { _mirrorView.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled; return; }
         // the eye, not head-turned, its right and forward negated: looking backwards
         _mirrorCam.GlobalTransform = Node3D.GlobalTransform * new Transform3D(new Basis(Vector3.Up, Mathf.Pi), Node3D.Eye);
         // the original redraws it every second frame; the modern look every frame

@@ -2778,8 +2778,8 @@ public partial class Main : Node3D
             case GameKey.SaveScreen: SaveScreen(); return;
             // TOGGLE_2DGPIT_EXT ('[' in gamekey.map, command 0x5d): flips Ext. Instrum. Disp.'s own byte, so it is kept with the settings
             case GameKey.Toggle2DCockpitExt: ToggleExtInstruments(); return;
-            // TOGGLE_GOSTPIT_DETAIL (']'): the ghost cockpit, which the original allows on its hardware renderers (forced off in software)
-            case GameKey.ToggleGhostCockpit: if (_car is not null) _car.GhostCockpit = !_car.GhostCockpit; return;
+            // TOGGLE_GOSTPIT_DETAIL (']'): the ghost cockpit exists only in render mode 1; on the hardware renderers it is forced off
+            case GameKey.ToggleGhostCockpit: return;
             case GameKey.ToggleFramerate: return;   // a no-op in the release too
             // RAISE_DEAD (case 0x26): a dead network player asks the server for a new car; the server refuses
             // it before 5 s and once the game is decided

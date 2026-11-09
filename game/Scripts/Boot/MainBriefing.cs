@@ -95,8 +95,9 @@ public partial class Main
     /// The mission's start with its briefing played while the world builds. The card is up already (as in the original's order) and
     /// goes back to black as the build starts on a thread of its own (MissionBuilder.OffMainThread: it makes its nodes outside the
     /// tree and touches nothing in it; then <see cref="MakeAhead"/>) and the movie plays on this one. The build done, the rest of the
-    /// load (<see cref="Rest"/>) runs here under the movie in slices, the tree held still. Until the mission can start "PLEASE STAND BY"
-    /// shows over the movie and its skips do nothing; a movie that runs out first holds its last frame (MoviePlayer.Waiting), and
+    /// load (<see cref="Rest"/>) runs here under the movie in slices, the tree held still. A skip before the mission can start is kept, with
+    /// "PLEASE STAND BY" faded in over the movie, and done when it can; a movie that runs out first holds its last frame under the
+    /// line (MoviePlayer.Waiting), and
     /// one that could not play at all leaves the card to come back. False when the mission is not going on (the scene went, or the build
     /// failed and the game went back to the shell).
     /// </summary>
@@ -152,7 +153,7 @@ public partial class Main
             if (!IsInsideTree()) return false;
             MissionBuilder.Trace("loading card: black for the briefing");
             bool over = false, ready = false;
-            // until the mission can start: "PLEASE STAND BY" over the movie (StandByTag), the skips ignored, a movie that runs out held on its last frame
+            // until the mission can start: a skip kept (and "PLEASE STAND BY" faded in, StandByTag), a movie that runs out held on its last frame
             try { PlayMovies(start.Install, [briefing], () => over = true, overLoad: true, waiting: () => !ready); }
             catch (System.Exception ex) { GD.PrintErr($"movie {briefing}: not played: {ex}"); over = true; }
             System.Threading.Tasks.Task<bool>? rest = null;

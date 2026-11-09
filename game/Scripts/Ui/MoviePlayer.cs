@@ -32,12 +32,12 @@ public partial class MoviePlayer : CanvasLayer
     /// </summary>
     public bool OverLoad { get; init; }
     /// <summary>
-    /// While true (a briefing played while its mission loads, until the mission can start): <see cref="WaitingTag"/> over the
-    /// picture, the skip keys do nothing (not kept for later), and a movie that runs out holds its last frame until it turns
-    /// false, then ends.
+    /// While true (a briefing played while its mission loads, until the mission can start): a skip is not done yet but kept, and
+    /// <see cref="WaitingTag"/> fades in over the picture; the movie then ends the moment this turns false. A movie that runs out
+    /// meanwhile holds its last frame under the tag until then. No skip, no tag: the movie plays on as any other.
     /// </summary>
     public Func<bool>? Waiting { get; init; }
-    /// <summary>Shown over the picture while <see cref="Waiting"/> (the boot screen's "please stand by", small, in a corner: StandByTag).</summary>
+    /// <summary>Faded in over the picture when the player waits on the mission (a skip asked for, or the movie run out): the boot screen's "please stand by", small, in a corner (StandByTag).</summary>
     public StandByTag? WaitingTag { get; init; }
     private bool IsWaiting => Waiting?.Invoke() == true;
     private StandByTag? _tag;
@@ -201,8 +201,9 @@ public partial class MoviePlayer : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (_tag is not null && !IsWaiting) _tag.FadeOut();   // (and from then on a skip ends the movie)
-        if (_held) { if (!IsWaiting) Finish(); return; }
+        // a skip asked for while the mission was not ready, or the movie run out: on into the mission the moment it is
+        if ((_skipWanted || _held) && !IsWaiting) { Finish(); return; }
+        if (_held) return;
         if (_done || _movie is null) return;
         // the clock starts with the first frame, so a slow first decode does not eat into the picture
         // (a decoder that died or never delivers ends the movie instead: nothing else would ever start the clock, and the
@@ -219,7 +220,7 @@ public partial class MoviePlayer : CanvasLayer
             if (_hifi is not null) { _hifi.Play(); _hifiStart = System.Diagnostics.Stopwatch.GetTimestamp(); }
         }
         else _clock.Step(delta, Heard());
-        if (_skipAfter >= 0 && _skipAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_SKIP skips it{(IsWaiting ? " (ignored: the mission is not ready)" : "")}"); if (!IsWaiting) { Finish(); return; } }
+        if (_skipAfter >= 0 && _skipAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_SKIP skips it{(IsWaiting ? " (kept until the mission is ready)" : "")}"); if (Skip()) return; }
         if (_endAfter >= 0 && _endAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_END runs it out"); RunOut(); return; }
         // capture hook: I76_MOVIE_HOLD=N freezes the picture on frame N, so shots of different runs compare
         if (_hold >= 0 && _frames.IsEmpty && !_decoded) _clock.Set(_clock.Seconds - delta);   // (a capture runs faster than real time: wait for the decoder)
@@ -310,9 +311,20 @@ public partial class MoviePlayer : CanvasLayer
             || e is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.A or JoyButton.B or JoyButton.Start };   // any pad: A, B, Start (not only one the pad list knows yet: the intro plays before it has looked)
         if (!skip) return;
         GetViewport().SetInputAsHandled();
-        if (IsWaiting) return;   // the mission cannot start yet: the press does nothing (and nothing else sees it)
-        Finish();
+        Skip();
     }
+
+    /// <summary>A skip asked for (true when the movie ended): at once, or, while <see cref="Waiting"/>, kept with the stand-by line faded in.</summary>
+    private bool Skip()
+    {
+        if (!IsWaiting) { Finish(); return true; }
+        if (!_skipWanted) GD.Print($"movie {System.IO.Path.GetFileName(Path)}: skip asked for, kept until the mission is ready");
+        _skipWanted = true;
+        _tag?.FadeIn();
+        return false;
+    }
+
+    private bool _skipWanted;
 
     /// <summary>The movie is over by itself: it ends, or, while <see cref="Waiting"/>, its last frame stays up under the stand-by line until the mission can start.</summary>
     private void RunOut()
@@ -322,6 +334,7 @@ public partial class MoviePlayer : CanvasLayer
         _held = true;
         _stop = true;   // (the decoder is done with: only the last frame stays)
         _hifi?.Stop();
+        _tag?.FadeIn();   // (the player waits on the mission now)
         GD.Print($"movie {System.IO.Path.GetFileName(Path)}: over, its last frame held until the mission can start");
     }
 

@@ -8,7 +8,8 @@ namespace I76.Game.Ui;
 /// <summary>
 /// The boot screen's "PLEASE STAND BY . . ." (its line's lettering and fit, I76's or Nitro's), small and half clear in the
 /// bottom-right corner of a movie's picture (the picture's own rect, not the bars beside it): a briefing played while its mission
-/// loads shows it until the mission can start (MoviePlayer.Waiting), then it fades out over <see cref="FadeSeconds"/>. Set again in
+/// loads fades it in over <see cref="FadeSeconds"/> when the player waits on the mission (a skip asked for before the mission can
+/// start, or the movie run out), and goes with the movie when the mission starts (MoviePlayer.Waiting). Set again in
 /// Impact at the window's resolution in both looks, as the boot screen's line is, with a faint shadow so it reads over a bright
 /// frame; without Impact on the system, the picture's own pixels (loadgame.pcx), scaled down into its palette.
 /// </summary>
@@ -39,7 +40,7 @@ public partial class StandByTag : Control
         bool nitro = Install.IsNitro;
         (_box, _spec) = I76.Game.Boot.BootSplash.StandBy(nitro);
         _ink = I76.Game.Boot.BootSplash.StandByInk(nitro);
-        Modulate = new Color(1, 1, 1, Opacity);
+        Visible = false;   // (until FadeIn)
         AddChild(_impact = new ImpactLayer { Name = "Impact" });
         if (_impact.Available) return;
         _impact.QueueFree();
@@ -90,14 +91,15 @@ public partial class StandByTag : Control
         return outImg;
     }
 
-    /// <summary>Out over <see cref="FadeSeconds"/>, then hidden (once).</summary>
-    public void FadeOut()
+    /// <summary>In over <see cref="FadeSeconds"/> (once): the player asked to skip, or the movie ran out, before the mission is ready.</summary>
+    public void FadeIn()
     {
-        if (_fading || !Visible) return;
+        if (_fading) return;
         _fading = true;
+        Modulate = new Color(1, 1, 1, 0);
+        Visible = true;
         var t = CreateTween().SetPauseMode(Tween.TweenPauseMode.Process);
-        t.TweenProperty(this, "modulate:a", 0f, FadeSeconds);
-        t.TweenCallback(Callable.From(() => Visible = false));
+        t.TweenProperty(this, "modulate:a", Opacity, FadeSeconds);
     }
 
     public override void _Process(double delta)

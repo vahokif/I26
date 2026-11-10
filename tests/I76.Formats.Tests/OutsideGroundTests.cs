@@ -36,7 +36,10 @@ public class OutsideGroundTests
         Assert.True(Math.Abs(6000 * Math.Sin(Math.PI / 16) - HorizonList.PanelHeight) < 1e-3);
     }
 
-    /// <summary>T01's outside ground at fixed samples (tenths of a metre): beside the map's south edge, out on the flat, on the mountain to the south, off the grid's corner.</summary>
+    /// <summary>
+    /// T01's outside ground at fixed samples (tenths of a metre): beside the map's low south and north edges (carried on), out on the plain
+    /// (0), just past the plain, on the mountain to the south, off the grid's corner.
+    /// </summary>
     [InstallFact]
     public void T01sOutsideGroundIsTheSameNumbersEverywhere()
     {
@@ -44,28 +47,30 @@ public class OutsideGroundTests
         (int X, int Z, int Raw)[] golden =
         [
             (405, 6911, 3),
-            (405, 6900, -13),
-            (405, 6800, 485),
-            (380, 7000, 3),
-            (300, 7500, -329),
+            (405, 6800, 0),
+            (405, 6792, 0),
+            (405, 6780, 0),
+            (405, 6740, 5),
+            (300, 7500, 0),
+            (200, 7500, 16),
             (200, 5000, -294),
-            (1000, 8200, 1024),
+            (1000, 8200, 0),
             (640, 8191, 2),
+            (640, 8195, 2),
             (-50, -50, -12745),
             (20000, 300, -24412),
-            (768, 8064, 287),
-            (500, 6500, 2760),
+            (768, 8064, 0),
+            (500, 6500, 3504),
         ];
         var path = TestInstall.Install.Resolve("miss16", "t01.msn")!;
         var w = new MissionWorld(vfs, new ModelAssembler(vfs), path);
         var o = w.Outside!;
         Assert.Same(o, w.Outside);
         foreach (var (x, z, raw) in golden) Assert.True(raw == o.Raw(x, z), $"sample {x},{z}: {o.Raw(x, z)}, golden {raw}");
-        Assert.Equal(1, o.SurfaceId);
         Assert.Equal(2048, o.Skyline.Length);
         Assert.Equal(757029.75f, o.Skyline.Sum());
-        Assert.Equal("4d07e165310b9b362fe94bcd3a3b56f65b094c6f60b95dbc14443cb95652763c", o.Key);
-        Assert.Equal(0x43ae61ee, BitConverter.SingleToInt32Bits(o.AtGame(2025, 33000).H));
+        Assert.Equal("d16957872d410316514e643f301e822503ced2fe53216ac8eaebe6f9a8feeccf", o.Key);
+        Assert.Equal(0x4342c298, BitConverter.SingleToInt32Bits(o.AtGame(2025, 33000).H));
 
         // the same again from a fresh world, its blocks made in another order on many threads
         var again = new MissionWorld(vfs, new ModelAssembler(vfs), path).Outside!;

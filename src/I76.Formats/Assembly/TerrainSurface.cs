@@ -77,7 +77,7 @@ public sealed class TerrainSurface : ITerrainSurface
     public string? Key { get; set; }
 
     /// <summary>Changes with anything that changes the surface's arrays: cached surfaces (<see cref="CacheKey"/>) are keyed by it.</summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     /// <summary>Samples of the outside ground the surface holds round the map's bounds (<see cref="OutsideGround"/>): the cubic and the filters reach this far.</summary>
     public const int OutsidePad = 8;
@@ -126,7 +126,8 @@ public sealed class TerrainSurface : ITerrainSurface
     /// <param name="outside">
     /// The ground past the map's tiles: the surface then holds <see cref="OutsidePad"/> of its samples round the bounds (and in the empty
     /// cells), so the map's last cells are drawn running into it as the simulation has them, and every gentle cell there is open (a car can
-    /// come in from outside). Null: samples off the tiles take the nearest one's height, the map's edge is level.
+    /// come in from outside); every cell touching it is drawn on the simulation's ground, so a high edge falls as the cars meet it. Null:
+    /// samples off the tiles take the nearest one's height, the map's edge is level.
     /// </param>
     /// <param name="pins">The placed objects' outlines on the ground (<see cref="GroundFootprints.Of"/>): the cells under them are drawn on the simulation's ground.</param>
     public TerrainSurface(TerrainTiles tiles, IEnumerable<Vector2>? seeds = null, OutsideGround? outside = null, IReadOnlyList<GroundBox>? pins = null)
@@ -282,6 +283,14 @@ public sealed class TerrainSurface : ITerrainSurface
         }
         _pin = new bool[n];
         if (pins is not null) Pin(pins);
+        // with the outside ground, a cell with a corner off the tiles is drawn on the simulation's ground, as a pinned one is: the map's
+        // last cell falls to the outside ground's height there (the original's 0 round the map) as the cars meet it, however steep
+        if (outside is not null)
+            for (int z = 0; z < _h - 1; z++)
+                for (int x = 0; x < w - 1; x++)
+                    if (tiles.Sample(_sx0 + x, _sz0 + z) is null || tiles.Sample(_sx0 + x + 1, _sz0 + z) is null
+                        || tiles.Sample(_sx0 + x, _sz0 + z + 1) is null || tiles.Sample(_sx0 + x + 1, _sz0 + z + 1) is null)
+                        _pin[z * _w + x] = true;
         _anchor = new bool[n];
         for (int z = 0; z < _h - 1; z++)
             for (int x = 0; x < _w - 1; x++)

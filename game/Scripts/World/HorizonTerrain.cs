@@ -29,7 +29,7 @@ namespace I76.Game.World;
 /// its cells stay square and grow with distance: seen from the map, a cell's
 /// size on screen stays about the same and nothing ever pops. Heights are
 /// baked once on the CPU; inside the map's tiles it sinks under the playable
-/// heightfield, and at the map's edge it starts at the map's own ground. Sunlight is shadowed by a march over the baked heights;
+/// heightfield, and round the map it is the original's plain at 0, the mountains well out. Sunlight is shadowed by a march over the baked heights;
 /// the chunks receive Godot's shadow map (1.5 km, the map's own walls and
 /// scenery) but cast none, the march standing in for their own. Faces turned
 /// from the sun take a warm fill from the sunlit desert floor, and distance

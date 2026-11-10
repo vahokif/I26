@@ -156,7 +156,7 @@ public sealed class MissionWorld
     /// The loader (the original's scene loader, called with its ground flag for every ODEF record) overwrites
     /// the node's y with the bilinear terrain height at x and z, so a pole authored at y=100 stands on the ground. The sim's colliders
     /// and the drawing both use it. In a map's last cells the samples past the tiles are the outside ground's (<see cref="Outside"/>), as
-    /// the simulation's ground has them, where the original reads 0 and sinks the object halfway to it. A fence link's piece keeps the
+    /// the simulation's ground has them: off a high edge the original's 0, so the object sinks toward it as in the original. A fence link's piece keeps the
     /// height its line gave it (from the posts' heights).
     /// </summary>
     public Vector3 GroundedPosition(Placement p) => p.OnLine ? p.Object.Position

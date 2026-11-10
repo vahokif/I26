@@ -114,11 +114,7 @@ public partial class GroundClutterView : Node3D
 
     private int Surface(double x, double z)
     {
-        // As TerrainGround.SurfaceId: the sample's top bits (5 outside the sample range, as the original returns it; the outside ground's own past the tiles)
-        int sx = (int)Math.Floor(I76.Sim.Terrain.TerrainGround.Scale * (float)x + 0.5f), sz = (int)Math.Floor(I76.Sim.Terrain.TerrainGround.Scale * (float)z + 0.5f);
-        if (_world!.Terrain.Sample(sx, sz) is { } v) return (v >> 13) & 7;
-        if (_world.Outside is { } o) return o.SurfaceId;
-        if (sx < 0 || sz < 0 || sx > 0x2800 || sz > 0x2800) return 5;
-        return 0;
+        // as the simulation reads it: the sample's top bits, the original's 0 off the tiles and 5 outside the sample range
+        return I76.Sim.Terrain.TerrainGround.SurfaceAt(_world!.Terrain, x, z);
     }
 }

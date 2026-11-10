@@ -40,7 +40,10 @@ the modern look is the one it is built for.
 | `F5` | playtest, with the car under the cursor; `F5` or `Esc` comes back |
 | `F1` | the help overlay |
 
-**The ground past the map.** The editing view (not a playtest, which is a mission and draws as one) shows all of the ground past the
+**The ground past the map.** Within 600 m of the map's bounds it is the original's plain at height 0: a high edge's last cell falls
+to it (a drop, as in the original), a low one (up to 2.5 m) carries on at its own height and eases down; gentle ground rises for 500 m
+beyond the plain and the distant mountains stand past that. The editing view
+(not a playtest, which is a mission and draws as one) shows all of the ground past the
 map's tiles (`OutsideGround`) in both looks, with nothing clipped: Draw Distance does not apply there (it is always Far: no 600 m clip,
 no fade into the sky in the modern look), and the 1997 look, which in a mission draws the outside ground only within 600 m of the
 camera and cuts it at 600 m view depth, draws it as far as the modern look does (`OutsideTerrain.EditorView`): the map's own 1997 terrain

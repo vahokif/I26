@@ -9,15 +9,18 @@ namespace I76.Formats.Assembly;
 /// <summary>
 /// The ground past a map's tiles, the same for the simulation and for drawing. The original reads height 0 there (a sample
 /// off every tile is 0, so the last cell of the map falls to 0 and a plain at 0 runs on), and draws nothing: past its 600 m clip
-/// stand the horizon panels. Here the map runs on into the modern look's distant terrain, one function of the map:
+/// stand the horizon panels. Here that ground is kept and drawn, and far out it rises into the modern look's distant terrain:
 ///
 /// <list type="bullet">
-/// <item>At the map's edge the map's own ground carries on (its height, and its slope there eased level over <see cref="Ease"/>),
-/// and over <see cref="Margin"/> it blends into the procedural terrain, so nothing steps or kinks at the edge.</item>
-/// <item>The procedural terrain is the mountain ring made from the mission's horizon panels (their skyline cut into features at
-/// its peaks, each revolved about its peak and stood at its bearing so that from the map's centre it fills the angle the panel
-/// did), on a base that rises from the map's rim to the rim's middle height, with foothills, ridged ranges far out and a little
-/// roughness, sunk as the panels sink (the cone through the panels' foot for one reference eye per map,
+/// <item>Within <see cref="Plain"/> of the map's bounds (and in every empty cell inside them) it is the original's plain at 0. Off a high
+/// edge (one more than a car could drive down in the original's last cell, <see cref="DropFrom"/>) every sample is 0, so the map's last
+/// cell falls to 0 as it does there and a car that drives off drops as it does there. Off a low edge (up to <see cref="Carry"/>, most of
+/// the stock maps' edges) the ground carries on at the edge's own height and eases down to the plain's over a few hundred metres, so
+/// there is no step, dip or ditch at the edge; between the two, part of each.</item>
+/// <item>Past that the procedural terrain rises from the plain, gently: the mountain ring made from the mission's horizon panels (their
+/// skyline cut into features at its peaks, each revolved about its peak and stood at its bearing so that from the map's centre it fills
+/// the angle the panel did), on a base that rises over <see cref="BaseRise"/> to the map's middle rim height, with foothills, ridged
+/// ranges far out and a little roughness, sunk as the panels sink (the cone through the panels' foot for one reference eye per map,
 /// <see cref="HorizonEdge.Ring"/>).</item>
 /// </list>
 ///
@@ -28,17 +31,34 @@ namespace I76.Formats.Assembly;
 /// </summary>
 public sealed class OutsideGround
 {
-    /// <summary>Metres over which the map's edge blends into the procedural terrain.</summary>
-    public const float Margin = 300f;
-    /// <summary>Edge tiles within this many metres of the nearest share in the edge's height (a concave corner has two).</summary>
+    /// <summary>
+    /// Metres from the map's bounds over which the ground is the original's plain at <see cref="Bottom"/> (the 600 m clip: from anywhere
+    /// on the map the 1997 look sees only the plain). Custom maps are made for the original's drop and plain; nothing rises in reach of them.
+    /// </summary>
+    public const float Plain = 600f;
+    /// <summary>The plain's height, metres: the original's (every sample off the tiles reads 0).</summary>
+    public const float Bottom = 0f;
+    /// <summary>An edge up to this many metres over the plain carries on at its own height (no step), easing down to the plain's.</summary>
+    public const float Carry = 2.5f;
+    /// <summary>
+    /// An edge this many metres or more over the plain falls to it in its last cell, as in the original (a cell falling 3.65 m is the
+    /// steepest a car drives on, TerrainSurface.WallGradient); between <see cref="Carry"/> and this, the carried height goes to 0.
+    /// </summary>
+    public const float DropFrom = 4f;
+    /// <summary>Metres from the map's last samples over which a low edge's carried height eases down to the plain's.</summary>
+    public const float CarryFadeStart = 60f, CarryFadeEnd = 400f;
+    /// <summary>Edge tiles within this many metres of the nearest share in the carried edge height (a concave corner has two).</summary>
     public const float Feather = 60f;
-    /// <summary>The map's slope at its edge carries on (at most <see cref="MaxSlope"/>) and eases to level over this many metres.</summary>
-    public const float Ease = 30f;
-    public const float MaxSlope = 0.5f;
+    /// <summary>Metres past the gentle band over which the distant terrain's base rises to the map's rim height.</summary>
+    public const float BaseRise = 2500f;
+    /// <summary>Metres past the gentle band over which the distant terrain sinks onto the cone through the panels' foot.</summary>
+    public const float SinkFade = 3000f;
+    /// <summary>Metres past the plain with only gentle ground on it (foothills, roughness): the base, its sinking and the mountains come beyond.</summary>
+    public const float Gentle = 500f;
     /// <summary>Samples a side of a cached block.</summary>
     public const int Block = 32;
     /// <summary>Changes with anything that changes the function.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     private const float RefRadius = HorizonList.Radius;
     private const float TileW = TerrainTiles.Tile * 5f;
@@ -47,13 +67,11 @@ public sealed class OutsideGround
     /// <summary>One point of the function: the height and what the modern look shades it by (height over the base, distance from the map, rockiness, 0 peaks .. 1 mesas).</summary>
     public readonly record struct Point(float H, float Hrel, float D, float Rocky, float Style);
 
-    private readonly MissionWorld _world;
     private readonly TerrainTiles _tiles;
     private readonly Vector2 _centre;
     private readonly (float X0, float Z0, float X1, float Z1)[] _edge;    // sample rects of the tiles beside an empty cell, centre-relative
     private readonly (float X0, float Z0, float X1, float Z1)[] _holes;   // the empty cells inside the bounds, centre-relative
     private readonly (float X0, float Z0, float X1, float Z1) _bounds;
-    private readonly float[] _rim;
     private readonly float _base, _meanRef;
     private readonly List<Feature> _features = [];
     private List<Feature>[] _grid = [];
@@ -68,10 +86,8 @@ public sealed class OutsideGround
     public float FarCorner { get; }
     /// <summary>The panels' skyline, metres over their foot by column.</summary>
     public float[] Skyline { get; }
-    /// <summary>The map's rim height by bearing (1024 bins), smoothed; and its middle.</summary>
+    /// <summary>The middle of the map's rim height by bearing: the distant terrain's base.</summary>
     public float Base => _base;
-    /// <summary>The surface id of the ground outside: the commonest along the map's edge, as if its edge ground ran on.</summary>
-    public int SurfaceId { get; }
     /// <summary>The ring's sinking (<see cref="HorizonEdge.Ring"/>) and the cone's slope.</summary>
     public HorizonEdge.RingSink Sink => new(_sinkLow, _sinkEye);
     public float FootK => _footK;
@@ -151,7 +167,6 @@ public sealed class OutsideGround
 
     public OutsideGround(MissionWorld world, float[] skyline, HorizonEdge.RingSink sink)
     {
-        _world = world;
         _tiles = world.Terrain;
         Skyline = skyline;
         (_sinkLow, _sinkEye) = (sink.Low, sink.EyeY);
@@ -193,14 +208,14 @@ public sealed class OutsideGround
                     top = MathF.Max(top, (float)world.BilinearHeight(_centre.X + sx * t, _centre.Y + sz * t));
             rim[b] = top;
         }
-        _rim = new float[nb];
+        var smooth = new float[nb];
         for (int b = 0; b < nb; b++)
         {
             float s = 0;
             for (int d = -8; d <= 8; d++) s += rim[(b + d + nb) % nb];
-            _rim[b] = s / 17;
+            smooth[b] = s / 17;
         }
-        var order = (float[])_rim.Clone();
+        var order = smooth;
         Array.Sort(order);
         _base = order[nb / 2];
         double sum = 0;
@@ -208,23 +223,20 @@ public sealed class OutsideGround
         _meanRef = (float)(sum / skyline.Length);
         PlaceFeatures(skyline, far);
 
-        // the commonest surface along the edge
-        var count = new int[8];
-        for (int sz = r0 * TerrainTiles.Tile; sz < (r1 + 1) * TerrainTiles.Tile; sz++)
-            for (int sx = c0 * TerrainTiles.Tile; sx < (c1 + 1) * TerrainTiles.Tile; sx++)
-                if (_tiles.Sample(sx, sz) is { } v
-                    && (_tiles.Sample(sx + 1, sz) is null || _tiles.Sample(sx - 1, sz) is null || _tiles.Sample(sx, sz + 1) is null || _tiles.Sample(sx, sz - 1) is null))
-                    count[(v >> 13) & 7]++;
-        int best = 0;
-        for (int i = 1; i < 8; i++) if (count[i] > count[best]) best = i;
-        SurfaceId = best;
-
         using var k = new BakeCache.Key("outside-ground");
         k.Add(Version).Add((long)_tiles.ContentHash()).Add<float>(skyline).Add(_sinkLow).Add(_sinkEye);
         Key = k.Finish();
     }
 
     private bool Occupied(int r, int c) => r >= 0 && c >= 0 && r < MissionFile.ZmapGrid && c < MissionFile.ZmapGrid && _tiles.TileAt(r, c) != MissionFile.ZmapEmpty;
+
+    /// <summary>Metres from a centre-relative point to the map's bounds (the rectangle of its tiles); 0 inside them.</summary>
+    private float BoundsDistance(float x, float z)
+    {
+        var (x0, z0, x1, z1) = _bounds;
+        float dx = MathF.Max(MathF.Max(x0 - x, x - x1), 0), dz = MathF.Max(MathF.Max(z0 - z, z - z1), 0);
+        return MathF.Sqrt(dx * dx + dz * dz);
+    }
 
     /// <summary>Whether a centre-relative point is over one of the map's tiles (a cell of the grid with a tile in it).</summary>
     private bool Inside(float x, float z) =>
@@ -270,31 +282,23 @@ public sealed class OutsideGround
     // ---- the function ----
 
     /// <summary>
-    /// The function at a centre-relative point. Over a tile (where only the distant ring asks) it lies under the map's own ground,
-    /// deeper further in (a cell of the ring can straddle the edge; its part outside must not dip into a trench).
+    /// The function at a centre-relative point. Over a tile (where only the distant ring asks) it lies just under the plain round the
+    /// map, deeper further in, so under the map's own ground (which is never lower): a cell of the ring that straddles the edge neither
+    /// dips into a trench outside nor stands out of a high edge's fall.
     /// </summary>
     public Point At(float x, float z)
     {
         if (Inside(x, z))
         {
             float din = InsideDistance(x, z);
-            float ground = (float)_world.BilinearHeight(_centre.X + x, _centre.Y + z);
-            return new Point(ground - 3 + 2 * MathF.Min(30 - din, 0), 0, -din, 0, 0);
+            return new Point(Bottom - 3 + 2 * MathF.Min(30 - din, 0), 0, -din, 0, 0);
         }
         float d = EdgeDistance(x, z);
+        // the original's plain: nothing of the distant terrain reaches in
+        float t = BoundsDistance(x, z) - Plain;
+        if (t <= 0) return new Point(Bottom + Carried(x, z, d), 0, d, 0, 0);
         float r = Len(x, z);
-        float bearing = (float)(DetMath.Atan2((double)x, z) / (2 * DetMath.Pi));
-        if (bearing < 0) bearing += 1;
-        float fb = bearing * _rim.Length - 0.5f;
-        int i0 = (int)MathF.Floor(fb);
-        float tb = fb - i0;
-        float rim = _rim[(i0 % _rim.Length + _rim.Length) % _rim.Length] * (1 - tb) + _rim[((i0 + 1) % _rim.Length + _rim.Length) % _rim.Length] * tb;
-        float baseH = rim + (_base - rim) * SmoothStep(0, 1500, d);
-        if (d < Margin)
-        {
-            float edge = EdgeHeight(x, z, d);
-            baseH = edge + (baseH - edge) * SmoothStep(0, Margin, d);
-        }
+        float baseH = Bottom + (_base - Bottom) * SmoothStep(Gentle, Gentle + BaseRise, t);
         // the features: the highest of them here
         float best = 0, style = 0, rock = 0;
         // the noise the features share, made once here: a warp field (two scales) and ridges
@@ -326,19 +330,21 @@ public sealed class OutsideGround
                 if (h > best) { best = h; style = f.Style; rock = frac; }
             }
         // the ground between: rolling foothills near, ridged ranges farther out
-        float near = SmoothStep(250, 1800, d);
+        float near = SmoothStep(250, 1800, t);
         float hills = 35 * Fbm(x / 700, z / 700, 4) * near;
         float far = SmoothStep(3000, 12000, r);
         float ranges = far > 0 ? _meanRef * 0.55f * (r / RefRadius) * DetMath.Pow(Ridged(x / 3200 + 7.3f, z / 3200 - 1.9f, 5), 2.2f) * far : 0;
         float bg = hills + ranges;
-        float rise = SmoothStep(80, 900, d);
+        // the mountains (steep: cliffs, mesa walls) only past the gentle rise, the ground between from the plain's end
+        best *= SmoothStep(Gentle, Gentle + 1000, t);
+        float rise = SmoothStep(80, 900, t);
         float hrel = SmoothMax(best, bg, 30) * rise;
         // a little wind-blown roughness everywhere
-        hrel += 6 * (Fbm(x / 160, z / 160, 3) - 0.5f) * SmoothStep(100, 500, d);
+        hrel += 6 * (Fbm(x / 160, z / 160, 3) - 0.5f) * SmoothStep(100, 500, t);
         float rocky = MathF.Max(rock, Math.Clamp(bg / 250, 0, 1));
-        // sunk onto the cone through the panels' foot for the map's reference eye, fading in from the map's edge
+        // sunk onto the cone through the panels' foot for the map's reference eye, fading in from the plain
         float cone = _sinkLow + (_sinkEye - _sinkLow) * (1 - _footK * r);
-        float sink = _footK > 0 ? SmoothStep(0, 800, d) * MathF.Min(cone - baseH, 0) : 0;
+        float sink = _footK > 0 ? SmoothStep(Gentle, Gentle + SinkFade, t) * MathF.Min(cone - baseH, 0) : 0;
         return new Point(baseH + hrel + sink, hrel, d, rocky, style);
     }
 
@@ -368,10 +374,22 @@ public sealed class OutsideGround
     }
 
     /// <summary>
-    /// The map's own ground carried past its edge: from each edge tile within <see cref="Feather"/> of the nearest, the height at
-    /// its nearest sample point and the slope there toward this point (at most <see cref="MaxSlope"/>) eased level over
-    /// <see cref="Ease"/>, weighted by the inverse fourth power of the distance (less its value at the cut-off, so a tile comes in
-    /// from nothing): the nearest tile's own ground right at the edge, a smooth mix where two edges meet (a concave corner).
+    /// What a low edge carries onto the plain at a centre-relative point <paramref name="d"/> from the map: the edge's height there
+    /// (<see cref="EdgeHeight"/>) up to <see cref="Carry"/>, going to 0 for an edge of <see cref="DropFrom"/> or more, eased out from
+    /// <see cref="CarryFadeStart"/> to <see cref="CarryFadeEnd"/>. 0 exactly off a high edge.
+    /// </summary>
+    private float Carried(float x, float z, float d)
+    {
+        if (d >= CarryFadeEnd) return 0;
+        float e = EdgeHeight(x, z, d) - Bottom;
+        if (e >= DropFrom || e <= 0) return 0;
+        return MathF.Min(e, Carry) * (1 - SmoothStep(Carry, DropFrom, e)) * (1 - SmoothStep(CarryFadeStart, CarryFadeEnd, d));
+    }
+
+    /// <summary>
+    /// The map's own height carried past its edge: from each edge tile within <see cref="Feather"/> of the nearest, the height at its
+    /// nearest sample point, weighted by the inverse fourth power of the distance (less its value at the cut-off, so a tile comes in from
+    /// nothing): the nearest tile's own height right at the edge, a smooth mix where two edges meet (a concave corner).
     /// </summary>
     private float EdgeHeight(float x, float z, float d)
     {
@@ -384,14 +402,7 @@ public sealed class OutsideGround
             if (dk >= d + Feather) continue;
             double w = 1 / Pow4(MathF.Max(dk, 0.01f)) - cut;
             if (w <= 0) continue;
-            float hq = TileHeight(t, qx, qz), e = hq;
-            if (dk > 0)
-            {
-                float ux = ex / dk, uz = ez / dk;
-                float g = Math.Clamp((hq - TileHeight(t, qx - 5 * ux, qz - 5 * uz)) / 5, -MaxSlope, MaxSlope);
-                e += g * (dk < Ease ? dk - dk * dk / (2 * Ease) : Ease / 2);
-            }
-            sw += w; se += w * e;
+            sw += w; se += w * TileHeight(t, qx, qz);
         }
         return sw > 0 ? (float)(se / sw) : 0;
     }
@@ -486,7 +497,7 @@ public sealed class OutsideGround
                 float sx = (float)sn, sz = (float)cs;
                 float edge = 0;
                 for (float t = 0; t < farCorner + 10; t += 20) if (Inside(sx * t, sz * t)) edge = t;
-                float rad = MathF.Max(distance, edge + 2200 * distance / RefRadius) * (1 + jitter * (float)(rng.NextDouble() * 2 - 1));
+                float rad = MathF.Max(distance, edge + (2200 + Plain) * distance / RefRadius) * (1 + jitter * (float)(rng.NextDouble() * 2 - 1));
                 float scale = rad / RefRadius;
                 var feat = new Feature { X = sx * rad, Z = sz * rad, Scale = scale * heightScale, ColW = colRef * scale, F = f, Style = style };
                 _ = rng.Next(1 << 20);   // (a seed the features once took: the stream's place kept)

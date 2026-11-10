@@ -6,6 +6,7 @@ using I76.Sim.Math;
 using I76.Sim.Missions;
 using I76.Sim.Rng;
 using I76.Sim.Session;
+using I76.Sim.Terrain;
 using I76.Sim.Vehicles;
 using Xunit;
 using Xunit.Abstractions;
@@ -13,13 +14,16 @@ using Xunit.Abstractions;
 namespace I76.Sim.Tests;
 
 /// <summary>
-/// Driving off the map onto the outside ground (OutsideGround): a car at speed crosses the map's edge as it crosses any other line of
-/// samples (no take-off, no landing, no impact, no loss of speed), and runs on out there; the AI drives out after a car; the upright
-/// reset puts a car on the outside ground. The original reads 0 past the map's tiles: its edge cell falls to 0, a drop the old port
-/// had too.
+/// Driving off the map onto the outside ground (OutsideGround). The original reads 0 past the map's tiles: its edge cell falls to 0 and a
+/// plain at 0 runs on. Here a high edge falls so (a car drives off and drops, and a drop of more than 35 m kills it), and a low edge
+/// carries on at its own height (a car at speed crosses it as it crosses any other line of samples and runs on); the AI drives out after
+/// a car; the upright reset puts a car on the outside ground.
 /// </summary>
-public class OutsideGroundDriveTests(ITestOutputHelper log)
+public class OutsideGroundDriveTests(ITestOutputHelper log) : IDisposable
 {
+    private readonly string _dir = Directory.CreateTempSubdirectory("i26-edge-").FullName;
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
     private static string? Dir(string env) => Environment.GetEnvironmentVariable(env) is { Length: > 0 } d && Directory.Exists(d) ? d : null;
 
     private static (MissionSetup Setup, SimSession Session, Vehicle Car) Drive(string env, string mission, bool melee, int hz)
@@ -37,6 +41,132 @@ public class OutsideGroundDriveTests(ITestOutputHelper log)
         return (setup, s, v);
     }
 
+    /// <summary>
+    /// A new flat map 1.5 m high: its edge is low, so the ground carries on at 1.5 m (no step) and eases down to the plain's 0 well out,
+    /// gently (no 5 m step steeper than a tenth's rounding, 0.02); full throttle out across its north edge the car stays on the ground with no landing, impact or jolt, and runs on.
+    /// </summary>
+    [Fact]
+    public void ALowEdgeCarriesOnWithoutAStep()
+    {
+        if (Dir("I76_INSTALL") is null) return;
+        var (setup, s, v) = Plateau(1.5);
+        var g = ((I76.Sim.Collision.WorldGround)setup.Ground).Terrain;
+        for (double x = 2600; x <= 3800; x += 7.3)
+        {
+            Assert.Equal(1.5f, g.Height(x, 47355), 3);
+            Assert.Equal(1.5f, g.Height(x, 47357.5), 3);
+            Assert.Equal(1.5f, g.Height(x, 47390), 3);
+            Assert.Equal(0f, g.Height(x, 47800));
+        }
+        double steepest = 0;
+        for (double z = 47360; z < 47800; z += 5) steepest = System.Math.Max(steepest, System.Math.Abs(g.Height(3200, z + 5) - g.Height(3200, z)) / 5);
+        Assert.True(steepest <= 0.021, $"the carried height eases down at up to {steepest:0.000} in 1");
+        Put(setup, v, 3200, 47210, 0);
+        float dt = SimRate.FromLabel(20).TickSeconds;
+        float prevVy = 0, maxDvy = 0;
+        for (int f = 1; f <= (int)(40 / dt) && v.Pos.Z < 47700; f++)
+        {
+            var i = new CarInput();
+            if (f is >= 2 and <= 6) i.Commands = CarCommands.StartEngine;
+            if (f > 8) i.Buttons = CarButtons.ThrottleUp;
+            s.Tick([i]);
+            if (System.Math.Abs(v.Pos.Z - 47360) < 60)
+            {
+                Assert.False(s.World.Step.Landings.Contains(v) || s.World.Step.Impacts.Any(h => h.Self == v && h.Other is null), $"a landing or impact at z {v.Pos.Z:0.0}");
+                Assert.True((v.Flags & VehicleFlags.Airborne) == 0, $"airborne at z {v.Pos.Z:0.0}");
+                if (f > 40) maxDvy = MathF.Max(maxDvy, MathF.Abs(v.Vel.Y - prevVy));
+            }
+            prevVy = v.Vel.Y;
+        }
+        log.WriteLine($"off a 1.5 m edge: now at z {v.Pos.Z:0} at {v.Speed * 3.6f:0} km/h, vertical speed changes up to {maxDvy:0.000} m/s a tick near the edge");
+        Assert.True(v.Pos.Z >= 47700, $"only got to z {v.Pos.Z:0}");
+        Assert.True(maxDvy < 0.5f, $"the vertical speed jumps {maxDvy:0.000} m/s a tick at the edge");
+    }
+
+    /// <summary>A new flat map of 2 x 2 tiles <paramref name="metres"/> high, as the map editor makes it (its tiles at grid row 72, column 4: x 2560..3840, z 46080..47360).</summary>
+    private (MissionSetup Setup, SimSession Session, Vehicle Car) Plateau(double metres)
+    {
+        var install = new GameInstall(Dir("I76_INSTALL")!);
+        var vfs = new AssetVfs(install);
+        var asm = new ModelAssembler(vfs);
+        var (_, files) = I76.Editor.NewMap.CreateFlat(_dir, $"plat{(int)metres}", "Plateau", 2, metres, nitro: false);
+        var w = new MissionWorld(vfs, asm, files.First(f => f.EndsWith(".lvl", StringComparison.OrdinalIgnoreCase)));
+        var setup = MissionSetup.Build(vfs, w, asm, "vppirna1.vcf", script: false, rand: new CrtRand(1), melee: new List<string>(), seed: 1);
+        setup.Melee?.Start();
+        var s = new SimSession(setup, SessionOptions.SinglePlayer, SimRate.FromLabel(20));
+        var v = setup.World.Player!;
+        s.AddDriver(v);
+        setup.World.Vehicles.RemoveAll(x => x != v);
+        return (setup, s, v);
+    }
+
+    /// <summary>
+    /// The edge cell of a 150 m plateau is the original's: from the map's last sample (150 m) the ground falls over the 5 m to the next
+    /// sample, 0, bilinear (75 m halfway) with the original's normal, and the plain runs on at 0 (upward normal) for the 600 m round the map;
+    /// height, normal and surface agree with the original's reading to the bit along the whole edge.
+    /// </summary>
+    [Fact]
+    public void AHighEdgeFallsToTheOriginalsPlain()
+    {
+        if (Dir("I76_INSTALL") is null) return;
+        var (setup, _, _) = Plateau(150);
+        var g = ((I76.Sim.Collision.WorldGround)setup.Ground).Terrain;
+        Assert.NotNull(g.Outside);
+        var orig = new TerrainGround(g.Tiles, new Surface[8]);
+        Assert.Equal(150f, g.Height(3200, 47355), 3);
+        Assert.Equal(75f, g.Height(3200, 47357.5), 3);
+        Assert.Equal(0f, g.Height(3200, 47360));
+        Assert.Equal(0f, g.Height(3200, 47700));
+        Assert.Equal(0f, g.Height(3200, 47950));
+        Assert.Equal(Vector3.UnitY, g.Normal(3200.3, 47700.6));
+        for (double x = 2400; x <= 4000; x += 1.7)
+            foreach (double z in new[] { 47352.0, 47355.0, 47356.2, 47358.9, 47360.0, 47361.3, 47390.0, 47800.0 })
+            {
+                Assert.Equal(orig.Height(x, z), g.Height(x, z));
+                Assert.Equal(orig.Normal(x, z), g.Normal(x, z));
+                Assert.Equal(orig.SurfaceId(x, z), g.SurfaceId(x, z));
+            }
+        Assert.Equal(0, g.SurfaceId(3200, 47500));
+    }
+
+    /// <summary>
+    /// Full throttle off a plateau's north edge: off 150 m the car falls to the plain at 0 and the landing kills it (the original's 35 m fall);
+    /// off 30 m it lands on the plain and drives on.
+    /// </summary>
+    [Theory]
+    [InlineData(150.0, true)]
+    [InlineData(30.0, false)]
+    public void DrivingOffAHighEdgeDropsToThePlain(double metres, bool dies)
+    {
+        if (Dir("I76_INSTALL") is null) return;
+        var (setup, s, v) = Plateau(metres);
+        Put(setup, v, 3200, 47210, 0);   // 150 m in, heading +z, out across the north edge at z 47360
+        float dt = SimRate.FromLabel(20).TickSeconds;
+        bool fell = false, landed = false, dead = false;
+        double lowest = double.MaxValue;
+        for (int f = 1; f <= (int)(40 / dt); f++)
+        {
+            var i = new CarInput();
+            if (f is >= 2 and <= 6) i.Commands = CarCommands.StartEngine;
+            if (f > 8) i.Buttons = CarButtons.ThrottleUp;
+            s.Tick([i]);
+            if ((v.Flags & VehicleFlags.Airborne) != 0 && v.Pos.Z > 47355) fell = true;
+            if (fell && s.World.Step.Landings.Contains(v)) landed = true;
+            dead |= ((uint)v.Flags & 0x8020) != 0;
+            lowest = System.Math.Min(lowest, v.Pos.Y);
+            if (v.Pos.Z > 47700 || dead) break;
+        }
+        log.WriteLine($"off {metres} m: fell {fell}, landed {landed}, dead {dead}, lowest {lowest:0.00}, now at z {v.Pos.Z:0} y {v.Pos.Y:0.00} over ground {s.World.Ground.BareHeight(v.Pos.X, v.Pos.Z):0.00}");
+        Assert.True(fell, "the car never left the edge");
+        Assert.True(lowest < 5, $"it never came down to the plain: lowest {lowest:0.00}");
+        Assert.Equal(dies, dead);
+        if (!dies)
+        {
+            Assert.True(landed && v.Pos.Z > 47700, $"it landed {landed} and got to z {v.Pos.Z:0}");
+            Assert.True(MathF.Abs((float)v.Pos.Y - s.World.Ground.BareHeight(v.Pos.X, v.Pos.Z)) < 1 && s.World.Ground.BareHeight(v.Pos.X, v.Pos.Z) == 0, "not on the plain");
+        }
+    }
+
     private static void Put(MissionSetup s, Vehicle v, double x, double z, float yaw)
     {
         var f = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
@@ -46,9 +176,10 @@ public class OutsideGroundDriveTests(ITestOutputHelper log)
     }
 
     /// <summary>
-    /// Full throttle from 200 m inside the map, straight out across its edge (T01's south edge; N01's, a Nitro arena): the car crosses at
-    /// speed with all four wheels down, no landing or impact anywhere near the edge, its vertical speed changing no more from one tick to
-    /// the next there than on the map before it, and keeps its speed; 300 m out it is still on the ground and going.
+    /// Full throttle from 200 m inside the map, straight out across a low edge (T01's south edge, a few decimetres over the plain; N01's, a
+    /// Nitro arena): the ground carries on, and the car crosses at speed with all four wheels down, no landing or impact anywhere near the
+    /// edge, its vertical speed changing no more from one tick to the next there than on the map before it, and keeps its speed; 300 m out
+    /// it is still on the ground and going.
     /// </summary>
     [Theory]
     [InlineData("I76_INSTALL", "t01", false, 2025.0, 34760.0, 34560.0, 20)]
@@ -136,13 +267,13 @@ public class OutsideGroundDriveTests(ITestOutputHelper log)
         Assert.True(airborne < 1, $"{airborne:0.0} s in the air");
     }
 
-    /// <summary>The upright reset off the map stands the car on the outside ground, on its slope.</summary>
+    /// <summary>The upright reset off the map stands the car on the outside ground, on a mountain's slope far out, at 0 on the plain.</summary>
     [Fact]
     public void TheUprightResetOffTheMapStandsTheCarOnTheOutsideGround()
     {
         if (Dir("I76_INSTALL") is null) return;
         var (setup, _, v) = Drive("I76_INSTALL", "t01", false, 20);
-        double x = 2025, z = 33700;   // 860 m out, on the mountain's flank south of T01
+        double x = 2500, z = 32500;   // 2 km out, on the mountain's flank south of T01
         v.Pos = new Double3(x, 400, z);
         v.Rot = Rows.Concat(Rows.AboutZ(2.5f), Rows.AboutY(0.4f));
         v.Vel = new Vector3(3, -9, 2);
@@ -152,5 +283,12 @@ public class OutsideGroundDriveTests(ITestOutputHelper log)
         Assert.True(g > 50, "the outside ground there is the mountain's flank, not 0");
         Assert.Equal(g, (float)v.Pos.Y, 2);
         Assert.True(Vector3.Dot(v.Rot.Up, setup.Ground.BareNormal(x, z)) > 0.999f);
+        // 500 m out, on the plain
+        (x, z) = (2025, 34060);
+        v.Pos = new Double3(x, 50, z);
+        v.Rot = Rows.Concat(Rows.AboutZ(2.5f), Rows.AboutY(0.4f));
+        UprightReset.Apply(setup.World, v);
+        Assert.Equal(0f, setup.Ground.BareHeight(x, z));
+        Assert.Equal(0f, (float)v.Pos.Y, 2);
     }
 }

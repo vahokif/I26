@@ -31,10 +31,12 @@ public interface IGround
 /// The heightfield ground (no structure surfaces yet: the engine first checks
 /// the polygons of objects in the world, ramps and bridges).
 ///
-/// Off the map's tiles the original reads every sample as 0 (and 0 anywhere outside the 80x80 grid): the map's last cell
-/// falls to 0 and a plain at 0 runs on. With <paramref name="outside"/> those samples are the outside ground's instead
-/// (<see cref="OutsideGround.Raw"/>, the modern look's distant terrain carried on from the map's edge), read the same way
-/// (bilinear, the same normal rule) everywhere, and its surface is <see cref="OutsideGround.SurfaceId"/>.
+/// Off the map's tiles the original reads every sample as 0 (and 0 anywhere outside the 80x80 grid, the normal straight up): the
+/// map's last cell falls to 0 and a plain at 0 runs on. With <paramref name="outside"/> the samples off the tiles are the outside
+/// ground's (<see cref="OutsideGround.Raw"/>: the original's 0 round the map but where a low edge carries on, rising far out into the
+/// modern look's distant terrain), read the same way everywhere (bilinear, the same normal rule), but for the original's 0 outside the
+/// grid's sample range wherever the cell's samples off the tiles read 0 (a high edge on the grid's own border keeps its half-cell step).
+/// The surface off the tiles is the original's everywhere: 0, and 5 outside the grid's sample range.
 /// </summary>
 public sealed class TerrainGround(TerrainTiles tiles, Surface[] surfaces, OutsideGround? outside = null) : IGround
 {
@@ -60,6 +62,22 @@ public sealed class TerrainGround(TerrainTiles tiles, Surface[] surfaces, Outsid
 
     private int Raw(int sx, int sz) => tiles.Sample(sx, sz) is { } v ? v & MissionFile.HeightMask : outside?.Raw(sx, sz) ?? 0;
 
+    /// <summary>
+    /// Where the original's out-of-range rule (height 0, normal straight up) holds: outside the grid's sample range, with no outside
+    /// ground or where the samples off the tiles of the cell the height reads are the plain's 0 (not a low edge's carried height, nor the
+    /// distant terrain).
+    /// </summary>
+    private bool Flat(double x, double z)
+    {
+        if (InRange(x, z)) return false;
+        if (outside is null) return true;
+        int sx = (int)MathF.Floor(Scale * (float)x), sz = (int)MathF.Floor(Scale * (float)z);
+        for (int dz = 0; dz <= 1; dz++)
+            for (int dx = 0; dx <= 1; dx++)
+                if (tiles.Sample(sx + dx, sz + dz) is null && outside.Raw(sx + dx, sz + dz) != 0) return false;
+        return true;
+    }
+
     private static bool InRange(double x, double z)
     {
         double fx = Scale * (float)x + Bias, fz = Scale * (float)z + Bias;
@@ -69,7 +87,7 @@ public sealed class TerrainGround(TerrainTiles tiles, Surface[] surfaces, Outsid
     /// <summary>Bilinear, floor of the sample coordinate, times 0.1.</summary>
     public float Height(double x, double z)
     {
-        if (outside is null && !InRange(x, z)) return 0;
+        if (Flat(x, z)) return 0;
         float fx = Scale * (float)x, fz = Scale * (float)z;
         int sx = (int)MathF.Floor(fx), sz = (int)MathF.Floor(fz);
         float tx = fx - sx, tz = fz - sz;
@@ -100,11 +118,12 @@ public sealed class TerrainGround(TerrainTiles tiles, Surface[] surfaces, Outsid
     /// </summary>
     public Vector3 Normal(double x, double z)
     {
-        if (outside is null && !InRange(x, z)) return Vector3.UnitY;
+        bool inRange = InRange(x, z);
+        if (!inRange && Flat(x, z)) return Vector3.UnitY;
         double fx = Scale * x, fz = Scale * z;
         int ix = (int)fx, iz = (int)fz;       // ftol: truncation
-        if (fx < 0) ix = (int)System.Math.Floor(fx);   // (only the outside ground reaches below 0: the cell is the one the height reads)
-        if (fz < 0) iz = (int)System.Math.Floor(fz);
+        if (!inRange && fx < 0) ix = (int)System.Math.Floor(fx);   // (only the outside ground reaches here: the cell is the one the height reads)
+        if (!inRange && fz < 0) iz = (int)System.Math.Floor(fz);
         float a, b, c;
         if (z - iz <= x - ix)
         {
@@ -123,10 +142,17 @@ public sealed class TerrainGround(TerrainTiles tiles, Surface[] surfaces, Outsid
     public float BareHeight(double x, double z) => Height(x, z);
     public Vector3 BareNormal(double x, double z) => Normal(x, z);
 
-    public int SurfaceId(double x, double z)
+    public int SurfaceId(double x, double z) => SurfaceAt(tiles, x, z);
+
+    /// <summary>
+    /// The original's surface id at (x, z): the nearest sample's top bits, 0 on an empty cell and 5 outside the grid's sample range
+    /// (0..0x2800, the same rounding).
+    /// </summary>
+    public static int SurfaceAt(TerrainTiles tiles, double x, double z)
     {
         int sx = (int)MathF.Floor(Scale * (float)x + 0.5f), sz = (int)MathF.Floor(Scale * (float)z + 0.5f);
-        return tiles.Sample(sx, sz) is { } v ? (v >> 13) & 7 : outside?.SurfaceId ?? 0;
+        if (sx < 0 || sz < 0 || sx > 0x2800 || sz > 0x2800) return 5;
+        return ((tiles.Sample(sx, sz) ?? 0) >> 13) & 7;
     }
 
     public Surface Surface(int id) => surfaces[id & 7];

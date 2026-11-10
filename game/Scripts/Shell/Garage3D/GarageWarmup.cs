@@ -71,6 +71,8 @@ public static class GarageWarmup
                 GarageRoom.MakeTextures();
                 if (I76.Game.Boot.EngineThreads.Quitting) return;
                 var assets = GarageAssets.Held(vfs);
+                // the props' material maps (the Grappler's driver) wait for the main thread to take them, not a deferred call in the middle of this
+                assets.Materials.HoldFlush = true;
                 var car = TripCar.FromVcf(vfs.Read(vcf), n => I76.Sim.Vehicles.VehicleFactory.EngineCompId(vfs, n));
                 if (I76.Game.Boot.EngineThreads.Quitting) return;
                 GarageCar.Prepare(assets, car);
@@ -78,6 +80,7 @@ public static class GarageWarmup
             });
             while (!job.IsCompleted) if (!await Frames(1)) { _done = null; return; }
             if (made is not { } m) return;
+            m.Assets.TakeBack();
             double thread = System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
             // the stage's frames only while the player rests: a hover would wait for them
             while (shell.SinceInput < RestMs) if (!await Frames(1)) { _done = null; return; }

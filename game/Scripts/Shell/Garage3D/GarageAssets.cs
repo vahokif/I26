@@ -21,7 +21,20 @@ public sealed class GarageAssets
     public static GarageAssets For(Shell shell)
     {
         if (GarageWarmup.Busy) throw new InvalidOperationException("the garage's assets are the warm-up thread's until it is done");
-        return Held(shell.Vfs);
+        var assets = Held(shell.Vfs);
+        assets.TakeBack();
+        return assets;
+    }
+
+    /// <summary>
+    /// On the main thread, once the warm-up's thread is done with them: the props' material maps it left waiting are put on their
+    /// materials, and the next ones go on at the end of their frame again (MaterialLibrary.HoldFlush).
+    /// </summary>
+    internal void TakeBack()
+    {
+        if (!Materials.HoldFlush) return;
+        Materials.HoldFlush = false;
+        Materials.FlushPropMaps();
     }
 
     /// <summary>The assets of this install, made if need be (the warm-up's thread calls this one).</summary>

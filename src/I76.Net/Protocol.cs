@@ -13,7 +13,7 @@ namespace I76.Net;
 public static class Protocol
 {
     /// <summary>Bumped whenever a message's layout changes; a client of another version is turned away.</summary>
-    public const ushort Version = 23;
+    public const ushort Version = 24;
     /// <summary>The first thing in a join request, so that stray packets are refused before they are read.</summary>
     public const string Magic = "I76N";
     public const int DefaultPort = 7676;

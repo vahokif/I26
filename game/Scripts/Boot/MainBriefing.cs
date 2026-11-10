@@ -210,6 +210,7 @@ public partial class Main
             MissionBuilder.Trace("loading card gone: the mission goes on");
             _loading = false;
             GetTree().Paused = false;
+            if (AuditOn) AuditAfter();
             return true;
         }
         finally
@@ -286,6 +287,18 @@ public partial class Main
     private readonly Dictionary<ulong, double> _audited = [];
     private double _auditAt;
 
+    /// <summary>The audit's lines for the first two seconds after the movie: the mission's own sounds (T02's first CB line) are heard now.</summary>
+    private async void AuditAfter()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            _auditAt = 0;
+            Audit();
+            await ToSignal(GetTree().CreateTimer(0.5, processAlways: true), SceneTreeTimer.SignalName.Timeout);
+            if (!IsInsideTree()) return;
+        }
+    }
+
     private void Audit()
     {
         double now = Time.GetTicksMsec() / 1000.0;
@@ -311,7 +324,8 @@ public partial class Main
             foreach (var c in n.GetChildren()) Walk(c);
         }
         Walk(GetTree().Root);
-        GD.Print($"briefing audit: ticks {_sim?.Session.Ticks.ToString() ?? "-"}, script tick {_sim?.Script?.Host.FsmTick.ToString() ?? "-"}, paused {GetTree().Paused}, heard {(heard.Count == 0 ? "none" : string.Join(", ", heard))}");
+        GD.Print($"briefing audit{(GetNodeOrNull("Movie") is null ? " (the mission going)" : "")}: ticks {_sim?.Session.Ticks.ToString() ?? "-"}, script tick {_sim?.Script?.Host.FsmTick.ToString() ?? "-"}, "
+            + $"CB line {_sim?.Script?.Host.Cb.Current?.Name ?? "none"}, paused {GetTree().Paused}, heard {(heard.Count == 0 ? "none" : string.Join(", ", heard))}");
     }
 
     /// <summary>The plants made ahead for <paramref name="level"/> (<see cref="MakeAhead"/>), taken once, or null.</summary>

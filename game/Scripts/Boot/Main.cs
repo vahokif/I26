@@ -516,7 +516,12 @@ public partial class Main : Node3D
                 if (_net is null) _sim.Session.SettleCars();
                 MissionBuilder.Trace("cars settled");
                 yield return null;
+                // tick 0 runs with the game going, as behind the card: a CB line or sound its script starts then is held by the pause
+                // that follows (under a briefing played while loading, at once, in this same step), not heard under the movie
+                bool held = GetTree().Paused;
+                GetTree().Paused = false;
                 _sim.FirstTick();
+                GetTree().Paused = held;
             }
             UpdateScriptCamera();
         }

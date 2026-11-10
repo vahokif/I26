@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.1 (10 November 2026)
+
+Network games use protocol 24: 0.12.1 does not play with 0.12.0 or earlier, so everyone in a game needs 0.12.1.
+
+### Fixed
+- Driving off the edge of a map works as in the original again where it matters: off a high edge the ground falls away to the plain below, as the original's does, so a car driven off a plateau drops (and a fall of more than 35 m wrecks it) and custom maps built around their sheer edges play as they were made. A low edge still runs on smoothly into the land beyond, and the distant hills and mountains now start well away from the map.
+- A mission's briefing plays to its end unless you skip it: the mouse wheel or a resting finger on a touchpad no longer counts as a skip (which made the mission start the moment it had loaded), and a key or button already held when the briefing starts only skips it once released and pressed again.
+- A mission's first CB line no longer plays during its briefing (Taurus in T02 could be heard halfway through it); it plays when the mission starts.
+- Quitting in the first seconds of the main menu no longer crashes the game.
+- The modern look's smoke can no longer make the graphics driver fail on cards that refuse the way it reads the scene's depth with anti-aliasing on (this may be behind some of the crashes reported with Direct3D 12); it falls back to the previous way instead.
+- Render Scale no longer asks the graphics card for more memory than it has on a large desktop: the 3D view is drawn at no more than 3840x2160.
+- A race bot that is killed comes back at the start and drives the course to the checkpoint it still needs, instead of heading straight across the arena for it and falling off on the way.
+
 ## 0.12.0 (10 November 2026)
 
 Network games use protocol 23: 0.12.0 does not play with 0.11.0 or earlier, so everyone in a game needs 0.12.0.

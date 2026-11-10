@@ -35,4 +35,15 @@ public class RenderScaleTests
     }
 
     [Fact] public void EightXIsFourXWhereTheRendererHasNoEightX() => Assert.Equal(Viewport.Msaa.Msaa4X, RenderScale.Msaa(3, true));
+
+    [Fact] public void TheSupersampledViewIsNoBiggerThanFourK()
+    {
+        Assert.Equal(2f, RenderScale.Capped(2f, new Vector2I(1920, 1080)));     // 3840x2160
+        Assert.Equal(1.5f, RenderScale.Capped(1.5f, new Vector2I(2560, 1440)));  // 3840x2160
+        Assert.Equal(1.5f, RenderScale.Capped(2f, new Vector2I(2560, 1440)), 3);  // 200 % lowered to 4K's pixels
+        Assert.Equal(1f, RenderScale.Capped(2f, new Vector2I(3840, 2160)));      // a 4K desktop: drawn as it is
+        Assert.Equal(1f, RenderScale.Capped(2f, new Vector2I(5120, 2880)));      // never under 100 %
+        Assert.Equal(1f, RenderScale.Capped(1f, new Vector2I(1280, 720)));
+        Assert.Equal(2f, RenderScale.Capped(2f, new Vector2I(0, 0)));           // no size yet: as chosen
+    }
 }

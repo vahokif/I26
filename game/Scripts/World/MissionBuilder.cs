@@ -343,7 +343,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
         else Notes.Add($"palette {world.PaletteName} not found");
 
         var resolver = Resolver = new TextureResolver(vfs);
-        var textures = Textures = new TextureFactory(resolver, pal);
+        // a 1997 start reads no upscale until the look changes
+        var textures = Textures = new TextureFactory(resolver, pal) { Hd = !DeferModern };
         var materials = Materials = new MaterialLibrary(textures) { HoldFlush = OffMainThread };
         Meshes = new MeshBuilder(resolver, materials);
         _carParts = null;

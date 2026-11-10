@@ -1167,6 +1167,8 @@ public sealed class ShellSettings
     public bool HdMenuArt { get; set; } = true;
     /// <summary>The port's own: HiFi Audio's sounds and movie tracks in place of the original's (Audio Control, shown only when a pack is installed); on unless the player turned it off. Stored as [port] hd_sounds, its first name.</summary>
     public bool HiFiAudio { get; set; } = true;
+    /// <summary>The port's own: a texture pack's upscaled world, car and cockpit textures in the modern look (HdTextures); on unless the player turned it off.</summary>
+    public bool HdTextures { get; set; } = true;
     /// <summary>The port's own: the brake key on a stopped car shifts into reverse, accelerate on a reversing one into drive (Play Options; off, as the original).</summary>
     public bool AutoReverse { get; set; }
     /// <summary>The port's own: the pad's rumble for the original's force-feedback events (Play Options; on, and without a pad it does nothing; both looks).</summary>
@@ -1425,8 +1427,11 @@ public sealed class ShellSettings
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
         // no version step: absent, a pack's audio plays
         s.HiFiAudio = (bool)c.GetValue("port", "hd_sounds", true);
+        // no version step: absent, a pack's textures are drawn
+        s.HdTextures = (bool)c.GetValue("port", "hd_textures", true);
         HdAssets.Enabled = s.HdMenuArt;
         I76.Game.Assets.HiFiAudio.Enabled = s.HiFiAudio;
+        I76.Game.Assets.HdTextures.Enabled = s.HdTextures;
         return s;
     }
 
@@ -1465,6 +1470,7 @@ public sealed class ShellSettings
         if (DevFps) c.SetValue("port", "dev_fps", true);
         c.SetValue("port", "hd_menu_art", HdMenuArt);
         if (!HiFiAudio) c.SetValue("port", "hd_sounds", false);
+        if (!HdTextures) c.SetValue("port", "hd_textures", false);
         c.SetValue("shell", "graphics", Graphics);
         c.SetValue("shell", "audio", Audio);
         // the other game's flags and difficulty stay as the file has them

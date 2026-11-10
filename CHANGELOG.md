@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Upscaled textures for the world, the cars and the cockpit: a texture pack placed in the game's user folder (`tex-world-4x`, `tex-world-8x` and the like, or an `i76-hd-textures*.zip`) is drawn on the scenery, the cars and the 3D cockpit in the modern look, in place of the original textures it has. None comes with the game; the 1997 look and a game without a pack are unchanged. `hd_textures=false` under `[port]` in shell.cfg turns it off.
+
 ## 0.12.1 (10 November 2026)
 
 Network games use protocol 24: 0.12.1 does not play with 0.12.0 or earlier, so everyone in a game needs 0.12.1.

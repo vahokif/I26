@@ -2638,6 +2638,9 @@ public partial class Main : Node3D
             GetViewport().SetInputAsHandled();   // so that weapon_cycle (Enter; the exclusions have no Alt) never sees it
             return;
         }
+        // a single-player mission under a movie (its briefing, a script's) takes no input: the movie's skip keys are the movie's,
+        // and nothing else may open a menu, a picture or the pause, whose closing would let the game go on under the movie
+        if (BriefingUp) return;
         if (e is InputEventMouseMotion mm) { MouseCamera.Motion(mm.Relative); return; }
         if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } wb && MouseCamera.WheelActive)
         {
@@ -2744,9 +2747,12 @@ public partial class Main : Node3D
 
     private bool PlayerDead => _car is { } c && (c.Sim.Flags & I76.Sim.Vehicles.VehicleFlags.Dead) != 0;
 
+    /// <summary>A movie over a single-player mission (a network game's runs on under its own, with Esc its menu).</summary>
+    private bool BriefingUp => _net is null && !_inMenu && GetNodeOrNull("Movie") is not null;
+
     public override void _UnhandledInput(InputEvent e)
     {
-        if (_inMenu || _menu is not null || _loading || _picture is not null || _installerOnly || InstallerScreen.Busy || _reconfig is not null) return;
+        if (_inMenu || _menu is not null || _loading || _picture is not null || _installerOnly || InstallerScreen.Busy || _reconfig is not null || BriefingUp) return;
         // the typed cheats first, as the original hands every code to the cheat matcher before the menus and the game keys
         if (_sim is not null && e is InputEventKey { Pressed: true } ck && GameKeys.CodeOf(ck) is var cc && (cc & 0xff00) == 0x300)
             TypedCheat(_typer.Push(cc));

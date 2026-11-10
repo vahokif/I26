@@ -121,6 +121,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_NO_SCRIPT_CAM` | capture | `1`: ignore the mission script's camera moves (keep the cockpit view). |
 | `I76_MOVIE_HOLD` | capture | Hold a movie on a frame number. |
 | `I76_MOVIE_SKIP` | capture | `N`: skip a movie N drawn frames after its first, as a key would (with Load During Briefing a press before the mission is ready is kept, "PLEASE STAND BY" faded in, and done when it is). |
+| `I76_MOVIE_INPUT` | capture | `wheel@N;click@N;key@N`: N drawn frames after a movie's first, a notch of the mouse wheel, a left click or Enter (pressed, released the next frame) sent through the engine's input as the player's; only a new click or key press skips, never the wheel. With `I76_BRIEFING_AUDIT=1` (twice a second under a briefing played while its mission loads: the mission's ticks, its script's tick, the game's sounds heard; it must do nothing) the movie's being left alone shows. |
 | `I76_MOVIE_END` | capture | `N`: the movie runs out N drawn frames after its first, as at its end (with Load During Briefing, its last frame held under "PLEASE STAND BY" until the mission is ready). |
 
 ## Map editor (docs/map-editor.md)

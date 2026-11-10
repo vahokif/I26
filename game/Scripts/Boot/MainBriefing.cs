@@ -160,6 +160,9 @@ public partial class Main
             bool card = false;
             while (true)
             {
+                if (AuditOn) Audit();
+                // the mission stands still under the movie until it ends or is skipped: nothing may have let it go
+                if (!GetTree().Paused) { GD.PrintErr("briefing: the game was let go under the movie; held again"); GetTree().Paused = true; }
                 if (rest is null && !thread.IsAlive)
                 {
                     thread.Join();   // (over already: never waited on while it runs, as its calls to the renderer wait for this thread's frames)
@@ -272,6 +275,43 @@ public partial class Main
             MissionBuilder.Trace("ahead: plants");
         }
         return a;
+    }
+
+    /// <summary>
+    /// I76_BRIEFING_AUDIT=1: under the briefing, twice a second, a line of what the mission does meanwhile (it must do nothing): its
+    /// ticks, its script's tick, and the game's sounds heard (a player whose position moved since the last line; the movie's own
+    /// are left out). "briefing audit: ... heard none" all the way through is the frozen mission.
+    /// </summary>
+    private static readonly bool AuditOn = System.Environment.GetEnvironmentVariable("I76_BRIEFING_AUDIT") == "1";
+    private readonly Dictionary<ulong, double> _audited = [];
+    private double _auditAt;
+
+    private void Audit()
+    {
+        double now = Time.GetTicksMsec() / 1000.0;
+        if (now - _auditAt < 0.5) return;
+        _auditAt = now;
+        var heard = new List<string>();
+        void Walk(Node n)
+        {
+            if (n is MoviePlayer) return;
+            double? at = n switch
+            {
+                AudioStreamPlayer { Playing: true } p => p.GetPlaybackPosition(),
+                AudioStreamPlayer3D { Playing: true } p => p.GetPlaybackPosition(),
+                AudioStreamPlayer2D { Playing: true } p => p.GetPlaybackPosition(),
+                _ => null,
+            };
+            if (at is { } pos)
+            {
+                ulong id = n.GetInstanceId();
+                if (_audited.TryGetValue(id, out var was) && pos != was) heard.Add($"{n.GetParent()?.Name}/{n.Name} {was:0.00}->{pos:0.00}");
+                _audited[id] = pos;
+            }
+            foreach (var c in n.GetChildren()) Walk(c);
+        }
+        Walk(GetTree().Root);
+        GD.Print($"briefing audit: ticks {_sim?.Session.Ticks.ToString() ?? "-"}, script tick {_sim?.Script?.Host.FsmTick.ToString() ?? "-"}, paused {GetTree().Paused}, heard {(heard.Count == 0 ? "none" : string.Join(", ", heard))}");
     }
 
     /// <summary>The plants made ahead for <paramref name="level"/> (<see cref="MakeAhead"/>), taken once, or null.</summary>

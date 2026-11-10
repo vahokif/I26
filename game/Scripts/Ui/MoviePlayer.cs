@@ -61,6 +61,14 @@ public partial class MoviePlayer : CanvasLayer
     private int _hold = int.TryParse(System.Environment.GetEnvironmentVariable("I76_MOVIE_HOLD"), out int h) ? h : -1;
     /// <summary>Capture hook: I76_MOVIE_SKIP=N skips the movie N drawn frames after its first, as a key would (a briefing ended early).</summary>
     private int _skipAfter = int.TryParse(System.Environment.GetEnvironmentVariable("I76_MOVIE_SKIP"), out int sk) ? sk : -1;
+    /// <summary>
+    /// Capture hook: I76_MOVIE_INPUT="wheel@N;click@N;key@N" sends, N drawn frames after the first, a notch of the mouse wheel, a left
+    /// click (pressed, then released the next frame) or Enter (likewise) through the engine's input, as the player's would come.
+    /// </summary>
+    private readonly List<(string What, int At)> _inputs = [.. (System.Environment.GetEnvironmentVariable("I76_MOVIE_INPUT") ?? "")
+        .Split(';', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Split('@')).Where(p => p.Length == 2 && int.TryParse(p[1], out _))
+        .Select(p => (p[0], int.Parse(p[1])))];
+    private int _drawn;
     private SubViewport? _pass;
     private ColorRect? _debandRect;
     private AudioStreamGeneratorPlayback? _out;
@@ -81,6 +89,7 @@ public partial class MoviePlayer : CanvasLayer
     {
         Layer = Skippable ? 100 : 30;   // an unskippable movie is under the menu a player's Esc opens
         ProcessMode = ProcessModeEnum.Always;
+        _gate.HeldAtStart(HeldSkipInputs());
         try { _movie = Smacker.Open(Path); }
         catch (System.Exception ex)
         {
@@ -220,6 +229,7 @@ public partial class MoviePlayer : CanvasLayer
             if (_hifi is not null) { _hifi.Play(); _hifiStart = System.Diagnostics.Stopwatch.GetTimestamp(); }
         }
         else _clock.Step(delta, Heard());
+        if (_inputs.Count > 0) SendInputs(++_drawn);
         if (_skipAfter >= 0 && _skipAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_SKIP skips it{(IsWaiting ? " (kept until the mission is ready)" : "")}"); if (Skip()) return; }
         if (_endAfter >= 0 && _endAfter-- == 0) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_END runs it out"); RunOut(); return; }
         // capture hook: I76_MOVIE_HOLD=N freezes the picture on frame N, so shots of different runs compare
@@ -306,12 +316,55 @@ public partial class MoviePlayer : CanvasLayer
     public override void _Input(InputEvent e)
     {
         if (_done || !Skippable) return;
-        bool skip = e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape or Key.Space or Key.Enter or Key.KpEnter }
-            || e is InputEventMouseButton { Pressed: true }
-            || e is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.A or JoyButton.B or JoyButton.Start };   // any pad: A, B, Start (not only one the pad list knows yet: the intro plays before it has looked)
-        if (!skip) return;
-        GetViewport().SetInputAsHandled();
+        // Esc, Space, Enter, a mouse button (not the wheel, whose notches come as presses) or any pad's A, B or Start (not only one the
+        // pad list knows yet: the intro plays before it has looked)
+        string? input = e switch
+        {
+            InputEventKey { Keycode: Key.Escape or Key.Space or Key.Enter or Key.KpEnter } k => "key:" + k.Keycode,
+            InputEventMouseButton m when MovieSkipGate.SkipsWith((int)m.ButtonIndex) => "mouse:" + m.ButtonIndex,
+            InputEventJoypadButton { ButtonIndex: JoyButton.A or JoyButton.B or JoyButton.Start } j => $"pad{j.Device}:{j.ButtonIndex}",
+            _ => null,
+        };
+        if (input is null) return;
+        if (!e.IsPressed()) { _gate.Release(input); return; }
+        GetViewport().SetInputAsHandled();   // (a skip key is the movie's, held or repeating too: nothing under it acts on it)
+        if (e is InputEventKey { Echo: true }) return;
+        // only a new press made while the movie plays: one already down as it started (the key, click or button that started
+        // the mission) must be let go first
+        if (!_gate.Press(input)) { GD.Print($"movie {System.IO.Path.GetFileName(Path)}: {input} was down as it started, not a skip"); return; }
         Skip();
+    }
+
+    private readonly MovieSkipGate _gate = new();
+
+    private void SendInputs(int frame)
+    {
+        foreach (var (what, at) in _inputs)
+        {
+            bool down = frame == at;
+            if (!down && frame != at + 1) continue;
+            if (down) GD.Print($"movie {System.IO.Path.GetFileName(Path)}: I76_MOVIE_INPUT sends {what}");
+            InputEvent? e = what switch
+            {
+                "wheel" when down => new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true, Factor = 1 },
+                "click" => new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = down, ButtonMask = down ? MouseButtonMask.Left : 0 },
+                "key" => new InputEventKey { Keycode = Key.Enter, PhysicalKeycode = Key.Enter, Pressed = down },
+                _ => null,
+            };
+            if (e is not null) Input.ParseInputEvent(e);
+        }
+    }
+
+    /// <summary>The skip keys and buttons down as the movie starts (MovieSkipGate: they must be let go before they skip).</summary>
+    private static IEnumerable<string> HeldSkipInputs()
+    {
+        foreach (var k in (Key[])[Key.Escape, Key.Space, Key.Enter, Key.KpEnter])
+            if (Input.IsKeyPressed(k) || Input.IsPhysicalKeyPressed(k)) yield return "key:" + k;
+        foreach (var b in (MouseButton[])[MouseButton.Left, MouseButton.Right, MouseButton.Middle])
+            if (Input.IsMouseButtonPressed(b)) yield return "mouse:" + b;
+        foreach (int d in Input.GetConnectedJoypads())
+            foreach (var b in (JoyButton[])[JoyButton.A, JoyButton.B, JoyButton.Start])
+                if (Input.IsJoyButtonPressed(d, b)) yield return $"pad{d}:{b}";
     }
 
     /// <summary>A skip asked for (true when the movie ended): at once, or, while <see cref="Waiting"/>, kept with the stand-by line faded in.</summary>

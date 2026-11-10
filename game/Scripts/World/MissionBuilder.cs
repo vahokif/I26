@@ -344,7 +344,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
 
         var resolver = Resolver = new TextureResolver(vfs);
         // a 1997 start reads no upscale until the look changes
-        var textures = Textures = new TextureFactory(resolver, pal) { Hd = !DeferModern };
+        var packPalette = vfs.TryRead(I76.Formats.Imaging.HdTexture.PackPalette) is { Length: I76.Formats.Imaging.Palette.Size } pp ? new Palette(pp) : null;
+        var textures = Textures = new TextureFactory(resolver, pal) { Hd = !DeferModern, PackPalette = packPalette };
         var materials = Materials = new MaterialLibrary(textures) { HoldFlush = OffMainThread };
         Meshes = new MeshBuilder(resolver, materials);
         _carParts = null;

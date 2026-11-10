@@ -72,4 +72,71 @@ public static class HdTexture
         }
         return o;
     }
+
+    /// <summary>The palette a pack's pictures are coloured by: the textures are exported in t01.act's colours.</summary>
+    public const string PackPalette = "t01.act";
+
+    /// <summary>
+    /// The entries a mission's palette turns grey where the pack's palette colours them (the dream's ground and sky ramps), or
+    /// null for none: an upscale coloured by the pack's palette would bring their colour back.
+    /// </summary>
+    public static bool[]? Greyed(Palette mission, Palette pack)
+    {
+        bool[]? g = null;
+        for (int i = 0; i < 255; i++)
+        {
+            var (r, gg, b) = mission[i];
+            var (pr, pg, pb) = pack[i];
+            if (Spread(r, gg, b) <= 4 && Spread(pr, pg, pb) > 8) (g ??= new bool[256])[i] = true;
+        }
+        return g;
+    }
+
+    private static int Spread(int r, int g, int b) => Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b));
+    private static float Lum(int r, int g, int b) => 0.299f * r + 0.587f * g + 0.114f * b;
+
+    /// <summary>Whether any texel of the texture is one of the <paramref name="greyed"/> entries.</summary>
+    public static bool Uses(byte[] indices, bool[] greyed)
+    {
+        foreach (var i in indices) if (greyed[i]) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Turns an upscale's texels over the <paramref name="greyed"/> entries grey as the mission's palette has them, in place:
+    /// each takes its own luminance plus the mission's grey over the pack colour's luminance, that offset interpolated
+    /// bilinearly between the greyed texels of the original around it, so the grey ramp follows the upscale's detail with
+    /// no step at the original's texel edges. Both in the texture's stored order; other texels and alpha are untouched.
+    /// </summary>
+    public static void Recolour(byte[] rgba, int w, int h, int scale, byte[] indices, int ow, int oh, bool[] greyed, Palette mission, Palette pack)
+    {
+        var k = new float[256];
+        for (int i = 0; i < 256; i++)
+            if (greyed[i]) { var (pr, pg, pb) = pack[i]; k[i] = mission[i].R - Lum(pr, pg, pb); }
+        for (int y = 0; y < h; y++)
+        {
+            float v = (y + 0.5f) / scale - 0.5f;
+            int y0 = Math.Clamp((int)MathF.Floor(v), 0, oh - 1), y1 = Math.Min(y0 + 1, oh - 1);
+            float fy = Math.Clamp(v - y0, 0, 1);
+            for (int x = 0; x < w; x++)
+            {
+                if (!greyed[indices[(y / scale) * ow + x / scale]]) continue;
+                float u = (x + 0.5f) / scale - 0.5f;
+                int x0 = Math.Clamp((int)MathF.Floor(u), 0, ow - 1), x1 = Math.Min(x0 + 1, ow - 1);
+                float fx = Math.Clamp(u - x0, 0, 1);
+                float sum = 0, wsum = 0;
+                Add(x0, y0, (1 - fx) * (1 - fy)); Add(x1, y0, fx * (1 - fy)); Add(x0, y1, (1 - fx) * fy); Add(x1, y1, fx * fy);
+                int o = (y * w + x) * 4;
+                byte grey = (byte)Math.Clamp((int)MathF.Round(Lum(rgba[o], rgba[o + 1], rgba[o + 2]) + sum / wsum), 0, 255);
+                rgba[o] = rgba[o + 1] = rgba[o + 2] = grey;
+
+                void Add(int xx, int yy, float wt)
+                {
+                    int i = indices[yy * ow + xx];
+                    if (!greyed[i] || wt <= 0) return;
+                    sum += k[i] * wt; wsum += wt;
+                }
+            }
+        }
+    }
 }

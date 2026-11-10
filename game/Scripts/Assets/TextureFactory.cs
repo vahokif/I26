@@ -41,6 +41,18 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     private bool _shown;
     private readonly List<(string Member, ImageTexture Texture, byte[] Rgba, int Width, int Height)> _upscaled = [];
 
+    /// <summary>
+    /// The palette the pack's pictures are coloured by (HdTexture.PackPalette). Where the mission's palette turns grey entries
+    /// that one colours (the dream), an upscale over them is turned grey too (HdTexture.Recolour). Set before the first texture.
+    /// </summary>
+    public Palette? PackPalette
+    {
+        get => _packPalette;
+        set { _packPalette = value; _greyed = palette is not null && value is not null ? HdTexture.Greyed(palette, value) : null; }
+    }
+    private Palette? _packPalette;
+    private bool[]? _greyed;
+
     private readonly Dictionary<string, I76.Formats.Assembly.RoadRaster.Tex?> _rgba = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>What a stored texture depends on besides its name: the files it was read from (the install and the map's own folder) and the palette.</summary>
@@ -92,7 +104,7 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     private ImageTexture? UpscaleOf(string member, byte[] rgba, int w, int h)
     {
         if (_upscaled.Count == 0) _shown = Serving;
-        var img = _shown ? HdTextures.Load(member, rgba, w, h) : Picture(rgba, w, h);
+        var img = _shown ? LoadUpscale(member, rgba, w, h) : Picture(rgba, w, h);
         if (img is null) return null;
         var tex = ImageTexture.CreateFromImage(img);
         _upscaled.Add((member, tex, rgba, w, h));
@@ -111,9 +123,24 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
         var sw = System.Diagnostics.Stopwatch.StartNew();
         foreach (var (member, tex, rgba, w, h) in _upscaled)
         {
-            tex.SetImage((_shown ? HdTextures.Load(member, rgba, w, h) : null) ?? Picture(rgba, w, h));
+            tex.SetImage((_shown ? LoadUpscale(member, rgba, w, h) : null) ?? Picture(rgba, w, h));
             if (sw.Elapsed.TotalMilliseconds > 10) { yield return null; sw.Restart(); }
         }
+    }
+
+    /// <summary>The member's upscale (HdTextures.Load), its texels over the entries the mission's palette greys turned grey.</summary>
+    private Image? LoadUpscale(string member, byte[] rgba, int w, int h)
+    {
+        if (HdTextures.Load(member, rgba, w, h) is not { } img) return null;
+        if (_greyed is not { } g || resolver.Load(member) is not { Palette: null } t || !HdTexture.Uses(t.Indices, g)) return img;
+        // a .dds over the greyed entries is decompressed, turned grey and sent as RGBA8 with new mipmaps
+        img.ClearMipmaps();
+        if (img.IsCompressed()) img.Decompress();
+        img.Convert(Image.Format.Rgba8);
+        int uw = img.GetWidth(), uh = img.GetHeight();
+        var data = img.GetData();
+        HdTexture.Recolour(data, uw, uh, uw / w, t.Indices, w, h, g, palette!, _packPalette!);
+        return Picture(data, uw, uh);
     }
 
     private static Image Picture(byte[] rgba, int w, int h)

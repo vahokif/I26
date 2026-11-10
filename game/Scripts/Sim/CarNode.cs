@@ -781,6 +781,24 @@ public partial class CarNode : Node3D
 
     public override void _ExitTree() => HeadCars.Remove(this);
 
+    /// <summary>The modern look's beam: its edge's cosine (SpotLight3D's angle is the half-angle), for RetroLamps.</summary>
+    public static readonly float HeadEdgeCos = Mathf.Cos(Mathf.DegToRad(HeadAngle));
+
+    /// <summary>
+    /// Every lit headlamp's place and beam axis (global), whether or not it carries a real light (MaxHeadLit): what the road signs
+    /// send back toward (RetroLamps). As of the cars' last update.
+    /// </summary>
+    public static IEnumerable<(Vector3 At, Vector3 Aim)> LitHeadlamps()
+    {
+        foreach (var c in HeadCars)
+        {
+            if (!c._lampsOn || !c.IsInsideTree()) continue;
+            for (int i = 0; i < c._lamps.Length; i++)
+                if (c.HeadHeld(i)) { var t = c._lamps[i].GlobalTransform; yield return (t.Origin, -t.Basis.Z.Normalized()); }
+        }
+    }
+    private bool _lampsOn;
+
     /// <summary>How many other cars with lit lamps are nearer the camera than this one (distances as of their last update).</summary>
     private int HeadRank()
     {
@@ -1017,6 +1035,7 @@ public partial class CarNode : Node3D
         if (_head is not null) _head.Visible = shown && lit && !Modern;   // the original's flat lit faces: the 1997 look only (the modern look has its glare and spotlights)
         // the headlamps' real lights: the player's always, the others' only for the nearest few to the camera
         bool lampsOn = lit && !Wrecked;
+        _lampsOn = lampsOn;
         var headCam = GetViewport()?.GetCamera3D();
         _headDist2 = lampsOn && headCam is not null ? headCam.GlobalPosition.DistanceSquaredTo(GlobalPosition) : float.MaxValue;
         bool lampLights = lampsOn && (_isPlayer || (_headDist2 < HeadFar * HeadFar && HeadRank() < MaxHeadLit));

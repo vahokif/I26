@@ -43,12 +43,13 @@ public sealed class MaterialLibrary(TextureFactory textures)
     /// texture stepped by <see cref="Animate"/>. One per .tmt and mode, so every object using it flickers together.
     /// </summary>
     public Material ForAnimated(string[] frames, float fps, FaceMode mode, I76.Formats.Imaging.CarMaterial.Paint? car = null,
-        I76.Formats.Imaging.PropMaterial.Family prop = I76.Formats.Imaging.PropMaterial.Family.General, bool bothSides = false, bool unlit = false, bool selfLit = false)
+        I76.Formats.Imaging.PropMaterial.Family prop = I76.Formats.Imaging.PropMaterial.Family.General, bool bothSides = false, bool unlit = false, bool selfLit = false,
+        bool retro = false)
     {
-        var key = $"anim|{string.Join(",", frames)}|{mode}|{(car is null ? "" : "car")}" + (bothSides ? "|2" : "") + (unlit ? "|u" : "") + (selfLit ? "|s" : "");
+        var key = $"anim|{string.Join(",", frames)}|{mode}|{(car is null ? "" : "car")}" + (bothSides ? "|2" : "") + (unlit ? "|u" : "") + (selfLit ? "|s" : "") + (retro ? "|r" : "");
         if (_cache.TryGetValue(key, out var m)) return m;
-        if (ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit, selfLit: selfLit) is not ShaderMaterial first)
-            return _cache[key] = ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit, selfLit: selfLit);
+        if (ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit, selfLit: selfLit, retro: retro) is not ShaderMaterial first)
+            return _cache[key] = ForTexture(frames[0], mode, car, prop, bothSides: bothSides, unlit: unlit, selfLit: selfLit, retro: retro);
         var mat = (ShaderMaterial)first.Duplicate();
         var tex = frames.Select(f => TextureOf(f, mode)).OfType<Texture2D>().ToArray();
         if (tex.Length == frames.Length) _animated.Add((mat, tex, fps, mat.GetShaderParameter("albedo_cockpit").VariantType != Variant.Type.Nil));
@@ -155,13 +156,14 @@ public sealed class MaterialLibrary(TextureFactory textures)
     /// engine draws every face of a scene object (a face whose plane faces away from the eye is left out
     /// before its mode is read); the modern look keeps it both-sided.
     /// <paramref name="selfLit"/>: the modern look's night shows it shining of its own (FaceLight.SelfLit, object.gdshaderinc: self_lit).
+    /// <paramref name="retro"/>: a road sign's face, which the modern look's night shows retroreflective (RetroLamps, object.gdshaderinc: retro).
     /// </summary>
     public Material ForTexture(string member, FaceMode mode = FaceMode.Cutout, I76.Formats.Imaging.CarMaterial.Paint? car = null,
         I76.Formats.Imaging.PropMaterial.Family prop = I76.Formats.Imaging.PropMaterial.Family.General, bool oneSided = false, bool bothSides = false,
-        bool unlit = false, bool oneSided1997 = false, string? scheme = null, bool selfLit = false)
+        bool unlit = false, bool oneSided1997 = false, string? scheme = null, bool selfLit = false, bool retro = false)
     {
         var key = (car is null ? $"{member}|{mode}" + (prop == I76.Formats.Imaging.PropMaterial.Family.General ? "" : $"|prop{(int)prop}") : $"{member}|{mode}|car") + (oneSided ? "|1" : "") + (bothSides ? "|2" : "") + (unlit ? "|u" : "")
-            + (oneSided1997 ? "|f" : "") + (car is not null && scheme is not null ? "|p" + scheme : "") + (selfLit ? "|s" : "");
+            + (oneSided1997 ? "|f" : "") + (car is not null && scheme is not null ? "|p" + scheme : "") + (selfLit ? "|s" : "") + (retro ? "|r" : "");
         if (_cache.TryGetValue(key, out var m)) return m;
         var t = textures.Get(member);
         bool keyed = mode != FaceMode.Opaque && t is { HasKey: true };
@@ -185,6 +187,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         else mat.SetShaderParameter("albedo_color", Colors.Magenta);
         if (unlit) mat.SetShaderParameter("unlit_1997", true);
         if (selfLit) mat.SetShaderParameter("self_lit", true);
+        if (retro) mat.SetShaderParameter("retro", true);
         // the cockpit's own art (z*: panels, wheel, arms, dash) carries its lighting: the engine applies none
         string stem = member[(member.LastIndexOfAny(['/', '\\', ':']) + 1)..];
         if (stem.StartsWith('z') || stem.StartsWith('Z'))
@@ -661,16 +664,18 @@ public sealed class MaterialLibrary(TextureFactory textures)
 
     /// <summary>A flat-coloured face's material; a prop's (not a car's) weighed as PropMaterial weighs a texel, in the modern look.</summary>
     public Material ForColour(byte r, byte g, byte b, bool prop = false,
-        I76.Formats.Imaging.PropMaterial.Family family = I76.Formats.Imaging.PropMaterial.Family.General, bool bothSides = false, bool oneSided = false, bool selfLit = false)
+        I76.Formats.Imaging.PropMaterial.Family family = I76.Formats.Imaging.PropMaterial.Family.General, bool bothSides = false, bool oneSided = false, bool selfLit = false,
+        bool retro = false)
     {
         prop &= PropMaps;
         bothSides &= !oneSided;
-        var key = (prop ? $"#{r:x2}{g:x2}{b:x2}|prop{(int)family}" : $"#{r:x2}{g:x2}{b:x2}") + (bothSides ? "|2" : "") + (oneSided ? "|1" : "") + (selfLit ? "|s" : "");
+        var key = (prop ? $"#{r:x2}{g:x2}{b:x2}|prop{(int)family}" : $"#{r:x2}{g:x2}{b:x2}") + (bothSides ? "|2" : "") + (oneSided ? "|1" : "") + (selfLit ? "|s" : "") + (retro ? "|r" : "");
         if (_cache.TryGetValue(key, out var m)) return m;
         var mat = new ShaderMaterial { Shader = Pick(bothSides ? Open : Back) };
         if (oneSided) _oneSided.Add(mat);
         mat.SetShaderParameter("albedo_color", Color.Color8(r, g, b));
         if (selfLit) mat.SetShaderParameter("self_lit", true);
+        if (retro) mat.SetShaderParameter("retro", true);
         if (prop)
         {
             var (rough, metal, spec) = I76.Formats.Imaging.PropMaterial.ForColour(r, g, b, family);

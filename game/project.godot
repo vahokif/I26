@@ -174,6 +174,18 @@ i76_night_lights={
 "type": "sampler2D",
 "value": ""
 }
+i76_retro_count={
+"type": "int",
+"value": 0
+}
+i76_retro_at={
+"type": "mat4",
+"value": Projection(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+}
+i76_retro_aim={
+"type": "mat4",
+"value": Projection(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+}
 i76_cab_inv={
 "type": "transform",
 "value": Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)

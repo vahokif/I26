@@ -2340,6 +2340,8 @@ public partial class Main : Node3D
                 return Bare(g.X, g.Z) - _origin.Y;
             }
             AddChild(night = new NightLights { Name = "NightLights", Cars = () => _sim?.Cars ?? [], Ground = GroundGodot, MoonIntensity = _builder.Light.Intensity });
+            // the modern look's road signs send the headlamps' light back toward them (RetroLamps)
+            AddChild(new RetroLamps { Name = "RetroLamps", Lamps = CarNode.LitHeadlamps });
         }
         _drops = new DropShadows
         {

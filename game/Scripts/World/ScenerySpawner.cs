@@ -293,8 +293,14 @@ public partial class ScenerySpawner : Node3D
     /// <summary>I76_SELF_LIT (tuning): <c>0</c> leaves the modern look's self-lit faces and structure lamps out (before and after captures), <c>noshadow</c> the lamps' shadows.</summary>
     private static readonly string? SelfLitHook = System.Environment.GetEnvironmentVariable("I76_SELF_LIT");
 
-    /// <summary>ODEF class 4, the road signs: their self-lit faces (the original draws them at full brightness to be read at night) stay as they are in the modern look, which the headlamps light.</summary>
+    /// <summary>
+    /// ODEF class 4, the road signs: their self-lit faces (the original draws them at full brightness to be read at night) do not
+    /// glow in the modern look; they are retroreflective, bright in the beam of the lamps beside the eye (RetroLamps).
+    /// </summary>
     public const uint SignType = 4;
+
+    /// <summary>I76_RETRO_SIGNS (tuning): <c>0</c> leaves the modern look's retroreflective sign faces out (before and after captures).</summary>
+    private static readonly bool RetroSigns = System.Environment.GetEnvironmentVariable("I76_RETRO_SIGNS") != "0";
 
     public void Spawn(MissionWorld world, ModelAssembler asm, MeshBuilder builder, bool skipVehicles = false)
     {
@@ -338,7 +344,9 @@ public partial class ScenerySpawner : Node3D
                 : part => !(spinners?.Any(s => s.Owns(part.NodeName)) ?? false) && !(gates?.Owns(part.NodeName) ?? false) && !(cardNames?.Contains(part.NodeName) ?? false);
             // a structure's self-lit faces shine at night in the modern look (MeshBuilder.SelfLit), its lamps light what is under them
             bool selfLit = SelfLitHook != "0" && !roadPiece && g.Any(p => p.Object.ObjectType != SignType);
-            var mesh = model is null ? null : builder.Build(model, include: include, skipFace: skip, selfLit: selfLit);
+            // a road sign's face is retroreflective (RetroLamps)
+            bool retro = RetroSigns && !roadPiece && !g.Any(p => p.Object.ObjectType != SignType);
+            var mesh = model is null ? null : builder.Build(model, include: include, skipFace: skip, selfLit: selfLit, retro: retro);
             if (mesh is null && gates is not null && cardNames is null)
             {
                 // a model that is nothing but its gate (T12's bcaikgat): no static mesh, only the sliding one
@@ -365,7 +373,7 @@ public partial class ScenerySpawner : Node3D
             if (model is not null && SmokeBase(model) is { } smokeAt)
             {
                 modernDrops = WreckSmoke.IsSpriteFace;
-                modernMesh = builder.Build(model, include: include, skipFace: (part, f) => WreckSmoke.IsSpriteFace(f) || (grounded && GroundDecals.IsGroundFace(part, f, lowest)), selfLit: selfLit);
+                modernMesh = builder.Build(model, include: include, skipFace: (part, f) => WreckSmoke.IsSpriteFace(f) || (grounded && GroundDecals.IsGroundFace(part, f, lowest)), selfLit: selfLit, retro: retro);
                 foreach (var pl in list)
                 {
                     Smokers.Add(Coords.ToGame(Coords.ToGodot(pl.Object.Rotation, world.GroundedPosition(pl)) * Coords.ToGodot(smokeAt)));

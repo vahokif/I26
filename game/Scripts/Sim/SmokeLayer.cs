@@ -313,6 +313,8 @@ public partial class SmokeLayer : Node3D
         public override void _RenderCallback(int effectCallbackType, RenderData renderData)
         {
             if (_failed) return;
+            // the multisampled depth's build of the shader is not there (the backend refused it): the engine's resolved copy then
+            AccessResolvedDepth = !_msaaOk;
             try { Render(renderData); }
             catch (Exception e) { _failed = true; GD.PrintErr($"smoke layer: {e}"); }
         }
@@ -342,8 +344,19 @@ public partial class SmokeLayer : Node3D
         // with MSAA the layer reads the multisampled depth itself, the nearest of each texel's samples, not the engine's resolved
         // copy: read after the opaque pass that copy was empty on Apple GPUs (Metal and MoltenVK alike) and at times in patches elsewhere
         int samples = SmokeDepth.Samples(buffers.GetMsaa3D());
+        // without the multisampled build (the backend refused it), the engine's resolved copy (the effect asks for it from then on)
+        if (samples > 1 && !_msaaOk) samples = 1;
         int variant = samples > 1 ? 1 : 0;
         var depth = buffers.GetDepthLayer(0, samples > 1);
+        // no depth to read (the engine's buffers being remade, or no resolved copy yet): no smoke this frame
+        if (!depth.IsValid) return;
+        // the samples the depth was made with: a backend gives fewer than asked where the GPU has no more for its format
+        // (D3D12 and Vulkan alike take the most it has), and a read past them is undefined
+        if (samples > 1)
+        {
+            if (depth != _samplesOf) { _samplesOf = depth; _made = (int)(rd.TextureGetFormat(depth)?.Samples ?? RenderingDevice.TextureSamples.Samples1); }
+            samples = SmokeDepth.Samples(buffers.GetMsaa3D(), _made);
+        }
 
         // the camera: view, projection (as the scene's own shaders see it: clip y down), their inverses, the cab box, the sun
         var camT = scene.GetCamTransform();
@@ -384,8 +397,12 @@ public partial class SmokeLayer : Node3D
             _setUniforms[3].ClearIds(); _setUniforms[3].AddId(_sampler); _setUniforms[3].AddId(depth);
             _set = rd.UniformSetCreate(_setUniforms, _shaders[variant], 0);
         }
+        // a release build of the engine draws without checking the pipeline and the uniforms are there (a debug build refuses
+        // the draw): a draw without either is the GPU's to fault on, so none then, and the layer stays clear
+        bool drawable = _pipelines[variant].IsValid && _set.IsValid && rd.UniformSetIsValid(_set);
+        if (!drawable && !_toldUndrawable) { _toldUndrawable = true; GD.PrintErr($"smoke layer: no {(variant == 1 ? "multisampled " : "")}pipeline or uniform set; no smoke drawn"); }
         var dl = rd.DrawListBegin(_fb, RenderingDevice.DrawFlags.ClearColorAll, ClearColors);
-        if (count > 0)
+        if (count > 0 && drawable)
         {
             rd.DrawListBindRenderPipeline(dl, _pipelines[variant]);
             rd.DrawListBindUniformSet(dl, _set, 0);
@@ -402,6 +419,12 @@ public partial class SmokeLayer : Node3D
     private static Godot.Collections.Array<RDUniform>? _setUniforms;
     private static readonly Color[] ClearColors = [new Color(0, 0, 0, 0), new Color(0, 0, 0, 0)];
     private static bool? _reversed;
+    private static bool _toldUndrawable;
+    /// <summary>The multisampled depth texture last asked, and the samples it was made with (RenderingDevice.TextureSamples).</summary>
+    private static Rid _samplesOf;
+    private static int _made;
+    /// <summary>The multisampled depth's build of the shader and its pipeline were made: with MSAA the layer reads the multisampled depth.</summary>
+    private static volatile bool _msaaOk = true;
 
     private static RDUniform Buf(int binding, RenderingDevice.UniformType type, Rid id)
     {
@@ -523,18 +546,20 @@ public partial class SmokeLayer : Node3D
 
     private static bool Setup(RenderingDevice rd)
     {
-        // two builds of the fragment shader: the scene's depth single-sampled, and multisampled (MSAA)
+        // two builds of the fragment shader: the scene's depth single-sampled, and multisampled (MSAA). A backend may refuse one
+        // (its shader made from the SPIR-V is no shader): without the single-sampled one there is no layer, without the
+        // multisampled one the layer reads the engine's resolved depth under MSAA, as it did before
         for (int v = 0; v < 2; v++)
         {
             var src = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceVertex = Vert, SourceFragment = v == 0 ? Frag : Frag.Replace("#version 450", "#version 450\n#define MSAA") };
             var spirv = rd.ShaderCompileSpirVFromSource(src);
-            if (!string.IsNullOrEmpty(spirv.CompileErrorVertex) || !string.IsNullOrEmpty(spirv.CompileErrorFragment))
-            {
-                _failed = true;
-                GD.PrintErr($"smoke layer: shader: {spirv.CompileErrorVertex} {spirv.CompileErrorFragment}");
-                return false;
-            }
-            _shaders[v] = rd.ShaderCreateFromSpirV(spirv);
+            string error = $"{spirv.CompileErrorVertex} {spirv.CompileErrorFragment}".Trim();
+            if (error.Length == 0) _shaders[v] = rd.ShaderCreateFromSpirV(spirv);
+            if (_shaders[v].IsValid) continue;
+            GD.PrintErr($"smoke layer: the {(v == 1 ? "multisampled" : "single-sampled")} depth's shader was not made: {(error.Length > 0 ? error : "the backend refused it")}");
+            if (v == 1) { _msaaOk = false; continue; }
+            _failed = true;
+            return false;
         }
         _sampler = rd.SamplerCreate(new RDSamplerState { MinFilter = RenderingDevice.SamplerFilter.Nearest, MagFilter = RenderingDevice.SamplerFilter.Nearest, RepeatU = RenderingDevice.SamplerRepeatMode.ClampToEdge, RepeatV = RenderingDevice.SamplerRepeatMode.ClampToEdge });
         _noiseSampler = rd.SamplerCreate(new RDSamplerState { MinFilter = RenderingDevice.SamplerFilter.Linear, MagFilter = RenderingDevice.SamplerFilter.Linear, RepeatU = RenderingDevice.SamplerRepeatMode.Repeat, RepeatV = RenderingDevice.SamplerRepeatMode.Repeat });
@@ -570,8 +595,9 @@ public partial class SmokeLayer : Node3D
             for (int v = 0; v < 2; v++)
             {
                 if (_pipelines[v].IsValid) rd.FreeRid(_pipelines[v]);
-                _pipelines[v] = rd.RenderPipelineCreate(_shaders[v], fbFormat, -1, RenderingDevice.RenderPrimitive.TriangleStrips, new RDPipelineRasterizationState(), new RDPipelineMultisampleState(), new RDPipelineDepthStencilState(), blend);
+                _pipelines[v] = _shaders[v].IsValid ? rd.RenderPipelineCreate(_shaders[v], fbFormat, -1, RenderingDevice.RenderPrimitive.TriangleStrips, new RDPipelineRasterizationState(), new RDPipelineMultisampleState(), new RDPipelineDepthStencilState(), blend) : default;
             }
+            if (!_pipelines[1].IsValid && _msaaOk) { _msaaOk = false; GD.PrintErr("smoke layer: no pipeline for the multisampled depth's shader; the engine's resolved depth then"); }
             _fbFormat = fbFormat;
         }
         _size = size;
@@ -608,6 +634,13 @@ public static class SmokeDepth
         RenderingServer.ViewportMsaa.Msaa8X => 8,
         _ => 1,
     };
+
+    /// <summary>
+    /// The samples to read: the viewport's MSAA's, but no more than the depth texture was made with (<paramref name="made"/>, the
+    /// texture's <see cref="RenderingDevice.TextureSamples"/>): the backends make fewer than asked where the GPU has no more for the
+    /// format, and a sample past them is undefined.
+    /// </summary>
+    public static int Samples(RenderingServer.ViewportMsaa msaa, int made) => Math.Min(Samples(msaa), 1 << Math.Clamp(made, 0, 6));
 
     /// <summary>Whether a larger depth is nearer the eye under <paramref name="proj"/> (the reversed z of Godot's Forward+ projection).</summary>
     public static bool NearerIsLarger(Projection proj)

@@ -60,4 +60,14 @@ public class SmokeDepthTests
     {
         Assert.Equal(samples, SmokeDepth.Samples(msaa));
     }
+
+    [Theory]
+    [InlineData(RenderingServer.ViewportMsaa.Msaa8X, RenderingDevice.TextureSamples.Samples8, 8)]
+    [InlineData(RenderingServer.ViewportMsaa.Msaa8X, RenderingDevice.TextureSamples.Samples4, 4)]   // a GPU without 8x for the depth's format: the backend made 4
+    [InlineData(RenderingServer.ViewportMsaa.Msaa4X, RenderingDevice.TextureSamples.Samples2, 2)]
+    [InlineData(RenderingServer.ViewportMsaa.Msaa4X, RenderingDevice.TextureSamples.Samples8, 4)]
+    public void TheLayerReadsNoSamplePastTheOnesTheDepthWasMadeWith(RenderingServer.ViewportMsaa msaa, RenderingDevice.TextureSamples made, int samples)
+    {
+        Assert.Equal(samples, SmokeDepth.Samples(msaa, (int)made));
+    }
 }

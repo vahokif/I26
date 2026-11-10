@@ -231,6 +231,7 @@ public partial class Main : Node3D
             var boot = I76.Game.Shell.ShellSettings.Load();
             StartupSettings.PickAtStart(boot.LogFile, boot.Renderer, I76.Game.Shell.MicNames.OpensInput(boot.CbMic));
             I76.Game.Assets.HiFiAudio.Probe();
+            I76.Game.Assets.HdTextures.Probe();
         }
         // release.sh, before the export: the terrain's compressed material pack, for builds that cannot compress (World/TerrainMaterials.WritePrebaked)
         if (OS.GetCmdlineUserArgs() is var cl && Array.IndexOf(cl, "--bake-ground-pack") is var bk and >= 0 && bk + 1 < cl.Length)

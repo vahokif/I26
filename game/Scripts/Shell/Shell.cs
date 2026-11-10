@@ -1180,6 +1180,8 @@ public sealed class ShellSettings
     public bool HiFiAudio { get; set; } = true;
     /// <summary>The port's own: Play Options' Keyboard Steering Assist (I76.Sim.Session.KeyStick), on unless the player turned it off ([port] assisted_steering, written when off; the older keyboard_steering key's "original" reads as off).</summary>
     public bool AssistedSteering { get; set; } = true;
+    /// <summary>The port's own: a texture pack's upscaled world, car and cockpit textures in the modern look (HdTextures); on unless the player turned it off.</summary>
+    public bool HdTextures { get; set; } = true;
     /// <summary>The port's own: the brake key on a stopped car shifts into reverse, accelerate on a reversing one into drive (Play Options; off, as the original).</summary>
     public bool AutoReverse { get; set; }
     /// <summary>
@@ -1470,9 +1472,12 @@ public sealed class ShellSettings
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
         // no version step: absent, a pack's audio plays
         s.HiFiAudio = (bool)c.GetValue("port", "hd_sounds", true);
+        // no version step: absent, a pack's textures are drawn
+        s.HdTextures = (bool)c.GetValue("port", "hd_textures", true);
         HdAssets.Enabled = s.HdMenuArt;
         I76.Game.Assets.HiFiAudio.Enabled = s.HiFiAudio;
         I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering;
+        I76.Game.Assets.HdTextures.Enabled = s.HdTextures;
         return s;
     }
 
@@ -1516,6 +1521,7 @@ public sealed class ShellSettings
         if (LampHalo != I76.Game.Sim.LampHalo.Default) c.SetValue("port", "lamp_halo", LampHalo);
         c.SetValue("port", "hd_menu_art", HdMenuArt);
         if (!HiFiAudio) c.SetValue("port", "hd_sounds", false);
+        if (!HdTextures) c.SetValue("port", "hd_textures", false);
         c.SetValue("shell", "graphics", Graphics);
         c.SetValue("shell", "audio", Audio);
         // the other game's flags and difficulty stay as the file has them

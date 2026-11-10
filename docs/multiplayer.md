@@ -382,6 +382,11 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
   a racing bot's AI moves on at 25 m across the ground (`Entity.NavReach`; the AI's own 40 would turn it for the next checkpoint before it was in
   this one); a bot that is still a point ahead of the tracker for 2.5 s (a checkpoint well above or below the car) is sent back for the one it missed. It fires at whatever is ahead and near, as
   a human may (weapons are as free in a race as in combat). A new order starts at its first point (the AI's racer scan, would otherwise pick the nearest).
+  A bot that comes back at a spawn point (behind check1 on every stock arena) wants the checkpoint it wanted, as a human does (the count goes on
+  through a respawn, as in the original), and drives the course to it (`MeleeGame.LeadIn`): from the leg of the course nearest the car, the
+  checkpoints in order (passed, not counted) up to that one; on the leg out of it (the last checkpoint, seen from the start) it goes straight back.
+  Straight at it from the start, the planner took it across the arena into the walls and drops the course goes round, and it died and came back
+  to try the same again. Its 90 s without a checkpoint start again when it comes back, and a point of the course passed on the way counts.
 - **Capture the flag.** Roles by seat order in the team's bots: raider, defender, raider, escort, defender, and again. A carrier goes for the stand
   of its colour. A raider goes to the nearest enemy flag at its stand (`CtfGame` has no dropped flag: a carried flag goes home when its carrier is
   removed or comes back, so there is none to return) and takes it by touch. A defender meets whoever comes within 110 m of its stand, else circles it. An

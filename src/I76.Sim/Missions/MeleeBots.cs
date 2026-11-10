@@ -175,8 +175,8 @@ public sealed partial class MeleeGame
             }
             if (b.RaiseAt is not null)
             {
-                // a fresh car: it thinks from the start
-                b.RaiseAt = null; b.Plan = PlanNone; b.MovedAt = Host.Now;
+                // a fresh car: it thinks from the start (and a racer's time without a checkpoint starts again: the dead seconds are not its own)
+                b.RaiseAt = null; b.Plan = PlanNone; b.MovedAt = Host.Now; b.ProgressAt = Host.Now;
                 p.Entity.Depth = -1; p.Entity.Search = null;
             }
             if (Ended) { Order(p, PlanSit, null, null, 0); continue; }
@@ -386,7 +386,8 @@ public sealed partial class MeleeGame
 
     /// <summary>
     /// The race: the checkpoints from the next one the tracker wants, two laps' worth in a Race order (the AI plans its way
-    /// from point to point and loops the list; a car that sat out a pass of 30 m is told to go back for it).
+    /// from point to point and loops the list; a car that sat out a pass of 30 m is told to go back for it). A car that has
+    /// come back at a spawn point drives the course from there to that checkpoint (<see cref="LeadIn"/>).
     /// </summary>
     private void BotRace(MeleePlayer p, BotBrain b)
     {
@@ -394,12 +395,16 @@ public sealed partial class MeleeGame
         if (!_races.TryGetValue(p, out var tr)) _races[p] = tr = new RaceTracker(Checkpoints);
         if (!tr.HasCheckpoints) { Wander(p, b); return; }
         var e = p.Entity;
-        bool issue = b.Plan != PlanRace || b.Path is null || b.Before is null || b.Owner is null;
-        if (!issue)
+        bool fresh = b.Plan != PlanRace;
+        bool issue = fresh || b.Path is null || b.Before is null || b.Owner is null;
+        // the AI's place in its route: a point of the course on the way to the checkpoint it wants (Owner −1), or the route's own
+        int nav = b.Owner is { Length: > 0 } ow ? System.Math.Clamp(e.NavIndex, 0, ow.Length - 1) : 0;
+        bool leading = !issue && b.Owner![nav] < 0;
+        if (!issue && !leading)
         {
             // where the AI is in its route against where the tracker is: the AI moves on a point at RaceReach across the ground, the tracker counts at 30 in 3-D (a checkpoint high above or below)
-            int j = System.Math.Clamp(e.NavIndex, 0, b.Owner!.Length - 1);
-            int k = b.Owner[j], cur = tr.Current;
+            int j = nav;
+            int k = b.Owner![j], cur = tr.Current;
             if (k >= b.Before!.Length - 2) issue = true;
             else if (cur == b.Before[k]) b.AheadSince = -1;
             else if (k >= 1 && cur == b.Before[k - 1])
@@ -410,7 +415,14 @@ public sealed partial class MeleeGame
             else if (cur == b.Before[k + 1]) b.AheadSince = -1;   // the tracker is a point on: the AI is still planning
             else issue = true;                                      // neither (a respawn, a reconfiguration): from the tracker's next
         }
-        if (tr.Current != b.LastCur) { b.LastCur = tr.Current; b.ProgressAt = Host.Now; }
+        else if (leading)
+        {
+            b.AheadSince = -1;
+            if (tr.Current != b.Before![0]) issue = true;          // the one wanted taken on the way: on from the tracker's next
+        }
+        // progress is a checkpoint counted, or a point of the course passed on the way to the one wanted (a lap's worth of them after a respawn)
+        int mark = leading ? -3 - nav : tr.Current;
+        if (mark != b.LastCur) { b.LastCur = mark; b.ProgressAt = Host.Now; }
         else if (Host.Now - b.ProgressAt > NoProgressSeconds) { b.ProgressAt = Host.Now; b.CarefulRace = !b.CarefulRace; Explode?.Invoke(p.Car); return; }
         if (issue)
         {
@@ -420,6 +432,9 @@ public sealed partial class MeleeGame
             var path = new List<Vector3>();
             var owner = new List<int>();
             var from = p.Car.Pos.ToVector3();
+            // back at a spawn point: the course from there, as a person drives it, the checkpoints on the way passed but not counted
+            if (fresh && tr.Current >= 0)
+                foreach (var w in LeadIn(tr.Route(tr.Count, out _), from)) { path.Add(w); owner.Add(-1); from = w; }
             for (int k = 0; k < route.Length; k++)
             {
                 var to = route[k].ToVector3();
@@ -438,6 +453,39 @@ public sealed partial class MeleeGame
         Order(p, PlanRace, null, b.Path, PathSpeed(p));
         // a racer shoots what is in its way, as a person may: close, and in front (a shot at a car off to the side costs the turn)
         Shoot(p, 45f, 0.9f);
+    }
+
+    /// <summary>
+    /// The points of the course a car at <paramref name="at"/> drives through to reach the checkpoint its tracker wants next
+    /// (<paramref name="lap"/>[0], the rest of the lap after it in order). A car that has come back at a spawn point keeps the
+    /// checkpoint it wants, as a person's car does (the original keeps the race's count through a respawn; every stock arena's
+    /// spawn points are behind check1): straight at it, the planner would take it across the arena, off the edges and into the walls
+    /// the course goes round, again after each death, where a person drives the course to it. The car is on the leg of
+    /// the course nearest it (across the ground): it drives on from that leg's end, or its start if it is behind it, through
+    /// the points in order to the one wanted. On the leg out of the one wanted, past it, it goes straight back for it; on
+    /// the leg into it, on to it. A lap of one point has no course to drive.
+    /// </summary>
+    internal static List<Vector3> LeadIn(Double3[] lap, Vector3 at)
+    {
+        var lead = new List<Vector3>();
+        int n = lap.Length;
+        if (n < 2) return lead;
+        int leg = 0;
+        float best = float.MaxValue, bestT = 0;
+        for (int i = 0; i < n; i++)
+        {
+            var a = lap[i].ToVector3();
+            var c = lap[(i + 1) % n].ToVector3();
+            var ab = new Vector2(c.X - a.X, c.Z - a.Z);
+            var ap = new Vector2(at.X - a.X, at.Z - a.Z);
+            float len2 = ab.LengthSquared();
+            float t = len2 > 0 ? System.Math.Clamp(Vector2.Dot(ap, ab) / len2, 0f, 1f) : 0f;
+            float d = (ap - t * ab).LengthSquared();
+            if (d < best) { best = d; leg = i; bestT = t; }
+        }
+        int from = bestT > 0 && leg != 0 ? leg + 1 : leg;
+        for (int i = from; i > 0 && i < n; i++) lead.Add(lap[i].ToVector3());
+        return lead;
     }
 
     private const float RaceHop = 100000f;

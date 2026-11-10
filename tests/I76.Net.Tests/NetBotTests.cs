@@ -83,6 +83,55 @@ public class NetBotTests(ITestOutputHelper output)
         Assert.Equal((byte)winnerSlot, events.OfType<GameOverEvent>().Single().Standings[0].Slot);
     }
 
+    /// <summary>
+    /// A race bot killed mid-lap comes back at a spawn point (behind check1) wanting the checkpoint it wanted, as a person's car does
+    /// (the race's count goes on through a respawn), and drives the course to it from check1 in order, not straight across the arena
+    /// (where the planner took it off the course into the walls and drops, to die and come back to try again): it takes that one and
+    /// finishes the lap without dying again.
+    /// </summary>
+    [Theory]
+    [InlineData("N31.RAC", 1)]
+    [InlineData("N34.RAC", 7)]
+    public void AKilledRaceBotDrivesTheCourseFromTheStartToTheCheckpointItWants(string arena, int killAfter)
+    {
+        if (Nitro is null) return;
+        var host = new MeleeHost(new ServerOptions { Install = Nitro, Arena = arena, Kind = MeleeKind.Race, GoalValue = 0, Bots = 2, MaxPlayers = 4, BotSkill = BotSkill.Hard, Seed = 3 });
+        var game = host.Game;
+        var bot = host.Bots[0].Player;
+        var checks = game.Checkpoints.Where(c => c.Key < 99).OrderBy(c => c.Key).ToList();
+        double dt = host.Session.TickSeconds, t = 0;
+        RaceTracker Tracker() => game.RaceOf(bot)!;
+        // lap one, then to the checkpoint after check(killAfter + 1)
+        while (t < 600 && !(game.RaceOf(bot) is { Laps: >= 1 } r && r.Current == killAfter)) { host.Step(); t += dt; }
+        Assert.True(t < 600, "the bot raced a lap");
+        int deaths = bot.Deaths, laps = Tracker().Laps;
+        output.WriteLine($"{arena}: killed at {t:0} s by check{killAfter + 1}, {bot.Car.Pos.X:0},{bot.Car.Pos.Z:0}");
+        host.Setup.Damage.Destroy(bot.Car);
+        while (t < 900 && (bot.Destroyed || DamageModel.IsDead(bot.Car))) { host.Step(); t += dt; }
+        double back = t;
+        var at = bot.Car.Pos;
+        output.WriteLine($"back at {back:0} s at {at.X:0},{at.Z:0}");
+        Assert.Equal(deaths + 1, bot.Deaths);
+        Assert.True(game.Spawns.Min(s => System.Math.Sqrt((s.Pos.X - at.X) * (s.Pos.X - at.X) + (s.Pos.Z - at.Z) * (s.Pos.Z - at.Z))) < 25, "at a spawn point");
+        Assert.Equal(killAfter, Tracker().Current);                     // the same checkpoint wanted
+        // the checkpoints the car comes by (within 30 m across the ground) on its way: the course from check1 in order
+        var seen = new List<int>();
+        double took = 0;
+        while (t - back < 240 && Tracker().Laps == laps)
+        {
+            host.Step(); t += dt;
+            Assert.Equal(deaths + 1, bot.Deaths);
+            var p = bot.Car.Pos;
+            foreach (var (n, c) in checks)
+                if (took == 0 && (p.X - c.X) * (p.X - c.X) + (p.Z - c.Z) * (p.Z - c.Z) < 30 * 30 && (seen.Count == 0 || seen[^1] != n)) seen.Add(n);
+            if (took == 0 && Tracker().Current != killAfter) took = t;
+        }
+        output.WriteLine($"by checkpoints {string.Join(", ", seen)}; took check{killAfter + 2} {took - back:0} s after, the lap {t - back:0} s after");
+        Assert.True(took > 0, $"took check{killAfter + 2}");
+        Assert.Equal(Enumerable.Range(1, killAfter + 2), seen);
+        Assert.Equal(laps + 1, Tracker().Laps);
+    }
+
     // ---- capture the flag ----
 
     /// <summary>Three teams of two on a Nitro CTF arena: a raider takes an enemy flag from its stand and carries it home, a capture the game counts to the team and its players.</summary>

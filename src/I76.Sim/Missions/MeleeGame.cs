@@ -152,6 +152,8 @@ public sealed partial class MeleeGame
     /// <summary>A race lap was counted for a player.</summary>
     public event Action<MeleePlayer>? LapCounted;
     private readonly Dictionary<MeleePlayer, RaceTracker> _races = [];
+    /// <summary>A race: the player's lap counting (null before its first frame in the race).</summary>
+    public RaceTracker? RaceOf(MeleePlayer p) => _races.GetValueOrDefault(p);
     private float? _overAt;
     /// <summary>Who won, by the player who reached the goal (null until someone has, and for a time limit).</summary>
     public MeleePlayer? Winner { get; private set; }

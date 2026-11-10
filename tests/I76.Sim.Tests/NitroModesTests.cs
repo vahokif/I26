@@ -75,6 +75,38 @@ public class NitroModesTests
         Assert.Equal(2, r.Laps);
     }
 
+    /// <summary>
+    /// A race bot back at a spawn point (behind check1) keeps the checkpoint its tracker wants, as a person's car does, and drives the
+    /// course to it: the checkpoints from check1 on in order, passed but not counted. On the leg into the one it wants it goes
+    /// on to it; past it (the last checkpoint, from the start) it goes straight back.
+    /// </summary>
+    [Fact]
+    public void ARaceBotBackAtTheStartDrivesTheCourseToTheCheckpointItWants()
+    {
+        var c = new Dictionary<int, Double3> { [1] = new(0, 0, 100), [2] = new(0, 0, 400), [3] = new(300, 0, 400), [4] = new(300, 0, 100) };
+        var spawn = new System.Numerics.Vector3(0, 0, 40);
+        var r = new RaceTracker(c);
+        System.Numerics.Vector3[] Lead(System.Numerics.Vector3 at) => [.. MeleeGame.LeadIn(r.Route(r.Count, out _), at)];
+        System.Numerics.Vector3 V(int n) => c[n].ToVector3();
+        r.Update(c[1]);                                        // wants check2: by check1
+        Assert.Equal([V(1)], Lead(spawn));
+        r.Update(c[2]);                                        // wants check3: the course round to it, not across
+        Assert.Equal([V(1), V(2)], Lead(spawn));
+        Assert.Equal([V(2)], Lead(new(0, 0, 250)));            // on the leg into check2: on through it
+        Assert.Empty(Lead(new(150, 0, 400)));                  // on the leg into check3: on to it
+        Assert.Empty(Lead(new(300, 0, 300)));                  // past it, on the way to check4: straight back
+        r.Update(c[3]);                                        // wants check4, the last: back along the leg from it to check1
+        Assert.Empty(Lead(spawn));
+        Assert.Empty(Lead(new(200, 0, 100)));
+        r.Update(c[4]);                                        // wants check1 (the wrap): straight on
+        Assert.Empty(Lead(spawn));
+        // with a finish the lap goes through it, not check1 (it is passed, not counted, on the way)
+        var f = new Dictionary<int, Double3>(c) { [99] = new(0, 0, 0) };
+        r = new RaceTracker(f);
+        r.Update(f[1]); r.Update(f[2]);                        // wants check3
+        Assert.Equal([f[99].ToVector3(), f[2].ToVector3()], Lead(new(0, 0, -30)));
+    }
+
     private static MeleePlayer Player(int team, Double3 pos)
     {
         var car = new Vehicle { Pos = pos };

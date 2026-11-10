@@ -45,6 +45,7 @@ public partial class ExitWatchdog : Node
     private static PosixSignalRegistration? _winch, _term;
     private static volatile bool _wayland, _termRequested;
     private static int _watching;
+    private static bool _off;
     private bool _quitting;
 
     /// <summary>The code the program is quitting with, for _exit (Godot's OS keeps its own out of reach of C#): set it beside a Quit(code).</summary>
@@ -54,15 +55,19 @@ public partial class ExitWatchdog : Node
     /// <summary>Puts the watchdog under the root once a run (from a node's _Ready: the root is busy then, so deferred).</summary>
     public static void Install(SceneTree tree)
     {
-        // I76_EXIT_WATCHDOG=0 leaves it out (to see the engine's exit as it is)
-        if (_added || System.Environment.GetEnvironmentVariable("I76_EXIT_WATCHDOG") == "0") return;
+        // I76_EXIT_WATCHDOG=0 leaves the watch out (to see the engine's exit as it is); the node stays for the quit's wait for our threads
+        if (_added) return;
         _added = true;
+        _off = System.Environment.GetEnvironmentVariable("I76_EXIT_WATCHDOG") == "0";
         tree.Root.CallDeferred(Node.MethodName.AddChild, new ExitWatchdog { Name = "ExitWatchdog" });
     }
 
     public override void _Ready()
     {
         ProcessMode = ProcessModeEnum.Always;
+        // the window's close button quits once our threads that make engine resources are done (EngineThreads)
+        GetTree().AutoAcceptQuit = false;
+        if (_off) return;
         if (OperatingSystem.IsLinux() && DisplayServer.GetName() == "Wayland")
         {
             // a handler (which does nothing) so that the signal interrupts poll(); SIGWINCH's default is to ignore it,
@@ -90,11 +95,21 @@ public partial class ExitWatchdog : Node
         if (!_termRequested || _quitting) return;
         _quitting = true;
         GD.Print("exit watchdog: SIGTERM, quitting");
-        GetTree().Quit(143);
+        EngineThreads.QuitWhenDone(GetTree(), 143);
     }
 
-    // the SceneTree is being finalized: what remains is the engine's own cleanup
-    public override void _ExitTree() => StartWatch();
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest) EngineThreads.QuitWhenDone(GetTree());
+    }
+
+    // the SceneTree is being finalized: our threads that make engine resources are waited for (EngineThreads), then what
+    // remains is the engine's own cleanup
+    public override void _ExitTree()
+    {
+        EngineThreads.DrainAtExit(ExitCode);
+        if (!_off) StartWatch();
+    }
 
     private static void StartWatch()
     {

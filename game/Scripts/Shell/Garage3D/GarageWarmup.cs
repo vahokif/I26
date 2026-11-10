@@ -69,8 +69,10 @@ public static class GarageWarmup
             var job = _thread = OnThread(_thread, () =>
             {
                 GarageRoom.MakeTextures();
+                if (I76.Game.Boot.EngineThreads.Quitting) return;
                 var assets = GarageAssets.Held(vfs);
                 var car = TripCar.FromVcf(vfs.Read(vcf), n => I76.Sim.Vehicles.VehicleFactory.EngineCompId(vfs, n));
+                if (I76.Game.Boot.EngineThreads.Quitting) return;
                 GarageCar.Prepare(assets, car);
                 made = (assets, car);
             });
@@ -103,11 +105,13 @@ public static class GarageWarmup
         var thread = new System.Threading.Thread(() =>
         {
             MainThread.OwnsItsScene = true;
-            try { before?.Wait(); work(); }
-            catch (Exception ex) { GD.PushWarning($"garage warm-up: {ex.Message}"); }
+            try { before?.Wait(); if (!I76.Game.Boot.EngineThreads.Quitting) work(); }
+            catch (Exception ex) when (!I76.Game.Boot.EngineThreads.Quitting) { GD.PushWarning($"garage warm-up: {ex.Message}"); }
+            catch (Exception) { }   // the game is quitting: nothing of the engine's to say it with
             done.SetResult();
         }, 64 << 20) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "garage-warmup" };
-        thread.Start();
+        // (the quit waits for it: the engine must not go from under it)
+        I76.Game.Boot.EngineThreads.Start(thread);
         return done.Task;
     }
 }

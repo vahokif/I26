@@ -143,7 +143,7 @@ public partial class Main
             return LoadFailed(ex, loading);
         }
         GetTree().Paused = true;   // nothing moves under the movie until the mission starts, as under the original's briefing
-        thread.Start();
+        EngineThreads.Start(thread);   // (a quit meanwhile waits for it: the engine must not go from under it)
         try
         {
             // the card held a moment (it would otherwise only flash up), the build going on meanwhile, then back to black for the movie

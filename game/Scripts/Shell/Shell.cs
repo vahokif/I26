@@ -647,7 +647,7 @@ public partial class Shell : CanvasLayer
     }
 
     /// <summary>Quit to the desktop (0xc002, the original front end's main loop returns 0xff).</summary>
-    public void Quit() { Trip.Save(); GetTree().Quit(); }
+    public void Quit() { Trip.Save(); I76.Game.Boot.EngineThreads.QuitWhenDone(GetTree()); }
 
     /// <summary>Options' "Switch Game" (offered when the start showed the game chooser): back to the chooser in this window, then the other game (<see cref="I76.Game.Boot.GameSwitch"/>).</summary>
     public void SwitchGame() { Trip.Save(); I76.Game.Boot.GameSwitch.ToChooser(GetTree()); }

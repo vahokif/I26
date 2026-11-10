@@ -60,6 +60,51 @@ public sealed class HdDirSource : HdSource
 }
 
 /// <summary>
+/// A folder's own files (not its subfolders), listed once and found by name in any case: a world texture pack's folder, which a
+/// mission asks for a thousand names, most of them not there. A file added after the first look is not seen.
+/// </summary>
+public sealed class HdFlatDirSource : HdSource
+{
+    private readonly string _dir;
+    private readonly Lazy<Dictionary<string, string>> _files;
+    public HdFlatDirSource(string dir)
+    {
+        _dir = dir;
+        _files = new(() => Directory.Exists(dir)
+            ? Directory.EnumerateFiles(dir).ToDictionary(f => Path.GetFileName(f).ToLowerInvariant(), f => f)
+            : [], LazyThreadSafetyMode.ExecutionAndPublication);
+        var p = Path.Combine(dir, "pack.json");
+        if (File.Exists(p)) Info = HdPackInfo.Parse(File.ReadAllBytes(p));
+    }
+    public override string Origin => _dir;
+    public override int Count => _files.Value.Count;
+    public override bool Exists(string rel) => _files.Value.ContainsKey(Norm(rel));
+    public override byte[]? Read(string rel)
+    {
+        if (!_files.Value.TryGetValue(Norm(rel), out var f)) return null;
+        try { return File.ReadAllBytes(f); }
+        catch (IOException) { return null; }
+    }
+}
+
+/// <summary>Several sources read as one: a file comes from the first that has it. Info is the first's.</summary>
+public sealed class HdChainSource : HdSource
+{
+    private readonly HdSource[] _sources;
+    public HdChainSource(IEnumerable<HdSource> sources) { _sources = [.. sources]; Info = _sources.FirstOrDefault()?.Info; }
+    public override string Origin => string.Join(" over ", _sources.Select(s => s.Origin));
+    public override int Count => _sources.Sum(s => s.Count);
+    public override bool Exists(string rel) => _sources.Any(s => s.Exists(rel));
+    public override byte[]? Read(string rel)
+    {
+        foreach (var s in _sources)
+            if (s.Read(rel) is { } b) return b;
+        return null;
+    }
+    public override void Dispose() { foreach (var s in _sources) s.Dispose(); }
+}
+
+/// <summary>
 /// A pack file: a zip whose tex-menu/ folder is the layout (or another root, such as one folder down:
 /// I26-HD-Menu-Pack/tex-menu/), read in place. Its pack.json is the root's, else the zip's top one. Each thread reads through an
 /// archive of its own (a ZipArchive is not thread safe), opened on its first read: only the central directory is read, the
@@ -121,17 +166,20 @@ public sealed class HdZipSource : HdSource
 
 public static class HdPackFinder
 {
-    /// <summary>Opens the newest readable pack among i76-hd-menus*.zip in the folders, or null; unreadable ones are reported through <paramref name="warn"/>.</summary>
-    public static HdZipSource? Newest(IEnumerable<string> folders, Action<string>? warn = null)
+    /// <summary>
+    /// Opens the newest readable pack among the folders' <paramref name="pattern"/> zips (the menu art's i76-hd-menus*.zip by default)
+    /// with files under <paramref name="root"/>, or null; unreadable ones are reported through <paramref name="warn"/>.
+    /// </summary>
+    public static HdZipSource? Newest(IEnumerable<string> folders, Action<string>? warn = null, string pattern = "i76-hd-menus*.zip", string root = HdZipSource.Root)
     {
         HdZipSource? best = null;
         foreach (var dir in folders.Where(Directory.Exists).Distinct())
-            foreach (var f in Directory.EnumerateFiles(dir, "i76-hd-menus*.zip").OrderBy(f => f, StringComparer.Ordinal))
+            foreach (var f in Directory.EnumerateFiles(dir, pattern).OrderBy(f => f, StringComparer.Ordinal))
             {
                 HdZipSource z;
-                try { z = new HdZipSource(f); }
+                try { z = new HdZipSource(f, root); }
                 catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException) { warn?.Invoke($"{f}: {e.Message}"); continue; }
-                if (z.Info is null || z.Count == 0) { warn?.Invoke($"{f}: no pack.json or no tex-menu/ files"); z.Dispose(); continue; }
+                if (z.Info is null || z.Count == 0) { warn?.Invoke($"{f}: no pack.json or no {root} files"); z.Dispose(); continue; }
                 if (best is null || HdPackInfo.Compare(z.Info.Version, best.Info!.Version) > 0) { best?.Dispose(); best = z; }
                 else z.Dispose();
             }

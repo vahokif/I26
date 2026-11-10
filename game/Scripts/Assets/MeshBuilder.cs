@@ -27,6 +27,32 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
     }
 
     private readonly Dictionary<string, I76.Formats.Imaging.CarMaterial.Paint> _paints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Color?> _meanColour = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A face's colour as drawn, sRGB: an untextured face's own, a textured one's mean over its texels (the key's left out; an
+    /// animated face's first frame); null if its texture does not load. A lamp's light takes it (StructureLamps).
+    /// </summary>
+    public Color? FaceColour(AssembledModel model, I76.Formats.Geo.GeoFace f)
+    {
+        if (f.Texture.Length == 0 || f.Unk_0x20 == 0) return Color.Color8(f.R, f.G, f.B);
+        var member = resolver.AnimatedFace(f.Texture) is { } anim ? anim.Frames[0] : resolver.ResolveFace(f.Texture, model.ObjectCode, model.TmtNames, vtfMaps: model.VtfMaps);
+        if (member is null) return null;
+        if (_meanColour.TryGetValue(member, out var known)) return known;
+        Color? mean = null;
+        if (materials.RgbaOf(member) is { } t)
+        {
+            double r = 0, g = 0, b = 0;
+            int n = 0;
+            for (int i = 0; i + 3 < t.Rgba.Length; i += 4)
+            {
+                if (t.Rgba[i + 3] == 0) continue;
+                r += t.Rgba[i]; g += t.Rgba[i + 1]; b += t.Rgba[i + 2]; n++;
+            }
+            if (n > 0) mean = new Color((float)(r / n / 255), (float)(g / n / 255), (float)(b / n / 255));
+        }
+        return _meanColour[member] = mean;
+    }
 
     /// <summary>A vehicle's paint, for its material maps (MaterialLibrary, CarMaterial); none for anything else.</summary>
     private I76.Formats.Imaging.CarMaterial.Paint? PaintOf(AssembledModel model)
@@ -106,14 +132,24 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
     /// <param name="bothSides">every face drawn from both sides (the modern look's open wreck shape)</param>
     /// <param name="oneSided1997">the cut-out and translucent faces drawn from the front only in the 1997 look (MaterialLibrary.ForTexture)</param>
     /// <param name="frameOf">a face texture's .TMT entry: a damaged car's zones (CarNode.TexFrame, DamageTextures); entry 0 without it</param>
+    /// <param name="selfLit">a structure whose self-lit faces shine at night in the modern look (<see cref="SelfLit"/>)</param>
     public ArrayMesh? Build(AssembledModel model, bool wheels = true, Func<ModelPart, bool>? include = null, System.Numerics.Vector3 origin = default,
-        Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace = null, bool bothSides = false, bool oneSided1997 = false, Func<string, int>? frameOf = null) =>
-        Build(model, wheels, include, origin, skipFace, PaintOf(model), bothSides, oneSided1997, frameOf);
+        Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace = null, bool bothSides = false, bool oneSided1997 = false, Func<string, int>? frameOf = null,
+        bool selfLit = false) =>
+        Build(model, wheels, include, origin, skipFace, PaintOf(model), bothSides, oneSided1997, frameOf, selfLit);
+
+    /// <summary>
+    /// Whether a structure's face shines of its own at night in the modern look: one the art marks self-lit (FaceLight.SelfLit)
+    /// and not looking up (<paramref name="up"/>, its outward normal's y). A self-lit face looking up is ground under a lamp (the gas
+    /// station's pad, the pump islands' tops): the lamps above light it (StructureLamps), as the cut-scene shows the forecourt.
+    /// </summary>
+    public static bool SelfLit(I76.Formats.Geo.GeoFace f, float up) => I76.Formats.Geo.FaceLight.SelfLit(f) && up <= I76.Formats.Assembly.SelfLitLamps.Down;
 
     private ArrayMesh? Build(AssembledModel model, bool wheels, Func<ModelPart, bool>? include, System.Numerics.Vector3 origin,
         Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace, I76.Formats.Imaging.CarMaterial.Paint? paint, bool bothSides = false, bool oneSided1997 = false,
-        Func<string, int>? frameOf = null)
+        Func<string, int>? frameOf = null, bool selfLit = false)
     {
+        selfLit &= model.Kind == "sdf";
         var surfaces = new Dictionary<Material, Surface>();
         var cabin = new CabinFit();
         var seams = model.Kind == "vcf" ? new List<(Surface S, int I, Vector3 At, Vector3 FaceN, float W)>() : null;
@@ -142,22 +178,23 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
                 if (f.Vertices.Length < 3 || skipFace?.Invoke(part, f) == true) continue;
                 Material mat;
                 string? faceMember = null;
+                // a zero vertex normal (some GEOs have them) would light as NaN, which glow then spreads
+                var faceN = Coords.ToGodot(-part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z))).Normalized();
+                bool shines = selfLit && SelfLit(f, faceN.Y);
                 if (f.Texture.Length > 0 && f.Unk_0x20 != 0 && resolver.AnimatedFace(f.Texture) is { } anim)
                     mat = materials.ForAnimated(anim.Frames, anim.Fps, MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21), partPaint, partFamily, bothSides,
-                        unlit: I76.Formats.Geo.FaceLight.Unlit(f));
+                        unlit: I76.Formats.Geo.FaceLight.Unlit(f), selfLit: shines);
                 else if (f.Texture.Length > 0 && f.Unk_0x20 != 0 && resolver.ResolveFace(f.Texture, model.ObjectCode, model.TmtNames, vtfMaps: model.VtfMaps, frame: frameOf?.Invoke(f.Texture) ?? 0) is { } member)
                     mat = (faceMember = member) is null ? null! : materials.ForTexture(member, MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21), partPaint, partFamily, oneSided: plates.Contains((partIndex, f)), bothSides: bothSides,
                         unlit: I76.Formats.Geo.FaceLight.Unlit(f), oneSided1997: oneSided1997,
-                        scheme: scheme is { } sc && sc.Members.Contains(member) ? sc.Key : null);
+                        scheme: scheme is { } sc && sc.Members.Contains(member) ? sc.Key : null, selfLit: shines);
                 else
                 {
                     if (f.Texture.Length > 0) Unresolved.Add(f.Texture);
-                    mat = materials.ForColour(f.R, f.G, f.B, prop: partPaint is null, partFamily, bothSides, oneSided: plates.Contains((partIndex, f)));
+                    mat = materials.ForColour(f.R, f.G, f.B, prop: partPaint is null, partFamily, bothSides, oneSided: plates.Contains((partIndex, f)), selfLit: shines);
                 }
                 if (!surfaces.TryGetValue(mat, out var s)) surfaces[mat] = s = new Surface();
                 var fv = f.Vertices;
-                // a zero vertex normal (some GEOs have them) would light as NaN, which glow then spreads
-                var faceN = Coords.ToGodot(-part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z))).Normalized();
                 // an overlay (a window, a lamp) lying in an earlier part's face: lifted off it, as drawing it later did
                 var lift = decals.Contains((partIndex, f)) ? faceN * 0.012f : Vector3.Zero;
                 if (faceMember is not null && model.Kind == "vcf") estimate |= EstimatesNormals(I76.Formats.Imaging.CarMaterialTable.StemOf(faceMember));

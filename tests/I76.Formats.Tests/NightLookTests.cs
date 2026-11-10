@@ -1,4 +1,5 @@
 using System.Numerics;
+using I76.Formats.Assembly;
 using I76.Formats.Geo;
 using I76.Formats.Imaging;
 using I76.Formats.Mission;
@@ -123,5 +124,39 @@ public class NightLookTests
         Assert.Null(NightSpot.ShadowLight(new Vector3(60, 0.7f, 0), [(Light, Nose)], (_, _) => 0f, Lighting.Presets[0].Intensity));
         // by day nothing beats 1.5 times the sun's intensity
         Assert.Null(NightSpot.ShadowLight(c, [(Light, Nose)], (_, _) => 0f, Lighting.Presets[5].Intensity));
+    }
+
+    [Theory]
+    [InlineData(4, 1, 0, true)]    // a lit window, a sign, the canopy's underside: 0x14, and the art asks for nothing else
+    [InlineData(4, 5, 0, true)]    // keyed (the street lamp's post)
+    [InlineData(0, 0, 0, true)]    // row 0 is 4; untextured (a pump island): the engine lights it, the art asks for full brightness
+    [InlineData(4, 3, 0, false)]   // bit 1: lit (0x16)
+    [InlineData(4, 7, 0, false)]   // keyed with bit 1: the engine draws it unlit, the art asked for light
+    [InlineData(5, 7, 0, false)]   // a fence or a rail (0x57): the same
+    [InlineData(5, 1, 0, false)]   // the walls, the roof
+    [InlineData(4, 5, 2, false)]   // translucent
+    [InlineData(1, 1, 0, false)]
+    public void FacesTheArtMarksSelfLit(byte row, byte flags, byte translucent, bool self) =>
+        Assert.Equal(self, FaceLight.SelfLit(row, flags, translucent));
+
+    [InstallFact]
+    public void TheGasStationsLampsAreItsCanopyAndItsStreetLamps()
+    {
+        // T06's Paradise gas station: the two awnings' undersides, 23.4 x 15 at 4.6 and their slanted 2.7-wide inner edges, and the
+        // two lamp posts' lenses at 6.1, three faces each; the pad and the pumps' tops look up and make no lamp
+        var m = new ModelAssembler(TestInstall.Vfs).Assemble("bfparad2.sdf")!;
+        var lamps = SelfLitLamps.Of(m);
+        Assert.All(lamps, l => Assert.True(l.Facing.Y < -SelfLitLamps.Down));
+        Assert.Equal(2, lamps.Count(l => l.Part.NodeName.StartsWith("FP1_LT")));
+        Assert.All(lamps.Where(l => l.Part.NodeName.StartsWith("FP1_LT")), l => Assert.Equal(6.1f, l.At.Y, 1));
+        var canopy = lamps.Where(l => l.Part.NodeName.StartsWith("FP1_AW")).ToList();
+        Assert.Equal(16, canopy.Count);   // 3 x 2 cells under each awning, 2 along each edge
+        Assert.All(canopy, l => Assert.InRange(l.At.Y, 3.7f, 4.7f));
+        Assert.Equal(2 * (351f + 47.1f), canopy.Sum(l => l.Area), 0);
+        Assert.DoesNotContain(lamps, l => l.Part.NodeName is "FP1_PAD2" || l.Part.NodeName.StartsWith("FP1_PM"));
+        // the street lamp: its lens's three faces are one lamp
+        var street = SelfLitLamps.Of(new ModelAssembler(TestInstall.Vfs).Assemble("bczlite1.sdf")!);
+        Assert.Single(street);
+        Assert.Equal(6.1f, street[0].At.Y, 1);
     }
 }

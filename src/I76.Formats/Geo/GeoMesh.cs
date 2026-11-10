@@ -115,6 +115,18 @@ public static class FaceLight
         bool b1 = (flags & 2) != 0, keyed = (flags & 4) != 0;
         return row == 5 ? b1 && keyed : !b1 || keyed;
     }
+
+    /// <summary>
+    /// Whether the art marks the face to shine of its own (the modern look's self-lit faces): a face of row 3 or 4 (0 taken as
+    /// 4) without +0x20 bit 1, not translucent, textured or not. That is <see cref="Unlit"/> less what the engine draws at full
+    /// brightness though the face asks for light (bit 1 on a cut-out face: the fences and rails) or for no reason of its art
+    /// (the translucent faces), and with the untextured faces of those rows, which the engine lights whatever they ask (a
+    /// street lamp's lens, a pump island). Over the stock scenery: the road signs, the Paradise gas station's canopy, pumps,
+    /// pad, walls and lamps, the street lamp, a house's windows and porch lamp, Foxy's walls and neon, a wreck's flames.
+    /// </summary>
+    public static bool SelfLit(GeoFace f) => SelfLit(f.Unk_0x1F, f.Unk_0x20, f.Unk_0x21);
+
+    public static bool SelfLit(byte row, byte flags, byte translucent) => (row == 0 ? 4 : row) is 3 or 4 && (flags & 2) == 0 && translucent == 0;
 }
 
 /// <summary>

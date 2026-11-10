@@ -43,6 +43,8 @@ uniform float opacity = 0.6;
 uniform float shadow_dark = 0.0;   // the original's shadows were pure black
 uniform bool prelit = false;       // the cockpit's art: drawn as painted, no light, no shadow
 uniform bool unlit_1997 = false;   // the 1997 look: a face the engine draws at full brightness (FaceLight: lamps, lit windows, translucent faces)
+uniform bool self_lit = false;     // the modern look: a structure's face the art marks to shine of its own (FaceLight.SelfLit), glowing at night
+const float SELF_LIT_GLOW = 1.0;   // the glow: the face's colour, times this
 // material maps (modern look): roughness, metallic, clear coat, specular; a car's (CarMaterial) with a tangent-space
 // normal, scenery's and props' (PropMaterial) without
 uniform bool has_maps = false;
@@ -667,6 +669,9 @@ void fragment() {
 		SPECULAR = base_specular;
 		CLEARCOAT = 0.0;
 	}
+	// a self-lit face at night: its colour shines as the 1997 look draws it, at full brightness (the lit canopy, a lit window, a
+	// lamp); by day the sun outshines it, as it does the original's
+	if (self_lit && i76_night) EMISSION += c.rgb * SELF_LIT_GLOW;
 	if (!prelit && wreck.x > 0.0) {
 		vec3 a = ALBEDO, g;
 		float r = ROUGHNESS, m = METALLIC, s = SPECULAR;

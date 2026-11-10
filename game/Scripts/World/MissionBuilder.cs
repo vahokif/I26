@@ -658,7 +658,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             if (RoadsOffGround.Quads > 0) root.AddChild(RoadsOffGround); else { RoadsOffGround.Free(); RoadsOffGround = null; }
         }
 
-        Scenery = new ScenerySpawner { Name = "Placements" };
+        Scenery = new ScenerySpawner { Name = "Placements", Night = !Light.IsDay };
         Stage("scenery spawn");
         Scenery.Spawn(world, asm, Meshes, SkipVehicles);
         root.AddChild(Scenery);

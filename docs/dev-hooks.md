@@ -75,6 +75,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_VCF_SWAP` | capture | `car.vcf:old=new,old=new`: that car with other weapons in its file (names without `.gdf`, `vppirna1.vcf:gfmedium=gwhiteph` puts the WP Mortar where the flame thrower was), for a capture that needs a weapon the stock cars lack; with `--drive car.vcf`. |
 | `I76_SIREN_LIGHTS` | tuning | How many police light bars (the nearest to the camera) cast red and blue light at night in the modern look; 4 by default, 0 for none, -1 leaves the whole modern bar out. |
 | `I76_HEADLIGHTS` | tuning | How many other cars' headlamps (the nearest to the camera) cast real light at night in the modern look; 6 by default, 0 for none. The player's always do. |
+| `I76_SELF_LIT` | tuning | `0`: the modern look's night leaves the structures' self-lit faces unlit and their lamps out (the Paradise gas station dark, as before they were added); `noshadow`: the lamps cast no shadows. |
 | `I76_FPS_LOG` | test | `1`: every two seconds print `fps-log:` (frames a second, sim ticks a second and the tick, frame time mean, deviation and worst): the Max FPS cap against the sim rate. |
 | `I76_HOUR` | capture | Override the mission's hour of day for the lighting. |
 | `I76_CAR_CONDITION` | capture | `N`: every car shows damage level N. |

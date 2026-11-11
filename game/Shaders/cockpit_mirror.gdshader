@@ -18,7 +18,9 @@ void fragment() {
 	vec4 a = texture(art, UV);
 	// the art's surround (its corner colour) is not drawn: only the frame and the glass are
 	vec4 surround = texelFetch(art, ivec2(0, 0), 0);
-	if (a.a >= 0.5 && distance(a.rgb, surround.rgb) < 0.004) discard;
+	// within 0.1 of it: a pack's upscale (and its block compression) leaves the surround near, not exactly, the
+	// original's colour; the art's other colours are a third of the way across the cube or more
+	if (a.a >= 0.5 && distance(a.rgb, surround.rgb) < 0.1) discard;
 	vec2 vuv = vec2(1.0 - UV.x, 1.0 - UV.y);
 	vec3 v = faithful ? texture(view_nearest, vuv).rgb : texture(view, vuv).rgb;
 	ALBEDO = a.a >= 0.5 ? a.rgb : v;

@@ -61,6 +61,21 @@ public partial class Cockpit : Node
     /// <summary>What <see cref="_Ready"/> makes (the animated panels' frames, the radar's, the mirror), a null between the costly parts.</summary>
     public IEnumerable<object?> ReadySteps()
     {
+        foreach (var step in ArtSteps()) yield return step;
+        // the weapon camera is composed at the original's 256x128 under the original's mask
+        if (Resolver.FindByStem("zradmask") is { } mm && Textures.GetRgba(mm) is { } mo) _radarMask = Godot.Image.CreateFromData(mo.Width, mo.Height, false, Godot.Image.Format.Rgba8, mo.Rgba);
+        if (Resolver.FindByStem("zradmask") is { } rm && Resolver.Load(rm) is { } mt && mt.Width == 256) _radarClear = I76.Sim.Weapons.RadarScope.WeaponCameraClear(mt.Indices);
+        _rng = new System.Random();
+        yield return null;
+        SetupMirror();
+        Textures.Swapped += ArtSwapped;
+    }
+
+    public override void _ExitTree() => Textures.Swapped -= ArtSwapped;
+
+    /// <summary>The frames the cockpit swaps in (wheel, arms, radar), as they are drawn: the originals or a pack's upscales.</summary>
+    private IEnumerable<object?> ArtSteps()
+    {
         _wheelFrames = Frames("zswls{0}{1:00}", 36);
         yield return null;
         _armR = Frames("zhr45{0}{1:00}", 6);
@@ -75,23 +90,46 @@ public partial class Cockpit : Node
             if (i % 10 == 9) yield return null;
         }
         _radarMember = Resolver.FindByStem("zradf000");
-        _radarMask = Image("zradmask");
-        if (Resolver.FindByStem("zradmask") is { } mm && Resolver.Load(mm) is { } mt && mt.Width == 256) _radarClear = I76.Sim.Weapons.RadarScope.WeaponCameraClear(mt.Indices);
-        _rng = new System.Random();
-        yield return null;
-        SetupMirror();
+        _radarBaseW = _radarMember is not null && Textures.GetRgba(_radarMember) is { } r0 ? r0.Width : 256;
+        _reticle = null;
     }
 
+    /// <summary>
+    /// A look change swapped what is drawn: the panels, the frames and the radar's are made again at the new scale (the 1997
+    /// look's the originals) and everything is redrawn. The mirror's art is a drawn texture, swapped in place.
+    /// </summary>
+    private void ArtSwapped()
+    {
+        Panels.Reload();
+        foreach (var _ in ArtSteps()) { }
+        ResetPanels();
+        _repaintWeapons = true;
+        _wheelShown = -1;
+        _armShown[0] = _armShown[1] = (-1, -1);
+        _radarNext = 0;
+    }
+
+    /// <summary>
+    /// A strip's frames as textures. A pack's frames (larger than the original's) get their mipmaps, as the cockpit's other
+    /// art drawn from a pack has them: sampled from the full-size level, an 8x wheel's rim stepped and shimmered as it turned.
+    /// </summary>
     private (string? Member, ImageTexture?[] Tex) Frames(string pattern, int n)
     {
         var tex = new ImageTexture?[n + 1];
         for (int i = 1; i <= n; i++)
-            if (Image(string.Format(pattern, LightVariant, i)) is { } img) tex[i] = ImageTexture.CreateFromImage(img);
+            if (Drawn(string.Format(pattern, LightVariant, i)) is var (img, s))
+            {
+                if (s > 1) img.GenerateMipmaps();
+                tex[i] = ImageTexture.CreateFromImage(img);
+            }
         return (Resolver.FindByStem(string.Format(pattern, 1, 1)), tex);
     }
 
-    private Image? Image(string stem) =>
-        Resolver.FindByStem(stem) is { } m && Textures.GetRgba(m) is { } t ? Godot.Image.CreateFromData(t.Width, t.Height, false, Godot.Image.Format.Rgba8, t.Rgba) : null;
+    private Image? Image(string stem) => Drawn(stem)?.Img;
+
+    /// <summary>A member as it is drawn (TextureFactory.GetDrawnRgba) and its texels per original pixel.</summary>
+    private (Image Img, int Scale)? Drawn(string stem) =>
+        Resolver.FindByStem(stem) is { } m && Textures.GetDrawnRgba(m) is var (t, s) ? (Godot.Image.CreateFromData(t.Width, t.Height, false, Godot.Image.Format.Rgba8, t.Rgba), s) : null;
 
     private void Sound(string name)
     {
@@ -491,11 +529,15 @@ public partial class Cockpit : Node
 
     private static string Res(string name) => name.StartsWith('3') ? name[1..] : name;   // full-size art drops the '3'
 
+    /// <summary>The weapons panel redraws on its next update whatever moved (its rows and housings kept): a look change.</summary>
+    private bool _repaintWeapons;
+
     private void WeaponsPanel()
     {
         if (Car.Armory is not { } a) return;
         var ws = a.Weapons.Take(5).ToList();
-        bool dirty = false, force = false;
+        bool dirty = _repaintWeapons, force = _repaintWeapons;
+        _repaintWeapons = false;
         if (_rows is null || _rows.Length != ws.Count)
         {
             // one of five housings per row, chosen at random once
@@ -674,9 +716,11 @@ public partial class Cockpit : Node
             if (locked is not null) _sweptAt[locked] = _t;
             _radarPicked = locked;
         }
+        // a pack's frame is k texels a pixel: the scope's places and the stamps are the original's pixels times k
+        int k = System.Math.Max(1, img.GetWidth() / _radarBaseW), iw = img.GetWidth(), ih = img.GetHeight();
         if (has)
         {
-            Panels.StampInto(img, "zrad.map", RadarRange == 0 ? "range_1" : "range_3", "range_pos");
+            Panels.StampInto(img, k, "zrad.map", RadarRange == 0 ? "range_1" : "range_3", "range_pos");
             float R = RadarRange == 0 ? 100 : 600;
             bool any = false, pinged = false;
             foreach (var v in Combat.World.Vehicles)
@@ -688,31 +732,44 @@ public partial class Cockpit : Node
                 // step the sweep stopped on to the target's bearing: the original's beeping while a target is held
                 bool inWedge = v != locked && (locked is null || _steps > 0) && I76.Sim.Weapons.RadarScope.InPingWedge(_radarPrev, _radarCur, nx, nz);
                 if (inWedge) { if (!pinged) { RadarPing(); pinged = true; } _sweptAt[v] = _t; }   // every pass pings; blips in one step share the sound
-                int px = System.Math.Clamp((int)(99 + 51 * nx), 0, img.GetWidth() - 2);
-                int py = System.Math.Clamp((int)(65 + 51 * nz), 0, img.GetHeight() - 2);   // a raw bitmap row: bottom-up, as the image stores it
+                // (a raw bitmap row: bottom-up, as the image stores it)
                 // no team colours: palette index 0x69 when listed, 0 as the sweep passes or it is picked, +3 a second back to
                 // 0x69; the target 0xff, which the 1997 CD build never writes (its target fades as the others do)
                 bool soft = I76.Game.World.SoftwareLook.Active;
                 int ci = !soft && Combat.RadarTarget.GetValueOrDefault(Car) == v ? 0xff
                     : _sweptAt.TryGetValue(v, out var st) ? System.Math.Min(0x69, (int)(3 * (_t - st))) : 0x69;
-                img.FillRect(new Rect2I(px, py, 2, 2), soft ? SoftwareBlip(ci) : BlipColour(ci));
+                img.FillRect(BlipRect(nx, nz, 2, iw, ih, k), soft ? SoftwareBlip(ci) : BlipColour(ci));
             }
             if (Blips is { } blips)
                 foreach (var (fp, fc) in blips())
                 {
                     if (I76.Sim.Weapons.RadarScope.Project(Car.Rot, Car.Pos.ToVector3(), fp, R) is not var (nx, nz)) continue;
-                    int px = System.Math.Clamp((int)(99 + 51 * nx), 0, img.GetWidth() - 3);
-                    int py = System.Math.Clamp((int)(65 + 51 * nz), 0, img.GetHeight() - 3);
-                    img.FillRect(new Rect2I(px, py, 3, 3), fc);
+                    img.FillRect(BlipRect(nx, nz, 3, iw, ih, k), fc);
                 }
             if (any && !_ledAny) Sound("cgrowl.wav");
             _ledAny = any;
-            Panels.StampInto(img, "zrad.map", any ? "radled_1" : "radled_2", "led_pos");
+            Panels.StampInto(img, k, "zrad.map", any ? "radled_1" : "radled_2", "led_pos");
         }
         UploadRadar(img);
     }
 
+    /// <summary>
+    /// A blip's square on a radar frame of w x h texels at k texels a pixel: size x size of the original's pixels at
+    /// (99 + 51 x, 65 + 51 z), the scope's centre and radius in the original frame's pixels, kept inside the frame.
+    /// </summary>
+    public static Rect2I BlipRect(float nx, float nz, int size, int w, int h, int k)
+    {
+        int px = System.Math.Clamp((int)(99 + 51 * nx), 0, w / k - size);
+        int py = System.Math.Clamp((int)(65 + 51 * nz), 0, h / k - size);
+        return new Rect2I(px * k, py * k, size * k, size * k);
+    }
+
     private Vehicle? _radarPicked;
+    /// <summary>The radar frame's original width, so its scale is known whatever is drawn.</summary>
+    private int _radarBaseW = 256;
+
+    /// <summary>The radar's current picture's texels per original pixel (a pack's frames; the weapon camera's is 1).</summary>
+    public int RadarScale { get; private set; } = 1;
 
     /// <summary>CRADAR.WAV: its header's one voice, so a ping asked for while one sounds is dropped (a held target beeps at the sample's length).</summary>
     private void RadarPing()
@@ -739,8 +796,11 @@ public partial class Cockpit : Node
 
     private void UploadRadar(Image img)
     {
-        _radarTex ??= ImageTexture.CreateFromImage(img);
-        _radarTex.Update(img);
+        RadarScale = System.Math.Max(1, img.GetWidth() / _radarBaseW);
+        // a look change or the weapon camera (always the original's 256x128) changes the picture's size: a new picture, not an update
+        if (_radarTex is null) _radarTex = ImageTexture.CreateFromImage(img);
+        else if (_radarTex.GetWidth() != img.GetWidth() || _radarTex.GetHeight() != img.GetHeight()) _radarTex.SetImage(img);
+        else _radarTex.Update(img);
         if (System.Environment.GetEnvironmentVariable("I76_PIT_DUMP") is { } dir && Godot.Engine.GetProcessFrames() >= 15 && !_radarDumped) { img.SavePng(System.IO.Path.Combine(dir, "radar.png")); _radarDumped = true; }
         if (!_radarBound) { Materials.OverrideTexture(_radarMember!, _radarTex); _radarBound = true; }
     }
@@ -898,7 +958,7 @@ public partial class Cockpit : Node
         _mirrorFlat = new Godot.Environment { BackgroundMode = Godot.Environment.BGMode.Color, BackgroundColor = MirrorBackground,
             AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color(0.35f, 0.35f, 0.35f) };
         _mirrorMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/cockpit_mirror.gdshader") };
-        if (Textures.Get(member)?.Texture is { } art) { _mirrorMat.SetShaderParameter("art", art); _mirrorArt = art; }
+        if (Textures.Get(member)?.Drawn is { } art) { _mirrorMat.SetShaderParameter("art", art); _mirrorArt = art; }
         if (System.Environment.GetEnvironmentVariable("I76_PIT_DUMP") is { } dir) foreach (var n in new[] { "zmiri101", "zdash101", "zdash102" }) Image(n)?.SavePng(System.IO.Path.Combine(dir, n + ".png"));
         var vt = _mirrorView.GetTexture();
         _mirrorMat.SetShaderParameter("view", vt);

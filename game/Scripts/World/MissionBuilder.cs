@@ -56,6 +56,10 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public long RoadBakeMs { get; private set; }
     public string? GroundTexture { get; private set; }
     public Texture2D? SkyTexture { get; private set; }
+    /// <summary>The sky, the sun or moon sprite and the horizon panels as the modern look draws them: from a texture pack where it has them (TextureFactory.Entry.Drawn), else the same as SkyTexture, Sprite and Horizon.</summary>
+    public Texture2D? SkyDrawn { get; private set; }
+    public Texture2D? SpriteDrawn { get; private set; }
+    public Texture2DArray? HorizonDrawn { get; private set; }
     public string? SkyName { get; private set; }
     public Color SkyAverage { get; private set; } = new(0.7f, 0.7f, 0.75f);
     /// <summary>The sky texture's colours for the modern sky: the open sky, the clouds, their shade, and the luminances between.</summary>
@@ -357,7 +361,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // mip chain the engine picks from per quad by distance, repeating every
         // 8 samples (measured in the original game). So the largest
         // member everywhere, with GPU mipmaps, is the engine's ground.
-        Texture2D? ground = null;
+        Texture2D? ground = null, groundDrawn = null;   // what is measured (the original) and what the modern look draws
         // WDEF lists the sky (nk_…), the ground family and the zmap: mostly tp…, but t04 has tt031sd_ and m15 tm151as_
         var settingsEarly = I76.Formats.Mission.WorldSettings.Read(world.Mission);
         var tp = world.WdefRefs.FirstOrDefault(r => r.EndsWith(".map", StringComparison.OrdinalIgnoreCase)
@@ -367,7 +371,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         {
             var best = Enumerable.Range(1, 9).Select(i => tp[..4] + i + tp[5..]).Select(resolver.FindByStem).OfType<string>()
                 .Select(m => (m, e: textures.Get(m))).Where(x => x.e is not null).OrderByDescending(x => x.e!.Width * x.e.Height).FirstOrDefault();
-            if (best.e is not null) { ground = best.e.Texture; GroundTexture = best.m; }
+            if (best.e is not null) { ground = best.e.Texture; groundDrawn = best.e.Drawn; GroundTexture = best.m; }
         }
         // Sky, horizon, light: WDEF's WRLD chunk.
         Settings = I76.Formats.Mission.WorldSettings.Read(world.Mission);
@@ -377,6 +381,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
         if (I76.Formats.Mission.HorizonList.Parse(Settings is { Horizon.Length: > 0 } ? vfs.TryRead(Settings.Horizon) : null) is { } hz)
         {
             var imgs = new Godot.Collections.Array<Image>();
+            // the modern sky's panels from a pack's upscales, where it has them (HorizonDrawn); the 1997 look's and the skyline's are the originals
+            var drawn = new Godot.Collections.Array<Image>();
             foreach (var n in hz)
             {
                 if (resolver.FindByStem(n) is not { } m || textures.GetRgba(m) is not { } t) { imgs.Clear(); break; }
@@ -385,6 +391,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                     im.Resize(imgs[0].GetWidth(), imgs[0].GetHeight());
                 im.GenerateMipmaps();
                 imgs.Add(im);
+                if (textures.GetDrawnRgba(m) is ({ } d, > 1)) drawn.Add(Image.CreateFromData(d.Width, d.Height, false, Image.Format.Rgba8, d.Rgba));
             }
             if (imgs.Count == I76.Formats.Mission.HorizonList.Panels)
             {
@@ -393,13 +400,25 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 GC.KeepAlive(imgs);   // held past the call (see MeshArrays)
                 if (defer) HorizonImages = [.. imgs];
                 else if (EarlyHorizon && !huge) panels = [.. imgs.Select(im => (Image)im.Duplicate())];
+                if (drawn.Count == imgs.Count)
+                {
+                    foreach (var im in drawn)
+                    {
+                        if (im.GetWidth() != drawn[0].GetWidth() || im.GetHeight() != drawn[0].GetHeight()) im.Resize(drawn[0].GetWidth(), drawn[0].GetHeight());
+                        im.GenerateMipmaps();
+                    }
+                    HorizonDrawn = new Texture2DArray();
+                    HorizonDrawn.CreateFromImages(drawn);
+                    GC.KeepAlive(drawn);
+                }
             }
             else Notes.Add($"horizon {Settings!.Horizon}: textures missing");
         }
-        if (resolver.FindByStem(Light.Sprite) is { } sp && textures.Get(sp) is { } spt) Sprite = spt.Texture;
+        if (resolver.FindByStem(Light.Sprite) is { } sp && textures.Get(sp) is { } spt) { Sprite = spt.Texture; SpriteDrawn = spt.Drawn; }
         if (SkyName is not null && resolver.FindByStem(SkyName) is { } skyMember && textures.Get(skyMember) is { } sky)
         {
             SkyTexture = sky.Texture;
+            SkyDrawn = sky.Drawn;
             var img = sky.Texture.GetImage();
             Palette = MeasureSky(img);
             img.Resize(1, 1, Image.Interpolation.Lanczos);
@@ -462,7 +481,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             GroundNoise.ApplyNoise(sharedModern);
             if (ground is not null)
             {
-                sharedModern.SetShaderParameter("ground_tex", ground);
+                sharedModern.SetShaderParameter("ground_tex", groundDrawn ?? ground);
                 yield return null;
                 var fit = GroundNoise.Measure(gimg!, 40f);
                 yield return null;

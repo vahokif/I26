@@ -9,23 +9,30 @@ namespace I76.Game.Sim;
 /// compass zcm_, ...) is redrawn from its original image with sprites from
 /// the src sheets stamped at the layout's anchors, and every material that
 /// draws the texture is pointed at the live copy. Palette index 255 (alpha
-/// 0) in a sprite leaves the panel showing through.
+/// 0) in a sprite leaves the panel showing through. The layout's anchors and
+/// rectangles are the original's pixels; a panel or a sheet drawn from a
+/// texture pack's upscale (TextureFactory.GetDrawnRgba) is worked at its own
+/// scale, the sheet's texels mapped nearest onto the panel's where the two
+/// differ. A look change makes them again at the new scale (Reload).
 /// </summary>
 public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures, Assets.MaterialLibrary materials)
 {
     private sealed class Target
     {
-        public required Image Base, Work;
+        public required Image Work;
         public required ImageTexture Texture;
         /// <summary>The image's pixels as RGBA8 bytes, so a stamp is array copies, not one engine call per pixel.</summary>
         public required byte[] BaseBytes, WorkBytes;
         public int W, H;
+        /// <summary>Its texels per original pixel.</summary>
+        public int S = 1;
         public bool Dirty;
     }
 
     private readonly Dictionary<string, Target?> _targets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Image?> _sheets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, byte[]?> _sheetBytes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _scales = new(StringComparer.OrdinalIgnoreCase);
 
     public EltLayout Layout => layout;
 
@@ -39,11 +46,17 @@ public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.Texture
     /// <summary>A dst texture's live copy, or null until it is first drawn (the original's empty descriptor). Rows bottom-up, as stored.</summary>
     public Texture2D? Texture(string dst) => _targets.GetValueOrDefault(dst)?.Texture;
 
+    /// <summary>A live panel's texels per original pixel (1 until it is first drawn).</summary>
+    public int Scale(string dst) => _targets.GetValueOrDefault(dst)?.S ?? 1;
+
     private Image? Load(string tex)
     {
-        if (resolver.FindByStem(System.IO.Path.GetFileNameWithoutExtension(tex)) is not { } member || textures.GetRgba(member) is not { } t) return null;
-        return Image.CreateFromData(t.Width, t.Height, false, Image.Format.Rgba8, t.Rgba);
+        if (resolver.FindByStem(System.IO.Path.GetFileNameWithoutExtension(tex)) is not { } member || textures.GetDrawnRgba(member) is not { } d) return null;
+        _scales[tex] = d.Scale;
+        return Image.CreateFromData(d.Tex.Width, d.Tex.Height, false, Image.Format.Rgba8, d.Tex.Rgba);
     }
+
+    private int ScaleOf(string tex) => _scales.GetValueOrDefault(tex, 1);
 
     private Target? TargetOf(string dst)
     {
@@ -54,9 +67,28 @@ public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.Texture
             var tex = ImageTexture.CreateFromImage(img);
             if (!Unbound.Contains(dst)) materials.OverrideTexture(member, tex);
             var bytes = img.GetData();
-            t = new Target { Base = img, Work = (Image)img.Duplicate(), Texture = tex, BaseBytes = bytes, WorkBytes = (byte[])bytes.Clone(), W = img.GetWidth(), H = img.GetHeight() };
+            t = new Target { Work = (Image)img.Duplicate(), Texture = tex, BaseBytes = bytes, WorkBytes = (byte[])bytes.Clone(), W = img.GetWidth(), H = img.GetHeight(), S = ScaleOf(dst) };
         }
         return _targets[dst] = t;
+    }
+
+    /// <summary>
+    /// Makes the panels and sheets again from what is drawn now (the originals or a pack's upscales, a look change): each live
+    /// texture keeps its identity (the materials and the 2D dash hold it) and takes the new size, its original image until redrawn.
+    /// </summary>
+    public void Reload()
+    {
+        _sheets.Clear(); _sheetBytes.Clear(); _scales.Clear();
+        foreach (var (dst, t) in _targets)
+        {
+            if (t is null || Load(dst) is not { } img) continue;
+            var bytes = img.GetData();
+            t.BaseBytes = bytes; t.WorkBytes = (byte[])bytes.Clone();
+            t.W = img.GetWidth(); t.H = img.GetHeight(); t.S = ScaleOf(dst);
+            t.Work = (Image)img.Duplicate();
+            t.Texture.SetImage(img);
+            t.Dirty = false;
+        }
     }
 
     private Image? Sheet(string src)
@@ -66,11 +98,35 @@ public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.Texture
     }
 
     /// <summary>
-    /// The .elt counts rows from the top of the picture as shown, the maps
-    /// store them bottom-up (a DIB's order): row y of the layout is image row
-    /// h − 1 − y, in the sheets and the panels alike.
+    /// Copies a w × h rectangle (the layout's pixels) of a sheet at (sx, sy) to (dx, dy) of a target, each at its own scale
+    /// (<paramref name="ss"/>, <paramref name="ds"/> texels a pixel), the sheet's texels mapped nearest onto the target's;
+    /// <paramref name="keyed"/>: a texel under alpha 0.5 leaves the target alone. The .elt counts rows from the top of the
+    /// picture as shown, the maps store them bottom-up (a DIB's order): row y of the layout is image row h − 1 − y, in the
+    /// sheets and the panels alike.
     /// </summary>
-    private static int Row(Image img, int y) => img.GetHeight() - 1 - y;
+    public static void Blit(byte[] src, int sw, int sh, int ss, int sx, int sy, int w, int h, byte[] dst, int dw, int dh, int ds, int dx, int dy, bool keyed)
+    {
+        // the target's columns this rectangle reaches: on the target and, through the nearest mapping, on the sheet
+        int i0 = System.Math.Max(0, -dx * ds), i1 = System.Math.Min(w * ds, dw - dx * ds);
+        while (i1 > i0 && sx * ss + (i1 - 1) * ss / ds >= sw) i1--;
+        if (i1 <= i0) return;
+        var s32 = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(src.AsSpan(0, src.Length & ~3));
+        var d32 = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(dst.AsSpan(0, dst.Length & ~3));
+        bool same = ss == ds;
+        for (int j = 0; j < h * ds; j++)
+        {
+            int y = sy * ss + j * ss / ds, oy = dy * ds + j;
+            if (y >= sh || oy < 0 || oy >= dh) continue;
+            int srow = (sh - 1 - y) * sw, drow = (dh - 1 - oy) * dw + dx * ds;
+            if (same && !keyed) { s32.Slice(srow + sx * ss + i0, i1 - i0).CopyTo(d32.Slice(drow + i0, i1 - i0)); continue; }
+            for (int i = i0; i < i1; i++)
+            {
+                int so = srow + sx * ss + (same ? i : i * ss / ds);
+                if (keyed && src[so * 4 + 3] < 128) continue;   // alpha > 0.5
+                d32[drow + i] = s32[so];
+            }
+        }
+    }
 
     /// <summary>Starts a redraw of a dst texture from its original image.</summary>
     public void Clear(string dst)
@@ -85,17 +141,7 @@ public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.Texture
     {
         if (TargetOf(dst) is not { } t || layout.Find(sprite) is not { } s || Sheet(s.Texture) is not { } sheet) return;
         var r = s.Label;
-        var src = SheetBytes(s.Texture)!;
-        int sw = sheet.GetWidth(), sh = sheet.GetHeight();
-        for (int j = 0; j < r.H; j++)
-            for (int i = 0; i < r.W; i++)
-            {
-                int sx = r.X + i, sy = r.Y + j, dx = x + i, dy = y + j;
-                if (sx >= sw || sy >= sh || dx < 0 || dy < 0 || dx >= t.W || dy >= t.H) continue;
-                int so = ((sh - 1 - sy) * sw + sx) * 4;
-                if (src[so + 3] < 128) continue;   // alpha > 0.5
-                System.Buffer.BlockCopy(src, so, t.WorkBytes, ((t.H - 1 - dy) * t.W + dx) * 4, 4);
-            }
+        Blit(SheetBytes(s.Texture)!, sheet.GetWidth(), sheet.GetHeight(), ScaleOf(s.Texture), r.X, r.Y, r.W, r.H, t.WorkBytes, t.W, t.H, t.S, x, y, keyed: true);
         t.Dirty = true;
     }
 
@@ -129,15 +175,7 @@ public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.Texture
 
     private void Copy(string sheetName, Image sheet, int sx, int sy, int w, int h, Target t, int dx, int dy)
     {
-        var src = SheetBytes(sheetName)!;
-        int sw = sheet.GetWidth(), sh = sheet.GetHeight();
-        for (int j = 0; j < h; j++)
-            for (int i = 0; i < w; i++)
-            {
-                int x = sx + i, y = sy + j, ox = dx + i, oy = dy + j;
-                if (x >= sw || y >= sh || ox >= t.W || oy >= t.H) continue;
-                System.Buffer.BlockCopy(src, ((sh - 1 - y) * sw + x) * 4, t.WorkBytes, ((t.H - 1 - oy) * t.W + ox) * 4, 4);
-            }
+        Blit(SheetBytes(sheetName)!, sheet.GetWidth(), sheet.GetHeight(), ScaleOf(sheetName), sx, sy, w, h, t.WorkBytes, t.W, t.H, t.S, dx, dy, keyed: false);
         t.Dirty = true;
     }
 
@@ -147,19 +185,17 @@ public sealed class CockpitPanels(EltLayout layout, I76.Formats.Assembly.Texture
         return b;
     }
 
-    /// <summary>Stamps a sprite into a given image at an anchor of the layout's <paramref name="dst"/> block (the radar's current frame).</summary>
-    public void StampInto(Image img, string dst, string sprite, string anchor)
+    /// <summary>
+    /// Stamps a sprite into a given image at an anchor of the layout's <paramref name="dst"/> block (the radar's current frame,
+    /// at <paramref name="ds"/> texels a pixel: zrad.map is only the layout's name for it).
+    /// </summary>
+    public void StampInto(Image img, int ds, string dst, string sprite, string anchor)
     {
         if (layout.FindIn(dst, anchor) is not { } a || layout.Find(sprite) is not { } s || Sheet(s.Texture) is not { } sheet) return;
         var r = s.Label;
-        for (int j = 0; j < r.H; j++)
-            for (int i = 0; i < r.W; i++)
-            {
-                int sx = r.X + i, sy = r.Y + j, dx = a.X + i, dy = a.Y + j;
-                if (sx >= sheet.GetWidth() || sy >= sheet.GetHeight() || dx >= img.GetWidth() || dy >= img.GetHeight()) continue;
-                var c = sheet.GetPixel(sx, Row(sheet, sy));
-                if (c.A > 0.5f) img.SetPixel(dx, Row(img, dy), c);
-            }
+        var d = img.GetData();
+        Blit(SheetBytes(s.Texture)!, sheet.GetWidth(), sheet.GetHeight(), ScaleOf(s.Texture), r.X, r.Y, r.W, r.H, d, img.GetWidth(), img.GetHeight(), ds, a.X, a.Y, keyed: true);
+        img.SetData(img.GetWidth(), img.GetHeight(), false, Image.Format.Rgba8, d);
     }
 
     /// <summary>Uploads the textures redrawn since the last call.</summary>

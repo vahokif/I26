@@ -42,7 +42,8 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     /// <summary>What the upscales made so far show: the pack's pictures, or the originals'.</summary>
     private bool _shown;
     private readonly List<(string Member, ImageTexture Texture, byte[] Rgba, int Width, int Height)> _upscaled = [];
-    private readonly Dictionary<string, I76.Formats.Assembly.RoadRaster.Tex?> _drawnRgba = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>An upscale was read for what is painted on the CPU (GetDrawnRgba, UpscaleImage): what <see cref="_shown"/> says holds.</summary>
+    private bool _drew;
 
     /// <summary>After a look change swapped what is drawn (<see cref="SetHdSteps"/>): art painted from <see cref="GetDrawnRgba"/> is made again.</summary>
     public event System.Action? Swapped;
@@ -77,26 +78,29 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     /// <summary>
     /// A texture's RGBA as it is drawn, for what is painted on the CPU and shown (the cockpit's panels, frames and radar, the
     /// horizon, ...): the pack's upscale (a .dds decompressed) while upscales are drawn, with <c>Scale</c> its texels per original
-    /// pixel each way; else the original's, <see cref="GetRgba"/>, at 1. Keyed texels have alpha under one half either way.
+    /// pixel each way; else the original's, <see cref="GetRgba"/>, at 1. Keyed texels have alpha under one half either way. Not
+    /// kept here: an upscale's texels are many (8 MB for an 8x cockpit texture), and the caller keeps what it paints from.
     /// </summary>
     public (I76.Formats.Assembly.RoadRaster.Tex Tex, int Scale)? GetDrawnRgba(string member)
     {
         if (GetRgba(member) is not { } o) return null;
-        if (!Serving || !HdTextures.Has(member)) return (o, 1);
-        if (!_drawnRgba.TryGetValue(member, out var d))
-        {
-            if (_upscaled.Count == 0 && _drawnRgba.Count == 0) _shown = true;
-            d = null;
-            if (Get(member) is { } e && LoadUpscale(member, e.Rgba, e.Width, e.Height) is { } img)
-            {
-                img.ClearMipmaps();
-                if (img.IsCompressed()) img.Decompress();
-                img.Convert(Image.Format.Rgba8);
-                d = new I76.Formats.Assembly.RoadRaster.Tex(img.GetWidth(), img.GetHeight(), img.GetData());
-            }
-            _drawnRgba[member] = d;
-        }
-        return d is null ? (o, 1) : (d, d.Width / o.Width);
+        if (UpscaleImage(member) is not { } img) return (o, 1);
+        img.ClearMipmaps();
+        if (img.IsCompressed()) img.Decompress();
+        img.Convert(Image.Format.Rgba8);
+        return (new I76.Formats.Assembly.RoadRaster.Tex(img.GetWidth(), img.GetHeight(), img.GetData()), img.GetWidth() / o.Width);
+    }
+
+    /// <summary>
+    /// The member's upscale as the GPU takes it (a .dds as stored, block-compressed with its mipmaps), while upscales are drawn; else
+    /// null. For a texture of its own (the cockpit's wheel and arm frames), so an 8x frame is not sent as 8 MB of RGBA8.
+    /// </summary>
+    public Image? UpscaleImage(string member)
+    {
+        if (!Serving || !HdTextures.Has(member) || Get(member) is not { } e) return null;
+        if (_upscaled.Count == 0 && !_drew) _shown = true;
+        _drew = true;
+        return LoadUpscale(member, e.Rgba, e.Width, e.Height);
     }
 
     private readonly Dictionary<string, Entry?> _cache = new(StringComparer.OrdinalIgnoreCase);
@@ -104,8 +108,10 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     public Entry? Get(string member)
     {
         if (_cache.TryGetValue(member, out var e)) return e;
-        // with a pack the entries are this factory's own: a look change swaps their pictures
-        e = HdTextures.Installed ? Make(member) : I76.Formats.Vfs.SessionStore.GetOrAdd("tex|" + _scope + member, () => Make(member), x => x is null ? 0 : x.Rgba.LongLength * (x.HasKey ? 7 : 5) / 2);   // a keyed one also keeps its unkeyed colours
+        e = I76.Formats.Vfs.SessionStore.GetOrAdd("tex|" + _scope + member, () => Make(member), x => x is null ? 0 : x.Rgba.LongLength * (x.HasKey ? 7 : 5) / 2);   // a keyed one also keeps its unkeyed colours
+        // the original's entry is kept for the editor session whatever is installed; the upscale is this factory's own, as a look
+        // change swaps its picture (SetHdSteps)
+        if (e is not null && HdTextures.Has(member)) { var o = e; e = o with { Upscale = new(() => UpscaleOf(member, o.Rgba, o.Width, o.Height)) }; }
         _cache[member] = e;
         return e;
     }
@@ -121,9 +127,7 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
             if (key) { rgba = (byte[])plain.Clone(); TextureReader.BleedUnderKey(rgba, t.Width, t.Height); }
             // the opaque faces' copy is made when one first asks for it (most keyed textures are only drawn keyed)
             Lazy<ImageTexture>? unkeyed = key ? new(() => Upload(plain, t.Width, t.Height)) : null;
-            // the upscale is made when something first draws it (Drawn)
-            Lazy<ImageTexture?>? upscale = HdTextures.Has(member) ? new(() => UpscaleOf(member, rgba, t.Width, t.Height)) : null;
-            e = new Entry(Upload(rgba, t.Width, t.Height), key, t.Width, t.Height, rgba) { Unkeyed = unkeyed, Upscale = upscale };
+            e = new Entry(Upload(rgba, t.Width, t.Height), key, t.Width, t.Height, rgba) { Unkeyed = unkeyed };
         }
         return e;
     }
@@ -134,7 +138,7 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     /// </summary>
     private ImageTexture? UpscaleOf(string member, byte[] rgba, int w, int h)
     {
-        if (_upscaled.Count == 0 && _drawnRgba.Count == 0) _shown = Serving;
+        if (_upscaled.Count == 0 && !_drew) _shown = Serving;
         var img = _shown ? LoadUpscale(member, rgba, w, h) : Picture(rgba, w, h);
         if (img is null) return null;
         var tex = ImageTexture.CreateFromImage(img);

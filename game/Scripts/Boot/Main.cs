@@ -2499,6 +2499,8 @@ public partial class Main : Node3D
             yield break;
         }
         _standBy?.QueueFree(); _standBy = null;
+        // with a texture pack's roads, the 1997 look's road layers are made the first time it is asked for
+        if (on && _builder is { } built) foreach (var step in built.FaithfulRoadSteps()) yield return step;
         _mode1997 = on;
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
         _builder?.Terrain?.UseModern(!on);

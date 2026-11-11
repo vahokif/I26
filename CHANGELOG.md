@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### New
-- Upscaled textures for the world, the cars and the cockpit: a texture pack placed in the game's user folder (`tex-world-4x`, `tex-world-8x` and the like, or an `i76-hd-textures*.zip`) is drawn in the modern look in place of the original textures it has: the scenery, the cars, the 3D cockpit and the 2D dash with their live panels (radar, weapons, specials, damage, gear, compass, gauges), the steering wheel and arms, the mirror's frame, the CB handset, the sky, the horizon, the ground, effects, and the mission map and notepad (the map also from the HD menu art's `maps/`). None comes with the game; the 1997 look and a game without a pack are unchanged. Graphic Detail's HD Textures row, shown when a pack is installed, turns it off and on (from the next mission or visit to the garage).
+- Upscaled textures for the world, the cars and the cockpit: a texture pack placed in the game's user folder (`tex-world-4x`, `tex-world-8x` and the like, or an `i76-hd-textures*.zip`) is drawn in the modern look in place of the original textures it has: the scenery, the cars, the 3D cockpit and the 2D dash with their live panels (radar, weapons, specials, damage, gear, compass, gauges), the steering wheel and arms, the mirror's frame, the CB handset, the sky, the horizon, the ground, the roads, road pieces and ground decals, effects, and the mission map and notepad (the map also from the HD menu art's `maps/`). None comes with the game; the 1997 look and a game without a pack are unchanged. Graphic Detail's HD Textures row, shown when a pack is installed, turns it off and on (from the next mission or visit to the garage).
 
 ## 0.12.1 (10 November 2026)
 

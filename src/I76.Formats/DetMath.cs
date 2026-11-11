@@ -86,6 +86,21 @@ public static class DetMath
         return Math.ScaleB(sum, (int)k);
     }
 
+    /// <summary>
+    /// e to the <paramref name="x"/> to float precision, for weights in a filter: as <see cref="Exp(double)"/> but a shorter series of
+    /// multiplications (relative error under 1e-8 before the rounding to float), so about as quick as MathF.Exp.
+    /// </summary>
+    public static float ExpF(float x)
+    {
+        if (x > 88.8f) return float.PositiveInfinity;
+        if (x < -104) return 0;
+        double k = Math.Round(x * 1.4426950408889634);
+        double r = x - k * Ln2Hi - k * Ln2Lo;   // |r| <= 0.35
+        // Taylor to r^8 (the next term is under 1e-9)
+        double sum = 1 + r * (1 + r * (1.0 / 2 + r * (1.0 / 6 + r * (1.0 / 24 + r * (1.0 / 120 + r * (1.0 / 720 + r * (1.0 / 5040 + r * (1.0 / 40320))))))));
+        return (float)Math.ScaleB(sum, (int)k);
+    }
+
     /// <summary><paramref name="x"/> to the <paramref name="p"/>, for x &gt;= 0 (0 for x = 0).</summary>
     public static double Pow(double x, double p) => x <= 0 ? 0 : Exp(p * Log(x));
 

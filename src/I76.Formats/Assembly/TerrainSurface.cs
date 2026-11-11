@@ -77,7 +77,7 @@ public sealed class TerrainSurface : ITerrainSurface
     public string? Key { get; set; }
 
     /// <summary>Changes with anything that changes the surface's arrays: cached surfaces (<see cref="CacheKey"/>) are keyed by it.</summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>Samples of the outside ground the surface holds round the map's bounds (<see cref="OutsideGround"/>): the cubic and the filters reach this far.</summary>
     public const int OutsidePad = 8;
@@ -192,7 +192,8 @@ public sealed class TerrainSurface : ITerrainSurface
         });
         // edge-preserving (bilateral) blur, two passes over 5×5: binomial in distance, and a neighbour counts
         // less the more its height differs (σ = StepKeep), so terraces of a few metres melt into slopes while
-        // the 20-40 m walls of mesas and buttes keep their flat tops and sharp rims
+        // the 20-40 m walls of mesas and buttes keep their flat tops and sharp rims. The weights are DetMath's exponential, so
+        // every machine draws (and caches) the same ground: the platform's MathF.Exp rounds differently on Windows
         var hb = _hb = (float[])_ht.Clone();
         var blur = Task.Run(() =>
         {
@@ -214,7 +215,7 @@ public sealed class TerrainSurface : ITerrainSurface
                             for (int dx = -2; dx <= 2; dx++)
                             {
                                 float v = src[zz * w + Math.Clamp(x + dx, 0, w - 1)], d = v - c;
-                                float wgt = bin[dx + 2] * bin[dz + 2] * MathF.Exp(-d * d * inv2s2);
+                                float wgt = bin[dx + 2] * bin[dz + 2] * DetMath.ExpF(-d * d * inv2s2);
                                 sum += wgt * v; wsum += wgt;
                             }
                         }
@@ -408,7 +409,7 @@ public sealed class TerrainSurface : ITerrainSurface
                 for (int dx = -2; dx <= 2; dx++)
                 {
                     float v = src(x + dx, z + dz), d = v - c;
-                    float wgt = bin[dx + 2] * bin[dz + 2] * MathF.Exp(-d * d * inv2s2);
+                    float wgt = bin[dx + 2] * bin[dz + 2] * DetMath.ExpF(-d * d * inv2s2);
                     sum += wgt * v; wsum += wgt;
                 }
             return sum / wsum;

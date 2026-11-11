@@ -27,11 +27,18 @@ public class OutsideGroundTests
             if (p > 0) Assert.True(Math.Abs(Math.Log(p) - DetMath.Log(p)) <= 1e-14 * Math.Max(1, Math.Abs(Math.Log(p))), $"log {p}");
             double e = (rnd.NextDouble() * 2 - 1) * 50;
             Assert.True(Math.Abs(Math.Exp(e) - DetMath.Exp(e)) <= 1e-14 * Math.Exp(e), $"exp {e}");
+            // the float one, for filter weights (the blur's arguments are at most 0): within a unit in the last place of the float
+            float ef = (float)((rnd.NextDouble() - 0.9) * 110);
+            float want = (float)Math.Exp(ef), got = DetMath.ExpF(ef);
+            Assert.True(Math.Abs(want - got) <= Math.Max(MathF.BitIncrement(want) - want, float.Epsilon), $"expf {ef}: {got} against {want}");
             double u = rnd.NextDouble();
             Assert.True(Math.Abs(Math.Pow(u, 2.2) - DetMath.Pow(u, 2.2)) <= 1e-14, $"pow {u}");
         }
         Assert.Equal(0, DetMath.Atan2(0.0, 0.0));
         Assert.Equal(0, DetMath.Pow(0.0, 2.2));
+        Assert.Equal(1f, DetMath.ExpF(0));
+        Assert.Equal(0f, DetMath.ExpF(-200));
+        Assert.Equal(float.PositiveInfinity, DetMath.ExpF(100));
         // the panels' height is a fixed number now: 6000 sin(π/16)
         Assert.True(Math.Abs(6000 * Math.Sin(Math.PI / 16) - HorizonList.PanelHeight) < 1e-3);
     }

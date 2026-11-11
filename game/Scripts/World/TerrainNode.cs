@@ -262,6 +262,25 @@ public partial class TerrainNode : Node3D
         c.Mi.MaterialOverride = _modern ? c.Modern : c.Faithful ?? FaithfulMaterial;
     }
 
+    private readonly HashSet<ChunkState> _ownFaithful = [];
+
+    /// <summary>
+    /// A chunk's 1997 road layer given after the mission was built (MissionBuilder.FaithfulRoadSteps): its own 1997 material.
+    /// <paramref name="software"/>: the Software renderer's where a repaired texture reaches (TextureRepairs), else null (the 1997 look's).
+    /// </summary>
+    public void SetFaithfulRoadLayer(int x0, int z0, Texture2D layer, float roadLightY, Texture2D? software = null)
+    {
+        if (_chunks.FirstOrDefault(k => k.X0 == x0 && k.Z0 == z0) is not { } c) return;
+        if (_ownFaithful.Add(c) && (c.Faithful ?? FaithfulMaterial) is ShaderMaterial f) c.Faithful = (ShaderMaterial)f.Duplicate();
+        ApplyRoadLayer(c.Faithful as ShaderMaterial, layer, roadLightY);
+        if (c.Faithful is ShaderMaterial fs)
+        {
+            fs.SetShaderParameter("has_road_software", software is not null);
+            if (software is not null) fs.SetShaderParameter("road_layer_software", software);
+        }
+        if (!_modern) c.Mi.MaterialOverride = c.Faithful;
+    }
+
     private static void ApplyRoadLayer(ShaderMaterial? m, Texture2D? layer, float? lightY)
     {
         if (m is null) return;

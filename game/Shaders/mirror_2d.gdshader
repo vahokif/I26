@@ -14,7 +14,9 @@ void fragment() {
 	vec2 auv = vec2(UV.x * clip.x / art_size.x, 1.0 - UV.y * clip.y / art_size.y);
 	vec4 a = texture(art, auv);
 	vec4 surround = texelFetch(art, ivec2(0, 0), 0);
-	if (a.a >= 0.5 && distance(a.rgb, surround.rgb) < 0.004) discard;
+	// within 0.1 of it: a pack's upscale (and its block compression) leaves the surround near, not exactly, the
+	// original's colour; the art's other colours are a third of the way across the cube or more
+	if (a.a >= 0.5 && distance(a.rgb, surround.rgb) < 0.1) discard;
 	vec2 vuv = vec2(1.0 - auv.x, 1.0 - auv.y);
 	vec3 v = faithful ? texture(view_nearest, vuv).rgb : texture(view, vuv).rgb;
 	COLOR = vec4(a.a >= 0.5 ? a.rgb : v, 1.0);

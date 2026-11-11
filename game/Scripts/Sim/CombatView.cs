@@ -323,7 +323,7 @@ public partial class CombatView : Node3D
         if (Builder?.Resolver?.FindByStem("MCANNON") is { } name && Builder.Textures?.Get(name) is { } t)
             _shellMat = new StandardMaterial3D
             {
-                AlbedoTexture = t.Texture, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                AlbedoTexture = t.Drawn, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                 Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor, AlphaScissorThreshold = 0.5f,
                 TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest,
             };

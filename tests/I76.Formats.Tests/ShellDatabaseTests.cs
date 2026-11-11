@@ -31,6 +31,23 @@ public class ShellDatabaseTests
     }
 
     [InstallFact]
+    public void ABankIsDecodedOnce()
+    {
+        // a screen asks for its banks every time it draws: the internet roster asked for bank 36 (its arrow) on every answer that changed
+        // the list, tens of milliseconds a time decoding the whole bank again
+        var db = Db();
+        var bank = db.Bank(0x24);
+        Assert.Same(bank, db.Bank(0x24));
+        Assert.Same(db.BankNative(0x24), db.BankNative(0x24));
+        // the same pictures as a fresh decode
+        var fresh = new SpriteBank(db.RawNative(0x24), null, 0x24);
+        Assert.Equal(fresh.Count, bank.Count);
+        for (int i = 0; i < bank.Count; i++)
+            Assert.Equal(fresh[i]?.Pixels, bank[i]?.Pixels);
+        Assert.Equal((0x24, 14), (bank[14]!.Bank, bank[14]!.Index));
+    }
+
+    [InstallFact]
     public void TheFontsAndSoundsRead()
     {
         var db = Db();

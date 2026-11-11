@@ -55,12 +55,24 @@ public sealed class ShellDatabase
     /// <summary>A background by this file's own record number.</summary>
     public Pcx BackgroundNative(int n) => Pcx.Parse(Lzss(RawNative(n)));
 
-    /// <summary>A sprite bank (records 33–64, "1.10"): its items, decoded. On Nitro, indexed by the base bank's sprite numbers; one Nitro dropped is empty.</summary>
-    public SpriteBank Bank(int id) =>
-        Rec(id) == 0 ? SpriteBank.Empty : new(RawNative(Rec(id)), IsNitro ? NitroShellMap.SpriteMap(id) : null, Rec(id));
+    /// <summary>
+    /// A sprite bank (records 33–64, "1.10"): its items, decoded. On Nitro, indexed by the base bank's sprite numbers; one Nitro dropped is empty.
+    /// Decoded once and kept (the sprites are never changed): a screen asks for its banks every time it draws, and decoding one of the big ones
+    /// (the popups' 36) takes tens of milliseconds, which the internet roster paid on every answer that changed its list.
+    /// </summary>
+    public SpriteBank Bank(int id) => Kept(_banks, id, () => Rec(id) == 0 ? SpriteBank.Empty : new(RawNative(Rec(id)), IsNitro ? NitroShellMap.SpriteMap(id) : null, Rec(id)));
 
-    /// <summary>A bank by this file's own record number and sprite numbers.</summary>
-    public SpriteBank BankNative(int n) => new(RawNative(n), null, n);
+    /// <summary>A bank by this file's own record number and sprite numbers (kept as <see cref="Bank"/>'s are).</summary>
+    public SpriteBank BankNative(int n) => Kept(_nativeBanks, n, () => new(RawNative(n), null, n));
+
+    private readonly Dictionary<int, SpriteBank> _banks = [], _nativeBanks = [];
+
+    private static SpriteBank Kept(Dictionary<int, SpriteBank> kept, int key, Func<SpriteBank> decode)
+    {
+        lock (kept) if (kept.TryGetValue(key, out var b)) return b;
+        var bank = decode();
+        lock (kept) return kept.TryAdd(key, bank) ? bank : kept[key];
+    }
 
     /// <summary>A bitmap font (records 65–71).</summary>
     public ShellFont Font(int id) => new(Raw(id)) { Record = id };

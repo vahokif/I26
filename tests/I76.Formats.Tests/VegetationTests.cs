@@ -692,12 +692,7 @@ public class VegetationTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>
-    /// The sward map on T02's real terrain (the South Plains): made quickly enough for the loading card, grassy on the
-    /// open prairie, bare under objects (the roads paint over it), and its texels near the placer's own sward at their middles.
-    /// </summary>
-    [InstallFact]
-    public void T02SwardCoversThePrairieAndKeepsOffObjects()
+    private static (I76.Formats.Assembly.MissionWorld W, VegMask Mask, VegRegion Region, SurfaceTerrain Terrain, VegetationPlacer P) T02Placer()
     {
         var vfs = TestInstall.Vfs;
         var asm = new I76.Formats.Assembly.ModelAssembler(vfs);
@@ -706,7 +701,30 @@ public class VegetationTests(ITestOutputHelper output)
         var terrain = new SurfaceTerrain(surf, w.Terrain);
         var mask = VegMask.ForMission(w, asm);
         var region = Biomes.For("T02")!;
-        var p = new VegetationPlacer(region.Biome, new VegetationParams { LowGround = region.LowGround }, terrain, mask, VegHash.Of("T02"));
+        return (w, mask, region, terrain, new VegetationPlacer(region.Biome, new VegetationParams { LowGround = region.LowGround }, terrain, mask, VegHash.Of("T02")));
+    }
+
+    /// <summary>T02's sward map is made quickly enough for the loading card.</summary>
+    [InstallFact]
+    [Trait("Load", "Sensitive")]   // wall-clock timing: flakes on a busy machine; feature runs skip it (--filter "Load!=Sensitive"), a release check runs it
+    public void T02SwardIsQuick()
+    {
+        var (w, _, _, _, p) = T02Placer();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        SwardMap.Build(p, w.Terrain);
+        long ms = sw.ElapsedMilliseconds;
+        output.WriteLine($"T02 sward: {ms} ms");
+        Assert.True(ms < 1500, $"{ms} ms");
+    }
+
+    /// <summary>
+    /// The sward map on T02's real terrain (the South Plains): grassy on the open prairie, bare under objects (the roads
+    /// paint over it), and its texels near the placer's own sward at their middles. How quickly: <see cref="T02SwardIsQuick"/>.
+    /// </summary>
+    [InstallFact]
+    public void T02SwardCoversThePrairieAndKeepsOffObjects()
+    {
+        var (w, mask, region, terrain, p) = T02Placer();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var map = SwardMap.Build(p, w.Terrain);
         long ms = sw.ElapsedMilliseconds;
@@ -738,7 +756,6 @@ public class VegetationTests(ITestOutputHelper output)
         // Low's ground is as grassy as High's: the sward does not depend on the setting's density
         var low = new VegetationPlacer(region.Biome, new VegetationParams { Density = 0.6f, LowGround = region.LowGround }, terrain, mask, VegHash.Of("T02"));
         Assert.Equal(p.Sward(9047, 43797), low.Sward(9047, 43797));
-        Assert.True(ms < 1500, $"{ms} ms");
     }
 
     [Fact]

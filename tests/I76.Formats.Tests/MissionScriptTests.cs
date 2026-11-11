@@ -463,7 +463,7 @@ public class MissionScriptTests(ITestOutputHelper log)
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d is not null && root is null; d = d.Parent)
             if (File.Exists(Path.Combine(d.FullName, "I76.sln"))) root = d.FullName;
         if (root is null) return;
-        var md = File.ReadAllText(Path.Combine(root, "docs", "mission-scripts.md"));
+        var md = File.ReadAllText(Path.Combine(root, "docs", "mission-scripts.md")).Replace("\r\n", "\n");   // a Windows checkout has CRLF
         var blocks = System.Text.RegularExpressions.Regex.Matches(md, "```yaml\n(.*?)```", System.Text.RegularExpressions.RegexOptions.Singleline)
             .Select(m => m.Groups[1].Value).ToList();
         Assert.Equal(2, blocks.Count);

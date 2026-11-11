@@ -83,10 +83,24 @@ public partial class Cockpit : Node
         _shotR = Frames("zsr45{0}{1:00}", 3);
         _shotL = Frames("zsl45{0}{1:00}", 3);
         yield return null;
+        // a pack's frames read as stored, then made RGBA8 on every core (62 frames of 2048x1024 at 8x, which one by one took seconds)
+        var up = new Godot.Image?[62];
         for (int i = 0; i <= 30; i++)
         {
-            _radarF[i] = Image("zradf" + i.ToString("000"));
-            _radarB[i] = Image("zradb" + i.ToString("000"));
+            up[i] = Resolver.FindByStem("zradf" + i.ToString("000")) is { } mf ? Textures.UpscaleImage(mf) : null;
+            up[31 + i] = Resolver.FindByStem("zradb" + i.ToString("000")) is { } mb ? Textures.UpscaleImage(mb) : null;
+        }
+        System.Threading.Tasks.Parallel.For(0, up.Length, k =>
+        {
+            if (up[k] is not { } u) return;
+            u.ClearMipmaps();
+            if (u.IsCompressed()) u.Decompress();
+            u.Convert(Godot.Image.Format.Rgba8);
+        });
+        for (int i = 0; i <= 30; i++)
+        {
+            _radarF[i] = up[i] ?? Image("zradf" + i.ToString("000"));
+            _radarB[i] = up[31 + i] ?? Image("zradb" + i.ToString("000"));
             if (i % 10 == 9) yield return null;
         }
         _radarMember = Resolver.FindByStem("zradf000");
@@ -110,18 +124,19 @@ public partial class Cockpit : Node
     }
 
     /// <summary>
-    /// A strip's frames as textures. A pack's frames (larger than the original's) get their mipmaps, as the cockpit's other
-    /// art drawn from a pack has them: sampled from the full-size level, an 8x wheel's rim stepped and shimmered as it turned.
+    /// A strip's frames as textures. A pack's frames are its pictures as the GPU takes them (block-compressed, with their mipmaps,
+    /// as the cockpit's other art drawn from a pack): an 8x frame sent as RGBA8 was 8 MB, and without mipmaps an 8x wheel's rim
+    /// stepped and shimmered as it turned.
     /// </summary>
     private (string? Member, ImageTexture?[] Tex) Frames(string pattern, int n)
     {
         var tex = new ImageTexture?[n + 1];
         for (int i = 1; i <= n; i++)
-            if (Drawn(string.Format(pattern, LightVariant, i)) is var (img, s))
-            {
-                if (s > 1) img.GenerateMipmaps();
-                tex[i] = ImageTexture.CreateFromImage(img);
-            }
+        {
+            string stem = string.Format(pattern, LightVariant, i);
+            if ((Resolver.FindByStem(stem) is { } m ? Textures.UpscaleImage(m) : null) is { } up) tex[i] = ImageTexture.CreateFromImage(up);
+            else if (Image(stem) is { } img) tex[i] = ImageTexture.CreateFromImage(img);
+        }
         return (Resolver.FindByStem(string.Format(pattern, 1, 1)), tex);
     }
 

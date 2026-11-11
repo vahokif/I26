@@ -70,7 +70,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         if (_faithfulRoads is not { } bake || Terrain is not { } terrain) yield break;
         _faithfulRoads = null;
         var task = System.Threading.Tasks.Task.Run(bake);
-        while (!task.IsCompleted) yield return task;
+        while (!task.Wait(1)) yield return task;   // (a caller that runs the steps at once waits here rather than spins)
         var (layers, lightY) = task.Result;
         foreach (var ((x0, z0), img) in layers) terrain.SetFaithfulRoadLayer(x0, z0, ImageTexture.CreateFromImage(img), lightY);
         GD.Print($"road layers: the 1997 look's {layers.Count} baked from the originals");
@@ -574,7 +574,9 @@ public sealed class MissionBuilder(AssetVfs vfs)
         for (int i = 0; i < pieceTex.Count; i++) roadTex[roadNames.Length + i] = pieceTex[i];
         // a texture pack's upscales of the roads, the road pieces' tops and the ground decals, where it has them (else null:
         // one set of layers, as without a pack)
-        var roadTexHd = HdRoadTextures(roadTex, roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))),
+        // (not in the map editor: its repaints of edited roads are the originals', and the 1997 look's layers made later would
+        // be the roads as they were at the build)
+        var roadTexHd = I76.Game.Editor.EditorSession.Active ? null : HdRoadTextures(roadTex, roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))),
             m => textures.GetDrawnRgba(m));
         HdRoads = roadTexHd is not null;
         for (int i = 0; i < pieceTris.Count; i++) pieceTris[i] = pieceTris[i] with { Texture = pieceTris[i].Texture + roadNames.Length };

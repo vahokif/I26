@@ -53,6 +53,33 @@ public class MissionTitlesTests
         Assert.Equal("M01", MissionTitles.CoopTitle(TestInstall.Install, "m01"));
     }
 
+    [InstallFact]
+    public void TheCoopListIsReadOncePerMissionFolder()
+    {
+        // the internet roster, a game's popup and the co-op lobby name a co-op game by its mission's title every time they draw (several
+        // times a second while answers come in): reading every stock mission's script for it each time stalled the shell (the lag a co-op
+        // game listed online gave everyone on the roster)
+        using var scratch = new ScratchInstall(TestInstall.Dir!, null);
+        var install = scratch.Install;
+        var first = MissionTitles.CoopList(install);
+        Assert.Contains(first, m => m.Stem == "t05");
+        for (int i = 0; i < 20; i++)
+        {
+            Assert.Equal("1. Meet Taurus", MissionTitles.CoopTitle(install, "t01"));
+            Assert.Same(first, MissionTitles.CoopList(install));
+        }
+        // the copy handed out is the caller's own
+        var copy = MissionTitles.Coop(install);
+        copy.Clear();
+        Assert.Equal(first, MissionTitles.Coop(install));
+        // a change to the folder is read again
+        File.Delete(Path.Combine(install.MissionDir!, Directory.EnumerateFiles(install.MissionDir!).Select(Path.GetFileName).First(f => f!.Equals("t05.msn", StringComparison.OrdinalIgnoreCase))!));
+        var again = MissionTitles.CoopList(install);
+        Assert.NotSame(first, again);
+        Assert.DoesNotContain(again, m => m.Stem == "t05");
+        Assert.Equal("T05", MissionTitles.CoopTitle(install, "t05"));
+    }
+
     [NitroFact]
     public void TheNitroCoopListIsTheCampaignInTheGamesOrder()
     {

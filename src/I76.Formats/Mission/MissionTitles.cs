@@ -79,10 +79,29 @@ public static class MissionTitles
     /// S01-S07 or the Nitro Pack's campaign (P01-P19, B01), in <see cref="Stock"/>'s order (the game's own: the campaign first, then the
     /// scenarios in the shell's list order; Nitro's SCENARIO.DAT order, then B and P). No melee arena, no mission a player added.
     /// </summary>
-    public static List<MapListing> Coop(GameInstall install)
+    public static List<MapListing> Coop(GameInstall install) => [.. CoopList(install)];
+
+    /// <summary>
+    /// <see cref="Coop"/>'s list, read once per mission folder (again only when the folder changes): finding it reads every stock
+    /// mission's script, tens of milliseconds and more on a cold or scanned disk, and the internet roster, a game's popup and the co-op lobby
+    /// name a co-op game by its mission's title (<see cref="CoopTitle"/>) every time they draw, several times a second while answers come in.
+    /// </summary>
+    internal static IReadOnlyList<MapListing> CoopList(GameInstall install)
     {
         var dir = install.MissionDir;
         if (dir is null) return [];
+        var stamp = Directory.GetLastWriteTimeUtc(dir);
+        lock (CoopLists)
+            if (CoopLists.TryGetValue(dir, out var known) && known.Stamp == stamp) return known.List;
+        var list = ReadCoop(install, dir);
+        lock (CoopLists) CoopLists[dir] = (stamp, list);
+        return list;
+    }
+
+    private static readonly Dictionary<string, (DateTime Stamp, IReadOnlyList<MapListing> List)> CoopLists = new();
+
+    private static List<MapListing> ReadCoop(GameInstall install, string dir)
+    {
         var stock = Directory.EnumerateFiles(dir).Where(f => MapFileSet.IsStockMission(f) && f.EndsWith(".msn", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(f => Path.GetFileNameWithoutExtension(f).ToLowerInvariant(), f => f);
         var o = new List<MapListing>();
@@ -98,7 +117,7 @@ public static class MissionTitles
 
     /// <summary>The title a co-op mission goes by in the lists (the stem's upper case for one the install does not list).</summary>
     public static string CoopTitle(GameInstall install, string mission) =>
-        Coop(install).FirstOrDefault(m => m.Stem.Equals(mission, StringComparison.OrdinalIgnoreCase))?.Title is { Length: > 0 } t ? t : mission.ToUpperInvariant();
+        CoopList(install).FirstOrDefault(m => m.Stem.Equals(mission, StringComparison.OrdinalIgnoreCase))?.Title is { Length: > 0 } t ? t : mission.ToUpperInvariant();
 
     private static readonly Dictionary<string, string[]> TripTitles = new();
 

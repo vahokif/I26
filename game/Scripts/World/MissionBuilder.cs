@@ -30,6 +30,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public List<I76.Formats.Assembly.RoadPiece>? RoadPieces { get; private set; }
     /// <summary>Road layer texels per chunk side: 1024 over 160 units is the road textures' own 6.4 per unit.</summary>
     public const int RoadLayerResolution = 1024;
+    /// <summary>
+    /// The modern look's road layer with a texture pack's road or road-piece upscales served (TextureFactory.GetDrawnRgba): 2048, so
+    /// the bake keeps half of what a 4x upscale adds rather than a quarter, for four times the layers' memory. Only then; the 1997
+    /// look then keeps layers of its own from the originals at <see cref="RoadLayerResolution"/>.
+    /// </summary>
+    public const int RoadLayerResolutionHd = 2048;
     public static bool CompressRoadLayers { get; set; } = OS.HasFeature("editor") && System.Environment.GetEnvironmentVariable("I76_SOFT_COMPRESS") is not ("0" or "1");   // I76_SOFT_COMPRESS: 1 our encoder, 0 none (RGBA8, an export without it)   // editor builds only have Godot's compressor (TerrainMaterials.Compress)
     /// <summary>
     /// Where Godot's compressor is not there (an export; I76_SOFT_COMPRESS=1 pretends so in the editor) the layers are BC3 by our own
@@ -55,6 +61,28 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// (TextureRepairs); in the map editor, which paints the repaired copy in both looks, the same dictionary.
     /// </summary>
     public Dictionary<int, RoadRaster.Tex?>? RoadTextures97 { get; private set; }
+    /// <summary>The modern look's road layers were baked from a texture pack's upscales (<see cref="RoadLayerResolutionHd"/>).</summary>
+    public bool HdRoads { get; private set; }
+    private Func<(Dictionary<(int, int), Image> Layers, Dictionary<(int, int), Image> Software, float LightY)>? _faithfulRoads;
+
+    /// <summary>
+    /// With a texture pack's roads (<see cref="HdRoads"/>), the 1997 look's road layers from the originals (a stock texture's slip as
+    /// the file has it, and its Software renderer's from the repaired copy where one reaches), baked the first time the look is asked
+    /// for (off the main thread; a step yields the task while it runs) and given to the terrain's 1997 materials. Without, nothing:
+    /// the layers were made with the mission, as they always were.
+    /// </summary>
+    public IEnumerable<object?> FaithfulRoadSteps()
+    {
+        if (_faithfulRoads is not { } bake || Terrain is not { } terrain) yield break;
+        _faithfulRoads = null;
+        var task = System.Threading.Tasks.Task.Run(bake);
+        while (!task.IsCompleted) yield return task;
+        var (layers, software, lightY) = task.Result;
+        foreach (var ((x0, z0), img) in layers)
+            terrain.SetFaithfulRoadLayer(x0, z0, ImageTexture.CreateFromImage(img), lightY,
+                software.TryGetValue((x0, z0), out var sw) ? ImageTexture.CreateFromImage(sw) : null);
+        GD.Print($"road layers: the 1997 look's {layers.Count} baked from the originals");
+    }
     public List<RoadRaster.FlatTri>? RoadPieceTris { get; private set; }
     /// <summary>Whose ground face each of <see cref="RoadPieceTris"/> is (GroundDecals): its placement and part; null for a road piece's top.</summary>
     public List<(I76.Formats.Assembly.Placement P, string Part)?>? RoadPieceOwners { get; private set; }
@@ -111,7 +139,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// (<paramref name="groundList"/> false: no road data) the road pieces and every lot are left out.
     /// </summary>
     private static (List<RoadRaster.FlatTri>, List<RoadRaster.Tex?>, List<(I76.Formats.Assembly.Placement, string)?>, Dictionary<int, RoadRaster.Tex?>) RoadPieceTops(I76.Formats.Assembly.MissionWorld world,
-        I76.Formats.Assembly.ModelAssembler asm, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures, bool groundList)
+        I76.Formats.Assembly.ModelAssembler asm, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures, bool groundList, List<string>? members = null)
     {
         var tris = new List<RoadRaster.FlatTri>();
         var owners = new List<(I76.Formats.Assembly.Placement, string)?>();
@@ -120,7 +148,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         var original = new Dictionary<int, RoadRaster.Tex?>();
         int Tex(string key, Func<RoadRaster.Tex?> make)
         {
-            if (!texIndex.TryGetValue(key, out int i)) { texIndex[key] = i = texList.Count; texList.Add(make()); }
+            if (!texIndex.TryGetValue(key, out int i)) { texIndex[key] = i = texList.Count; texList.Add(make()); members?.Add(key); }
             return i;
         }
         var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
@@ -174,16 +202,31 @@ public sealed class MissionBuilder(AssetVfs vfs)
     }
 
     /// <summary>
+    /// The road layer's textures (by index: the roads', then the road pieces' tops and ground decals') with a texture pack's upscales
+    /// in place of the originals it has (<paramref name="drawn"/>: a member as drawn and its scale), or null when it has none: the
+    /// layers are then upstream's, one set at <see cref="RoadLayerResolution"/>. A flat colour ("#rrggbb") has no member.
+    /// </summary>
+    public static Dictionary<int, RoadRaster.Tex?>? HdRoadTextures(IReadOnlyDictionary<int, RoadRaster.Tex?> roadTex,
+        IEnumerable<(int Index, string? Member)> members, Func<string, (RoadRaster.Tex Tex, int Scale)?> drawn)
+    {
+        Dictionary<int, RoadRaster.Tex?>? hd = null;
+        foreach (var (i, member) in members)
+            if (member is not null && !member.StartsWith('#') && drawn(member) is ({ } d, > 1))
+                (hd ??= new Dictionary<int, RoadRaster.Tex?>(roadTex))[i] = d;
+        return hd;
+    }
+
+    /// <summary>
     /// One chunk's road layer, rasterised, mipmapped and compressed as <see cref="BakeRoadLayers"/> does it, or null when no road
     /// crosses it (any thread). A map that fills the grid bakes its chunks one by one as they stream in, not all 102 400 up front.
     /// </summary>
     private static Image? BakeChunkLayer(List<RoadRaster.FlatQuad> flat, List<RoadRaster.FlatTri> tris, RoadRaster.Index index,
-        Dictionary<int, RoadRaster.Tex?> roadTex, int x0, int z0)
+        Dictionary<int, RoadRaster.Tex?> roadTex, int x0, int z0, int res = RoadLayerResolution)
     {
-        var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(x0 * 5f, z0 * 5f), TerrainNode.Chunk * 5f, RoadLayerResolution,
+        var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(x0 * 5f, z0 * 5f), TerrainNode.Chunk * 5f, res,
             i => roadTex.GetValueOrDefault(i), tris: tris, index: index);
         if (layer is null) return null;
-        var img = Image.CreateFromData(RoadLayerResolution, RoadLayerResolution, false, Image.Format.Rgba8, layer);
+        var img = Image.CreateFromData(res, res, false, Image.Format.Rgba8, layer);
         img.GenerateMipmaps();
         if (CompressRoadLayers) img.Compress(Image.CompressMode.S3Tc, Image.CompressSource.Generic);
         else if (SoftCompressRoadLayers) img = SoftDxt5(img);
@@ -209,7 +252,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// again is quicker than reading back uncompressed ones.
     /// </summary>
     private static Dictionary<(int, int), Image> BakeRoadLayers(List<RoadRaster.FlatQuad> flat, List<RoadRaster.FlatTri> tris,
-        Dictionary<int, RoadRaster.Tex?> roadTex, List<(int X0, int Z0)> origins)
+        Dictionary<int, RoadRaster.Tex?> roadTex, List<(int X0, int Z0)> origins, int res = RoadLayerResolution)
     {
         var cache = CompressRoadLayers ? HeightCache : null;
         // a map editor session keeps the layers it baked in memory too, for its playtests of ground the disk cache is not used for (edited)
@@ -218,7 +261,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         if (cache is not null || session)
         {
             using var k = new BakeCache.Key("road-layers");
-            k.Add(RoadRaster.Version).Add(EngineVersion).Add(RoadLayerResolution).Add(CompressRoadLayers).Add(flat).Add(tris);
+            k.Add(RoadRaster.Version).Add(EngineVersion).Add(res).Add(CompressRoadLayers).Add(flat).Add(tris);
             foreach (var (i, t) in roadTex.OrderBy(kv => kv.Key))
             {
                 k.Add(i);
@@ -235,7 +278,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             {
                 var got = new Image[blobs.Count];
                 System.Threading.Tasks.Parallel.For(0, blobs.Count, i =>
-                    got[i] = Image.CreateFromData(RoadLayerResolution, RoadLayerResolution, true, (Image.Format)blobs[i].Meta, blobs[i].Data));
+                    got[i] = Image.CreateFromData(res, res, true, (Image.Format)blobs[i].Meta, blobs[i].Data));
                 var hit = new Dictionary<(int, int), Image>();
                 for (int i = 0; i < blobs.Count; i++) hit[((int)(blobs[i].Tag >> 32), (int)blobs[i].Tag)] = got[i];
                 if (HashOn) TraceLayers("cache", origins, hit, null);
@@ -252,12 +295,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
         System.Threading.Tasks.Parallel.ForEach(origins, o =>
         {
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-            var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(o.X0 * 5f, o.Z0 * 5f), TerrainNode.Chunk * 5f, RoadLayerResolution,
+            var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(o.X0 * 5f, o.Z0 * 5f), TerrainNode.Chunk * 5f, res,
                 i => roadTex.GetValueOrDefault(i), tris: tris, index: index);
             long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
             if (layer is null) { System.Threading.Interlocked.Add(ref tRaster, t1 - t0); return; }
             if (raw is not null) raw[o] = H64(layer);
-            var img = Image.CreateFromData(RoadLayerResolution, RoadLayerResolution, false, Image.Format.Rgba8, layer);
+            var img = Image.CreateFromData(res, res, false, Image.Format.Rgba8, layer);
             img.GenerateMipmaps();
             long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
             if (CompressRoadLayers) img.Compress(Image.CompressMode.S3Tc, Image.CompressSource.Generic);
@@ -566,7 +609,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
         Stage("road pieces");
         // road-piece objects (ODEF types 0x50–0x5f, the intersections): their tops painted over the roads,
         // their textures numbered after the road set's
-        var (pieceTris, pieceTex, pieceOwners, pieceOriginal) = RoadPieceTops(world, asm, resolver, textures, GroundListDrawn);
+        var pieceMembers = new List<string>();
+        var (pieceTris, pieceTex, pieceOwners, pieceOriginal) = RoadPieceTops(world, asm, resolver, textures, GroundListDrawn, pieceMembers);
         for (int i = 0; i < pieceTex.Count; i++) roadTex[roadNames.Length + i] = pieceTex[i];
         // the 1997 look's: a stock texture's slip as the file has it (TextureRepairs), the modern look's repaired; the map editor
         // paints the repaired copy in both looks (RoadPainter)
@@ -576,6 +620,11 @@ public sealed class MissionBuilder(AssetVfs vfs)
             roadTex97 = new Dictionary<int, RoadRaster.Tex?>(roadTex);
             foreach (var (i, t) in pieceOriginal) roadTex97[roadNames.Length + i] = t;
         }
+        // a texture pack's upscales of the roads, the road pieces' tops and the ground decals, where it has them (else null:
+        // one set of layers, as without a pack); a repaired texture the pack has no upscale of stays the repaired copy
+        var roadTexHd = HdRoadTextures(roadTex, roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))),
+            m => textures.GetDrawnRgba(m));
+        HdRoads = roadTexHd is not null;
         for (int i = 0; i < pieceTris.Count; i++) pieceTris[i] = pieceTris[i] with { Texture = pieceTris[i].Texture + roadNames.Length };
         RoadNames = roadNames; RoadTextures = roadTex; RoadTextures97 = roadTex97; RoadPieceTris = pieceTris; RoadPieceOwners = pieceOwners;
         // not in the cache: the ground materials are made while the roads bake
@@ -596,17 +645,26 @@ public sealed class MissionBuilder(AssetVfs vfs)
         bool Fills(int x0, int z0) => RoadRaster.OwnFaithful(new(x0 * 5f, z0 * 5f), chunkSize, fills, [], differing97);
         bool Repairs(int x0, int z0) => repairs.Count > 0 && RoadRaster.OwnFaithful(new(x0 * 5f, z0 * 5f), chunkSize, [], repairs, differing97);
         // (a map that fills the grid paints each chunk's layer as it streams in: LazyRoad, below)
-        var origins97 = huge ? [] : origins.Where(o => Own97(o.X0, o.Z0)).ToList();
+        // with a pack's roads the modern layers are its, denser; the 1997 look's, the originals' for every chunk (and its Software
+        // renderer's where a repaired texture reaches), are baked the first time the look is asked for (FaithfulRoadSteps): until then it has none
+        var origins97 = huge || roadTexHd is not null ? [] : origins.Where(o => Own97(o.X0, o.Z0)).ToList();
         // the 1997 look's Software renderer where a repaired texture reaches: the repaired copy (the original's software path drew the
         // 8-bit art, which has no slip), without the gap fills; the modern look's own layer where no fill reaches the chunk too
-        var originsSw = huge ? [] : origins.Where(o => Repairs(o.X0, o.Z0) && Fills(o.X0, o.Z0)).ToList();
+        var originsSw = huge || roadTexHd is not null ? [] : origins.Where(o => Repairs(o.X0, o.Z0) && Fills(o.X0, o.Z0)).ToList();
+        int resModern = roadTexHd is null ? RoadLayerResolution : RoadLayerResolutionHd;
         Stage("road bake");
-        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTex, origins);
+        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTexHd ?? roadTex, origins, resModern);
         var layers97 = huge || origins97.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex97, origins97);
         var layersSw = originsSw.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, originsSw);
+        var lightY = Light.Direction.Y * Light.Intensity;
+        _faithfulRoads = huge || roadTexHd is null ? null : () =>
+        {
+            var sw = origins.Where(o => Repairs(o.X0, o.Z0)).ToList();
+            return (BakeRoadLayers(flat, pieceTris, roadTex97, origins), sw.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, sw), lightY);
+        };
         List<RoadRaster.FlatQuad> flatFilled = huge ? [.. flat, .. fills] : [];
         RoadRaster.Index? indexFilled = huge ? new RoadRaster.Index(flatFilled, pieceTris, TerrainNode.Chunk * 5f) : null;
-        RoadRaster.Index? indexPlain = huge && fills.Count + repairs.Count > 0 ? new RoadRaster.Index(flat, pieceTris, TerrainNode.Chunk * 5f) : null;
+        RoadRaster.Index? indexPlain = huge && (fills.Count + repairs.Count > 0 || roadTexHd is not null) ? new RoadRaster.Index(flat, pieceTris, TerrainNode.Chunk * 5f) : null;
         var lazyRoad = new System.Collections.Concurrent.ConcurrentDictionary<(int, int), (Image? Modern, Image? Faithful, bool Own, Image? Software)>();
         Stage("road bake done");
         // the ground materials, staged meanwhile: made here, then the shared modern material that uses them
@@ -645,6 +703,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 var sw = lz.Software is null ? null : ReferenceEquals(lz.Software, lz.Modern) ? tm : ImageTexture.CreateFromImage(lz.Software);
                 return (!lz.Own ? tm : lz.Faithful is { } fi ? ImageTexture.CreateFromImage(fi) : null, sw);
             }
+            if (roadTexHd is not null) return (null, null);   // FaithfulRoadSteps
             if (!origins97.Contains((x0, z0))) return (Layer(x0, z0), null);
             if (!layer97Tex.TryGetValue((x0, z0), out var t))
                 layer97Tex[(x0, z0)] = t = layers97.TryGetValue((x0, z0), out var img) ? ImageTexture.CreateFromImage(img) : null;
@@ -700,13 +759,14 @@ public sealed class MissionBuilder(AssetVfs vfs)
             Terrain.PrepareChunk = (x0, z0) =>
             {
                 if (cavities) { var im = TerrainMaterials.Cavity(world, x0, z0); lock (cavityImages) cavityImages[(x0, z0)] = im; }
-                // the chunk's road layers, off the main thread: the modern look's with the gap fills, and the 1997 look's without (and with
-                // the files' own textures) where they reach it
-                var modern = BakeChunkLayer(flatFilled, pieceTris, indexFilled!, roadTex, x0, z0);
-                bool own = indexPlain is not null && Own97(x0, z0);
+                // the chunk's road layers, off the main thread: the modern look's with the gap fills (a pack's upscales where served), and
+                // the 1997 look's without (and with the files' own textures) where they reach it, or everywhere with a pack's roads
+                var modern = BakeChunkLayer(flatFilled, pieceTris, indexFilled!, roadTexHd ?? roadTex, x0, z0, resModern);
+                bool own = roadTexHd is not null || indexPlain is not null && Own97(x0, z0);
                 var faithful = own ? BakeChunkLayer(flat, pieceTris, indexPlain!, roadTex97, x0, z0) : null;
-                // the Software renderer's where a repaired texture reaches: the repaired copy without the fills (the modern look's where none reaches)
-                var software = !own || !Repairs(x0, z0) ? null : Fills(x0, z0) ? BakeChunkLayer(flat, pieceTris, indexPlain!, roadTex, x0, z0) : modern;
+                // the Software renderer's where a repaired texture reaches: the repaired copy without the fills (the modern look's where none
+                // reaches, unless that is a pack's)
+                var software = !own || !Repairs(x0, z0) ? null : Fills(x0, z0) || roadTexHd is not null ? BakeChunkLayer(flat, pieceTris, indexPlain!, roadTex, x0, z0) : modern;
                 if (modern is not null || own) lazyRoad[(x0, z0)] = (modern, faithful, own, software);
                 if (modern is not null && System.Environment.GetEnvironmentVariable("I76_STREAM_DEBUG") == "1") System.Console.Error.WriteLine($"stream: road layer at chunk {x0},{z0} (game {x0 * 5},{z0 * 5})");
             };

@@ -1,0 +1,19 @@
+# Text files are checked out with LF on every system, Windows included (whatever core.autocrlf says): tests read docs,
+# tables and scripts from the tree and compare them, and a CRLF checkout made them differ from Linux's.
+* text=auto eol=lf
+
+# Visual Studio's solutions are kept as committed, with CRLF
+*.sln -text
+# shipped as it is, its licence texts byte for byte
+tools/release/THIRD-PARTY-NOTICES.txt -text
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.bin binary
+*.zip binary
+*.wav binary
+*.ogg binary
+*.ttf binary
+*.dds binary
+*.webp binary

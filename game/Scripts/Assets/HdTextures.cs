@@ -6,9 +6,10 @@ namespace I76.Game.Assets;
 
 /// <summary>
 /// The one place upscaled world, car and cockpit textures are found (<see cref="HdTexture"/> has the layout). None ships with
-/// the port; sources in order: $I76_TEX_DIR/world/ (a folder, for development), the user folder's tex-world-8x/, tex-world-4x/,
-/// tex-world-3x/ and tex-world-2x/, every one present read in that order (a partial pack over a full one), else user://tex-world/,
-/// then the newest i76-hd-textures*.zip next to the executable or in user:// (its tex-world/ folder, read in place). Only the
+/// the port; sources in order: $I76_TEX_DIR/world/ (a folder, for development), then the packs <see cref="HdPacks"/> found:
+/// tex-world-8x, tex-world-4x, tex-world-3x and tex-world-2x, every one present read in that order (a partial pack over a full
+/// one), else tex-world; each a folder in the user folder (or one level too deep, inside the folder Extract All made, or beside
+/// the program) or the pack's zip read in place (I26-HD-*.zip, i76-hd-*.zip). Only the
 /// modern look draws them, and only on the models' faces (<see cref="TextureFactory"/>); the "HD Textures" setting switches
 /// them off.
 /// </summary>
@@ -38,11 +39,7 @@ public static class HdTextures
         }
     }
 
-    private static bool UserHas(string folder)
-    {
-        var d = ProjectSettings.GlobalizePath($"user://{folder}/");
-        return Directory.Exists(d) && Directory.EnumerateFileSystemEntries(d).Any();
-    }
+    private static bool UserHas(string folder) => HdPacks.Found.Has(folder);
 
     private static void ProbeOnce()
     {
@@ -52,18 +49,12 @@ public static class HdTextures
         {
             var folders = HdTexture.Folders(UserHas);
             if (env is not null && Directory.Exists(env)) _source = new HdFlatDirSource(env);
-            else if (folders.Length == 1) _source = new HdFlatDirSource(ProjectSettings.GlobalizePath($"user://{folders[0]}/"));
-            else if (folders.Length > 1) _source = new HdChainSource(folders.Select(f => new HdFlatDirSource(ProjectSettings.GlobalizePath($"user://{f}/"))));
-            else
-            {
-                var exe = I76.Formats.Installers.ExtractionPlaces.AppFolder(OS.GetExecutablePath());
-                _source = HdPackFinder.Newest(new[] { exe, ProjectSettings.GlobalizePath("user://") }.OfType<string>(),
-                    w => GD.PushWarning($"HD textures: {w}"), "i76-hd-textures*.zip", HdTexture.Folder + "/");
-            }
+            else if (folders.Length == 1) _source = HdPacks.Found.Get(folders[0])!.Open();
+            else if (folders.Length > 1) _source = new HdChainSource(folders.Select(f => HdPacks.Found.Get(f)!.Open()));
             if (_source is { Count: 0 }) { _source.Dispose(); _source = null; }
         }
         catch (System.Exception e) when (e is IOException or System.UnauthorizedAccessException) { GD.PushWarning($"HD textures: {e.Message}"); _source = null; }
-        if (_source is null) { GD.Print("HD textures: none (no I76_TEX_DIR/world, user://tex-world-Nx/, user://tex-world/ or i76-hd-textures*.zip)"); return; }
+        if (_source is null) { GD.Print("HD textures: none (no I76_TEX_DIR/world, and no tex-world-Nx or tex-world folder, or zip holding one, in the user folder or beside the program)"); return; }
         GD.Print($"HD textures: {_source.Origin} ({_source.Count} files{(_source.Info is { } i ? $", {i}" : "")}; {watch.ElapsedMilliseconds} ms)");
     }
 

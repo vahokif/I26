@@ -104,7 +104,10 @@ public sealed class HdChainSource : HdSource
     public override void Dispose() { foreach (var s in _sources) s.Dispose(); }
 }
 
-/// <summary>A pack file: a zip whose tex-menu/ folder is the layout (or another root: tex-world/ for the world textures), read in place.</summary>
+/// <summary>
+/// A pack file: a zip whose tex-menu/ folder is the layout (or another root: tex-world/ or tex-world-4x/ for the world textures, or
+/// one folder down, I26-HD-Textures-4x/tex-world-4x/), read in place. Its pack.json is the root's, else the zip's top one.
+/// </summary>
 public sealed class HdZipSource : HdSource
 {
     private readonly string _path;
@@ -116,13 +119,15 @@ public sealed class HdZipSource : HdSource
     public HdZipSource(string path, string root = Root)
     {
         _path = path;
+        root = Norm(root);
+        if (!root.EndsWith('/')) root += "/";
         _zip = new ZipArchive(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read), ZipArchiveMode.Read);
         foreach (var e in _zip.Entries)
         {
             var n = Norm(e.FullName);
-            if (n.StartsWith(root) && n.Length > root.Length) _entries[n[root.Length..]] = e;
+            if (n.StartsWith(root) && n.Length > root.Length && !n.EndsWith('/')) _entries[n[root.Length..]] = e;
         }
-        Info = HdPackInfo.Parse(Slurp(_zip.GetEntry("pack.json")));
+        Info = HdPackInfo.Parse(Slurp(_entries.GetValueOrDefault("pack.json"))) ?? HdPackInfo.Parse(Slurp(_zip.GetEntry("pack.json")));
     }
 
     public override string Origin => _path;

@@ -285,6 +285,15 @@ public partial class DamageView : Node3D
         p.Start();
     }
 
+    /// <summary>A one-shot riding on a car, its position followed every frame (Voice3D).</summary>
+    private void SoundOn(Node3D car, string name)
+    {
+        if (Audio?.Get(name) is not { } s) return;
+        var p = Voice3D.OneShot(s, name, Audio.Limits(name));
+        car.AddChild(p);
+        p.Start();
+    }
+
     private void Throw(System.Numerics.Vector3 at, System.Numerics.Vector3 vel, Mesh? mesh = null)
     {
         var body = new RigidBody3D { Position = G(at) + new Vector3(0, 0.8f, 0), LinearVelocity = Coords.ToGodot(vel), AngularVelocity = new Vector3(3, 5, 2) };
@@ -378,7 +387,9 @@ public partial class DamageView : Node3D
                     sc.StopEngine();
                     break;
                 case TyreBlown t:
-                    Sound("tblow.wav", t.Vehicle.Pos.ToVector3());   // the mesh follows Wheel.Blown below
+                    // on the car, as the original's object sounds are (only vexplode and the 0x200 voices are left where they began)
+                    if (Cars.TryGetValue(t.Vehicle, out var tc)) SoundOn(tc, "tblow.wav");
+                    else Sound("tblow.wav", t.Vehicle.Pos.ToVector3());   // the mesh follows Wheel.Blown below
                     break;
                 case PartFlung f:
                 {

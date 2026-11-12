@@ -458,6 +458,20 @@ public partial class CombatView : Node3D
         p.Start();
     }
 
+    /// <summary>
+    /// A one-shot riding on a car (its position followed every frame, as the original's object sounds are; only the 0x200
+    /// voices and the explosions' sounds are placed once and left), heard as DirectSound3D heard it (Voice3D). A car with
+    /// no node has it where the car is.
+    /// </summary>
+    private void SoundOn(I76.Sim.Vehicles.Vehicle v, string name)
+    {
+        if (CarOf?.Invoke(v) is not { } car) { Sound(name, v.Pos.ToVector3()); return; }
+        if (Audio is null || name.Length == 0 || name.Equals("null", StringComparison.OrdinalIgnoreCase) || Audio.Get(name) is not { } s) return;
+        var p = Voice3D.OneShot(s, name, Audio.Limits(name));
+        car.AddChild(p);
+        p.Start();
+    }
+
     private readonly Dictionary<string, EffectSprites.Look?> _muzzles = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>GDFC +0x66 names the muzzle flash's .xdf (xmuzz1: X1_MUZF1 front, X1_MUZS1 side).</summary>
@@ -724,7 +738,8 @@ public partial class CombatView : Node3D
                     // The radar jammer's activation stops the lock warning as it plays cjamm.wav
                     if (c.Sound.Equals("cjamm.wav", StringComparison.OrdinalIgnoreCase) && c.Shooter == Combat.World.Player && CarOf?.Invoke(c.Shooter) is CarNode jammer)
                         jammer.StopSingle("clockon.wav");
-                    if (Audio?.Get(c.Sound) is { } cs) Sound(c.Sound, c.Shooter.Pos.ToVector3());
+                    // on the car, as the original's object sounds are: nitro's 4 s and the jammer's go with it
+                    SoundOn(c.Shooter, c.Sound);
                     break;
             }
         }

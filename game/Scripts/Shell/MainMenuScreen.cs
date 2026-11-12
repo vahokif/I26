@@ -72,7 +72,7 @@ public sealed class MainMenuScreen : ShellScreen
             int hot = Nitro ? sprite + 1 : sprite - 1;
             if (Nitro)
             {
-                var nb = banner >= 0 ? new SpriteWidget(-1, _bank[banner]?.Width == 275 ? 185 : 123, 452, _bank, banner) { NitroBank = true } : null;
+                var nb = banner >= 0 ? new SpriteWidget(-1, _bank[banner]?.Width == 275 ? 185 : 123, BannerTop, _bank, banner) { NitroBank = true } : null;
                 _w[id] = new SpriteWidget(id, x, y, _bank, sprite, nb) { Hot = hot, NitroBank = true, Text = id == 0xe ? "LAN" : null };   // IPX is the LAN here
                 continue;
             }
@@ -128,8 +128,14 @@ public sealed class MainMenuScreen : ShellScreen
 
     private void Select(int id) { var w = _w[id]; w.Selected = true; w.Lit = false; w.Draw(Frame, Imp); }
 
-    // the port's own entry, set in Impact like the menu's labels: the map editor (docs/map-editor.md), bottom left in the 640x480 frame
-    private static readonly Rectangle EditorBox = new(10, 430, 140, 34);
+    // the port's own entry, set in Impact like the menu's labels: the map editor (docs/map-editor.md), bottom left in the 640x480 frame,
+    // wholly above the hover banners (Nitro's from x 123 at y 452, the base game's from x 130 at y 460), whose drawing and erasing
+    // restore their rectangles from the background and would cut into it (#156)
+    private static readonly Rectangle EditorBox = new(10, 414, 140, 34);
+    /// <summary>The map editor entry's rectangle (x, y, width, height) in the 640x480 frame.</summary>
+    public static (int X, int Y, int W, int H) EditorEntry => (EditorBox.X, EditorBox.Y, EditorBox.W, EditorBox.H);
+    /// <summary>The top of the highest hover banner: Nitro's, at y 452 (the base game's are at 460).</summary>
+    public const int BannerTop = 452;
     private bool _editorHot;
     private sealed record Rectangle(int X, int Y, int W, int H) { public bool Has(Vector2I m) => m.X >= X && m.X < X + W && m.Y >= Y && m.Y < Y + H; }
 

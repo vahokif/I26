@@ -30,6 +30,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public List<I76.Formats.Assembly.RoadPiece>? RoadPieces { get; private set; }
     /// <summary>Road layer texels per chunk side: 1024 over 160 units is the road textures' own 6.4 per unit.</summary>
     public const int RoadLayerResolution = 1024;
+    /// <summary>
+    /// The modern look's road layer with a texture pack's road or road-piece upscales served (TextureFactory.GetDrawnRgba): 2048, so
+    /// the bake keeps half of what a 4x upscale adds rather than a quarter, for four times the layers' memory. Only then; the 1997
+    /// look then keeps layers of its own from the originals at <see cref="RoadLayerResolution"/>.
+    /// </summary>
+    public const int RoadLayerResolutionHd = 2048;
     public static bool CompressRoadLayers { get; set; } = OS.HasFeature("editor") && System.Environment.GetEnvironmentVariable("I76_SOFT_COMPRESS") is not ("0" or "1");   // I76_SOFT_COMPRESS: 1 our encoder, 0 none (RGBA8, an export without it)   // editor builds only have Godot's compressor (TerrainMaterials.Compress)
     /// <summary>
     /// Where Godot's compressor is not there (an export; I76_SOFT_COMPRESS=1 pretends so in the editor) the layers are BC3 by our own
@@ -50,12 +56,35 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// <summary>What the map editor needs to paint a chunk's road layer anew: the road texture names, their pixels (the piece tops' after them) and the piece tops.</summary>
     public string[]? RoadNames { get; private set; }
     public Dictionary<int, RoadRaster.Tex?>? RoadTextures { get; private set; }
+    /// <summary>The modern look's road layers were baked from a texture pack's upscales (<see cref="RoadLayerResolutionHd"/>).</summary>
+    public bool HdRoads { get; private set; }
+    private Func<(Dictionary<(int, int), Image> Layers, float LightY)>? _faithfulRoads;
+
+    /// <summary>
+    /// With a texture pack's roads (<see cref="HdRoads"/>), the 1997 look's road layers from the originals, baked the first time the
+    /// look is asked for (off the main thread; a step yields the task while it runs) and given to the terrain's 1997 materials.
+    /// Without, nothing: the layers were made with the mission, as they always were.
+    /// </summary>
+    public IEnumerable<object?> FaithfulRoadSteps()
+    {
+        if (_faithfulRoads is not { } bake || Terrain is not { } terrain) yield break;
+        _faithfulRoads = null;
+        var task = System.Threading.Tasks.Task.Run(bake);
+        while (!task.Wait(1)) yield return task;   // (a caller that runs the steps at once waits here rather than spins)
+        var (layers, lightY) = task.Result;
+        foreach (var ((x0, z0), img) in layers) terrain.SetFaithfulRoadLayer(x0, z0, ImageTexture.CreateFromImage(img), lightY);
+        GD.Print($"road layers: the 1997 look's {layers.Count} baked from the originals");
+    }
     public List<RoadRaster.FlatTri>? RoadPieceTris { get; private set; }
     /// <summary>The quads closing short gaps in the road data (RoadGaps), modern look only.</summary>
     public int RoadFills { get; private set; }
     public long RoadBakeMs { get; private set; }
     public string? GroundTexture { get; private set; }
     public Texture2D? SkyTexture { get; private set; }
+    /// <summary>The sky, the sun or moon sprite and the horizon panels as the modern look draws them: from a texture pack where it has them (TextureFactory.Entry.Drawn), else the same as SkyTexture, Sprite and Horizon.</summary>
+    public Texture2D? SkyDrawn { get; private set; }
+    public Texture2D? SpriteDrawn { get; private set; }
+    public Texture2DArray? HorizonDrawn { get; private set; }
     public string? SkyName { get; private set; }
     public Color SkyAverage { get; private set; } = new(0.7f, 0.7f, 0.75f);
     /// <summary>The sky texture's colours for the modern sky: the open sky, the clouds, their shade, and the luminances between.</summary>
@@ -73,14 +102,14 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// fight.
     /// </summary>
     private static (List<RoadRaster.FlatTri>, List<RoadRaster.Tex?>) RoadPieceTops(I76.Formats.Assembly.MissionWorld world,
-        I76.Formats.Assembly.ModelAssembler asm, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures)
+        I76.Formats.Assembly.ModelAssembler asm, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures, List<string>? members = null)
     {
         var tris = new List<RoadRaster.FlatTri>();
         var texList = new List<RoadRaster.Tex?>();
         var texIndex = new Dictionary<string, int>();
         int Tex(string key, Func<RoadRaster.Tex?> make)
         {
-            if (!texIndex.TryGetValue(key, out int i)) { texIndex[key] = i = texList.Count; texList.Add(make()); }
+            if (!texIndex.TryGetValue(key, out int i)) { texIndex[key] = i = texList.Count; texList.Add(make()); members?.Add(key); }
             return i;
         }
         var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
@@ -134,16 +163,31 @@ public sealed class MissionBuilder(AssetVfs vfs)
     }
 
     /// <summary>
+    /// The road layer's textures (by index: the roads', then the road pieces' tops and ground decals') with a texture pack's upscales
+    /// in place of the originals it has (<paramref name="drawn"/>: a member as drawn and its scale), or null when it has none: the
+    /// layers are then upstream's, one set at <see cref="RoadLayerResolution"/>. A flat colour ("#rrggbb") has no member.
+    /// </summary>
+    public static Dictionary<int, RoadRaster.Tex?>? HdRoadTextures(IReadOnlyDictionary<int, RoadRaster.Tex?> roadTex,
+        IEnumerable<(int Index, string? Member)> members, Func<string, (RoadRaster.Tex Tex, int Scale)?> drawn)
+    {
+        Dictionary<int, RoadRaster.Tex?>? hd = null;
+        foreach (var (i, member) in members)
+            if (member is not null && !member.StartsWith('#') && drawn(member) is ({ } d, > 1))
+                (hd ??= new Dictionary<int, RoadRaster.Tex?>(roadTex))[i] = d;
+        return hd;
+    }
+
+    /// <summary>
     /// One chunk's road layer, rasterised, mipmapped and compressed as <see cref="BakeRoadLayers"/> does it, or null when no road
     /// crosses it (any thread). A map that fills the grid bakes its chunks one by one as they stream in, not all 102 400 up front.
     /// </summary>
     private static Image? BakeChunkLayer(List<RoadRaster.FlatQuad> flat, List<RoadRaster.FlatTri> tris, RoadRaster.Index index,
-        Dictionary<int, RoadRaster.Tex?> roadTex, int x0, int z0)
+        Dictionary<int, RoadRaster.Tex?> roadTex, int x0, int z0, int res = RoadLayerResolution)
     {
-        var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(x0 * 5f, z0 * 5f), TerrainNode.Chunk * 5f, RoadLayerResolution,
+        var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(x0 * 5f, z0 * 5f), TerrainNode.Chunk * 5f, res,
             i => roadTex.GetValueOrDefault(i), tris: tris, index: index);
         if (layer is null) return null;
-        var img = Image.CreateFromData(RoadLayerResolution, RoadLayerResolution, false, Image.Format.Rgba8, layer);
+        var img = Image.CreateFromData(res, res, false, Image.Format.Rgba8, layer);
         img.GenerateMipmaps();
         if (CompressRoadLayers) img.Compress(Image.CompressMode.S3Tc, Image.CompressSource.Generic);
         else if (SoftCompressRoadLayers) img = SoftDxt5(img);
@@ -169,7 +213,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// again is quicker than reading back uncompressed ones.
     /// </summary>
     private static Dictionary<(int, int), Image> BakeRoadLayers(List<RoadRaster.FlatQuad> flat, List<RoadRaster.FlatTri> tris,
-        Dictionary<int, RoadRaster.Tex?> roadTex, List<(int X0, int Z0)> origins)
+        Dictionary<int, RoadRaster.Tex?> roadTex, List<(int X0, int Z0)> origins, int res = RoadLayerResolution)
     {
         var cache = CompressRoadLayers ? HeightCache : null;
         // a map editor session keeps the layers it baked in memory too, for its playtests of ground the disk cache is not used for (edited)
@@ -178,7 +222,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         if (cache is not null || session)
         {
             using var k = new BakeCache.Key("road-layers");
-            k.Add(RoadRaster.Version).Add(EngineVersion).Add(RoadLayerResolution).Add(CompressRoadLayers).Add(flat).Add(tris);
+            k.Add(RoadRaster.Version).Add(EngineVersion).Add(res).Add(CompressRoadLayers).Add(flat).Add(tris);
             foreach (var (i, t) in roadTex.OrderBy(kv => kv.Key))
             {
                 k.Add(i);
@@ -195,7 +239,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             {
                 var got = new Image[blobs.Count];
                 System.Threading.Tasks.Parallel.For(0, blobs.Count, i =>
-                    got[i] = Image.CreateFromData(RoadLayerResolution, RoadLayerResolution, true, (Image.Format)blobs[i].Meta, blobs[i].Data));
+                    got[i] = Image.CreateFromData(res, res, true, (Image.Format)blobs[i].Meta, blobs[i].Data));
                 var hit = new Dictionary<(int, int), Image>();
                 for (int i = 0; i < blobs.Count; i++) hit[((int)(blobs[i].Tag >> 32), (int)blobs[i].Tag)] = got[i];
                 if (HashOn) TraceLayers("cache", origins, hit, null);
@@ -212,12 +256,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
         System.Threading.Tasks.Parallel.ForEach(origins, o =>
         {
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-            var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(o.X0 * 5f, o.Z0 * 5f), TerrainNode.Chunk * 5f, RoadLayerResolution,
+            var layer = RoadRaster.Bake(flat, new System.Numerics.Vector2(o.X0 * 5f, o.Z0 * 5f), TerrainNode.Chunk * 5f, res,
                 i => roadTex.GetValueOrDefault(i), tris: tris, index: index);
             long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
             if (layer is null) { System.Threading.Interlocked.Add(ref tRaster, t1 - t0); return; }
             if (raw is not null) raw[o] = H64(layer);
-            var img = Image.CreateFromData(RoadLayerResolution, RoadLayerResolution, false, Image.Format.Rgba8, layer);
+            var img = Image.CreateFromData(res, res, false, Image.Format.Rgba8, layer);
             img.GenerateMipmaps();
             long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
             if (CompressRoadLayers) img.Compress(Image.CompressMode.S3Tc, Image.CompressSource.Generic);
@@ -343,7 +387,9 @@ public sealed class MissionBuilder(AssetVfs vfs)
         else Notes.Add($"palette {world.PaletteName} not found");
 
         var resolver = Resolver = new TextureResolver(vfs);
-        var textures = Textures = new TextureFactory(resolver, pal);
+        // a 1997 start reads no upscale until the look changes
+        var packPalette = vfs.TryRead(I76.Formats.Imaging.HdTexture.PackPalette) is { Length: I76.Formats.Imaging.Palette.Size } pp ? new Palette(pp) : null;
+        var textures = Textures = new TextureFactory(resolver, pal) { Hd = !DeferModern, PackPalette = packPalette };
         var materials = Materials = new MaterialLibrary(textures) { HoldFlush = OffMainThread };
         Meshes = new MeshBuilder(resolver, materials);
         _carParts = null;
@@ -355,7 +401,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // mip chain the engine picks from per quad by distance, repeating every
         // 8 samples (measured in the original game). So the largest
         // member everywhere, with GPU mipmaps, is the engine's ground.
-        Texture2D? ground = null;
+        Texture2D? ground = null, groundDrawn = null;   // what is measured (the original) and what the modern look draws
         // WDEF lists the sky (nk_…), the ground family and the zmap: mostly tp…, but t04 has tt031sd_ and m15 tm151as_
         var settingsEarly = I76.Formats.Mission.WorldSettings.Read(world.Mission);
         var tp = world.WdefRefs.FirstOrDefault(r => r.EndsWith(".map", StringComparison.OrdinalIgnoreCase)
@@ -365,7 +411,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         {
             var best = Enumerable.Range(1, 9).Select(i => tp[..4] + i + tp[5..]).Select(resolver.FindByStem).OfType<string>()
                 .Select(m => (m, e: textures.Get(m))).Where(x => x.e is not null).OrderByDescending(x => x.e!.Width * x.e.Height).FirstOrDefault();
-            if (best.e is not null) { ground = best.e.Texture; GroundTexture = best.m; }
+            if (best.e is not null) { ground = best.e.Texture; groundDrawn = best.e.Drawn; GroundTexture = best.m; }
         }
         // Sky, horizon, light: WDEF's WRLD chunk.
         Settings = I76.Formats.Mission.WorldSettings.Read(world.Mission);
@@ -375,6 +421,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
         if (I76.Formats.Mission.HorizonList.Parse(Settings is { Horizon.Length: > 0 } ? vfs.TryRead(Settings.Horizon) : null) is { } hz)
         {
             var imgs = new Godot.Collections.Array<Image>();
+            // the modern sky's panels from a pack's upscales, where it has them (HorizonDrawn); the 1997 look's and the skyline's are the originals
+            var drawn = new Godot.Collections.Array<Image>();
             foreach (var n in hz)
             {
                 if (resolver.FindByStem(n) is not { } m || textures.GetRgba(m) is not { } t) { imgs.Clear(); break; }
@@ -383,6 +431,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                     im.Resize(imgs[0].GetWidth(), imgs[0].GetHeight());
                 im.GenerateMipmaps();
                 imgs.Add(im);
+                if (textures.GetDrawnRgba(m) is ({ } d, > 1)) drawn.Add(Image.CreateFromData(d.Width, d.Height, false, Image.Format.Rgba8, d.Rgba));
             }
             if (imgs.Count == I76.Formats.Mission.HorizonList.Panels)
             {
@@ -391,13 +440,25 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 GC.KeepAlive(imgs);   // held past the call (see MeshArrays)
                 if (defer) HorizonImages = [.. imgs];
                 else if (EarlyHorizon && !huge) panels = [.. imgs.Select(im => (Image)im.Duplicate())];
+                if (drawn.Count == imgs.Count)
+                {
+                    foreach (var im in drawn)
+                    {
+                        if (im.GetWidth() != drawn[0].GetWidth() || im.GetHeight() != drawn[0].GetHeight()) im.Resize(drawn[0].GetWidth(), drawn[0].GetHeight());
+                        im.GenerateMipmaps();
+                    }
+                    HorizonDrawn = new Texture2DArray();
+                    HorizonDrawn.CreateFromImages(drawn);
+                    GC.KeepAlive(drawn);
+                }
             }
             else Notes.Add($"horizon {Settings!.Horizon}: textures missing");
         }
-        if (resolver.FindByStem(Light.Sprite) is { } sp && textures.Get(sp) is { } spt) Sprite = spt.Texture;
+        if (resolver.FindByStem(Light.Sprite) is { } sp && textures.Get(sp) is { } spt) { Sprite = spt.Texture; SpriteDrawn = spt.Drawn; }
         if (SkyName is not null && resolver.FindByStem(SkyName) is { } skyMember && textures.Get(skyMember) is { } sky)
         {
             SkyTexture = sky.Texture;
+            SkyDrawn = sky.Drawn;
             var img = sky.Texture.GetImage();
             Palette = MeasureSky(img);
             img.Resize(1, 1, Image.Interpolation.Lanczos);
@@ -460,7 +521,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             GroundNoise.ApplyNoise(sharedModern);
             if (ground is not null)
             {
-                sharedModern.SetShaderParameter("ground_tex", ground);
+                sharedModern.SetShaderParameter("ground_tex", groundDrawn ?? ground);
                 yield return null;
                 var fit = GroundNoise.Measure(gimg!, 40f);
                 yield return null;
@@ -508,8 +569,16 @@ public sealed class MissionBuilder(AssetVfs vfs)
         Stage("road pieces");
         // road-piece objects (ODEF types 0x50–0x5f, the intersections): their tops painted over the roads,
         // their textures numbered after the road set's
-        var (pieceTris, pieceTex) = RoadPieceTops(world, asm, resolver, textures);
+        var pieceMembers = new List<string>();
+        var (pieceTris, pieceTex) = RoadPieceTops(world, asm, resolver, textures, pieceMembers);
         for (int i = 0; i < pieceTex.Count; i++) roadTex[roadNames.Length + i] = pieceTex[i];
+        // a texture pack's upscales of the roads, the road pieces' tops and the ground decals, where it has them (else null:
+        // one set of layers, as without a pack)
+        // (not in the map editor: its repaints of edited roads are the originals', and the 1997 look's layers made later would
+        // be the roads as they were at the build)
+        var roadTexHd = I76.Game.Editor.EditorSession.Active ? null : HdRoadTextures(roadTex, roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))),
+            m => textures.GetDrawnRgba(m));
+        HdRoads = roadTexHd is not null;
         for (int i = 0; i < pieceTris.Count; i++) pieceTris[i] = pieceTris[i] with { Texture = pieceTris[i].Texture + roadNames.Length };
         RoadNames = roadNames; RoadTextures = roadTex; RoadPieceTris = pieceTris;
         // not in the cache: the ground materials are made while the roads bake
@@ -525,13 +594,18 @@ public sealed class MissionBuilder(AssetVfs vfs)
         float chunkSize = TerrainNode.Chunk * 5f;
         bool Fills(int x0, int z0) => fills.Any(q => q.Max.X >= x0 * 5f && q.Max.Y >= z0 * 5f && q.Min.X < x0 * 5f + chunkSize && q.Min.Y < z0 * 5f + chunkSize);
         // (a map that fills the grid paints each chunk's layer as it streams in: LazyRoad, below)
-        var origins97 = huge ? [] : origins.Where(o => Fills(o.X0, o.Z0)).ToList();
+        // with a pack's roads the modern layers are its, denser; the 1997 look's, the originals' for every chunk, are baked the
+        // first time the look is asked for (FaithfulRoadSteps): until then it has none
+        var origins97 = huge || roadTexHd is not null ? [] : origins.Where(o => Fills(o.X0, o.Z0)).ToList();
+        int resModern = roadTexHd is null ? RoadLayerResolution : RoadLayerResolutionHd;
         Stage("road bake");
-        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTex, origins);
+        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTexHd ?? roadTex, origins, resModern);
         var layers97 = huge || origins97.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, origins97);
+        var lightY = Light.Direction.Y * Light.Intensity;
+        _faithfulRoads = huge || roadTexHd is null ? null : () => (BakeRoadLayers(flat, pieceTris, roadTex, origins), lightY);
         List<RoadRaster.FlatQuad> flatFilled = huge ? [.. flat, .. fills] : [];
         RoadRaster.Index? indexFilled = huge ? new RoadRaster.Index(flatFilled, pieceTris, TerrainNode.Chunk * 5f) : null;
-        RoadRaster.Index? indexPlain = huge && fills.Count > 0 ? new RoadRaster.Index(flat, pieceTris, TerrainNode.Chunk * 5f) : null;
+        RoadRaster.Index? indexPlain = huge && (fills.Count > 0 || roadTexHd is not null) ? new RoadRaster.Index(flat, pieceTris, TerrainNode.Chunk * 5f) : null;
         var lazyRoad = new System.Collections.Concurrent.ConcurrentDictionary<(int, int), (Image? Modern, Image? Faithful, bool Own)>();
         Stage("road bake done");
         // the ground materials, staged meanwhile: made here, then the shared modern material that uses them
@@ -567,6 +641,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 if (!lazyRoad.TryRemove((x0, z0), out var lz)) return tm;
                 return !lz.Own ? tm : lz.Faithful is { } fi ? ImageTexture.CreateFromImage(fi) : null;
             }
+            if (roadTexHd is not null) return null;   // FaithfulRoadSteps
             if (!origins97.Contains((x0, z0))) return Layer(x0, z0);
             if (!layer97Tex.TryGetValue((x0, z0), out var t))
                 layer97Tex[(x0, z0)] = t = layers97.TryGetValue((x0, z0), out var img) ? ImageTexture.CreateFromImage(img) : null;
@@ -614,8 +689,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
             {
                 if (cavities) { var im = TerrainMaterials.Cavity(world, x0, z0); lock (cavityImages) cavityImages[(x0, z0)] = im; }
                 // the chunk's road layers, off the main thread: the modern look's with the gap fills, and the 1997 look's without where they reach it
-                var modern = BakeChunkLayer(flatFilled, pieceTris, indexFilled!, roadTex, x0, z0);
-                bool own = indexPlain is not null && Fills(x0, z0);
+                var modern = BakeChunkLayer(flatFilled, pieceTris, indexFilled!, roadTexHd ?? roadTex, x0, z0, resModern);
+                bool own = roadTexHd is not null || indexPlain is not null && Fills(x0, z0);
                 var faithful = own ? BakeChunkLayer(flat, pieceTris, indexPlain!, roadTex, x0, z0) : null;
                 if (modern is not null || own) lazyRoad[(x0, z0)] = (modern, faithful, own);
                 if (modern is not null && System.Environment.GetEnvironmentVariable("I76_STREAM_DEBUG") == "1") System.Console.Error.WriteLine($"stream: road layer at chunk {x0},{z0} (game {x0 * 5},{z0 * 5})");

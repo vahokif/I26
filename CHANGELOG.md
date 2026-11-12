@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Upscaled textures for the world, the cars and the cockpit: a texture pack placed in the game's user folder (`tex-world-4x`, `tex-world-8x` and the like, or the pack's own zip, `I26-HD-*.zip` or `i76-hd-*.zip`, read without extracting it) is drawn in the modern look in place of the original textures it has: the scenery, the cars, the 3D cockpit and the 2D dash with their live panels (radar, weapons, specials, damage, gear, compass, gauges), the steering wheel and arms, the mirror's frame, the CB handset, the sky, the horizon, the ground, the roads, road pieces and ground decals, effects, and the mission map and notepad (the map also from the HD menu art's `maps/`). None comes with the game; the 1997 look and a game without a pack are unchanged. Graphic Detail's HD Textures row, shown when a pack is installed, turns it off and on (from the next mission or visit to the garage).
+- The HD packs (menu art and textures) are also found where players often put them by mistake: a pack folder one level too deep (`tex-world-4x	ex-world-4x`), inside the folder Windows' Extract All names after the archive, beside the program instead of in the user folder, or the archive left as a zip. A folder in the right place wins; a renamed pack folder is not used but named in the log with the name it needs. The log's `HD packs:` line says what was found where.
+
 ## 0.12.1 (10 November 2026)
 
 Network games use protocol 24: 0.12.1 does not play with 0.12.0 or earlier, so everyone in a game needs 0.12.1.

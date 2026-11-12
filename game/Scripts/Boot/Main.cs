@@ -218,6 +218,7 @@ public partial class Main : Node3D
             if (RenderBackend.Compatibility)
                 GD.Print("renderer: Compatibility (OpenGL): SSAO and some finer effects are off (docs/compatibility-renderer.md)");
             I76.Game.Assets.HiFiAudio.Probe();
+            I76.Game.Assets.HdTextures.Probe();
         }
         // release.sh, before the export: the terrain's compressed material pack, for builds that cannot compress (World/TerrainMaterials.WritePrebaked)
         if (OS.GetCmdlineUserArgs() is var cl && Array.IndexOf(cl, "--bake-ground-pack") is var bk and >= 0 && bk + 1 < cl.Length)
@@ -571,15 +572,29 @@ public partial class Main : Node3D
 
     private CanvasLayer? _picture;
 
-    /// <summary>A texture member's picture as it is meant to be seen: opaque (index 255 is a colour here) and the right way up.</summary>
-    private Texture2D? Picture(string stem)
+    /// <summary>
+    /// A texture member's picture as it is meant to be seen: opaque (index 255 is a colour here) and the right way up; a texture
+    /// pack's upscale where it has one (TextureFactory.GetDrawnRgba), and for the map in the modern look the HD menu art's
+    /// maps/&lt;stem&gt; (.webp, .png or .jpg) before that. Null when the install has none (an upscale alone makes no map).
+    /// </summary>
+    private Texture2D? Picture(string stem, bool map, out bool smooth)
     {
-        if (_builder?.Resolver?.FindByStem(stem) is not { } m || _builder.Textures?.GetRgba(m) is not { } t) return null;
+        smooth = false;
+        if (_builder?.Resolver?.FindByStem(stem) is not { } m || _builder.Textures?.GetDrawnRgba(m) is not var (t, scale)) return null;
+        // an upscale is drawn filtered through its mipmaps; the original's pixels kept
+        smooth = true;
+        if (map && !_mode1997 && I76.Game.Shell.HdAssets.LoadImage(I76.Game.Shell.HdAssets.Find($"maps/{stem.ToLowerInvariant()}")) is { } hd)
+        {
+            hd.GenerateMipmaps();
+            return ImageTexture.CreateFromImage(hd);
+        }
+        smooth = scale > 1;
         var rgba = (byte[])t.Rgba.Clone();
         for (int i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
         var img = Image.CreateFromData(t.Width, t.Height, false, Image.Format.Rgba8, rgba);
         // .map and .m16 rows are stored bottom up (as the handset's are); a .vqm's top down
         if (!m.EndsWith(".vqm", System.StringComparison.OrdinalIgnoreCase)) img.FlipY();
+        if (smooth) img.GenerateMipmaps();
         return ImageTexture.CreateFromImage(img);
     }
 
@@ -592,13 +607,14 @@ public partial class Main : Node3D
     private void OpenPicture(MissionPicture.Kind kind)
     {
         Texture2D? pic;
+        bool smooth;
         if (kind == MissionPicture.Kind.Map)
         {
             // WRLD +0x79 names it; none ("No map specified for this mission"): nothing happens
             if (_builder?.Settings?.Overview is not { Length: > 0 } name) return;
-            pic = Picture(System.IO.Path.GetFileNameWithoutExtension(name));
+            pic = Picture(System.IO.Path.GetFileNameWithoutExtension(name), true, out smooth);
         }
-        else pic = Picture($"ZNPD6{DriverVariant()}01");
+        else pic = Picture($"ZNPD6{DriverVariant()}01", false, out smooth);
         if (pic is null) return;
         if (_net is null) GetTree().Paused = true;
         if (GetNodeOrNull<AudioStreamPlayer>("Music") is { } music) music.ProcessMode = ProcessModeEnum.Always;
@@ -615,7 +631,8 @@ public partial class Main : Node3D
         var view = new MissionPicture
         {
             What = kind, Picture = pic, Objectives = objectives, Lee = lee,
-            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,   // the art's pixels kept in both looks (the text is set at the window's scale)
+            // the art's pixels kept in both looks (the text is set at the window's scale); an upscale filtered
+            TextureFilter = smooth ? CanvasItem.TextureFilterEnum.LinearWithMipmaps : CanvasItem.TextureFilterEnum.Nearest,
             Closed = k =>
             {
                 layer.QueueFree();
@@ -1507,7 +1524,7 @@ public partial class Main : Node3D
         if (combat.Damage is I76.Sim.Damage.DamageModel wdm) wdm.Damaging += wiggle.Damaging;
         yield return null;
         var hud = new Hud { Staged = staged, Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Network = () => _net is not null, HostAllowsCrosshair = () => _net?.Client.CrosshairAllowed == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
-            Texture = n => _builder?.Resolver?.FindByStem(n) is { } m ? _builder.Textures?.Get(m)?.Texture : null, Faithful = () => _mode1997, Palette = _builder?.ActPalette, Variant = DriverVariant(), ReadFile = n => _builder?.Vfs.TryRead(n) };
+            Texture = n => _builder?.Resolver?.FindByStem(n) is { } m ? _builder.Textures?.Get(m)?.Drawn : null, Faithful = () => _mode1997, Palette = _builder?.ActPalette, Variant = DriverVariant(), ReadFile = n => _builder?.Vfs.TryRead(n) };
         AddChild(hud);
         if (staged) foreach (var step in hud.ReadySteps()) yield return step;
         AddMirrorTarget(combat);
@@ -1896,6 +1913,10 @@ public partial class Main : Node3D
         var m = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sky_modern.gdshader") };
         foreach (var p in new[] { "clouds", "horizon", "has_horizon", "sprite", "has_sprite", "sprite_dir", "sprite_radius" })
             m.SetShaderParameter(p, dome.GetShaderParameter(p));
+        // a texture pack's sky, horizon and sprite where it has them (the dome, the 1997 look's, keeps the originals)
+        if (_builder?.SkyDrawn is { } sd) m.SetShaderParameter("clouds", sd);
+        if (_builder?.HorizonDrawn is { } hd && _builder.Horizon is not null) m.SetShaderParameter("horizon", hd);
+        if (_builder?.SpriteDrawn is { } spd && _builder.Sprite is not null) m.SetShaderParameter("sprite", spd);
         if (_builder?.Palette is { } pal)
         {
             // by day the haze and the clouds are lifted toward white; a night sky keeps the texture's own dark blues (the original's
@@ -2478,6 +2499,8 @@ public partial class Main : Node3D
             yield break;
         }
         _standBy?.QueueFree(); _standBy = null;
+        // with a texture pack's roads, the 1997 look's road layers are made the first time it is asked for
+        if (on && _builder is { } built) foreach (var step in built.FaithfulRoadSteps()) yield return step;
         _mode1997 = on;
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
         _builder?.Terrain?.UseModern(!on);

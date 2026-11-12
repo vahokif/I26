@@ -88,6 +88,32 @@ public class MouseLookTests
         Assert.False(head.HasOffset);
     }
 
+    /// <summary>#165: looking down is held at each heading to what keeps the arms' cut-off ends out of view, and turning the head pulls it up to that.</summary>
+    [Fact]
+    public void CockpitMouseLookLooksLessLowToTheSides()
+    {
+        const float d = MathF.PI / 180;
+        var head = new MouseCockpitOffset();
+        head.Step(0.016f, autoReturn: false, keyHeld: false, 0, 1);                        // straight ahead, the mouse pulled far down
+        Assert.Equal(I76.Formats.Input.CockpitReach.MaxPitch(0), I76.Formats.Input.FreeLook.Rest + head.Pitch / d, 3);
+        Assert.True(head.Pitch < MouseCockpitOffset.MaxDown);
+        head.Step(0.016f, autoReturn: false, keyHeld: false, -90 * d, 0);                 // turned to the right window
+        Assert.Equal(90, head.Yaw / d, 3);
+        Assert.Equal(I76.Formats.Input.CockpitReach.MaxPitch(90), I76.Formats.Input.FreeLook.Rest + head.Pitch / d, 3);
+        head.Step(0.016f, autoReturn: false, keyHeld: false, 0, 1);                        // and down again: no lower
+        Assert.Equal(I76.Formats.Input.CockpitReach.MaxPitch(90), I76.Formats.Input.FreeLook.Rest + head.Pitch / d, 3);
+        head.Step(0.016f, autoReturn: false, keyHeld: false, 0, -10 * d);                 // up is free
+        Assert.Equal(I76.Formats.Input.CockpitReach.MaxPitch(90) - 10, I76.Formats.Input.FreeLook.Rest + head.Pitch / d, 3);
+        // easing back to forward with Camera Return never passes under the reach either
+        head.Step(0.016f, autoReturn: false, keyHeld: false, 30 * d, 1);                  // 60° right, as low as it goes
+        for (int i = 0; i < 200; i++)
+        {
+            head.Step(0.05f, autoReturn: true, keyHeld: false, 0, 0);
+            Assert.True(I76.Formats.Input.FreeLook.Rest + head.Pitch / d <= I76.Formats.Input.CockpitReach.MaxPitch(head.Yaw / d) + 1e-3f);
+        }
+        Assert.False(head.HasOffset);
+    }
+
     [Fact]
     public void ArmoryCyclePrevStepsUpTheWeaponRackAndRespectsLinks()
     {

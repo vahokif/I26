@@ -1,4 +1,5 @@
 using System;
+using I76.Formats.Input;
 
 namespace I76.Sim.Views;
 
@@ -61,12 +62,13 @@ public static class MouseLook
 /// The port's mouse free-look offset in the 3D cockpit: accumulates head (yaw, pitch) in radians from <see cref="MouseLook.Orbit"/> deltas
 /// (where orbit yaw is negated so moving the mouse right turns the pilot's head right, and pitch+ looks down toward the dash). Eases back
 /// to forward after <see cref="ReturnDelay"/> seconds when <c>autoReturn</c> (Camera Return) is on, and clears when a glance key is held.
+/// Looking down is held to <see cref="CockpitReach"/> at the head's yaw, so the cut-off ends of the arms never show (#165).
 /// </summary>
 public sealed class MouseCockpitOffset
 {
     public const float ReturnDelay = 1.5f;
     public const float ReturnHalfLife = 0.25f;
-    /// <summary>Reach in radians: ±160° yaw (to the side windows and over the shoulder), −22° up and +25° down from the −13° rest pitch.</summary>
+    /// <summary>Reach in radians: ±160° yaw (to the side windows and over the shoulder), −22° up and +25° down from the −13° rest pitch (less to the sides: <see cref="MaxDownAt"/>).</summary>
     public const float MaxYaw = 160f * MathF.PI / 180f;
     public const float MaxUp = 22f * MathF.PI / 180f;
     public const float MaxDown = 25f * MathF.PI / 180f;
@@ -75,6 +77,10 @@ public sealed class MouseCockpitOffset
     public float Pitch { get; private set; }
     public float Idle { get; private set; } = ReturnDelay;
     public bool HasOffset => Yaw != 0f || Pitch != 0f;
+
+    /// <summary>How far below the rest pitch the head may look at <paramref name="yaw"/> (radians): <see cref="MaxDown"/>, or less where <see cref="CockpitReach"/> says.</summary>
+    public static float MaxDownAt(float yaw) =>
+        MathF.Min(MaxDown, (CockpitReach.MaxPitch(yaw * 180f / MathF.PI) - FreeLook.Rest) * MathF.PI / 180f);
 
     public void Reset()
     {
@@ -89,7 +95,7 @@ public sealed class MouseCockpitOffset
         if (orbitYaw != 0f || orbitPitch != 0f)
         {
             Yaw = System.Math.Clamp(Yaw - orbitYaw, -MaxYaw, MaxYaw);
-            Pitch = System.Math.Clamp(Pitch + orbitPitch, -MaxUp, MaxDown);
+            Pitch = System.Math.Clamp(Pitch + orbitPitch, -MaxUp, MathF.Max(-MaxUp, MaxDownAt(Yaw)));
             Idle = 0f;
             return;
         }
@@ -101,5 +107,6 @@ public sealed class MouseCockpitOffset
         Pitch *= k;
         if (MathF.Abs(Yaw) < 1e-4f) Yaw = 0f;
         if (MathF.Abs(Pitch) < 1e-4f) Pitch = 0f;
+        Pitch = MathF.Min(Pitch, MathF.Max(-MaxUp, MaxDownAt(Yaw)));   // easing back round may pass a heading that allows less
     }
 }

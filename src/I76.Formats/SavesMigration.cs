@@ -18,7 +18,7 @@ public static class SavesMigration
         var saves = Path.Combine(userDir, SavesDir);
         foreach (var name in new[] { "bookmarks.cfg", "trip.cfg", "trip_car.json" })
             n += Move(Path.Combine(userDir, name), Path.Combine(saves, name), log);
-        foreach (var f in Directory.GetFiles(userDir, "bookmark_*.json"))
+        foreach (var f in Directory.GetFiles(userDir, "bookmark_*.json").Concat(Directory.GetFiles(userDir, "bookmark_*.snap")))
             n += Move(f, Path.Combine(saves, Path.GetFileName(f)), log);
         n += Move(Path.Combine(userDir, "nitro", "scenario.dat"), Path.Combine(saves, "nitro", "scenario.dat"), log);
         return n;

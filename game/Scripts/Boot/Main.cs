@@ -563,6 +563,7 @@ public partial class Main : Node3D
         {
             Vfs = _builder.Vfs, Palette = pal, InstallDir = _opt.Install, Mission = mission, NoReconfigure = four, Faithful = _mode1997, End = end, Net = _net is not null,
             Live = s => { ApplyAudio(s); ApplyGraphics(s); }, CheatsOff = I76.Game.Shell.CheatMarker.Clear, CanRetry = CanRetry, Developer = DevOn,
+            SaveBookmark = SaveCheckpointBookmark,
             Closed = o => { layer.QueueFree(); _menu = null; MenuClosed(o); },
         };
         layer.AddChild(_menu);

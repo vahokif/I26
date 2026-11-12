@@ -13,15 +13,16 @@ public sealed class SavesMigrationTests : IDisposable
     [Fact]
     public void Old_saves_move_and_unrelated_files_stay()
     {
-        W("b", "bookmarks.cfg"); W("c0", "bookmark_save000.json"); W("c1", "bookmark_save001.json"); W("t", "trip.cfg"); W("tc", "trip_car.json");
+        W("b", "bookmarks.cfg"); W("c0", "bookmark_save000.json"); W("c1", "bookmark_save001.json"); W("sn1", "bookmark_save001.snap"); W("t", "trip.cfg"); W("tc", "trip_car.json");
         W("s", "nitro", "scenario.dat"); W("m", "nitro", "nituser.mel"); W("x", "shell.cfg"); W("i", "input.map"); W("l", "melee.cfg");
         var log = new List<string>();
-        Assert.Equal(6, SavesMigration.Run(_u, log.Add));
-        Assert.Equal(6, log.Count);
+        Assert.Equal(7, SavesMigration.Run(_u, log.Add));
+        Assert.Equal(7, log.Count);
         Assert.Equal("b", File.ReadAllText(P("saves", "bookmarks.cfg")));
         Assert.Equal("c1", File.ReadAllText(P("saves", "bookmark_save001.json")));
+        Assert.Equal("sn1", File.ReadAllText(P("saves", "bookmark_save001.snap")));
         Assert.Equal("s", File.ReadAllText(P("saves", "nitro", "scenario.dat")));
-        foreach (var gone in new[] { "bookmarks.cfg", "bookmark_save000.json", "trip.cfg", "trip_car.json" }) Assert.False(File.Exists(P(gone)));
+        foreach (var gone in new[] { "bookmarks.cfg", "bookmark_save000.json", "bookmark_save001.snap", "trip.cfg", "trip_car.json" }) Assert.False(File.Exists(P(gone)));
         Assert.False(File.Exists(P("nitro", "scenario.dat")));
         foreach (var kept in new[] { "shell.cfg", "input.map", "melee.cfg" }) Assert.True(File.Exists(P(kept)));
         Assert.True(File.Exists(P("nitro", "nituser.mel")));

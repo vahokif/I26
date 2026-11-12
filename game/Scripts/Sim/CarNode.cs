@@ -39,6 +39,7 @@ public partial class CarNode : Node3D
         // (dead centre, GitHub #83); Godot's model cut a far helicopter's loop at 250 m, so it fell silent.
         _engine = new Voice3D { Stream = loop, Autoplay = true, BaseDb = -6 + SoundFiles.VolumeDb(_engineVolume), Name = "Engine" };
         AddChild(_engine);
+        Voice3D.Trace($"engine loop on: {Name}{(_engine.Playing ? "" : " (parked, out of range)")}");
     }
 
     private AudioStream? _engineLoop;
@@ -58,6 +59,7 @@ public partial class CarNode : Node3D
     /// <summary>A dead car's engine falls silent (sound event 2).</summary>
     public void StopEngine()
     {
+        if (_engine is not null) Voice3D.Trace($"engine loop off: {Name}");
         _engine?.Stop();
         _engine?.QueueFree();
         _engine = null;

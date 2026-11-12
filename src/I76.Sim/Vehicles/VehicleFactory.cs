@@ -76,7 +76,8 @@ public static class VehicleFactory
     /// buses and the tractor keep eimarx.wav and vhorn5.wav, the police car its siren, the tank, helicopters, balloon and
     /// UFO their loops. The engine part still sets the power. The original's shell wrote the part's ordinal into the car it
     /// launched (a stock Sheriff left as ENG NUM 3), so the player's own truck
-    /// sounded like a V-10 and the police car had no siren (docs/deviations.md).
+    /// sounded like a V-10 and the police car had no siren (docs/deviations.md). A mission's own truck, tank or aircraft with
+    /// a plain row sounds as its body without the flag (<see cref="HeavyBody"/>); its other cars as their files say.
     /// </summary>
     /// <param name="meleeBrakes">An Auto Melee or a network game: the brake is scaled by the car's BRAK part (1.0 / 1.3 / 1.6 / 2.0). A mission ignores the part.</param>
     /// <param name="specials">False for an Auto Melee's opponents: the game writes their cars with three empty SPEC slots,
@@ -91,10 +92,11 @@ public static class VehicleFactory
         string[] wdfNames = [.. Enumerable.Range(0, 3).Select(a => Bin.CStr(d, p + 0x36 + 13 * a, 13))];
         int engNum = Bin.I32(d, p + 0x2a), suspId = Bin.I32(d, p + 0x2e), brakeId = Bin.I32(d, p + 0x32);
 
-        int soundNum = bodySound && engNum is >= 0 and <= 3 && BodySoundRow(vfs, vdfName) is { } bodyRow ? bodyRow : engNum;
-        var v = new Vehicle { Definition = vcfName, EngineNumber = soundNum, Ignition = IgnitionFor(vfs, soundNum), HornLoops = HornLoops(vfs, soundNum) };
         var vdf = new Bwd2File(vfs.Read(vdfName));
         var vdfc = vdf.First("VDFC")!.Value;
+        bool heavy = HeavyBody(Bin.U32(vdf.Data, vdfc.PayloadOffset + 0x18));
+        int soundNum = (bodySound || heavy) && engNum is >= 0 and <= 3 && BodySoundRow(vfs, vdfName) is { } bodyRow ? bodyRow : engNum;
+        var v = new Vehicle { Definition = vcfName, EngineNumber = soundNum, Ignition = IgnitionFor(vfs, soundNum), HornLoops = HornLoops(vfs, soundNum) };
         v.ObjectClass = Bin.U32(vdf.Data, vdfc.PayloadOffset + 0x14);   // the VDFC chunk reader
         float mass = Bin.F32(vdf.Data, vdfc.PayloadOffset + 0x30);
         v.P.Drag = Bin.F32(vdf.Data, vdfc.PayloadOffset + 0x38);
@@ -187,6 +189,16 @@ public static class VehicleFactory
                 cdf.All("BRAK").Select(c => R(c, 4, 8, -1)).ToList(),
                 cdf.All("SUSP").Select(c => R(c, 4, 8, 0xc)).ToList());
     }
+
+    /// <summary>
+    /// Whether a body's size class (VDFC +0x18: 5 the Moth trucks, buses and tractor, 6 the tank, 7 the aircraft) picks its own
+    /// engine loop. The 1997 CD build chose the loop by this class (the truck, tank and helicopter sounds) and by the file's
+    /// engine only for the other bodies; the 1998 build reads every car's engsnd.dat row from its file, and the missions' own
+    /// helicopters, tank and trucks were saved with a plain engine row (the helicopters of T05, T07, T08, T11, T16, S06 and S07,
+    /// T16's tank, the buses, tanker and Moth truck of S05, S07, T17 and the Nitro Pack's P04, P05, P13 and P17), so there they
+    /// sound like a car. Such a file sounds as its body here, as on the CD.
+    /// </summary>
+    public static bool HeavyBody(uint sizeClass) => sizeClass is 5 or 6 or 7;
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<AssetVfs, Dictionary<string, int>> BodyRows = new();
 

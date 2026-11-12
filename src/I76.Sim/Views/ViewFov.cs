@@ -17,7 +17,11 @@ public static class ViewFov
     /// <summary>The choice in force (view only; <see cref="Apply"/> sets it from the settings).</summary>
     public static int Choice { get; private set; }
 
-    public static void Apply(int choice) => Choice = System.Math.Clamp(choice, 0, Across.Length - 1);
+    public static void Apply(int choice)
+    {
+        Choice = System.Math.Clamp(choice, 0, Across.Length - 1);
+        I76.Formats.Input.CockpitReach.ViewHeight = Main;   // the free head's reach below follows the view's height (#165)
+    }
 
     /// <summary>The choice for a shell.cfg [port] fov value (degrees across 4:3); anything that is not one of the offered values is the original's.</summary>
     public static int Parse(int? across) => across is { } a && System.Array.IndexOf(Across, a) is var i and >= 0 ? i : 0;

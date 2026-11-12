@@ -353,6 +353,43 @@ public sealed class AxisControls
 }
 
 /// <summary>
+/// How low the port's free head (the mouse, the pad's look stick, the head tracker) may look at each heading in the 3D cockpit, so
+/// the cut-off ends of the driver's arms never come into view (#165). The arms (the .45s, raised or at rest) and the steering
+/// wheel with its hands are pictures on flat quads, cut off at their lower edges; the original's glances never look low enough to
+/// see those edges. The table was measured from every car's interior in both stock games: at each degree of yaw, the highest pitch at
+/// which the lower edges of the two arm quads and the wheel's quad still lie under the view's lower border, at the original's height
+/// of view and in any window from 4:3 to 32:9, less 1° for the head's sway, then kept under that at every degree between its 5° steps.
+/// A taller view (a wide Field of View in a narrow window) looks that much less low, a shorter one that much lower.
+/// </summary>
+public static class CockpitReach
+{
+    /// <summary>The main view's height in degrees (the game layer keeps it current: the Field of View setting in this window).</summary>
+    public static float ViewHeight { get; set; } = OriginalHeight;
+    public const float OriginalHeight = 73.74f;
+
+    /// <summary>The lowest pitch (game degrees, down positive) every 5° of yaw from −160° (left) to 160° (right), at the original's height of view.</summary>
+    private static readonly float[] Lowest =
+    [
+        10.1f, 7.5f, 5.3f, 3.4f, 1.9f, 0.7f, -0.2f, -0.9f, -1.4f, -1.6f, -1.6f, -1.4f, -1.0f, -0.4f, -0.8f, -2.0f,
+        -2.9f, -3.6f, -4.1f, -4.4f, -4.4f, -4.4f, -4.1f, -3.6f, -2.9f, -2.0f, -0.8f, 0.4f, 1.6f, 3.1f, 4.8f, 6.9f,
+        9.4f,
+        6.9f, 4.8f, 3.0f, 1.5f, 0.4f, -0.6f, -1.3f, -1.8f, -2.1f, -2.2f, -2.1f, -1.8f, -1.3f, -0.6f, 0.4f, 1.6f,
+        3.1f, 4.4f, 3.8f, 2.5f, 1.5f, 0.6f, 0.1f, -0.3f, -0.4f, -0.4f, -0.1f, 0.4f, 1.1f, 2.1f, 3.4f, 4.9f,
+    ];
+
+    /// <summary>The lowest the head may look (game degrees, down positive) at <paramref name="yaw"/> (degrees, right positive) with a view <paramref name="viewHeight"/> degrees high.</summary>
+    public static float MaxPitch(float yaw, float viewHeight)
+    {
+        float i = (Math.Clamp(yaw, -160f, 160f) + 160f) / 5f;
+        int a = Math.Min((int)i, Lowest.Length - 2);
+        return Lowest[a] + (Lowest[a + 1] - Lowest[a]) * (i - a) + (OriginalHeight - viewHeight) / 2;
+    }
+
+    /// <summary>The same at the view's height in force (<see cref="ViewHeight"/>).</summary>
+    public static float MaxPitch(float yaw) => MaxPitch(yaw, ViewHeight);
+}
+
+/// <summary>
 /// The port's in-car free look on a pad (not the original's, which has only the held glances): the look
 /// stick turns the head in proportion to its deflection, and eases back when let go. Sideways the free look reaches its full yaw at
 /// <see cref="FreeEdge"/>; past <see cref="GunEnter"/> a wide detent holds the glance-left or glance-right pose (the glance key held:
@@ -406,12 +443,12 @@ public sealed class FreeLook
         return a <= DeadZone ? 0 : MathF.Sign(v) * MathF.Min(1, (a - DeadZone) / (top - DeadZone));
     }
 
-    /// <summary>The free head's target (yaw right-positive, pitch the game's: negative looks up), in degrees; null while the stick is centred.</summary>
+    /// <summary>The free head's target (yaw right-positive, pitch the game's: negative looks up), in degrees; null while the stick is centred. Never lower than <see cref="CockpitReach"/> allows at that yaw.</summary>
     public static (float Yaw, float Pitch)? Head(float x, float y)
     {
         float sx = Shape(x, FreeEdge), sy = Shape(y, y > 0 ? DashEnter : 1);
         if (sx == 0 && sy == 0) return null;
-        return (sx * MaxYaw, Rest + sy * (sy < 0 ? MaxUp : MaxDown));
+        return (sx * MaxYaw, Math.Min(Rest + sy * (sy < 0 ? MaxUp : MaxDown), CockpitReach.MaxPitch(sx * MaxYaw)));
     }
 }
 

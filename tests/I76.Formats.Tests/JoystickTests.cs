@@ -255,7 +255,23 @@ public class JoystickTests
         var half = FreeLook.Head(-0.31f, 0)!.Value;                    // halfway between the dead zone and FreeEdge
         Assert.Equal(-FreeLook.MaxYaw / 2, half.Yaw, 1);
         Assert.Equal(FreeLook.Rest - FreeLook.MaxUp, FreeLook.Head(0, -1)!.Value.Pitch, 3);   // up: the game's negative pitch
-        Assert.Equal(FreeLook.Rest + FreeLook.MaxDown, FreeLook.Head(0, 1)!.Value.Pitch, 3);
+        Assert.Equal(CockpitReach.MaxPitch(0), FreeLook.Head(0, 1)!.Value.Pitch, 3);           // down: as far as the wheel's hands allow
+        Assert.Equal(FreeLook.Rest + FreeLook.MaxDown * 0.5f, FreeLook.Head(0, 0.51f)!.Value.Pitch, 1);
+    }
+
+    /// <summary>#165: down and to the side the head stops above the arms' cut-off ends; straight ahead the original's glance down (6°) is still in reach.</summary>
+    [Fact]
+    public void TheFreeHeadLooksLessLowToTheSides()
+    {
+        Assert.InRange(CockpitReach.MaxPitch(0), 6f, FreeLook.Rest + FreeLook.MaxDown);
+        foreach (var yaw in new[] { -80f, -45f, 45f, 80f }) Assert.True(CockpitReach.MaxPitch(yaw) < 3, $"{yaw}");
+        foreach (var x in new[] { -1f, 1f })
+        {
+            var (yaw, pitch) = FreeLook.Head(x, 0.85f)!.Value;                                 // the stick down and fully to a side
+            Assert.Equal(CockpitReach.MaxPitch(yaw), pitch, 3);
+        }
+        Assert.Equal(CockpitReach.MaxPitch(-160), CockpitReach.MaxPitch(-200));                      // held at the free look's ends
+        Assert.Equal(CockpitReach.MaxPitch(30) + 5, CockpitReach.MaxPitch(30, CockpitReach.OriginalHeight - 10), 3);   // a view 10° shorter looks 5° lower
     }
 
     [Fact]

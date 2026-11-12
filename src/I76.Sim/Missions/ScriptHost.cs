@@ -126,6 +126,9 @@ public sealed partial class ScriptHost : IFsmHost
         e.OrderTarget = t;
         // the order's target replaces the radar's (the AI's radar-target update reads it): a structure held from an earlier order goes
         if (t?.Static is null && Combat is { } oc) oc.StructureTarget.Remove(e.Vehicle);
+        // an order with no target (sit, hide, goto) sets the AI's current target to none, and its radar with it: the turrets
+        // go back to straight ahead rather than holding the last order's target (#176, Nitro's Mother: evade, then sit)
+        if (t is null && !human && !e.Vehicle.IsEmplacement && Combat is { } nc) nc.RadarTarget[e.Vehicle] = null;
         if (e.Dead) return;
         // The player's Ptable resets unless the script drove it last frame
         bool reset = human && _playerDrivenTick != FsmTick - 1 && _playerDrivenTick != FsmTick;

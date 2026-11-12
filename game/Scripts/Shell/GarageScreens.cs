@@ -684,9 +684,8 @@ public sealed class GarageScreen : GarageBase, IChassisForm
         {
             if (Node(slots[row]) is not { } n) return;
             if (Melee is not null) { Inv.Nodes.Remove(n); _changed = true; Repaint(); return; }
-            // a stripped dropper keeps its "(C)" (the state is not changed), weapons and specials go to the van
-            if (type != 8) n.State = PartState.Van;
-            n.Slot = -1;
+            // weapons, droppers and specials go to the van (the original leaves a dropper marked "(C)": TripInventory.Strip)
+            Inv.Strip(n);
             Repaint();
             return;
         }

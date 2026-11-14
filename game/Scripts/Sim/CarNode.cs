@@ -462,7 +462,7 @@ public partial class CarNode : Node3D
     /// <summary>One glow material per texture; weakly keyed, so a finished scene's car textures are not held for the rest of the run.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Texture2D, ShaderMaterial> GlowMats = new();
     internal static void ResetForGameSwitch() => GlowMats.Clear();
-    private const float BrakeLevel = 1.3f, TailLevel = 0.6f, BrakeLightEnergy = 1.0f;
+    private const float BrakeLevel = 1.3f, TailLevel = 0.6f;
 
     /// <summary>The tail lamp mesh's glow twin: each surface's own texture under the red-lens shader.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Mesh, Mesh?> GlowTwins = new();
@@ -492,14 +492,17 @@ public partial class CarNode : Node3D
     }
     private MeshInstance3D? _tailGlow, _brakeGlow, _brakeHeld;
     private MeshInstance3D[] _glare = [], _rearGlare = [];
-    private OmniLight3D? _brakeLight;
+    private SpotLight3D[] _rearLights = [];
     private ulong _brakeSeenMs;
     private float _rearLevel = -1;
     // the modern look's filament ramp (LampRamp): each lamp kind's drawn level follows its switch with a lag; the first
     // frame stands them at their switches. What the lights, glares and glows were last set to, so a steady lamp costs nothing
     private float _headRamp, _brakeRamp, _tailRamp, _rearRamp;
+    // the rear lamps' filaments for their light on the ground, which lights the road behind from the cockpit (the mirrors) too,
+    // where the body and its lamp faces are not drawn
+    private float _brakeLamp, _tailLamp;
     private bool _rampFresh = true;
-    private float _headApplied = -1, _brakeApplied = -1, _brakeGlowApplied = -1, _tailGlowApplied = -1, _haloApplied = -1;
+    private float _headApplied = -1, _rearGroundApplied = -1, _brakeGlowApplied = -1, _tailGlowApplied = -1, _haloApplied = -1;
     private static readonly Color HeadColour = new(1f, 0.95f, 0.8f);
     /// <summary>The modern look: the headlamps flare towards the camera.</summary>
     public bool Modern { get; set; } = true;
@@ -709,10 +712,11 @@ public partial class CarNode : Node3D
     /// <summary>
     /// The modern look's rear lamps: a red glare at each (the centres of the
     /// brake lamp part's halves), full while braking and faint while the
-    /// lights are on, wide rather than beamed, and a small red light behind
-    /// the car while braking.
+    /// lights are on, seen only looking into the lamps from behind, and each
+    /// lamp's red light on the ground behind the car (faint with the lights
+    /// on, brighter braking).
     /// </summary>
-    public void AddRearLamps(System.Numerics.Vector3[]? at)
+    public void AddRearLamps(System.Numerics.Vector3[]? at, float[]? overhang = null)
     {
         if (at is null) return;
         _glareShader ??= GD.Load<Shader>("res://Shaders/headlight_glare.gdshader");
@@ -722,15 +726,16 @@ public partial class CarNode : Node3D
             _rearMat = new ShaderMaterial { Shader = _glareShader };
             _rearMat.SetShaderParameter("tint", new Color(1f, 0.1f, 0.06f));
             _rearMat.SetShaderParameter("strength", 0.6f);
-            _rearMat.SetShaderParameter("sharpness", 1.5f);
-            _rearMat.SetShaderParameter("wide", 0.3f);
-            _rearMat.SetShaderParameter("size_near", 0.22f);
-            _rearMat.SetShaderParameter("size_far", 0.48f);
+            _rearMat.SetShaderParameter("sharpness", 2.5f);
+            _rearMat.SetShaderParameter("wide", 0f);
+            _rearMat.SetShaderParameter("size_near", 0.12f);
+            _rearMat.SetShaderParameter("size_far", 0.26f);
             _rearMat.SetShaderParameter("streak_amount", 0.25f);
-            _rearMat.SetShaderParameter("halo_amount", 0.2f);
+            _rearMat.SetShaderParameter("halo_amount", 0.1f);
             _rearMat.SetShaderParameter("day_floor", 0.4f);
         }
-        // the lamp's -Z looks backwards: half a turn about up
+        // the lamp's -Z looks backwards: half a turn about up. The glare shows only looking into the lamp from behind (no floor for
+        // the side: seen from there it hung off the car's corner as an orb), and small, on the lens
         _rearGlare = at.Select(p =>
         {
             var g = new MeshInstance3D { Mesh = _glareQuad, MaterialOverride = _rearMat, Position = Coords.ToGodot(p) + new Vector3(0, 0, 0.05f),
@@ -738,11 +743,26 @@ public partial class CarNode : Node3D
             AddChild(g);
             return g;
         }).ToArray();
-        var mid = at.Aggregate(System.Numerics.Vector3.Zero, (a, b) => a + b) / at.Length;
-        _brakeLight = new OmniLight3D { Position = Coords.ToGodot(mid) + new Vector3(0, -0.15f, 0.6f), OmniRange = 4.5f, LightEnergy = BrakeLightEnergy,
-            LightColor = new Color(1f, 0.08f, 0.04f), ShadowEnabled = false, Visible = false, Name = "BrakeLight" };
-        AddChild(_brakeLight);
+        // and a spotlight behind each lens, looking back and down as the headlamps' look ahead: the lamp's light on the road behind
+        // the car. It stands clear of the body under the lamp (a bumper or bed reaching further back) and its cone runs from a little
+        // under the horizon to 70 degrees down, so nothing of the car or the ground under it is in it
+        foreach (var l in _rearLights) l.QueueFree();
+        _rearLights = at.Select((p, i) =>
+        {
+            float back = RearSetBack + (overhang is { } o && i < o.Length ? o[i] : 0f);
+            var l = new SpotLight3D { Position = Coords.ToGodot(p) + new Vector3(0, 0, back), RotationDegrees = new Vector3(RearPitch, 180f, 0),
+                SpotRange = RearRange, SpotAngle = RearAngle, SpotAttenuation = RearAttenuation, SpotAngleAttenuation = 0.8f, LightEnergy = 0,
+                LightColor = RearColour, ShadowEnabled = false, Visible = false, Name = "RearLight" };
+            AddChild(l);
+            return l;
+        }).ToArray();
+        _rearGroundApplied = -1;
     }
+
+    // The rear lamps' light on the ground (Godot's SpotAngle is the cone's half-angle): its axis 38 degrees down, its edges 6 and 70
+    // degrees down, so the pool starts a few tens of centimetres behind the lamp and fades out over the next few metres; red through the lens.
+    private const float RearSetBack = 0.08f, RearPitch = -38f, RearAngle = 32f, RearRange = 6f, RearAttenuation = 1.2f;
+    private static readonly Color RearColour = new(1f, 0.06f, 0.03f);
 
     private SirenBar? _siren;
 
@@ -1031,6 +1051,7 @@ public partial class CarNode : Node3D
         if (halo != _haloApplied) (_haloApplied, _headApplied, _rearLevel, _brakeGlowApplied, _tailGlowApplied) = (halo, -1, -1, -1, -1);
         float headTarget = lampsOn ? 1f : 0f, brakeTarget = Modern && shown && braking ? 1f : 0f, tailTarget = Modern && shown && lit ? 1f : 0f;
         float rearTarget = !Modern || !shown ? 0f : braking ? 1f : lightsOn ? 0.3f : 0f;
+        float brakeLampTarget = Modern && !Wrecked && braking ? 1f : 0f, tailLampTarget = Modern && lampsOn ? 1f : 0f;
         if (ramp && !_rampFresh)
         {
             float dt = (float)GetProcessDeltaTime();
@@ -1038,8 +1059,10 @@ public partial class CarNode : Node3D
             _brakeRamp = LampRamp.Rear(_brakeRamp, brakeTarget, dt);
             _tailRamp = LampRamp.Rear(_tailRamp, tailTarget, dt);
             _rearRamp = LampRamp.Rear(_rearRamp, rearTarget, dt);
+            _brakeLamp = LampRamp.Rear(_brakeLamp, brakeLampTarget, dt);
+            _tailLamp = LampRamp.Rear(_tailLamp, tailLampTarget, dt);
         }
-        else (_headRamp, _brakeRamp, _tailRamp, _rearRamp, _rampFresh) = (headTarget, brakeTarget, tailTarget, rearTarget, false);
+        else (_headRamp, _brakeRamp, _tailRamp, _rearRamp, _brakeLamp, _tailLamp, _rampFresh) = (headTarget, brakeTarget, tailTarget, rearTarget, brakeLampTarget, tailLampTarget, false);
         // The brake lamp's lit faces (BLGT) show while braking; the tail lamp (TLGT) is the headlamps' child
         // node, so it shows only with the lights on (and the front holding up): with them off and the brake off the lamp
         // is the body's own unlit lens. Both looks; the modern look adds its glow over the lit faces, and under the ramp a
@@ -1071,7 +1094,7 @@ public partial class CarNode : Node3D
         _lampsOn = lampsOn;
         bool headLit = _headRamp > 0f;
         var headCam = GetViewport()?.GetCamera3D();
-        _headDist2 = headLit && headCam is not null ? headCam.GlobalPosition.DistanceSquaredTo(GlobalPosition) : float.MaxValue;
+        _headDist2 = (headLit || _tailLamp > 0f || _brakeLamp > 0f) && headCam is not null ? headCam.GlobalPosition.DistanceSquaredTo(GlobalPosition) : float.MaxValue;
         bool lampLights = headLit && (_isPlayer || (_headDist2 < HeadFar * HeadFar && HeadRank() < MaxHeadLit));
         for (int i = 0; i < _lamps.Length; i++) _lamps[i].Visible = lampLights && HeadHeld(i);
         if (_headRamp != _headApplied)
@@ -1084,12 +1107,12 @@ public partial class CarNode : Node3D
             if (Modern)
                 foreach (var g in _glare) { g.SetInstanceShaderParameter("level", _headRamp * halo); g.SetInstanceShaderParameter("warmth", new Vector3(wr, wg, wb)); }
         }
-        if (_brakeLight is not null && _brakeRamp != _brakeApplied)
-        {
-            _brakeApplied = _brakeRamp;
-            _brakeLight.LightEnergy = BrakeLightEnergy * _brakeRamp;
-            _brakeLight.Visible = _brakeRamp > 0f && (RearHeld(0) || RearHeld(1));
-        }
+        // the rear lamps' light on the ground: the tail filament's with the lights on, the brake's brighter one over it, a night's
+        // only (RearLampLight); like the headlamps', the player's always and only the nearest few other cars'
+        float rearE = rearOk ? RearLampLight.Energy(_tailLamp, _brakeLamp, Daylight.Current) : 0f;
+        if (rearE != _rearGroundApplied) { _rearGroundApplied = rearE; foreach (var l in _rearLights) l.LightEnergy = rearE; }
+        bool rearLights = rearE > 0f && (_isPlayer || (_headDist2 < HeadFar * HeadFar && HeadRank() < MaxHeadLit));
+        for (int i = 0; i < _rearLights.Length; i++) _rearLights[i].Visible = rearLights && RearHeld(i);
         // the pool lies on the road ahead, so it shows from the cockpit too (the body hidden there)
         if (_lightPool is not null) _lightPool.Visible = !Wrecked && lit && !Modern;
         for (int i = 0; i < _glare.Length; i++) _glare[i].Visible = shown && headLit && Modern && HeadHeld(i);

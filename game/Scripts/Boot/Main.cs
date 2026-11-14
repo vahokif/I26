@@ -3318,6 +3318,7 @@ public partial class Main : Node3D
         }
         // Draw Distance: Original clips where the original did (the world camera rebuild's 600), in either look (not the map editor's view)
         ActiveCamera.Far = I76.Formats.Imaging.DrawDistance.CameraFar(DrawDistanceNow);
+        if (_pit is not null) _pit.MirrorFar = ActiveCamera.Far;   // the rear-view mirror draws as far as the view (not the binoculars' zoomed far)
         UpdateSoftwareBand();   // MainSoftware.cs
         if (_pit?.Binoculars == true && ActiveCamera == _car?.CockpitCamera) ActiveCamera.Far = System.Math.Min(ActiveCamera.Far * 8, 100000f);   // Far = zoom * far, zoom 8
         bool free = ActiveCamera == _cam;   // the fly camera (--cam): the origin follows it, not the car, or a far view loses depth precision

@@ -884,6 +884,18 @@ public partial class Cockpit : Node
     private int _mirrorMode = 2;
     private bool _mirrorTick;
 
+    /// <summary>
+    /// The mirror's field of view across its width. The original asks for 30 degrees, but its camera set-up keeps a field of
+    /// view within 45..135, so its mirror shows 45 across (measured: about 43).
+    /// </summary>
+    public const float MirrorFov = 45f;
+
+    /// <summary>
+    /// The mirror's far clip: the main view's draw distance (Draw Distance's camera far, set by the game each frame), so the
+    /// mirror shows what the view ahead would. The original's mirror stops at 100 m (docs/deviations.md).
+    /// </summary>
+    public float MirrorFar { get; set; } = I76.Formats.Imaging.DrawDistance.FarClip;
+
     private void SetupMirror()
     {
         if (Resolver.FindByStem("zmiri101") is not { } member || Node3D.CockpitMesh is not { Mesh: { } mesh } mi) return;
@@ -891,7 +903,7 @@ public partial class Cockpit : Node
         var surfaces = Enumerable.Range(0, mesh.GetSurfaceCount()).Where(i => mesh.SurfaceGetMaterial(i) is { } m && made.Contains(m)).ToList();
         if (surfaces.Count == 0) return;
         _mirrorView = new SubViewport { Size = new Vector2I(1024, 256), RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled, Name = "Mirror" };
-        _mirrorCam = new Camera3D { Fov = 30, KeepAspect = Camera3D.KeepAspectEnum.Width, Near = 0.1f, Far = 20000, Current = true };
+        _mirrorCam = new Camera3D { Fov = MirrorFov, KeepAspect = Camera3D.KeepAspectEnum.Width, Near = 0.1f, Far = MirrorFar, Current = true };
         _mirrorView.AddChild(_mirrorCam);
         SmokeLayer.MirrorCamera = _mirrorCam;
         AddChild(_mirrorView);
@@ -948,6 +960,7 @@ public partial class Cockpit : Node
         if (_mirrorMode == 0) { _mirrorView.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled; return; }
         // the eye, not head-turned, its right and forward negated: looking backwards
         _mirrorCam.GlobalTransform = Node3D.GlobalTransform * new Transform3D(new Basis(Vector3.Up, Mathf.Pi), Node3D.Eye);
+        _mirrorCam.Far = MirrorFar;
         // the original redraws it every second frame; the modern look every frame
         _mirrorTick = !_mirrorTick;
         _mirrorView.RenderTargetUpdateMode = !_faithful ? SubViewport.UpdateMode.Always : _mirrorTick ? SubViewport.UpdateMode.Once : SubViewport.UpdateMode.Disabled;

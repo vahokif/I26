@@ -27,6 +27,11 @@ public static class DevSettings
     private const string M = PortMark;
     private static readonly string[] FalseTrue = ["false", "true" + M];
 
+    /// <summary>The muzzle light's reaches offered (MuzzleReach): 0 the light before the key, on the firing car alone; a value set by hand shows as the nearest.</summary>
+    public static readonly int[] MuzzleReachSteps = [0, 25, 50, 75, 100, 125, 150, 200];
+    private static readonly string[] MuzzleReachNames = [.. MuzzleReachSteps.Select(p => p == MuzzleReach.Default ? $"{p}" : $"{p}{M}")];
+    private static int Nearest(int[] steps, int value) => Array.IndexOf(steps, steps.MinBy(p => Math.Abs(p - value)));
+
     public static readonly DevSetting[] All =
     [
         // every name shown at a network game's start (Ctrl+T toggles it in the game; the original starts each game with it off)
@@ -40,6 +45,9 @@ public static class DevSettings
             s => I76.Game.World.BrushImpacts.Enabled = s.BrushImpacts),
         new("dev_fps", FalseTrue, s => s.DevFps ? 1 : 0, (s, v) => s.DevFps = v != 0, DevWhen.Live),
         new("developer", FalseTrue, s => s.DeveloperTools ? 1 : 0, (s, v) => s.DeveloperTools = v != 0, DevWhen.NextStart),
+        // the modern look's muzzle light: how far a shot's flash lights the ground ahead, in percent (0 the light before the key)
+        new("muzzle_reach", MuzzleReachNames, s => Nearest(MuzzleReachSteps, s.MuzzleReach), (s, v) => s.MuzzleReach = MuzzleReachSteps[v], DevWhen.Live,
+            s => MuzzleReach.Percent = s.MuzzleReach),
     ];
 
     public static string WhenText(DevWhen w) => w switch { DevWhen.Live => "live", DevWhen.NextScreen => "next screen", DevWhen.NextMission => "next mission", _ => "next start" };

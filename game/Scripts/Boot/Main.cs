@@ -734,6 +734,7 @@ public partial class Main : Node3D
     private void ApplyGraphics(I76.Game.Shell.ShellSettings s)
     {
         ApplyDevFps(s);
+        I76.Game.Sim.MuzzleReach.Percent = s.MuzzleReach;
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(s.CarInteriors);
         I76.Game.World.BrushImpacts.Enabled = s.BrushImpacts;
         if (_modernEnv is not null) { _modernEnv.AdjustmentEnabled = true; _modernEnv.AdjustmentBrightness = ModernBrightness(s.Graphics[0xc]); }
@@ -1865,6 +1866,7 @@ public partial class Main : Node3D
         I76.Game.World.ObjectLight.Set("i76_light_dir", l);
         _lightDir = l;
         I76.Game.World.ObjectLight.Set("i76_light_intensity", light.Intensity);
+        I76.Game.Sim.Daylight.Current = I76.Game.Sim.Daylight.Of(light.IsDay, light.Intensity);
         I76.Game.World.ObjectLight.Set("i76_ambient", light.Ambient);
         I76.Game.World.ObjectLight.Set("i76_night", !light.IsDay);
         I76.Game.World.ObjectLight.Set("i76_fade", new Vector2(I76.Formats.Mission.Lighting.FadeA, I76.Formats.Mission.Lighting.FadeB));

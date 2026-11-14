@@ -1189,6 +1189,8 @@ public sealed class ShellSettings
     public bool DeveloperTools { get; set; }
     /// <summary>[port] dev_fps (no row; the Developer panel's Settings): the frame rate over the game. Off by default.</summary>
     public bool DevFps { get; set; }
+    /// <summary>[port] muzzle_reach (no row; the Developer panel's Settings): how far the modern look's muzzle light reaches round a firing gun, in percent: 100 the ground and the cliffs ahead at night, 0 the light before the key, on the firing car alone (MuzzleReach; written when not the default).</summary>
+    public int MuzzleReach { get; set; } = I76.Game.Sim.MuzzleReach.Default;
 
     /// <summary>A hand-written flag's word: true, 1, on or yes (any case) turn it on; anything else, or nothing, leaves it off.</summary>
     public static bool DeveloperWord(string? word) => word?.Trim().ToLowerInvariant() is "true" or "1" or "on" or "yes";
@@ -1425,6 +1427,7 @@ public sealed class ShellSettings
         // no version step: absent, it is off (players never see the panel); developer_tools is the key's older name, still read
         s.DeveloperTools = DeveloperWord(c.GetValue("port", "developer", false).ToString()) || DeveloperWord(c.GetValue("port", "developer_tools", false).ToString());
         s.DevFps = (bool)c.GetValue("port", "dev_fps", false);
+        s.MuzzleReach = I76.Game.Sim.MuzzleReach.Parse(c.GetValue("port", "muzzle_reach", "").ToString());
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
         // no version step: absent, a pack's audio plays
         s.HiFiAudio = (bool)c.GetValue("port", "hd_sounds", true);
@@ -1466,6 +1469,7 @@ public sealed class ShellSettings
         if (KeepMouseInWindow) c.SetValue("port", "keep_mouse_in_window", true);
         if (DeveloperTools) c.SetValue("port", "developer", true);
         if (DevFps) c.SetValue("port", "dev_fps", true);
+        if (MuzzleReach != I76.Game.Sim.MuzzleReach.Default) c.SetValue("port", "muzzle_reach", MuzzleReach);
         c.SetValue("port", "hd_menu_art", HdMenuArt);
         if (!HiFiAudio) c.SetValue("port", "hd_sounds", false);
         c.SetValue("shell", "graphics", Graphics);

@@ -58,7 +58,14 @@ uniform float cloud_lum = 0.8;
 uniform float detail = 0.35;      // how much the noise reshapes the texture's clouds
 uniform float light_strength = 1.0;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// a lattice point's random level, without a sine: sin of the large arguments the finer octaves reach (dot products in the
+// hundreds of thousands) loses its precision on the GPU and neighbouring points came out alike, which left the noise flat over
+// runs of cells and the density ramp made those into straight-edged blocks in the clouds (#149)
+float hash(vec2 p) {
+	vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+	q += dot(q, q.yzx + 33.33);
+	return fract((q.x + q.y) * q.z);
+}
 float vnoise(vec2 p) {
 	vec2 i = floor(p), f = fract(p);
 	vec2 u = f * f * (3.0 - 2.0 * f);

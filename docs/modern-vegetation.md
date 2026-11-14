@@ -53,6 +53,10 @@ pay for the longer reach and the middle meshes, a chunk wholly in the far tier, 
 away, draws one node a species: its variants merged under the first variant's mesh. The chunk update looks for chunks to
 place every 4 m of the eye's travel, not every frame.
 
+A chunk wholly beyond its plants' fade (its nearest point past the fade's end: every plant dithered away) draws nothing, by
+day as by night: such chunks are kept placed out to 80 m past the reach so a turn of the camera does not place them again,
+but were drawn to no pixel.
+
 ## Regions
 
 `Biomes.For(mission, ground)` gives a mission its `VegRegion`: a biome, whether its low ground is a strip of its own

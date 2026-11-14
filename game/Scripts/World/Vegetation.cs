@@ -64,6 +64,7 @@ public partial class VegetationNode : Node3D
         public bool Casting;
         public bool GrassOn;         // the ground layer's grass tufts drawn (the chunk within their reach; its other plants reach farther)
         public bool Merged;          // drawn by FarGroups now
+        public bool Drawn = true;    // false: every plant beyond its fade: no node shown
         public float Distance, Far;
         public float[] Shade = [];   // the shrubs' shade quads (16 floats each: the transform's rows, custom data), made with the groups
         public MultiMeshInstance3D? ShadeNode;
@@ -682,8 +683,18 @@ public partial class VegetationNode : Node3D
     }
 
     /// <summary>The tier each of a chunk's plants is drawn at: all one when the chunk lies within one tier's band, else split plant by plant.</summary>
+    private const int Hidden = 4;
+
     private void Retier(Chunk c, System.Numerics.Vector3 eye)
     {
+        if (!c.Drawn)
+        {
+            if (c.Tier == Hidden) return;
+            c.Tier = Hidden;
+            c.Merged = false;
+            foreach (var g in c.Groups.Concat(c.FarGroups)) for (int t = 0; t < 3; t++) Show(c, g, t, null, 0);
+            return;
+        }
         float mid = c.Layer == VegLayer.Shrub ? _level.ShrubMid : _level.GroundMid, far = c.Layer == VegLayer.Shrub ? _level.ShrubFar : _level.GroundFar;
         c.Distance = ChunkDistance(c.Cx, c.Cz, c.Layer, eye);
         c.Far = ChunkFarthest(c.Cx, c.Cz, c.Layer, eye);
@@ -832,6 +843,9 @@ public partial class VegetationNode : Node3D
             bool cast = c.Layer == VegLayer.Shrub && d < _level.ShadowRange;
             if (cast != c.Casting) { c.Casting = cast; c.Tier = -1; }
             if (c.Layer == VegLayer.Ground && GrassReach(c, d) != c.GrassOn) c.Tier = -1;
+            // a chunk wholly beyond its plants' fade draws nothing (every plant would be dithered away)
+            bool drawn = d <= Reach(c.Layer);
+            if (drawn != c.Drawn) { c.Drawn = drawn; c.Tier = -1; }
             Retier(c, eye);
             if (count)
             {
@@ -861,7 +875,7 @@ public partial class VegetationNode : Node3D
                                 }
                     GD.Print($"vegetation probe: {layer} {inRect}");
                 }
-            GD.Print($"vegetation stats: eye {eye.X:0} {eye.Y:0} {eye.Z:0}: {Instances} plants attached in {_chunks.Count} chunks, {nodes} nodes; by tier {tiers[0]} / {tiers[1]} / {tiers[2]}" + (_tumble is { } tw ? $"; {tw.Stats}" : ""));
+            GD.Print($"vegetation stats: eye {eye.X:0} {eye.Y:0} {eye.Z:0}: {Instances} plants attached in {_chunks.Count} chunks, {nodes} nodes; by tier {tiers[0]} / {tiers[1]} / {tiers[2]}; {_chunks.Values.Count(c => !c.Drawn)} chunks not drawn" + (_tumble is { } tw ? $"; {tw.Stats}" : ""));
         }
     }
 }

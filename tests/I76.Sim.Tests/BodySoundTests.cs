@@ -54,7 +54,8 @@ public class BodySoundTests
         try
         {
             var plain = VehicleFactory.Create(vfs, name);
-            Assert.Equal(car.Engine, plain.EngineNumber);                  // a mission's own file keeps its row
+            // a mission's own file keeps its row, but for a truck, tank or aircraft body (the CD build's rule)
+            Assert.Equal(row == 10 ? car.Engine : row, plain.EngineNumber);
             var v = VehicleFactory.Create(vfs, name, bodySound: true);
             Assert.Equal(row, v.EngineNumber);
             Assert.Equal(engine, VehicleFactory.EngineSound(vfs, v.EngineNumber));
@@ -74,5 +75,50 @@ public class BodySoundTests
         // a car body has none: its variants carry engine parts
         Assert.Null(VehicleFactory.BodySoundRow(vfs, "vfrattlr.vdf"));
         Assert.Null(VehicleFactory.BodySoundRow(vfs, "vppirnha.vdf"));
+    }
+
+    /// <summary>
+    /// The missions' own helicopters, tank and trucks, saved with a plain engine row, sound as their bodies: the 1997 CD build
+    /// picked the loop by the body's size class (5 trucks, 6 tank, 7 aircraft). The police cars, a size-3 body, keep their files' rows.
+    /// </summary>
+    [Theory]
+    [InlineData("t05ug01.vcf", 0, "aheli.wav")]
+    [InlineData("t07uc01.vcf", 0, "aheli.wav")]
+    [InlineData("t08uc01.vcf", 0, "aheli.wav")]
+    [InlineData("t11ug01.vcf", 0, "aheli.wav")]
+    [InlineData("t11ug04.vcf", 0, "aheli.wav")]
+    [InlineData("t16ug01.vcf", 0, "aheli.wav")]
+    [InlineData("s06vu01.vcf", 0, "aheli.wav")]
+    [InlineData("t16st01.vcf", 0, "eitank.wav")]
+    [InlineData("s05vxb01.vcf", 3, "eimarx.wav")]
+    [InlineData("s07xm01.vcf", 3, "eimarx.wav")]
+    [InlineData("t17mx01.vcf", 3, "eimarx.wav")]
+    [InlineData("t10cp01.vcf", 0, "einp1.wav")]
+    [InlineData("t07cp01.vcf", 2, "eishp.wav")]
+    public void A_missions_own_heavy_vehicle_sounds_as_its_body(string vcf, int fileRow, string engine)
+    {
+        if (Dir("I76_INSTALL") is not { } dir) return;
+        var vfs = new AssetVfs(new GameInstall(dir));
+        var f = new I76.Formats.Bwd2.Bwd2File(vfs.Read(vcf));
+        Assert.Equal(fileRow, BitConverter.ToInt32(f.Data, f.First("VCFC")!.Value.PayloadOffset + 0x2a));
+        var v = VehicleFactory.Create(vfs, vcf);
+        Assert.Equal(engine, VehicleFactory.EngineSound(vfs, v.EngineNumber));
+        Assert.Equal(engine == "einp1.wav" || engine == "eishp.wav" || engine == "eimarx.wav", VehicleFactory.EngineRevable(vfs, v.EngineNumber));
+    }
+
+    [Theory]
+    [InlineData("nobus2.vcf")]
+    [InlineData("nocargo2.vcf")]
+    public void The_nitro_packs_own_buses_and_trucks_sound_as_their_bodies(string vcf)
+    {
+        if (NitroDir is not { } dir) return;
+        var vfs = new AssetVfs(new GameInstall(dir));
+        Assert.Equal("eimarx.wav", VehicleFactory.EngineSound(vfs, VehicleFactory.Create(vfs, vcf).EngineNumber));
+    }
+
+    [Fact]
+    public void Only_the_truck_tank_and_aircraft_sizes_pick_the_bodys_sound()
+    {
+        Assert.Equal([5u, 6u, 7u], Enumerable.Range(0, 12).Select(i => (uint)i).Where(VehicleFactory.HeavyBody));
     }
 }

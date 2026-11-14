@@ -11,4 +11,10 @@ public static class EngineSoundPitch
 
     /// <summary>The pitch scale for a loop recorded at <paramref name="sampleRate"/> Hz.</summary>
     public static float Scale(float rpm, float sampleRate) => Math.Max(Hz(rpm), 100f) / sampleRate;
+
+    /// <summary>
+    /// Whether a car's engine loop sounds in this state: running (flag 1) and not dead (flag 0x20). A gun emplacement has
+    /// none. The original starts the loop at the ignition's end and stops it on engine off or death (sound events 1 and 2).
+    /// </summary>
+    public static bool LoopRuns(uint flags, bool emplacement) => !emplacement && (flags & 1) != 0 && (flags & 0x20) == 0;
 }

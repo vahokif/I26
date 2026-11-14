@@ -90,6 +90,9 @@ public partial class Voice3D : AudioStreamPlayer3D
     /// <summary>I76_AUDIO_LOG=1: every start and stop of the voices this port's sound rules make is printed (audio cannot be heard in a capture).</summary>
     public static readonly bool LogEnabled = System.Environment.GetEnvironmentVariable("I76_AUDIO_LOG") == "1";
 
+    /// <summary>The voice in the log: its owner's node name with its own (a car's "t11ug01/Engine").</summary>
+    public string Who => GetParent() is { } p ? $"{p.Name}/{Name}" : Name;
+
     public static void Trace(string what) { if (LogEnabled) GD.Print($"[audio] {what}"); }
 
     /// <summary>
@@ -120,7 +123,7 @@ public partial class Voice3D : AudioStreamPlayer3D
     /// <summary>Plays the voice unless the admission refused it (<see cref="_EnterTree"/>): callers start one-shots with this.</summary>
     public void Start()
     {
-        if (_refused) { Trace($"not started: {Name}, out of range"); return; }
+        if (_refused) { Trace($"not started: {Who}, out of range"); return; }
         if (!Admit()) { Trace($"not started: {_limitName}, {_max} already playing"); _refused = true; QueueFree(); return; }
         Play();
     }
@@ -146,18 +149,18 @@ public partial class Voice3D : AudioStreamPlayer3D
         bool loops = Assets.AudioBank.Loops(Stream);
         if (far && !_parked)
         {
-            if (!loops) { _refused = true; CullLog?.Invoke("drop"); Trace($"cull: drop {Name} at {GlobalPosition.DistanceTo(at):0} m"); Stop(); QueueFree(); return; }
+            if (!loops) { _refused = true; CullLog?.Invoke("drop"); Trace($"cull: drop {Who} at {GlobalPosition.DistanceTo(at):0} m"); Stop(); QueueFree(); return; }
             // only a sounding voice is parked: a loop its owner stopped (an idle gun) must not come back by itself
             if (!Playing) return;
             _parked = true;
-            Stop(); CullLog?.Invoke("park"); Trace($"cull: park {Name} at {GlobalPosition.DistanceTo(at):0} m");
+            Stop(); CullLog?.Invoke("park"); Trace($"cull: park {Who} at {GlobalPosition.DistanceTo(at):0} m");
         }
         else if (!far && _parked)
         {
             _parked = false;
             Play();
             CullLog?.Invoke("resume");
-            Trace($"cull: resume {Name}");
+            Trace($"cull: resume {Who}");
         }
     }
 

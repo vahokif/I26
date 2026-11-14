@@ -214,6 +214,14 @@ i76_sward_tint={
 "type": "vec4",
 "value": Vector4(0, 0, 0, 0)
 }
+i76_veg_field={
+"type": "sampler2D",
+"value": ""
+}
+i76_veg_field_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
 i76_brush={
 "type": "vec4",
 "value": Vector4(0, 0, 0, 0)

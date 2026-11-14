@@ -426,6 +426,42 @@ Plants have no collision, so two shader-side rules keep a car and the plants apa
   lamps and muzzle flashes, tracers and the shadows are left alone.
   `I76_CAB_CLIP=0` turns both rules off for before and after captures.
 
+## Brush impacts
+
+The plants answer the fighting (`World/BrushImpacts.cs`, one node under the vegetation; the pure part
+`src/I76.Formats/Vegetation/BrushField.cs`). Visual only, each player's own, nothing the simulation or a network game
+reads; hidden with the plants in the 1997 look; shell.cfg `[port] brush_impacts=off` turns it off (on by default; no row).
+
+- **The field.** A square of 128 x 128 cells of 1.5 m (192 m) round the camera, moved in steps of 16 cells, holds per cell
+  how far the plants there are laid down (0..1, rising again linearly over 15 s, the shader easing it so a plant stays
+  down for the first few seconds), the way they lie (an angle), a scorch (kept while the field covers it) and a shake
+  (halving every 0.3 s). It goes to the vegetation shader as one RGBA8 texture (`i76_veg_field`, nearest, and
+  `i76_veg_field_rect`), uploaded only on frames where a cell changed, and only the changed rectangle re-encoded. In the
+  vertex shader each plant reads the cell at its root: laid down, each vertex is turned about the root toward the way it
+  lies by up to 92 degrees times its sway weight (so the stems curve and keep their length; never below the ground),
+  less for the stiff ones (cacti and yuccas about half of it); shaken, the crown swings to and fro along that way; scorched,
+  it darkens toward char. No per-plant state: thousands of plants cost one texture fetch each. The map's placed trees
+  (Seminole's pines) are solid and left out.
+- **Rounds.** A round striking the ground within a plant's crown (its root within the crown's reach, the hit below its
+  top) shakes it along the round's way and throws 12 leaves and 2 twigs (18 and 4 for the heavy guns), straw off the
+  grasses; at most 4 bursts a frame and 40 alive.
+- **Cars.** Every car on the ground (CabClip's, within 120 m) lays the cells along its track down within 1.9 m, along its
+  heading, those at the sides leaning out too; a car at more than 4 m/s meeting a standing shrub throws its leaves.
+  The shader's existing parting (Cars and plants) still bends the plants round the car while it is there; the field keeps
+  them down after it has gone.
+- **Blasts.** A blast of the modern look's explosion table (car deaths, buildings, grenades, mines, missiles, ...; the
+  fireball's burst as a small one) lays the plants within 2.2 times its drawn size (4 to 16 m) outward, three quarters
+  down at most, shakes them, scorches the middle, and throws leaves off the five nearest shrubs.
+- **Fire.** A fire near a leafy plant (stiffness under 0.6: not the cacti, yuccas and succulents) can set it smouldering
+  for 7 to 13 s, and now and then burning for 3 to 6 s of that, scorched and slumped where it burns: a flame thrower's
+  stream where it lands (0.8 a second), a fire drop's pool (0.15), a burning wreck (0.12 times its flames), a blast with
+  fire in it (two tries at one half). At most 6 at once, 3 of them in flame, each with a warm flickering light.
+
+Measured (T01 as an Instant Melee arena, High, 1280 x 960, the player firing the MG along the roadside, frames 300 to 900,
+frame profiler medians, 3 runs each way alternated on one machine): GPU 2.94 ms on against 2.90 off (+0.05), the main
+thread's node time 2.17 against 2.10 ms (+0.06), three more draw calls; the node's own work 0.08 ms a frame on average
+(`I76_BRUSH_DEBUG=1`).
+
 ## Tumbleweeds
 
 A few dead Russian thistles blow across the open flats (`TumbleweedField`, pure; `TumbleweedNode`, a child of the plants'

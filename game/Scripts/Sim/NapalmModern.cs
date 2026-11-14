@@ -156,6 +156,8 @@ public partial class NapalmModern : Node3D
         s.AccSmoke += dt * (14 + 2.2 * s.Reach) * sc; s.AccEmber += dt * 9 * sc;
         bool hit = s.FirstHit >= 0 && s.FirstHit < s.Count - 1;
         if (hit) s.AccLick += dt * (22 + 2 * (s.Count - s.FirstHit)) * sc;
+        // the stream's fire where it lands can set the brush there alight (World/BrushImpacts.cs)
+        if (hit) I76.Game.World.BrushImpacts.Heat(s.HitAt, 2.5f * sc, 0.8f);
         while (s.AccSmoke >= 1) { s.AccSmoke--; Spawn(3, At(s, _rng.Randf() * s.Reach), sc); }
         while (s.AccEmber >= 1) { s.AccEmber--; Spawn(2, At(s, _rng.Randf() * s.Reach), sc); }
         while (s.AccLick >= 1)

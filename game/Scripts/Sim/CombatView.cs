@@ -650,6 +650,8 @@ public partial class CombatView : Node3D
         foreach (var e in Combat.Events)
         {
             if (e is not Explosion) skipBlast = false;
+            // the scattered plants answer a blast (World/BrushImpacts.cs): laid down outward and shaken, perhaps set alight
+            if (e is Explosion bx && !skipBlast && IsModern && Blast(bx.Effect) is { } bb) I76.Game.World.BrushImpacts.Blast(G(bx.At), bb.Size, bb.Fire);
             switch (e)
             {
                 case ShotFired s:
@@ -685,6 +687,7 @@ public partial class CombatView : Node3D
                     Sound(i.Sound, i.At, -2, Ds3d.LoudMinDistance);
                     bool bullet = i.Kind is 1 or 6 or 0x12;
                     if (IsModern && i.Kind == 0x15 && _fx.HasExplosions) _fx.FireBurst(G(i.At));
+                    if (IsModern && i.Kind == 0x15) I76.Game.World.BrushImpacts.Blast(G(i.At), 1.5f, 1f);
                     if (IsModern && bullet && i.Hit != default && G(i.Hit).DistanceTo(CameraPos()) < 400)
                     {
                         // off a surface the sparks glance away along the reflection; off the ground, up and back
@@ -693,6 +696,8 @@ public partial class CombatView : Node3D
                             ? System.Numerics.Vector3.Normalize(System.Numerics.Vector3.Reflect(d, n) * 0.6f + n * 0.4f)
                             : System.Numerics.Vector3.Normalize(-d * 0.5f + System.Numerics.Vector3.UnitY);
                         _fx.Strike(G(i.Hit), Coords.ToGodot(spray), i.Victim is null || i.Victim is I76.Sim.Collision.StaticObject, i.Kind == 6);
+                        // into the dirt under a plant's crown: leaves and twigs, and the plant shaken (World/BrushImpacts.cs)
+                        if (i.Victim is null) I76.Game.World.BrushImpacts.Round(G(i.Hit), Coords.ToGodot(d), i.Kind == 6);
                     }
                     else if (i.Effect.Length == 0 || i.Effect.Equals("null", StringComparison.OrdinalIgnoreCase)) Flash(i.At, 0.5f, 0.08);
                     break;

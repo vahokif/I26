@@ -99,6 +99,8 @@ are for another game and are not listed.
 
 **Field of view.** Graphic Detail's **Field of View** row (Original, 80, 100, 110) sets how wide the main 3D views look, in degrees across a 4:3 view (the original's is 90, and a wider window shows more to the sides at any choice); it applies at once to the outside views and the cockpit's view (the 2D dash's gunsight moves with it, so it stays on the gun line). The binoculars, the mirror, the radar and the cut-scenes keep their own framing.
 
+**Brush impacts.** In the modern look the scattered plants answer the fighting: rounds into a plant throw leaves and shake it, cars lay the plants they drive through down and they rise again over 15 s, blasts lay them down outward, and fire can set leafy brush smouldering or burning for a few seconds, leaving it scorched. Drawing only, each player's own, online too. `brush_impacts=off` under `[port]` in shell.cfg (or the Developer panel's Settings) turns it off.
+
 ### Controls
 
 Controls follow the original's keys, as set in Options > Control Configuration (which edits keys, the mouse

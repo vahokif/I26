@@ -288,6 +288,7 @@ public partial class FireDrops : Node3D
             _last[r.Shooter] = r;
             p.Gen = _gen;
             p.Level = Smooth(0f, 0.6f, r.Age) * Smooth(0f, BurnDown, r.Life);
+            if (p.Level > 0.5f) I76.Game.World.BrushImpacts.Heat(p.Pos, Size * 0.6f, 0.15f);   // the pool can catch the brush it lies in
         }
         // drops that left the sim: burning is over, the scorch stays and fades
         foreach (var kv in _byRound) if (kv.Value.Gen != _gen && !kv.Value.Dead) _gone.Add(kv.Key);

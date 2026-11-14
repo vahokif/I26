@@ -1280,6 +1280,8 @@ public sealed class ShellSettings
     public bool CoopRollingStart { get; set; }
     /// <summary>The port's own: CONFIGURE CHASSIS as a 3D garage (Graphic Detail's 3D Garage; shell.cfg [port] garage_3d, written only when off). On unless the player turned it off; off is the original's 2D form.</summary>
     public bool Garage3D { get; set; } = true;
+    /// <summary>The port's own, without a row: the modern look's scattered plants answer the fighting (World/BrushImpacts.cs; [port] brush_impacts, written only when off).</summary>
+    public bool BrushImpacts { get; set; } = true;
     /// <summary>The port's own: the modern look's cars show a cabin and driver behind their glass (Graphic Detail's Car Interiors; shell.cfg [port] car_interiors, written only when off). Off: the windows are plain reflective glass.</summary>
     public bool CarInteriors { get; set; } = true;
     /// <summary>The port's own: the chase view eases back behind the car a few seconds after the mouse or stick last moved (Mouse Options' Camera Return); off, it stays where it was left.</summary>
@@ -1412,6 +1414,7 @@ public sealed class ShellSettings
         s.CoopRollingStart = (bool)c.GetValue("port", "coop_rolling_start", false);
         // no version step: absent, the 3D garage is on
         s.Garage3D = (bool)c.GetValue("port", "garage_3d", true);
+        s.BrushImpacts = !string.Equals(c.GetValue("port", "brush_impacts", "on").ToString(), "off", StringComparison.OrdinalIgnoreCase);
         s.CarInteriors = (bool)c.GetValue("port", "car_interiors", true) && System.Environment.GetEnvironmentVariable("I76_CAR_INTERIORS") != "0";
         s.CameraReturn = (bool)c.GetValue("port", "camera_return", true);
         s.ZoomReset = (bool)c.GetValue("port", "zoom_reset", true);
@@ -1500,6 +1503,7 @@ public sealed class ShellSettings
         if (CoopScale != 0) c.SetValue("port", "coop_scale", CoopScale);
         if (CoopRollingStart) c.SetValue("port", "coop_rolling_start", true);
         if (!Garage3D) c.SetValue("port", "garage_3d", false);
+        if (!BrushImpacts) c.SetValue("port", "brush_impacts", "off");
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);
         if (!CameraReturn) c.SetValue("port", "camera_return", false);
         if (!ZoomReset) c.SetValue("port", "zoom_reset", false);

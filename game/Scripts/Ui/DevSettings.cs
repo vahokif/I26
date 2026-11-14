@@ -35,6 +35,9 @@ public static class DevSettings
         new("telemetry_format", ["i26", "outsim" + M, "outgauge" + M],
             s => (int)(TelemetryPackets.ParseFormat(s.TelemetryFormat) ?? TelemetryFormat.I26),
             (s, v) => s.TelemetryFormat = v == 0 ? null : ((TelemetryFormat)v).ToString().ToLowerInvariant(), DevWhen.NextMission),
+        // the modern look's scattered plants answer the fighting (World/BrushImpacts.cs)
+        new("brush_impacts", ["off", "on" + M], s => s.BrushImpacts ? 1 : 0, (s, v) => s.BrushImpacts = v != 0, DevWhen.Live,
+            s => I76.Game.World.BrushImpacts.Enabled = s.BrushImpacts),
         new("dev_fps", FalseTrue, s => s.DevFps ? 1 : 0, (s, v) => s.DevFps = v != 0, DevWhen.Live),
         new("developer", FalseTrue, s => s.DeveloperTools ? 1 : 0, (s, v) => s.DeveloperTools = v != 0, DevWhen.NextStart),
     ];

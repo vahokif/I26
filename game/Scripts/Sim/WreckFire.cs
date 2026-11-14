@@ -127,6 +127,8 @@ public partial class WreckFire : Node3D
         float flames = carGone ? 0 : Flames(_age), heat = carGone ? 0 : HeldHeat ?? Heat(_age), smoke = carGone ? 0 : Smoke(_age);
         if (_detached) return;
         if (!carGone) Car.SetBurn(1f, heat);
+        // the burning wreck can catch the brush round it (World/BrushImpacts.cs)
+        if (!carGone && modern && flames > 0.3f) I76.Game.World.BrushImpacts.Heat(Car.GlobalPosition, 4f, 0.12f * flames);
         if (modern != _wasModern)
         {
             _wasModern = modern;

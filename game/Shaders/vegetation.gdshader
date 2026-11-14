@@ -31,6 +31,12 @@ uniform bool rolling = false;
 // the cars' positions (World/CabClip.cs: x, y, z, and the radius a plant is parted from), 16 at most
 global uniform int i76_car_count;
 global uniform sampler2D i76_cars : filter_nearest;
+// the brush impacts (World/BrushImpacts.cs, BrushField): a field of 1.5 m cells round the camera, per cell r laid down,
+// g the way it lies (an angle over a turn), b scorched, a shaken; the rect is its corner (x, z), 1 / its side, and w 1 when on
+global uniform sampler2D i76_veg_field : filter_nearest;
+global uniform vec4 i76_veg_field_rect;
+// off for the map's own placed trees (World/PlacedTrees.cs): solid objects the cars cannot drive through
+uniform bool brush = true;
 // how much of the sun's light the baked occlusion takes away too (all of the sky's)
 uniform float ao_light = 0.6;
 // a thin blade is kept at least this many pixels wide; as it is widened, its tuft's other blades thin out to keep the tuft's mass
@@ -40,7 +46,8 @@ uniform int debug_view = 0;
 
 varying float v_fade;
 varying float v_sway;
-varying float v_vary;
+// x the colour variation, y scorched (brush impacts)
+varying vec2 v_vary;
 varying float v_tin;
 varying float v_tout;
 
@@ -58,7 +65,7 @@ void vertex() {
 	if (rolling) v_fade *= INSTANCE_CUSTOM.x;
 	float phase = INSTANCE_CUSTOM.y * 6.2832;
 	float height = max(INSTANCE_CUSTOM.z, 0.2);
-	v_vary = INSTANCE_CUSTOM.w;
+	v_vary = vec2(INSTANCE_CUSTOM.w, 0.0);
 	float s = UV2.x;
 	v_sway = rolling ? 1.0 : s;
 	// grass blades far off: hair-thin blades would break up into sub-pixel sparkle, so each is widened to min_px pixels
@@ -84,6 +91,28 @@ void vertex() {
 	float flutter = UV2.y * (1.0 - stiff) * s * 0.025 * sin(TIME * 7.0 + dot(VERTEX, vec3(3.1, 2.3, 4.7)));
 	VERTEX.xz += push + vec2(flutter);
 	VERTEX.y -= length(push) * 0.3 * s;
+	// the brush impacts: a plant laid down bends over about its root along the way it lies (each vertex turned by its sway
+	// weight, so the stems curve and keep their length), the stiff ones far less; shaken, it swings to and fro along it
+	if (brush && !rolling && i76_veg_field_rect.w > 0.0) {
+		vec2 buv = (origin.xz - i76_veg_field_rect.xy) * i76_veg_field_rect.z;
+		if (buv.x >= 0.0 && buv.y >= 0.0 && buv.x < 1.0 && buv.y < 1.0) {
+			vec4 b = textureLod(i76_veg_field, buv, 0.0);
+			float a = b.g * 6.2832;
+			vec2 way = vec2(cos(a), sin(a));
+			float lay = smoothstep(0.0, 0.6, b.r) * (1.0 - 0.55 * stiff);
+			float shake = b.a * (1.0 - 0.75 * stiff) * s * s * min(height, 2.0) * 0.22 * sin(TIME * 17.0 + phase * 3.0);
+			vec3 p = VERTEX - origin;
+			float th = lay * 1.6 * s;
+			float along = dot(p.xz, way);
+			vec2 side = p.xz - way * along;
+			float nh = along * cos(th) + p.y * sin(th);
+			float ny = -along * sin(th) + p.y * cos(th);
+			p.xz = side + way * (nh + shake);
+			p.y = max(ny, 0.04 * s);
+			VERTEX = origin + p;
+			v_vary.y = b.b;
+		}
+	}
 	// a car driving through parts the plant: its crown is pushed away from the car and laid down, the stiff ones (cacti, yucca) far less
 	float give = rolling ? 0.0 : (1.0 - 0.85 * stiff) * s;
 	for (int i = 0; i < i76_car_count; i++) {
@@ -111,10 +140,12 @@ void fragment() {
 	// the tier cross-fade: the incoming tier keeps the pixels the outgoing one gives up
 	if (dither < 1.0 - v_tin || dither >= 1.0 - v_tout) discard;
 	vec4 tex = texture(atlas, UV);
-	vec3 col = tex.rgb * COLOR.rgb * tint * (1.0 + 0.1 * v_vary);
+	vec3 col = tex.rgb * COLOR.rgb * tint * (1.0 + 0.1 * v_vary.x);
 	// the base of a plant carries the ground's dust
 	col = mix(col, col * dust * 1.6, (1.0 - smoothstep(0.0, 0.18, v_sway)) * 0.45);
 	col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, saturation);
+	// scorched by a fire (brush impacts): charred toward black, the leaves first
+	col = mix(col, vec3(0.045, 0.04, 0.035), v_vary.y * (0.7 + 0.25 * UV2.y));
 	ALBEDO = col;
 	ALPHA = tex.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;

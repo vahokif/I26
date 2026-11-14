@@ -144,6 +144,7 @@ public partial class PlacedTrees : Node3D
             m.SetShaderParameter("tint", g.Tint);
             m.SetShaderParameter("dust", g.Dust);
             m.SetShaderParameter("saturation", g.Saturation);
+            m.SetShaderParameter("brush", false);   // solid: no brush impacts
         }
     }
 

@@ -66,6 +66,7 @@ public partial class VegetationNode : Node3D
         public float Distance, Far;
         public float[] Shade = [];   // the shrubs' shade quads (16 floats each: the transform's rows, custom data), made with the groups
         public MultiMeshInstance3D? ShadeNode;
+        public PlantIndex? Index;    // the plants by place, for the brush impacts (BrushImpacts), made with the groups
     }
 
     private readonly Dictionary<(int, int, VegLayer), Chunk> _chunks = [];
@@ -142,6 +143,8 @@ public partial class VegetationNode : Node3D
             node._tumble = TumbleweedNode.Create(region, terrain, mask, () => node._placer, low, seed, (ShaderMaterial)node._groundMaterial.Duplicate(), ToMesh);
             node.AddChild(node._tumble);
         }
+        // the plants answer the fighting (shell.cfg [port] brush_impacts): shaken, laid down, scorched
+        node.AddChild(new BrushImpacts { Name = "BrushImpacts", Veg = node, Tint = node._tint });
         node.SetLevel(level);
         if (gallery is { } g) node.AddGallery(g.X, g.Z, g.Species);
         int verts = meshData.Sum(vs => vs.Sum(p => p[0].VertexCount));
@@ -234,10 +237,13 @@ public partial class VegetationNode : Node3D
     /// The ground's colour into the plants: a pull toward it overall (its colour carries the mission's light, which
     /// the painted plants don't), less light on a dark ground, and more of it as dust at their bases.
     /// </summary>
+    private Color _tint = Colors.White;
+
     private void SetGround(MissionBuilder b)
     {
         var g = GroundLook(b);
         Both("tint", g.Tint);
+        _tint = g.Tint;
         Both("dust", g.Dust);
         Both("saturation", g.Saturation);
         _swardColour = g.Sward;
@@ -358,6 +364,7 @@ public partial class VegetationNode : Node3D
     private void AddGallery(float gx, float gz, SpeciesDef[] species)
     {
         float step = GalleryStep;
+        var spots = new List<PlantSpot>();
         for (int i = 0; i < species.Length; i++)
         {
             var s = species[i];
@@ -369,6 +376,7 @@ public partial class VegetationNode : Node3D
                 var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseCustomData = true, Mesh = ToMesh(pm), InstanceCount = 1 };
                 mm.SetInstanceTransform(0, new Transform3D(Basis.Identity, Vector3.Zero));
                 mm.SetInstanceCustomData(0, new Color(s.Stiffness, 0.3f * v, pm.Bounds().Max.Y, 0));
+                spots.Add(new PlantSpot(new System.Numerics.Vector3(x, y, z), MathF.Max(pm.GroundRadius, 0.2f), pm.Bounds().Max.Y, s.Stiffness, s.Layer == VegLayer.Ground));
                 AddChild(new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = GalleryMaterial(s.Layer == VegLayer.Shrub ? _material : _groundMaterial), Position = Coords.ToGodot(x, y, z), Layers = TerrainNode.TerrainLayer, Name = $"Gallery_{s.Id}_{v}" });
                 if (s.Layer != VegLayer.Shrub && pm.GroundRadius < GroundShadeMin) continue;
                 var shade = new float[16];
@@ -377,7 +385,10 @@ public partial class VegetationNode : Node3D
                 AddChild(new MultiMeshInstance3D { Multimesh = sm, MaterialOverride = _shadeMaterial, Layers = TerrainNode.TerrainLayer, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = $"GalleryShade_{s.Id}_{v}" });
             }
         }
+        _gallery = new PlantIndex(gx - 4, gz - 4, MathF.Max(species.Length * step, 8 * step) + 8, spots);
     }
+
+    private PlantIndex? _gallery;
 
     // ---- meshes ----------------------------------------------------------------------------------------------
 
@@ -453,6 +464,42 @@ public partial class VegetationNode : Node3D
         if (GetViewport()?.GetCamera3D() is not { } cam || !IsInsideTree()) return null;
         var l = ToLocal(cam.GlobalPosition);
         return new System.Numerics.Vector3(l.X, l.Y, -l.Z);
+    }
+
+    /// <summary>
+    /// The plants drawn now whose crown reaches within <paramref name="radius"/> of a point (global, Godot's frame), with
+    /// their roots in Godot's frame too; at most <paramref name="max"/>. For the brush impacts (main thread).
+    /// </summary>
+    public void PlantsNear(Vector3 global, float radius, List<PlantSpot> into, int max = 64)
+    {
+        into.Clear();
+        if (!IsInsideTree()) return;
+        var l = ToLocal(global);
+        float x = l.X, z = -l.Z;
+        foreach (var layer in new[] { VegLayer.Shrub, VegLayer.Ground })
+        {
+            float cs = ChunkSize(layer), m = radius + 3f;
+            for (int cz = (int)MathF.Floor((z - m) / cs); cz <= (int)MathF.Floor((z + m) / cs); cz++)
+                for (int cx = (int)MathF.Floor((x - m) / cs); cx <= (int)MathF.Floor((x + m) / cs); cx++)
+                    if (_chunks.TryGetValue((cx, cz, layer), out var c) && c.Attached && c.Index is { } ix && into.Count < max)
+                        ix.Near(x, z, radius, into, max);
+        }
+        _gallery?.Near(x, z, radius, into, max);
+        for (int i = 0; i < into.Count; i++)
+        {
+            var s = into[i];
+            var g = ToGlobal(new Vector3(s.Root.X, s.Root.Y, -s.Root.Z));
+            into[i] = s with { Root = new System.Numerics.Vector3(g.X, g.Y, g.Z) };
+        }
+    }
+
+    /// <summary>The drawn ground's height under a point (global, Godot's frame), or null off the map.</summary>
+    public float? GroundY(Vector3 global)
+    {
+        if (_terrain is null || !IsInsideTree()) return null;
+        var l = ToLocal(global);
+        if (!_terrain.Has(l.X, -l.Z)) return null;
+        return ToGlobal(new Vector3(l.X, _terrain.Height(l.X, -l.Z), l.Z)).Y;
     }
 
     /// <summary>Every chunk within reach of the camera placed and attached now (behind the loading card), on every core.</summary>
@@ -541,6 +588,13 @@ public partial class VegetationNode : Node3D
             ShadeInstance(shade, shaded++, p.Position.X, p.Position.Z, ox, oz, p.Scale, mesh.Shade, mesh.ShadeRadius);
         }
         c.Shade = shaded * 16 == shade.Length ? shade : shade[..(shaded * 16)];
+        var spots = new List<PlantSpot>(placed.Count);
+        foreach (var p in placed)
+        {
+            var mesh = _meshes[p.Species][p.Variant];
+            spots.Add(new PlantSpot(p.Position, MathF.Max(mesh.ShadeRadius * p.Scale, 0.2f), mesh.Height * p.Scale, _stiffness[p.Species], c.Layer == VegLayer.Ground));
+        }
+        c.Index = new PlantIndex(ox, oz, side, spots);
         var o = new List<Group>();
         foreach (var ((sp, v), list) in groups)
         {

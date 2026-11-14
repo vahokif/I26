@@ -252,6 +252,7 @@ public sealed partial class MissionSetup
             {
                 staticOf[p] = so;
                 so.Nodes.AddRange(nodes);
+                so.OrderSurfaces();
                 // a gate's slide in the world: the record's offset through its node's transform to the model and the placement
                 var place = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p));
                 foreach (var part in m.Parts)

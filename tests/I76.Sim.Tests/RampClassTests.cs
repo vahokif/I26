@@ -123,5 +123,32 @@ public class RampClassTests
     {
         var walk = StructureNode.Order([-1, 0, -1]);
         Assert.Equal([2, 3, 1], walk);
+        // a garage whose floor and door hang under its walls, and one whose parts are all top-level (bcaik_s3, bcaik_s7)
+        Assert.Equal([1, 3, 2], StructureNode.Order([-1, 0, 0]));
+        Assert.Equal([3, 2, 1], StructureNode.Order([-1, -1, -1]));
+    }
+
+    /// <summary>
+    /// The Autowerks garages placed with the Ramp class id: the ground query takes a structure's first polygon that holds
+    /// the point, in the original's order (the last node walked first). bcaik_s7's walls, floor and door are all top-level,
+    /// so its roof comes before its floor and a car stays on it; bcaik_s3's and bcaik_s8's floor hangs under their walls,
+    /// so the floor comes first and a car on the roof falls through. A mission maker's comparison in the original: a car stays on
+    /// bcaik_s7's roof, not on bcaik_s3's or bcaik_s8's.
+    /// </summary>
+    [Theory]
+    [InlineData("bcaik_s7", true)]
+    [InlineData("bcaik_s3", false)]
+    [InlineData("bcaik_s8", false)]
+    public void AGaragesRoofHoldsACarWhenTheOriginalListsItFirst(string name, bool holds)
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", (name, 0xb, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, name, 4100, 36700);
+        var roof = o.Surfaces.Where(p => p.N.Y > 0.99f).MaxBy(p => p.V.Max(v => v.Y))!;
+        var c = new Vector3(roof.V.Average(v => v.X), roof.V.Max(v => v.Y), roof.V.Average(v => v.Z));
+        // over the roof's middle, from just above it
+        var (h, _) = setup.Ground.Query(c.X, c.Y + 0.5, c.Z);
+        if (holds) Assert.Equal(c.Y, h, 0.05f);
+        else Assert.True(h < c.Y - 3, $"{name}: the ground under the roof's middle is at {h:0.0}, the roof at {c.Y:0.0}");
     }
 }

@@ -235,6 +235,7 @@ public sealed partial class StaticObject
             foreach (var b in r.MeshBounds) if (Dead(b.Node)) MeshBounds.Add(Moved(b));
             foreach (var b in r.Spheres) if (Dead(b.Node)) { Spheres.Add(Moved(b)); swapped = true; }
         }
+        if (swapped) OrderSurfaces();
         Collapsed = swapped;
         Revision++;
         // the collider's sphere is rebuilt round what is left (measured: the grain hopper's
@@ -309,6 +310,21 @@ public sealed partial class StaticObject
     /// placed as type 3 is still made of type-2 nodes.
     /// </summary>
     public uint TypeAt(int node) => node >= 0 && node < Nodes.Count ? Nodes[node].Type : Type;
+
+    /// <summary>
+    /// Puts the drive-on surfaces in the original's order, which decides which one the ground query stands on (it takes
+    /// the first polygon of a structure that holds the point): the original prepends each node's polygons as it walks the
+    /// tree (<see cref="StructureNode.Walk"/>), so the last node walked comes first, each node's faces in their own order.
+    /// An Autowerks garage whose floor hangs under its walls (bcaik_s3, bcaik_s8) lists the floor before the roof, and a
+    /// car on the roof falls through; one whose parts are all top-level (bcaik_s7) lists the roof first.
+    /// </summary>
+    public void OrderSurfaces()
+    {
+        if (Nodes.Count == 0 || Surfaces.Count < 2) return;
+        var ordered = Surfaces.Select((p, i) => (p, i)).OrderByDescending(x => WalkRank(x.p.Node)).ThenBy(x => x.i).Select(x => x.p).ToList();
+        Surfaces.Clear();
+        Surfaces.AddRange(ordered);
+    }
 
     /// <summary>
     /// A node's place in the original's walk of the placement's tree for a car's contact (<see cref="StructureNode.Walk"/>;
@@ -530,7 +546,8 @@ public sealed class StaticWorld
             }
         }
         // the list is built by prepending a node's mesh polygons, which the original itself
-        // prepended: the nodes come last first, each one's faces in their own order
+        // prepended: the nodes come last first, each one's faces in their own order (the parts' order here;
+        // StaticObject.OrderSurfaces puts them in the walk's once the structure's nodes are known)
         for (int k = surfaces.Count - 1; k >= 0; k--) o.Surfaces.AddRange(surfaces[k]);
         if (all.Count == 0) return null;
         var min = all.Aggregate(Vector3.Min); var max = all.Aggregate(Vector3.Max);

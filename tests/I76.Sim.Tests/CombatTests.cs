@@ -65,6 +65,40 @@ public class CombatTests
         Assert.InRange(shots[2] - shots[1], 6, 7);
     }
 
+    /// <summary>
+    /// A rocket spawned part-way through a frame is moved by the sub-frame time but eased towards its terminal
+    /// speed by half the whole frame, as the original does (measured, retail 1.0 on an emulated Pentium: 13
+    /// rockets, residual 0.003 m/s), so every rocket of a held burst leaves its spawn frame at the same speed.
+    /// </summary>
+    [Fact]
+    public void AFireRiteBurstsRocketsAllEaseByTheWholeFrame()
+    {
+        if (InstallDir is null) return;
+        var vfs = new AssetVfs(new GameInstall(InstallDir));
+        var world = new SimWorld(new Flat(), new CrtRand(1));
+        var car = VehicleFactory.Create(vfs, "vppt01.vcf");
+        world.Vehicles.Add(car);
+        world.Player = car;
+        var a = car.Armory!;
+        int fr = a.Weapons.FindIndex(w => w.Def.Kind == 2);
+        var combat = new Combat(world, n => vfs.TryRead(n) is { } d ? EffectDef.Read(n, d) : null) { Damage = new Sink() };
+        const float dt = 102f / 2048f;
+        var seen = new HashSet<Round>();
+        var speeds = new List<float>();
+        for (int f = 0; f < 90; f++)
+        {
+            var keys = new bool[5]; keys[fr] = true;
+            a.PlayerTriggers(false, keys);
+            combat.Frame(dt);
+            foreach (var r in combat.Rounds.Where(r => r.Kind == 2 && seen.Add(r))) speeds.Add(r.LocalVel.Z);
+            combat.Events.Clear();
+        }
+        Assert.True(speeds.Count >= 4, $"{speeds.Count} rockets");
+        var def = a.Weapons[fr].Def;
+        float expect = def.Speed + (def.Ordnance!.TerminalSpeed - def.Speed) * 0.5f * dt;
+        foreach (var v in speeds) Assert.Equal(expect, v, 0.01f);
+    }
+
     [Fact]
     public void AnMgHitsTheCarAheadAtItsRate()
     {

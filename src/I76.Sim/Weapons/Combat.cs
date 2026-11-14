@@ -967,7 +967,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         void FireOne(float pre)
         {
             if (batch) { batched++; batchDt = MathF.Max(batchDt, pre); }
-            else Shot(v, w, 1, pre);
+            else Shot(v, w, 1, pre, frameDt);
         }
         if (dt <= w.WaitA || dt <= w.WaitB)
         {
@@ -1037,11 +1037,11 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         if (flameHeld) FlameHold(v, w);
         w.WasFiring = w.Trigger;
         w.Trigger = false;   // a per-frame request
-        if (batched > 0) Shot(v, w, batched, batchDt / 3f);
+        if (batched > 0) Shot(v, w, batched, batchDt / 3f, frameDt);
     }
 
     /// <summary>Sound and flash, ammo, the target by ordnance kind, then the round.</summary>
-    private void Shot(Vehicle v, Weapon w, int n, float dtPre)
+    private void Shot(Vehicle v, Weapon w, int n, float dtPre, float frameDt)
     {
         var rot = Rows.Concat(w.MuzzleRot, v.Rot);
         var muzzle = v.Pos.ToVector3() + v.Rot.ToWorld(w.MuzzlePos);
@@ -1070,14 +1070,14 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         Events.Add(new ShotFired(v, w, muzzle, rot.Forward));
         if (!Unlimited(v)) w.Ammo = System.Math.Max(0, w.Ammo - n);
         int had = PredictedRounds.Count;
-        if (n > 0) Spawn(v, w, muzzle, rot, n, target, dtPre);
+        if (n > 0) Spawn(v, w, muzzle, rot, n, target, dtPre, frameDt);
         if (_cosmetic) PredictedShot?.Invoke(w, PredictedRounds.Count > had ? PredictedRounds[^1] : null);
     }
 
     private float U() => Rand.Next() * 3.051851e-5f;
 
     /// <summary>The round leaves the muzzle with its spread and the rand() draws in the original's order.</summary>
-    private void Spawn(Vehicle shooter, Weapon w, Vector3 pos, Rows rot, int count, object? target, float dtPre)
+    private void Spawn(Vehicle shooter, Weapon w, Vector3 pos, Rows rot, int count, object? target, float dtPre, float frameDt)
     {
         var def = w.Def;
         uint k = def.Kind;
@@ -1130,7 +1130,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             LocalVel = new Vector3(0, 0, v0), Life = def.Life == 0 ? 5f : def.Life, Count = count, Damage = w.Damage, Target = target,
         };
         (_cosmetic ? PredictedRounds : Rounds).Add(r);
-        if (dtPre != 0) { r.Life -= dtPre; Step(r, dtPre); }
+        // the catch-up step moves the round by the sub-frame time but eases a rocket by the whole frame, as the original does
+        if (dtPre != 0) { r.Life -= dtPre; Step(r, dtPre, frameDt); }
     }
 
     private static Rows LookAlong(Vector3 d, Rows fallback)
@@ -1281,7 +1282,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         v.Flags |= VehicleFlags.Airborne;
     }
 
-    private bool Step(Round r, float dt)
+    private bool Step(Round r, float dt, float easeDt = 0)
     {
         if (r.Kind is 0xf or 0x10) return StepMine(r, dt);
         if (r.Kind is 0xc or 0xe or 0x11) return StepSlick(r, dt);
@@ -1289,7 +1290,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         r.PrevPos = r.Pos;
         r.Age += dt;
         var acc = new Vector3(0, -9.8f * r.Ord.Gravity, 0);
-        float kf = r.Kind is 1 or 6 or 0x12 ? dt : r.Kind == 2 ? dt * 0.5f : dt;
+        float kf = r.Kind is 1 or 6 or 0x12 ? dt : r.Kind == 2 ? (easeDt > 0 ? easeDt : dt) * 0.5f : dt;
         if (r.Kind == 3)
         {
             // The step flies the pose it has, then (if it hit nothing) steers for the next one

@@ -56,7 +56,7 @@ public static class UprightReset
         v.GroundNormal = up;
         v.GroundHeight = h;
         v.HeightAboveGround = 0;
-        foreach (var w in v.Wheels)
+        foreach (var w in v.Wheels.Concat(v.MiddleWheels))
         {
             w.Travel = 0;
             w.PrevRate = 0;

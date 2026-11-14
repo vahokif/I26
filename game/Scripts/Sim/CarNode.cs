@@ -947,13 +947,8 @@ public partial class CarNode : Node3D
         }
     }
 
-    /// <summary>
-    /// A wheel's suspension travel to draw. The middle pair has no suspension in the sim (the original runs it with no
-    /// force), so it rides at the mean of its side's front and rear wheels.
-    /// </summary>
-    private float TravelOf(Wheel w) =>
-        w == Sim.MiddleRight ? 0.5f * (Sim.FrontRight.Travel + Sim.RearRight.Travel)
-        : w == Sim.MiddleLeft ? 0.5f * (Sim.FrontLeft.Travel + Sim.RearLeft.Travel) : w.Travel;
+    /// <summary>A wheel's suspension travel to draw (the middle pair's own: the sim steps its suspension too).</summary>
+    private static float TravelOf(Wheel w) => w.Travel;
 
     private bool _animSeeded;
     private static float LerpAngle(float a, float b, float t) => a + (float)Math.IEEERemainder(b - a, 2 * Math.PI) * t;

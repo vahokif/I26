@@ -65,7 +65,7 @@ public sealed class CarState
             if (w.Blown) s.Blown |= (byte)(1 << k);
             k++;
         }
-        // the middle pair's tyres ride in bits 4 and 5 (they have no travel of their own)
+        // the middle pair's tyres ride in bits 4 and 5 (their travel is not sent)
         k = 4;
         foreach (var w in v.MiddleWheels) { if (w.Blown) s.Blown |= (byte)(1 << k); k++; }
         // a helicopter has one pool of hit points, in the first zone (its target box's bar reads it)
@@ -114,6 +114,12 @@ public sealed class CarState
         }
         k = 4;
         foreach (var w in v.MiddleWheels) { w.Blown = (Blown & (1 << k)) != 0; k++; }
+        // the middle pair's travel is not sent: drawn at the mean of its side's front and rear
+        if (v.MiddleRight is { } mr && v.MiddleLeft is { } ml)
+        {
+            mr.Travel = 0.5f * (v.FrontRight.Travel + v.RearRight.Travel);
+            ml.Travel = 0.5f * (v.FrontLeft.Travel + v.RearLeft.Travel);
+        }
         v.FrontRight.SteerAngle = SteerFront0;
         v.FrontLeft.SteerAngle = SteerFront1;
         if (v.Heli is { } hs) hs.Hp = Zones[0];

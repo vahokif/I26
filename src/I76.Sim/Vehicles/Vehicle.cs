@@ -269,8 +269,9 @@ public sealed class Vehicle
     public IEnumerable<Wheel> Wheels => [FrontRight, FrontLeft, RearRight, RearLeft];
     /// <summary>
     /// The optional middle pair (a 6x4's second axle; null on a car, the .vcf's middle .wdf is "null").
-    /// The original gives them hit points, mass, a blow-out and a mesh, but its force and suspension code reads only
-    /// the four others: "middle wheels: 0"), so they stay out of <see cref="Wheels"/>.
+    /// The original gives them hit points, mass, a blow-out, a mesh and their own suspension (stepped with no weight
+    /// transfer, drooping in flight), but its forces, push-out and attitude read only the four others, so they stay
+    /// out of <see cref="Wheels"/>.
     /// </summary>
     public Wheel? MiddleRight, MiddleLeft;
     public IEnumerable<Wheel> MiddleWheels => MiddleRight is null || MiddleLeft is null ? [] : [MiddleRight, MiddleLeft];

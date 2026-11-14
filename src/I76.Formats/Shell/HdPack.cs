@@ -59,45 +59,64 @@ public sealed class HdDirSource : HdSource
     public override byte[]? Read(string rel) { var p = P(rel); return File.Exists(p) ? File.ReadAllBytes(p) : null; }
 }
 
-/// <summary>A pack file: a zip whose tex-menu/ folder is the layout, read in place.</summary>
+/// <summary>
+/// A pack file: a zip whose tex-menu/ folder is the layout (or another root, such as one folder down:
+/// I26-HD-Menu-Pack/tex-menu/), read in place. Its pack.json is the root's, else the zip's top one. Each thread reads through an
+/// archive of its own (a ZipArchive is not thread safe), opened on its first read: only the central directory is read, the
+/// pictures as they are asked for.
+/// </summary>
 public sealed class HdZipSource : HdSource
 {
     private readonly string _path;
     private readonly ZipArchive _zip;
-    private readonly Dictionary<string, ZipArchiveEntry> _entries = [];
-    private readonly object _lock = new();
+    // a layout path (lower case) -> the entry's name in the zip
+    private readonly Dictionary<string, string> _entries = [];
+    private readonly ThreadLocal<ZipArchive> _local;
+    private readonly int _owner = Environment.CurrentManagedThreadId;
     public const string Root = "tex-menu/";
 
-    public HdZipSource(string path)
+    public HdZipSource(string path, string root = Root)
     {
         _path = path;
-        _zip = new ZipArchive(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read), ZipArchiveMode.Read);
+        root = Norm(root);
+        if (!root.EndsWith('/')) root += "/";
+        _zip = Open(path);
         foreach (var e in _zip.Entries)
         {
             var n = Norm(e.FullName);
-            if (n.StartsWith(Root) && n.Length > Root.Length) _entries[n[Root.Length..]] = e;
+            if (n.StartsWith(root) && n.Length > root.Length && !n.EndsWith('/')) _entries[n[root.Length..]] = e.FullName;
         }
-        Info = HdPackInfo.Parse(Slurp(_zip.GetEntry("pack.json")));
+        _local = new ThreadLocal<ZipArchive>(() => Environment.CurrentManagedThreadId == _owner ? _zip : Open(_path), trackAllValues: true);
+        Info = HdPackInfo.Parse(Slurp(_zip, _zip.Entries.FirstOrDefault(e => Norm(e.FullName) == root + "pack.json")?.FullName))
+            ?? HdPackInfo.Parse(Slurp(_zip, "pack.json"));
     }
+
+    private static ZipArchive Open(string path) => new(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read), ZipArchiveMode.Read);
 
     public override string Origin => _path;
     public override int Count => _entries.Count;
     public override bool Exists(string rel) => _entries.ContainsKey(Norm(rel));
-    public override byte[]? Read(string rel) => _entries.TryGetValue(Norm(rel), out var e) ? Slurp(e) : null;
+    public override byte[]? Read(string rel) => _entries.TryGetValue(Norm(rel), out var e) ? Slurp(_local.Value!, e) : null;
 
-    private byte[]? Slurp(ZipArchiveEntry? e)
+    private static byte[]? Slurp(ZipArchive zip, string? name)
     {
-        if (e is null) return null;
-        lock (_lock)
+        if (name is null || zip.GetEntry(name) is not { } e) return null;
+        try
         {
             using var s = e.Open();
             using var ms = new MemoryStream((int)Math.Min(e.Length, int.MaxValue));
             s.CopyTo(ms);
             return ms.ToArray();
         }
+        catch (InvalidDataException) { return null; }
     }
 
-    public override void Dispose() => _zip.Dispose();
+    public override void Dispose()
+    {
+        foreach (var z in _local.Values) if (!ReferenceEquals(z, _zip)) z.Dispose();
+        _local.Dispose();
+        _zip.Dispose();
+    }
 }
 
 public static class HdPackFinder

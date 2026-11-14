@@ -22,6 +22,7 @@ the rules of the project are in [../CHARTER.md](../CHARTER.md).
 |---|---|
 | [frame-rate.md](frame-rate.md) | The original's frame-coupled rules and the Simulation Rate setting. |
 | [modern-physics.md](modern-physics.md) | The optional Modern Physics driving model. |
+| [jumps.md](jumps.md) | For players: a car off a ramp, in the air and landing; T05's canyon jump worked through. |
 | [multiplayer.md](multiplayer.md) | The network melee: protocol, snapshots, prediction. |
 | [savestate.md](savestate.md) | Snapshots of the whole simulation: what they hold, versioning, the completeness guard, restoring. |
 | [modern-vegetation.md](modern-vegetation.md) | The modern look's procedural plants: species and their L-systems, placement, drawing, cost. |

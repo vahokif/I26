@@ -1,6 +1,7 @@
 # Playing I26
 
-Details for players. The [README](../README.md) has the features and a short install guide.
+Details for players. The [README](../README.md) has the features and a short install guide; [jumps.md](jumps.md) explains
+how a car flies off a ramp and lands (T05's canyon worked through).
 
 ## System requirements
 

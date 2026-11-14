@@ -95,6 +95,12 @@ public sealed class TripInventory
 
     public PartNode? InSlot(int slot) => Nodes.FirstOrDefault(n => n.State == PartState.Car && n.Slot == slot);
 
+    /// <summary>
+    /// A car node that fills one of the car's slots. A dropper stripped in the 2D garage stays marked in the car with none
+    /// ("(C)", as the original's form leaves it): not on the car, so it takes no damage and is no turret.
+    /// </summary>
+    private bool Fitted(PartNode n) => n.State == PartState.Car && n.Slot >= 0 && n.Slot < Slots.Count;
+
     /// <summary>The van's parts by list (the six inventory lists): engines, suspensions, brakes, tyres, weapons, specials.</summary>
     public static int ListOf(int type) => type switch { 2 => 0, 3 => 1, 1 or 4 => 2, 5 => 3, >= 6 and <= 11 => 4, 12 or 13 => 5, _ => -1 };
 
@@ -103,7 +109,7 @@ public sealed class TripInventory
     /// <summary>The damage the last mission left (CarState) on the car's nodes: engine, brakes, suspension, tyres in slot order, weapons by hardpoint.</summary>
     public void ApplyState(CarState s)
     {
-        foreach (var n in Nodes.Where(n => n.State == PartState.Car))
+        foreach (var n in Nodes.Where(Fitted))
         {
             var slot = Slots[n.Slot];
             switch (slot.Type)
@@ -305,7 +311,7 @@ public sealed class TripInventory
                 || !tyres[2]!.Part.Id.Equals(tyres[3]!.Part.Id, StringComparison.OrdinalIgnoreCase)) return 27;
         }
         // the turret checks hold for the helicopters too: a turret on a Huey's side gun passed the 2D form's DONE while the 3D garage never offers one (#131); only the one-turret limit is not asked of them (the Huey has two)
-        var turrets = Nodes.Where(n => n.State == PartState.Car && n.Part.IsTurret).ToList();
+        var turrets = Nodes.Where(n => Fitted(n) && n.Part.IsTurret).ToList();
         if (turrets.Count > 1 && !unlimTurrets && !wheelless) return 26;   // the Huey's own two stay
         if (turrets.Any(t => !ChassisRules.TurretMount(Slots[t.Slot]))) return 28;
         return null;

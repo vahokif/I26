@@ -690,9 +690,13 @@ public sealed partial class MeleeGame
             return;
         }
         var fresh = Build(pl.CarFile, true);
-        foreach (var (w, f) in p.Wheels.Zip(fresh.Wheels))
+        // all six wheels: a 6x4's middle pair blows out as the others do (#167)
+        for (int k = 0; k < 6; k++)
+        {
+            if (p.WheelAt(k) is not { } w || fresh.WheelAt(k) is not { } f) continue;
             if (full) Session.FieldCopy.Into(f, w);
             else { w.Grip = f.Grip; w.Rolling = f.Rolling; w.Blown = false; w.Rest = f.Rest; }   // the blow-out's lower rest height too
+        }
         p.P = fresh.P;
         p.Engine = fresh.Engine;
         // the driver's side-glance handguns are fitted to the car by the game after the build (the cockpit decides

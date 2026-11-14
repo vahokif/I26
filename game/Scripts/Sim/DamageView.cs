@@ -490,11 +490,13 @@ public partial class DamageView : Node3D
         }
     }
 
-    /// <summary>The wreck of a grounded building keeps its lot painted into the terrain (GroundDecals), so leaves it out of its mesh too.</summary>
+    /// <summary>
+    /// The wreck of a grounded building keeps its lot painted into the terrain (GroundDecals), so leaves it out of its mesh
+    /// too; a scorch mark or a flattened part its destruction lays on the ground was never painted, so is drawn.
+    /// </summary>
     private Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? GroundFaces(Placement p, AssembledModel m)
     {
-        if (!World.GroundDecals.Applies(p)) return null;
-        float lowest = World.GroundDecals.LowestY(m);
-        return (part, f) => World.GroundDecals.IsGroundFace(part, f, lowest);
+        if (!World.GroundDecals.Applies(p) || p.Definition is not { } def || Builder.Assembler!.Assemble(def) is not { } intact) return null;
+        return World.GroundDecals.Painted(intact);
     }
 }

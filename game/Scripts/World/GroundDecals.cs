@@ -28,6 +28,22 @@ public static class GroundDecals
         return f.Vertices.All(v => part.ToModel.Apply(part.Mesh.Vertices[v.Index]).Y <= lowest + Band);
     }
 
+    /// <summary>
+    /// Of a model's wreck (its 'A' parts for the dead nodes): the faces that are painted into the terrain already, the ones
+    /// the intact model was painted with at load. Those are a live part's own ground faces and a dead part's whose intact
+    /// twin ('_' for 'A') had ground faces (a lot). A dead part whose twin lay on nothing (a phone booth's or a ticket
+    /// box's scorch mark, a pipeline's flattened pipe, a plane's burnt hull) is drawn: the paint never had it.
+    /// </summary>
+    public static Func<ModelPart, GeoFace, bool> Painted(AssembledModel intact)
+    {
+        float lowest = LowestY(intact);
+        var grounded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in intact.Parts)
+            if (part.Mesh.Faces.Any(f => IsGroundFace(part, f, lowest))) grounded.Add(part.NodeName);
+        static string Twin(string n) => n.Length > 4 && n[3] is 'A' or 'a' ? n[..3] + "_" + n[4..] : n;
+        return (part, f) => grounded.Contains(Twin(part.NodeName)) && IsGroundFace(part, f, lowest);
+    }
+
     /// <summary>Whether a placement's ground faces are painted rather than drawn: scenery (not vehicles, road pieces or drive-on structures). The loader stands every placement on the terrain (MissionWorld.GroundedPosition).</summary>
     public static bool Applies(Placement p) =>
         p.Definition is { } d && !d.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) && !RoadPieceObjects.IsRoadPiece(p.Object.ObjectType) && p.Object.ObjectType is not (0xb or 0xc or 0xd);   // drive-on structures keep their decks

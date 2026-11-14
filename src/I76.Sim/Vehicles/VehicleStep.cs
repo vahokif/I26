@@ -548,10 +548,13 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
     /// The per-frame object pass for this car against the static world
     /// (mesh class): XZ boxes,
     /// a swept-sphere test, then the four mid-height box corners as rays
-    /// against the polygons; the earliest wins. Ramps and other structures
-    /// hit with n.y &gt; 0.3 are left to the ground query (drive-on
-    /// suppression). The record is then the vehicle callback's
-    /// to consume on the next substep.
+    /// against the polygons. Of one object, the first node in its tree's walk
+    /// that is touched gives the contact (<see cref="Collision.StaticObject.WalkRank"/>);
+    /// of several objects, the earliest. An object whose contact is a ramp's or
+    /// bridge's node (its own type 11-13) with
+    /// n.y &gt; 0.3 gives no response at all that frame: the ground query
+    /// carries the car (drive-on suppression). The record is then the
+    /// vehicle callback's to consume on the next substep.
     /// </summary>
     private void ObjectContacts(Vehicle v, float dtFrame, bool signsOnly = false)
     {
@@ -595,39 +598,66 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
             // another model moves this car: of the rest, only a structure's sign nodes, which that model leaves out
             if (signsOnly && !o.Nodes.Exists(n => n.Sign)) continue;
             if (o.Centre.X + o.Radius < minX || o.Centre.X - o.Radius > maxX || o.Centre.Z + o.Radius < minZ || o.Centre.Z - o.Radius > maxZ) continue;
-            if (!SweptSphere(c, v.Vel, o.Centre, r + o.Radius, dtFrame)) continue;
+            // the collider record's sphere: its centre and its 3D radius
+            if (!SweptSphere(c, v.Vel, o.Centre, r + MathF.Max(o.Radius, o.BoundRadius), dtFrame)) continue;
+            // this object's contact: the first node in the original's walk of its tree that the car touches (each
+            // node's own earliest), not the nearest of them
+            float first = float.MaxValue;
+            int firstRank = int.MaxValue;
+            Contact mine = default;
+            bool Sooner(int node, float t) { int k = o.WalkRank(node); return k < firstRank || k == firstRank && t < first; }
             foreach (var b in o.Boxes)
             {
                 if (signsOnly && !o.SignNode(b.Node) || o.Unfelt(b.Node)) continue;
-                if (!SweptSphere(c, v.Vel, b.Centre, r + b.Radius, dtFrame)) continue;
-                if (BoxBox(v, b, dtFrame) is { } hit && hit.T < best)
+                if (!SweptSphere(c, v.Vel, b.Origin, r + b.Reach, dtFrame)) continue;
+                if (BoxBox(v, b, dtFrame) is { } hit && Sooner(b.Node, hit.T))
                 {
-                    best = hit.T;
-                    rec = hit with { Other = o, Node = b.Node };
+                    first = hit.T; firstRank = o.WalkRank(b.Node);
+                    mine = hit with { Other = o, Node = b.Node };
                 }
             }
             foreach (var sp in o.Spheres)
             {
                 if (signsOnly && !o.SignNode(sp.Node) || o.Unfelt(sp.Node)) continue;
                 if (!SweptSphere(c, v.Vel, sp.Centre, r + sp.Radius, dtFrame)) continue;
-                if (SphereContact(v, sp.Centre, sp.Radius, dtFrame) is { } hit && hit.T < best)
+                if (SphereContact(v, sp.Centre, sp.Radius, dtFrame) is { } hit && Sooner(sp.Node, hit.T))
                 {
-                    best = hit.T;
-                    rec = hit with { Other = o, Node = sp.Node };
+                    first = hit.T; firstRank = o.WalkRank(sp.Node);
+                    mine = hit with { Other = o, Node = sp.Node };
                 }
             }
             var polys = signsOnly ? o.Polys.FindAll(q => o.SignNode(q.Node)) : o.Polys.Exists(q => o.Unfelt(q.Node)) ? o.Polys.FindAll(q => !o.Unfelt(q.Node)) : o.Polys;
-            if (polys.Count == 0) continue;
+            // each mesh node's pre-test: a sphere about the node's origin (its 'A' geometry, once destroyed, may lie
+            // outside it: the original never meets a fallen water tank lying off its pivot)
+            List<int>? beyond = null;
+            bool rootParts = false, rootPassed = false;
+            foreach (var mb in o.MeshBounds)
+            {
+                bool near = SweptSphere(c, v.Vel, mb.Origin, r + mb.Reach, dtFrame);
+                if (mb.Node < 0) { rootParts = true; rootPassed |= near; }
+                else if (!near) (beyond ??= []).Add(mb.Node);
+            }
+            bool rootReached = !rootParts || rootPassed;
+            if (beyond is not null || !rootReached)
+                polys = polys.FindAll(q => q.Node >= 0 ? beyond is null || !beyond.Contains(q.Node) : rootReached);
             foreach (var corner in corners)
             {
+                if (polys.Count == 0) break;
                 var pw = p0 + v.Rot.ToWorld(corner);
                 var pv = v.Vel + v.Rot.ToWorld(Vector3.Cross(corner, v.AngVel));
-                var (t, poly) = Collision.StaticWorld.RayMesh(polys, pw, pv, dtFrame);
-                if (poly is null || t >= best) continue;
-                if (o.IsStructure && poly.N.Y > 0.3f) { driveOn = true; continue; }      // drive-on: the ground query handles it
-                best = t;
-                rec = new Contact { Hit = true, Other = o, T = t, C = corner, RelVel = -pv, N = poly.N, Node = poly.Node };
+                var (t, poly) = Collision.StaticWorld.RayMesh(polys, pw, pv, dtFrame, o.WalkRank);
+                if (poly is null || !Sooner(poly.Node, t)) continue;
+                first = t; firstRank = o.WalkRank(poly.Node);
+                mine = new Contact { Hit = true, Other = o, T = t, C = corner, RelVel = -pv, N = poly.N, Node = poly.Node };
             }
+            if (!mine.Hit) continue;
+            // drive-on: the contact is a ramp's or bridge's node (its own type 0xb-0xd) facing up; the
+            // object gives no response this frame and the ground query carries the car. A node of another type
+            // in such a placement (the water tower's tank, a lean-to's pump) responds as any structure.
+            if (DriveOnNode(o, mine.Node ?? -1) && mine.N.Y > 0.3f) { driveOn = true; continue; }
+            if (first >= best) continue;
+            best = first;
+            rec = mine;
         }
         if (driveOn && !DriveOns.Contains(v)) DriveOns.Add(v);   // vvbo1.wav, once a frame
         if (rec.Hit)
@@ -640,6 +670,9 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
             Damage?.StaticContact(v, so, rec);
         }
     }
+
+    /// <summary>A ramp's or bridge's node by its own type (0xb-0xd; the root by the placement's): an upward contact with it is a drive-on.</summary>
+    private static bool DriveOnNode(Collision.StaticObject o, int node) => o.TypeAt(node) is 0xb or 0xc or 0xd;
 
     /// <summary>
     /// Both ways for a car against a class-0x2000 node: the car's

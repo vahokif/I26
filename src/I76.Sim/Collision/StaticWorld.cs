@@ -40,6 +40,31 @@ public sealed class StructureNode
     public bool Sign => Type == 4;
     /// <summary>A type-7 node's slide (<see cref="GateMotion"/>), null for every other node.</summary>
     public GateMotion? Gate { get; set; }
+    /// <summary>
+    /// Its place in the original's walk of the tree for a car's contact (<see cref="Order"/>): from 1, the root being 0.
+    /// 0 for every node of a structure made without it, which then meets a car at its nearest node.
+    /// </summary>
+    public int Walk { get; init; }
+
+    /// <summary>
+    /// The walk the original's car-against-scenery test makes of a placement's tree, each node's place in it from 1: each
+    /// node before its children, a node's children last record first (the loader prepends them). A car's contact with the
+    /// placement is the first node in this order that it touches: a fallen water tower's legs, walked before its tank,
+    /// decide the contact wherever the tank is touched too.
+    /// </summary>
+    public static int[] Order(IReadOnlyList<int> parents)
+    {
+        var rank = new int[parents.Count];
+        int next = 1;
+        void Visit(int parent, int depth)
+        {
+            if (depth > 64) return;
+            for (int c = parents.Count - 1; c >= 0; c--)
+                if (parents[c] == parent && c != parent) { rank[c] = next++; Visit(c, depth + 1); }
+        }
+        Visit(-1, 0);
+        return rank;
+    }
 }
 
 /// <summary>
@@ -286,6 +311,12 @@ public sealed partial class StaticObject
     public uint TypeAt(int node) => node >= 0 && node < Nodes.Count ? Nodes[node].Type : Type;
 
     /// <summary>
+    /// A node's place in the original's walk of the placement's tree for a car's contact (<see cref="StructureNode.Walk"/>;
+    /// the root, −1, is first). The car meets the first node in this order that any of its rays reach, not the nearest.
+    /// </summary>
+    public int WalkRank(int node) => node >= 0 && node < Nodes.Count ? Nodes[node].Walk : 0;
+
+    /// <summary>
     /// A dead type-3 node (or a dead type-3 root): the car's collide callback gives it no response, so a car drives
     /// through its remains (a saguaro's stump). A type-2 node's remains stay solid whatever the placement's type
     /// (measured in the original: T15's barn, placed as type 3, stops the car as a wreck).
@@ -346,6 +377,14 @@ public sealed record NodeFrame(Rows Rot, Vector3 Origin, Vector3 Min, Vector3 Ma
 public sealed record NodeBox(Rows Rot, Vector3 Origin, Vector3 Min, Vector3 Max, float Radius)
 {
     public Vector3 Centre => Origin + Rot.ToWorld((Min + Max) * 0.5f);
+    /// <summary>
+    /// The node's own radius: its geometry's farthest vertex from the middle of its bounds (the half diagonal when not
+    /// given). A car's pre-test for the node is a sphere this large about the node's origin (<see cref="Origin"/>), not
+    /// about its geometry: a destroyed node's 'A' geometry laid away from the node's pivot (a fallen water tank) is out
+    /// of a car's reach there.
+    /// </summary>
+    public float Reach { get => _reach >= 0 ? _reach : (Max - Min).Length() * 0.5f; init => _reach = value; }
+    private readonly float _reach = -1;
     /// <summary>The structure node it belongs to, or −1 for the root.</summary>
     public int Node { get; init; } = -1;
 }
@@ -466,11 +505,11 @@ public sealed class StaticWorld
             {
                 var rot = Frame();
                 var bmin = g.Vertices.Aggregate(Vector3.Min); var bmax = g.Vertices.Aggregate(Vector3.Max);
-                o.Boxes.Add(new NodeBox(rot, place.Apply(part.ToModel.Apply(Vector3.Zero)), bmin, bmax, g.Vertices.Max(v => v.Length())) { Node = node });
+                o.Boxes.Add(new NodeBox(rot, place.Apply(part.ToModel.Apply(Vector3.Zero)), bmin, bmax, g.Vertices.Max(v => v.Length())) { Node = node, Reach = Reach(g.Vertices) });
                 continue;   // a box is solid only, a structure's too (aaramp5's rails): the original walks polygon meshes alone
             }
             if (cls == 0x3000)
-                o.MeshBounds.Add(new NodeBox(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(Vector3.Min), g.Vertices.Aggregate(Vector3.Max), g.Vertices.Max(v => v.Length())) { Node = node });
+                o.MeshBounds.Add(new NodeBox(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(Vector3.Min), g.Vertices.Aggregate(Vector3.Max), g.Vertices.Max(v => v.Length())) { Node = node, Reach = Reach(g.Vertices) });
             // A bridge's surfaces are its deck nodes' only (not its trusses and spans); only a mesh part's faces are walkable
             bool drive = cls == 0x3000 && o.IsStructure && (type != 0xc || nodeType is null || deck);
             var mine = new List<Poly>();
@@ -501,6 +540,13 @@ public sealed class StaticWorld
         o.SphereRadius = 0.75f * o.BoundRadius;
         o.Radius = all.Max(p => new Vector2(p.X - o.Centre.X, p.Z - o.Centre.Z).Length());
         return o;
+    }
+
+    /// <summary>The farthest vertex from the middle of the vertices' bounds.</summary>
+    private static float Reach(Vector3[] v)
+    {
+        var c = (v.Aggregate(Vector3.Min) + v.Aggregate(Vector3.Max)) * 0.5f;
+        return v.Max(p => Vector3.Distance(p, c));
     }
 
     private static (Vector3, float) BoundSphere(Vector3[] v)
@@ -627,20 +673,24 @@ public sealed class StaticWorld
     /// <summary>
     /// The earliest polygon a point moving at v meets within dt.
     /// Polygons facing the motion (n·v ≤ −1e-4) with the point in front of them.
+    /// With <paramref name="rank"/>, the earliest of the first node in that order with any (<see cref="StaticObject.WalkRank"/>).
     /// </summary>
-    public static (float T, Poly? Hit) RayMesh(IReadOnlyList<Poly> polys, Vector3 p, Vector3 v, float dt)
+    public static (float T, Poly? Hit) RayMesh(IReadOnlyList<Poly> polys, Vector3 p, Vector3 v, float dt, Func<int, int>? rank = null)
     {
         float best = float.MaxValue; Poly? hit = null;
+        int bestRank = int.MaxValue;
         foreach (var poly in polys)
         {
+            int r = rank?.Invoke(poly.Node) ?? 0;
+            if (r > bestRank) continue;
             float nv = Vector3.Dot(poly.N, v);
             if (nv > -1e-4f) continue;
             float dist = Vector3.Dot(poly.N, p) + poly.D;
             if (dist <= 0) continue;
             float t = -dist / nv;
-            if (t < 0 || t > dt || t >= best) continue;
+            if (t < 0 || t > dt || (r == bestRank && t >= best)) continue;
             if (!Inside(poly, p + v * t)) continue;
-            best = t; hit = poly;
+            best = t; hit = poly; bestRank = r;
         }
         return (best, hit);
     }

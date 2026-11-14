@@ -59,9 +59,10 @@ public sealed partial class MissionSetup
         /// <summary>A fresh copy of the nodes for one placement, and the part-name lookup its colliders are tagged by (an 'A' part is its '_' twin's).</summary>
         public (List<StructureNode> Nodes, Func<string, int> Index) Instance()
         {
-            var nodes = Nodes.Select(n => new StructureNode
+            var walk = StructureNode.Order([.. Nodes.Select(n => n.Parent)]);
+            var nodes = Nodes.Select((n, i) => new StructureNode
             {
-                Name = n.Name, Parent = n.Parent, Type = n.Type, Flags = n.Flags, Hp = n.Hp, MaxHp = n.MaxHp,
+                Name = n.Name, Parent = n.Parent, Type = n.Type, Flags = n.Flags, Hp = n.Hp, MaxHp = n.MaxHp, Walk = walk[i],
                 Gate = n.Gate is { } g ? new GateMotion { Offset = g.Offset, Delta = g.Delta, Rate = g.Rate } : null,
             }).ToList();
             var at = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

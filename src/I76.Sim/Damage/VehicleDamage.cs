@@ -27,6 +27,8 @@ public sealed class VehicleDamage
     public List<int>[] Rows { get; } = Enumerable.Range(0, 7).Select(_ => new List<int>()).ToArray();
     /// <summary>The rough-terrain damage's fractional carry.</summary>
     public float RoughCarry;
+    /// <summary>Co-op Damage's fractional carry, by channel (DamageModel.Scaled).</summary>
+    public float[] CoopCarry = new float[4];
 
     /// <summary>A network melee's rules: the player's single-player advantages are off: no rescale, the kill roll's 2.5.</summary>
     public bool Network { get; }

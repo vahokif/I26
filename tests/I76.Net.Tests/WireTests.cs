@@ -15,7 +15,7 @@ public class WireTests
     public void TheProtocolIs24()
     {
         Assert.Equal(24, Protocol.Version);
-        Assert.Equal(16, I76.Sim.Save.SnapshotHeader.CurrentVersion);
+        Assert.Equal(17, I76.Sim.Save.SnapshotHeader.CurrentVersion);
     }
 
     /// <summary>The host's ignition lock (protocol 23): the join accept's last byte and one of the listing's host rules; an older listing without them reads as off.</summary>

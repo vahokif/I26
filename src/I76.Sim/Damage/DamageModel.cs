@@ -83,11 +83,20 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// <summary>The factor on what <paramref name="v"/> takes: <see cref="CoopDamageFactor"/> on a co-op human's car, else 1.</summary>
     private float IncomingFactor(Vehicle v) => CoopDamageFactor != 1f && World.Coop && World.IsHuman(v) ? CoopDamageFactor : 1f;
 
-    /// <summary>A copy of the packet with each channel scaled and truncated (a splash's packet may go on to other victims).</summary>
-    private static DamagePacket Scaled(DamagePacket p, float f)
+    /// <summary>
+    /// A copy of the packet with each channel scaled (a splash's packet may go on to other victims): the whole points, the
+    /// fraction carried to the victim's next packet on that channel, so a flame's one-point ticks still burn at x0.5.
+    /// </summary>
+    internal static DamagePacket Scaled(DamagePacket p, float f, float[]? carry)
     {
         var q = new DamagePacket { Attacker = p.Attacker, Mask = p.Mask, Flags = p.Flags, Kind = p.Kind };
-        for (int i = 0; i < 4; i++) q.Ch[i] = (int)(p.Ch[i] * f);
+        for (int i = 0; i < 4; i++)
+        {
+            if (carry is null || p.Ch[i] == 0) { q.Ch[i] = (int)(p.Ch[i] * f); continue; }
+            float x = p.Ch[i] * f + carry[i];
+            q.Ch[i] = (int)x;
+            carry[i] = x - q.Ch[i];
+        }
         return q;
     }
 
@@ -145,7 +154,7 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// <summary>The vehicle damage slot (class slot [10]). pkt null: straight to the death check (the vehicle death routine's call).</summary>
     public void VehicleSlot(Vehicle v, DamagePacket? p, Vector3 hitLocal)
     {
-        if (p is not null && IncomingFactor(v) is var f && f != 1f) p = Scaled(p, f);
+        if (p is not null && IncomingFactor(v) is var f && f != 1f) p = Scaled(p, f, v.Health?.CoopCarry);
         if (p is not null) Damaging?.Invoke(v, p);
         if (v.Heli is { } heli) { HeliSlot(v, heli, p); return; }
         if (v.Emplacement is not null) { if (p is not null) EmplacementSlot(v, p); return; }

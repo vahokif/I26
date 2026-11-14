@@ -34,7 +34,7 @@ public sealed class CarSnapshot
     private readonly DriverState _driverState;
 
     private sealed record ArmoryState(Armory Of, int Selected, bool Link, int[] Group, (Weapon Live, Weapon Copy)[] Weapons);
-    private sealed record DamageState(VehicleDamage Of, int[][] Pools, float RoughCarry, (Part Live, Part Copy)?[] Slots);
+    private sealed record DamageState(VehicleDamage Of, int[][] Pools, float RoughCarry, float[] CoopCarry, (Part Live, Part Copy)?[] Slots);
 
     private CarSnapshot(Vehicle v, Combat? combat, Driver? driver)
     {
@@ -49,7 +49,7 @@ public sealed class CarSnapshot
                 [.. a.Weapons.Concat(a.Handguns.OfType<Weapon>()).Select(w => (w, FieldCopy.Clone(w)))]);
         if (v.Health is { } h)
             _health = new(h, [[.. h.Armour], [.. h.Chassis], [.. h.ArmourMax], [.. h.ChassisMax], [.. h.ArmourMirror], [.. h.ChassisMirror]],
-                h.RoughCarry, [.. h.Slots.Select(s => s is null ? ((Part, Part)?)null : (s, FieldCopy.Clone(s)))]);
+                h.RoughCarry, [.. h.CoopCarry], [.. h.Slots.Select(s => s is null ? ((Part, Part)?)null : (s, FieldCopy.Clone(s)))]);
         if (combat is not null) _hasTarget = combat.RadarTarget.TryGetValue(v, out _target);
         _driver = driver;
         if (driver is not null) _driverState = driver.State;
@@ -79,6 +79,7 @@ public sealed class CarSnapshot
             int[][] pools = [h.Of.Armour, h.Of.Chassis, h.Of.ArmourMax, h.Of.ChassisMax, h.Of.ArmourMirror, h.Of.ChassisMirror];
             for (int k = 0; k < pools.Length; k++) h.Pools[k].CopyTo(pools[k], 0);
             h.Of.RoughCarry = h.RoughCarry;
+            h.CoopCarry.CopyTo(h.Of.CoopCarry, 0);
             for (int k = 0; k < h.Slots.Length; k++)
             {
                 if (h.Slots[k] is { } s) FieldCopy.Into(s.Copy, s.Live);

@@ -848,8 +848,8 @@ from the server.
   names come from the migration extras (`IHostMode.Restore(drivers, names)`).
 - **Listing.** A co-op game is listed with its mission as the arena (`SessionInfo.Coop`; the anet tag's kind bits 3).
 - **Co-op Damage** (`ServerOptions.CoopDamage`, `CoopSetup.DamageFactor`; the host form's, i26-server's and `--host-listen`'s
-  `--coop-damage 0.5|0.75|1|1.5`): the humans' cars take that times every damage (`DamageModel.CoopDamageFactor`, each channel
-  truncated); x1 by default. It is the server's alone (the clients take damage from the server) and part of the savestate's build,
+  `--coop-damage 0.5|0.75|1|1.5`): the humans' cars take that times every damage (`DamageModel.CoopDamageFactor`, each channel's
+  fraction carried per car to its next packet, so small ticks are not lost); x1 by default. It is the server's alone (the clients take damage from the server) and part of the savestate's build,
   so a successor builds it again from the options. The base host form's Co-op Damage row (a click steps it) and CO-OP DAMAGE in the Nitro
   form's co-op game options set it (shell.cfg [port] `coop_damage`, written only when not 1). The game's answer lists it after the makes and
   models (`SessionInfo.CoopDamage`, in hundredths; protocol 23) and the session popup says "Co-op damage x0.5" when it is not x1.

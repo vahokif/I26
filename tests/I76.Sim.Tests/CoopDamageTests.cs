@@ -54,11 +54,66 @@ public class CoopDamageTests
     }
 
     [Fact]
-    public void AHumansCarTakesTheFactorOfARoundTruncated()
+    public void AHumansCarTakesTheFactorOfARoundItsFractionCarried()
     {
-        Assert.Equal((12, 25), FrontArmourTaken(coop: true, 0.5f));    // 12.5 truncated, as the original's own factor truncates 18.75 to 18
+        Assert.Equal((12, 25), FrontArmourTaken(coop: true, 0.5f));    // 12, the 0.5 carried to the car's next packet
         Assert.Equal((18, 25), FrontArmourTaken(coop: true, 0.75f));
         Assert.Equal((37, 25), FrontArmourTaken(coop: true, 1.5f));
+    }
+
+    /// <summary>What a human's car loses (armour, chassis and parts: a flame goes past the armour to the parts) to a flame's 1-point packets every tick for <paramref name="seconds"/>.</summary>
+    private static int FlameLoss(float factor, double seconds)
+    {
+        var rand = new CrtRand(1);
+        var world = new SimWorld(new Flat(), rand) { Coop = true };
+        var human = Car(0, true, rand);
+        world.Vehicles.Add(human);
+        world.Player = human;
+        world.Humans.Add(human);
+        var dm = new DamageModel(world, new Combat(world, _ => null)) { CoopDamageFactor = factor };
+        int Left() => human.Health!.Armour.Sum() + human.Health.Chassis.Sum() + human.Health.Slots.Sum(s => s?.Hp ?? 0);
+        int before = Left();
+        int ticks = SimRate.Default.TicksFor((float)seconds);
+        for (int t = 0; t < ticks; t++)
+        {
+            var p = new DamagePacket { Mask = 4, Kind = DamageKind.Flame };
+            p.Ch[2] = 1;     // FlameTouch's floor: a flame's tick never does less than one point
+            dm.Apply(human, p, new Vector3(0, 0.5f, 2));
+        }
+        return before - Left();
+    }
+
+    [Fact]
+    public void AFlamesOnePointTicksBurnAtTheFactorNotNone()
+    {
+        int full = FlameLoss(1f, 5), half = FlameLoss(0.5f, 5), most = FlameLoss(0.75f, 5), more = FlameLoss(1.5f, 5);
+        // about the factor of x1's loss (the parts the loop picks differ a little); truncated per tick it was none at x0.5 and x0.75, x1 at x1.5
+        Assert.True(full > 0);
+        Assert.InRange(half, full * 0.4, full * 0.6);
+        Assert.InRange(most, full * 0.65, full * 0.85);
+        Assert.InRange(more, full * 1.3, full * 1.7);
+    }
+
+    [Fact]
+    public void TheCarryIsPerCarAndSaved()
+    {
+        var carry = new float[4];
+        var p = new DamagePacket { Mask = 4 };
+        p.Ch[2] = 1;
+        Assert.Equal(0, DamageModel.Scaled(p, 0.5f, carry).Ch[2]);
+        Assert.Equal(0.5f, carry[2]);
+        Assert.Equal(1, DamageModel.Scaled(p, 0.5f, carry).Ch[2]);
+        Assert.Equal(0f, carry[2]);
+        Assert.Equal(0, DamageModel.Scaled(p, 0.5f, null).Ch[2]);   // a car without a damage state: truncated
+
+        var rand = new CrtRand(1);
+        var v = Car(0, true, rand);
+        v.Health!.CoopCarry[2] = 0.25f;
+        var w = new SaveWriter(new SaveRefs());
+        VehicleSave.Write(w, v);
+        var back = Car(0, true, new CrtRand(1));
+        VehicleSave.Read(new SaveReader(w.ToArray(), new SaveRefs()), back);
+        Assert.Equal(0.25f, back.Health!.CoopCarry[2]);
     }
 
     [Fact]

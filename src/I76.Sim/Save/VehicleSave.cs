@@ -53,7 +53,7 @@ public static class VehicleSave
             .Structural(files, nameof(Weapon.Def), nameof(Weapon.Hardpoint), nameof(Weapon.Style), nameof(Weapon.MountKind), nameof(Weapon.RestMuzzle), nameof(Weapon.BaseRot), nameof(Weapon.TurretPivot));
         a.For<VehicleDamage>()
             .Saved(nameof(VehicleDamage.Armour), nameof(VehicleDamage.Chassis), nameof(VehicleDamage.ArmourMax), nameof(VehicleDamage.ChassisMax),
-                nameof(VehicleDamage.ArmourMirror), nameof(VehicleDamage.ChassisMirror), nameof(VehicleDamage.Slots), nameof(VehicleDamage.RoughCarry),
+                nameof(VehicleDamage.ArmourMirror), nameof(VehicleDamage.ChassisMirror), nameof(VehicleDamage.Slots), nameof(VehicleDamage.RoughCarry), nameof(VehicleDamage.CoopCarry),
                 // the pick table: the specials' rows are drawn from rand() when the car is built, so a rebuild with another seed differs
                 nameof(VehicleDamage.Rows))
             .Structural("its car, and whether it was built with the player's rules", nameof(VehicleDamage.V), nameof(VehicleDamage.IsPlayer), nameof(VehicleDamage.Network));
@@ -154,6 +154,7 @@ public static class VehicleSave
         {
             foreach (var pool in (int[][])[h.Armour, h.Chassis, h.ArmourMax, h.ChassisMax, h.ArmourMirror, h.ChassisMirror]) foreach (int x in pool) w.Int(x);
             w.F32(h.RoughCarry);
+            foreach (float x in h.CoopCarry) w.F32(x);
             foreach (var row in h.Rows) w.Ints(row);
             foreach (var part in h.Slots) if (part is not null) WritePart(w, part);
         }
@@ -192,6 +193,7 @@ public static class VehicleSave
             foreach (var pool in (int[][])[h.Armour, h.Chassis, h.ArmourMax, h.ChassisMax, h.ArmourMirror, h.ChassisMirror])
                 for (int i = 0; i < pool.Length; i++) pool[i] = r.Int();
             h.RoughCarry = r.F32();
+            for (int i = 0; i < h.CoopCarry.Length; i++) h.CoopCarry[i] = r.F32();
             foreach (var row in h.Rows) { row.Clear(); row.AddRange(r.Ints()); }
             foreach (var part in h.Slots) if (part is not null) ReadPart(r, part);
         }

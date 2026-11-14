@@ -492,11 +492,14 @@ public partial class DamageView : Node3D
 
     /// <summary>
     /// The wreck of a grounded building keeps its lot painted into the terrain (GroundDecals), so leaves it out of its mesh
-    /// too; a scorch mark or a flattened part its destruction lays on the ground was never painted, so is drawn.
+    /// too; a scorch mark or a flattened part its destruction lays on the ground was never painted, so is drawn. A drive-on
+    /// structure's wreck leaves out its lot's alone (GroundDecals.LotsOnly).
     /// </summary>
     private Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? GroundFaces(Placement p, AssembledModel m)
     {
-        if (!World.GroundDecals.Applies(p) || p.Definition is not { } def || Builder.Assembler!.Assemble(def) is not { } intact) return null;
-        return World.GroundDecals.Painted(intact);
+        bool lots = World.GroundDecals.LotsOnly(p);
+        if (!World.GroundDecals.Applies(p) && !lots || p.Definition is not { } def || Builder.Assembler!.Assemble(def) is not { } intact) return null;
+        var painted = World.GroundDecals.Painted(intact);
+        return lots ? (part, f) => intact.Lots.Contains(part.NodeName) && painted(part, f) : painted;
     }
 }

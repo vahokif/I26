@@ -86,8 +86,11 @@ public sealed class MissionBuilder(AssetVfs vfs)
         var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in world.Placements.Concat(world.LinePlacements))
         {
-            bool decals = GroundDecals.Applies(p);
+            // a drive-on structure paints its lots alone (GroundDecals.LotsOnly)
+            bool lots = GroundDecals.LotsOnly(p);
+            bool decals = GroundDecals.Applies(p) || lots;
             if (!decals && !ScenerySpawner.IsRoadPiece(p.Object.ObjectType) || p.Definition is null || asm.Assemble(p.Definition) is not { } model) continue;
+            if (lots && model.Lots.Count == 0) continue;
             // a road piece is painted only where the paint is its whole look (RoadPieceObjects): a ramp given the type is drawn
             if (!decals && !RoadPieceObjects.IsFlat(model = RoadPieceObjects.Drawn(model))) continue;
             float lowest = 0;
@@ -97,7 +100,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
                 foreach (var f in part.Mesh.Faces)
                 {
                     if (f.Vertices.Length < 3 || f.Vertices.Any(v => (uint)v.Index >= part.Mesh.Vertices.Length)) continue;
-                    if (decals && !GroundDecals.IsGroundFace(part, f, lowest)) continue;
+                    if (decals && !(lots ? GroundDecals.IsLotFace(model, part, f, lowest) : GroundDecals.IsGroundFace(part, f, lowest))) continue;
                     var n = place.Rotate(part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z)));
                     if (n.LengthSquared() < 0.5f || -n.Y / n.Length() < 0.6f) continue;   // outward is -plane: only tops
                     int ti;

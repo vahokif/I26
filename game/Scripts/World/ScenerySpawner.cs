@@ -328,14 +328,17 @@ public partial class ScenerySpawner : Node3D
             }
             bool grounded = g.Key.EndsWith(SceneryGroup.Ground, StringComparison.Ordinal);
             bool roadPiece = g.Key.EndsWith(SceneryGroup.Piece, StringComparison.Ordinal);
-            var def = grounded ? g.Key[..^SceneryGroup.Ground.Length] : roadPiece ? g.Key[..^SceneryGroup.Piece.Length] : g.Key;
+            bool lots = g.Key.EndsWith(SceneryGroup.Lots, StringComparison.Ordinal);
+            var def = grounded ? g.Key[..^SceneryGroup.Ground.Length] : roadPiece ? g.Key[..^SceneryGroup.Piece.Length] : lots ? g.Key[..^SceneryGroup.Lots.Length] : g.Key;
             var model = asm.Assemble(def);
             // a road piece shows one node of its model and is no object of the world (no spinners, no gates: RoadPieceObjects);
             // a flat one is painted into the terrain, any other drawn
             if (roadPiece && model is not null) model = RoadPieceObjects.Drawn(model);
             bool painted = roadPiece && model is not null && RoadPieceObjects.IsFlat(model);
             float lowest = model is null ? 0 : GroundDecals.LowestY(model);
-            Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip = grounded ? (part, f) => GroundDecals.IsGroundFace(part, f, lowest) : null;
+            // a drive-on structure's lot is painted with the ground too (GroundDecals.LotsOnly)
+            Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip = grounded ? (part, f) => GroundDecals.IsGroundFace(part, f, lowest)
+                : lots && model is not null ? (part, f) => GroundDecals.IsLotFace(model, part, f, lowest) : null;
             var spinners = model is null || roadPiece ? null : SpinnersOf(asm.Vfs, def, model);
             var gates = model is null || roadPiece ? null : GatesOf(asm.Vfs, def);
             // the camera-facing cards are drawn on their own
@@ -373,7 +376,7 @@ public partial class ScenerySpawner : Node3D
             if (model is not null && SmokeBase(model) is { } smokeAt)
             {
                 modernDrops = WreckSmoke.IsSpriteFace;
-                modernMesh = builder.Build(model, include: include, skipFace: (part, f) => WreckSmoke.IsSpriteFace(f) || (grounded && GroundDecals.IsGroundFace(part, f, lowest)), selfLit: selfLit, retro: retro);
+                modernMesh = builder.Build(model, include: include, skipFace: (part, f) => WreckSmoke.IsSpriteFace(f) || (skip?.Invoke(part, f) ?? false), selfLit: selfLit, retro: retro);
                 foreach (var pl in list)
                 {
                     Smokers.Add(Coords.ToGame(Coords.ToGodot(pl.Object.Rotation, world.GroundedPosition(pl)) * Coords.ToGodot(smokeAt)));

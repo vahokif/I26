@@ -11,7 +11,7 @@ public sealed partial class RoadTool
     /// <summary>
     /// I76_EDITOR_SCRIPT commands "road:..." (docs/dev-hooks.md), for captures and tests without a mouse: mode,name | build,ground|bridge|tunnel | piece,name|auto | stretch | click,x,z[,shift] |
     /// finish | cursor,x,z (or off) | select,x,z | drag,x,z,toX,toZ[,single] | insert,x,z | delete | split,x,z | bulldoze,x,z |
-    /// upgrade,x,z,kind | kind,n | grade,percent | conform,0/1 | snap,angle|grid|roads|structures,0/1 | shoulder,m | log.
+    /// upgrade,x,z,kind[,width] | kind,n | width,m | grade,percent | conform,0/1 | snap,angle|grid|roads|structures,0/1 | shoulder,m | log.
     /// </summary>
     public void Script(string line)
     {
@@ -74,10 +74,11 @@ public sealed partial class RoadTool
             case "upgrade":
                 {
                     int r = PickRoad(new V2(F(args, 0), F(args, 1)));
-                    if (r >= 0) Edit(() => RoadEditing.Retype(Ed.Doc, Roads, r, uint.Parse(args[2])), "Change road type");
+                    if (r >= 0) Edit(() => RoadEditing.Retype(Ed.Doc, Roads, r, uint.Parse(args[2]), args.Length > 3 ? F(args, 3) : null), "Change road type");
                     break;
                 }
             case "kind": SetKind(uint.Parse(args[0]), false); break;
+            case "width": SetWidth(F(args, 0), false); SyncPanel(); break;
             case "grade": MaxGrade = F(args, 0) / 100f; SyncPanel(); break;
             case "conform": Conform = args[0] == "1"; SyncPanel(); break;
             case "shoulder": Shoulder = F(args, 0); SyncPanel(); break;
@@ -96,7 +97,7 @@ public sealed partial class RoadTool
             case "log":
                 GD.Print($"editor roads: {Roads.Count} roads, {_structures.Count} structure ends (+{StructuresLeft} to read), dirty {Roads.Dirty}, painter {(_painter.Busy ? "busy" : $"idle, last {_painter.LastChunks} chunks in {_painter.LastMs:0} ms")}");
                 for (int i = args.Length > 0 && args[0] == "all" ? 0 : Math.Max(0, Roads.Count - 3); i < Roads.Count; i++)
-                    GD.Print($"  road {i}: kind {Roads[i].Kind}, {Roads[i].Points.Count} points, {Roads[i].Length():0} m{(Roads[i].Points.Count > 0 ? $", from {Roads[i].Points[0].Centre} to {Roads[i].Points[^1].Centre}" : "")}");
+                    GD.Print($"  road {i}: kind {Roads[i].Kind}, width {RoadBuilder.WidthOf(Roads[i]):0.00}, {Roads[i].Points.Count} points, {Roads[i].Length():0} m{(Roads[i].Points.Count > 0 ? $", from {Roads[i].Points[0].Centre} to {Roads[i].Points[^1].Centre}" : "")}");
                 break;
             case "structures":
                 foreach (var s in _structures) GD.Print($"  structure end ({s.Position.X:0}, {s.Position.Y:0.0}, {s.Position.Z:0}) dir ({s.Direction.X:0.00}, {s.Direction.Y:0.00}) width {s.Width:0.0} {(s.RoadLevel ? "road level" : "raised")}");

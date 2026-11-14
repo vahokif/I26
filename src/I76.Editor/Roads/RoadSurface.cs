@@ -12,8 +12,11 @@ namespace I76.Editor.Roads;
 /// </summary>
 public static class RoadSurface
 {
-    /// <summary>How far from the centre line the stock band reaches (metres).</summary>
+    /// <summary>How far from the centre line the stock band reaches (metres): 5 past the edge of a standard road.</summary>
     public const float Band = 10f;
+
+    /// <summary>The band of a road of <paramref name="width"/>: as far past its edges as the stock band is past a standard road's (15 for a wide road).</summary>
+    public static float BandFor(float width) => Band + (width - RoadBuilder.Width) / 2;
     /// <summary>How far past a road's end it still reaches.</summary>
     public const float EndMargin = 2.5f;
 
@@ -30,15 +33,15 @@ public static class RoadSurface
         var p = road.Points;
         if (p.Count == 0) return cells;
         bool closed = RoadBuilder.IsClosed(road);
-        float s = (float)Units.SampleSize;
+        float s = (float)Units.SampleSize, band = BandFor(RoadBuilder.WidthOf(road));
         for (int i = 0; i < Math.Max(1, p.Count - 1); i++)
         {
             Vector2 a = p[i].Centre, b = p[Math.Min(i + 1, p.Count - 1)].Centre;
             var ab = b - a; float len = ab.Length();
             Vector2 dir = len < 1e-6f ? Vector2.Zero : ab / len;
             bool first = i == 0 && !closed, last = i >= p.Count - 2 && !closed;
-            int x0 = (int)Math.Floor((Math.Min(a.X, b.X) - Band - EndMargin) / s), x1 = (int)Math.Ceiling((Math.Max(a.X, b.X) + Band + EndMargin) / s);
-            int z0 = (int)Math.Floor((Math.Min(a.Y, b.Y) - Band - EndMargin) / s), z1 = (int)Math.Ceiling((Math.Max(a.Y, b.Y) + Band + EndMargin) / s);
+            int x0 = (int)Math.Floor((Math.Min(a.X, b.X) - band - EndMargin) / s), x1 = (int)Math.Ceiling((Math.Max(a.X, b.X) + band + EndMargin) / s);
+            int z0 = (int)Math.Floor((Math.Min(a.Y, b.Y) - band - EndMargin) / s), z1 = (int)Math.Ceiling((Math.Max(a.Y, b.Y) + band + EndMargin) / s);
             for (int sz = z0; sz <= z1; sz++)
                 for (int sx = x0; sx <= x1; sx++)
                 {
@@ -46,7 +49,7 @@ public static class RoadSurface
                     float along = len < 1e-6f ? 0 : Vector2.Dot(q - a, dir);
                     if ((first && along < -EndMargin) || (last && along > len + EndMargin)) continue;
                     float t = len < 1e-6f ? 0 : Math.Clamp(along / len, 0, 1);
-                    if (Vector2.Distance(q, a + ab * t) <= Band) cells.Add((sx, sz));
+                    if (Vector2.Distance(q, a + ab * t) <= band) cells.Add((sx, sz));
                 }
         }
         return cells;
@@ -108,7 +111,7 @@ public static class RoadSurface
 
     private static bool Near(RoadEdit r, HashSet<(int X, int Z)> cells)
     {
-        float s = (float)Units.SampleSize, reach = Band + EndMargin + 2 * s;
+        float s = (float)Units.SampleSize, reach = BandFor(RoadBuilder.WidthOf(r)) + EndMargin + 2 * s;
         float x0 = cells.Min(c => c.X) * s - reach, x1 = cells.Max(c => c.X) * s + reach, z0 = cells.Min(c => c.Z) * s - reach, z1 = cells.Max(c => c.Z) * s + reach;
         return r.Points.Any(p => p.Centre.X >= x0 && p.Centre.X <= x1 && p.Centre.Y >= z0 && p.Centre.Y <= z1);
     }

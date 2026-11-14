@@ -90,7 +90,7 @@ stock roads from their own centre lines to within 35 cm for 97 % of edges.
 
 | | Stock | Notes |
 |---|---|---|
-| width | 9.996 to 10.004 (every point) | |
+| width | 9.996 to 10.004 (every point) | the original's map builder writes 20 for a "4 Lanes" road (none shipped); the engine reads any width (`RoadBuilder.WideWidth`) |
 | edges | square to the central difference of the neighbours' centres (mean error 0.004 in the dot product); the first point square to its forward step | left = right + 10 x (-tz, tx) for the direction of increasing index: true of 199 171 of 199 172 points |
 | spacing | median 5.09, 10th percentile 5.00, 99th 8.3 | 5 is the terrain sample step |
 | turn | 99 % of points turn under 8.9 degrees (a radius of 32 at 5 spacing) | |

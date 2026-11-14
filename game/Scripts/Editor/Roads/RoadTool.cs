@@ -24,6 +24,8 @@ public sealed partial class RoadTool : Node
 
     // ---- settings (kept for the session) ------------------------------------------------------------------------------------
     public static uint Kind = 0;
+    /// <summary>The width of new roads: standard (10) or wide (20, the original builder's "4 Lanes"; RoadBuilder.WideWidth).</summary>
+    public static float Width = RoadBuilder.Width;
     public static bool Cubic, Chain, Conform = true;
     public static readonly SnapOptions Snap = new() { Angle = true, Grid = false };
     public static float MaxGrade = RoadGrade.DefaultMaxGrade;
@@ -134,7 +136,7 @@ public sealed partial class RoadTool : Node
         RoadMode.Curve => Cubic ? "Cubic curve: start, two control points, end. Shift chains on." : "Curve: start, control point, end. Shift chains on. (8 again: cubic)",
         RoadMode.Freeform => "Freeform: click points to bend a spline through; Enter or a double click finishes.",
         RoadMode.Select => "Select a road to edit: drag a point, double-click to add one, Delete removes, K splits, T changes the type.",
-        RoadMode.Upgrade => "Upgrade: click a road to give it the road type chosen in the panel.",
+        RoadMode.Upgrade => "Upgrade: click a road to give it the road type and width chosen in the panel.",
         _ => "Bulldoze: click a road to remove it. Ctrl+Z brings it back.",
     };
 
@@ -246,9 +248,10 @@ public sealed partial class RoadTool : Node
             case RoadMode.Upgrade:
                 if (PickRoad(cur) is var u and >= 0)
                 {
-                    if (Roads[u].Kind == Kind) { Ed.Toast($"Already {RoadBuilder.KindName(Kind)}"); break; }
-                    Edit(() => RoadEditing.Retype(Ed.Doc, Roads, u, Kind), "Change road type");
-                    Ed.Toast($"Road {u + 1}: {RoadBuilder.KindName(Kind)}");
+                    bool sameWidth = RoadBuilder.IsWideWidth(RoadBuilder.WidthOf(Roads[u])) == RoadBuilder.IsWideWidth(Width);
+                    if (Roads[u].Kind == Kind && sameWidth) { Ed.Toast($"Already {Describe(Kind, Width)}"); break; }
+                    bool follow = Edit(() => RoadEditing.Retype(Ed.Doc, Roads, u, Kind, sameWidth ? null : Width), "Change road type");
+                    Ed.Toast($"Road {u + 1}: {Describe(Kind, Width)}{(follow ? "; the junctions beside it changed" : "")}");
                 }
                 break;
             case RoadMode.Bulldoze:
@@ -281,7 +284,12 @@ public sealed partial class RoadTool : Node
     }
 
     private RoadGrade.Settings Grade() => new(MaxGrade, 30f);
+    /// <summary>The shoulder settings for a standard road; the planner and the edits widen the flat band to a wide road's width.</summary>
     private RoadTerrain.Settings Shoulders() => new(RoadBuilder.HalfWidth + 3f, Shoulder);
+
+    /// <summary>"Asphalt", or "wide asphalt" for a wide road.</summary>
+    private static string Describe(uint kind, float width) => RoadBuilder.IsWideWidth(width) ? $"wide {RoadBuilder.KindName(kind).ToLowerInvariant()}" : RoadBuilder.KindName(kind);
+    private static string Describe(RoadEdit r) => Describe(r.Kind, RoadBuilder.WidthOf(r));
 
     // ---- drawing --------------------------------------------------------------------------------------------------------------
 
@@ -338,7 +346,7 @@ public sealed partial class RoadTool : Node
         var d = _draft;
         var path = RoadPlanner.DraftPath(d, null);
         SnapResult? end = endClicked && _snap.Kind is SnapKind.Structure or SnapKind.RoadEnd or SnapKind.RoadMiddle ? _snap : null;
-        var plan = RoadPlanner.Plan(path, Kind, d.Start is { Kind: SnapKind.Structure or SnapKind.RoadEnd } s ? s : null, end, Roads);
+        var plan = RoadPlanner.Plan(path, Kind, d.Start is { Kind: SnapKind.Structure or SnapKind.RoadEnd } s ? s : null, end, Roads, Width);
         if (plan.Problem is not null) { Ed.Toast(plan.Problem, true); if (!endClicked) { } return; }
         var before = _junctions.Take();
         int pieces0 = _junctions.Pieces.Count;
@@ -348,7 +356,7 @@ public sealed partial class RoadTool : Node
         var follow = _junctions.Settle(before, "Junctions", Conform);
         Ed.Undo.Push(Junctions.Join(r.Command.Name, r.Command, follow));
         _sel = follow is not null ? -1 : plan.ExtendRoad >= 0 ? plan.ExtendRoad : Roads.Count - 1;
-        string verb = plan.Closes ? "Closed a loop" : plan.ExtendRoad >= 0 ? "Extended road" : "Road";
+        string verb = plan.Closes ? "Closed a loop" : plan.ExtendRoad >= 0 ? "Extended road" : RoadBuilder.IsWideWidth(plan.Width) ? "Wide road" : "Road";
         string ground = r.Terrain is { } t && Conform ? $"; cut {t.MaxCut:0.0} m, fill {t.MaxFill:0.0} m" : "";
         int made2 = _junctions.Pieces.Count - pieces0;
         string pieces = made2 > 0 ? $"; {made2} intersection piece{(made2 > 1 ? "s" : "")} placed" : follow is not null ? "; junctions changed" : "";
@@ -427,6 +435,20 @@ public sealed partial class RoadTool : Node
         if (_selPt < 0) { Ed.Toast("Select a point of the road to split it there", true); return; }
         if (RoadEditing.Split(Roads, _sel, _selPt) is { } cmd) { Ed.Undo.Push(cmd); _selPt = -1; Ed.Toast("Split in two roads (each is a road of its own for the AI)"); }
         else Ed.Toast("Too close to an end to split", true);
+    }
+
+    /// <summary>The width of new roads (and, with <paramref name="applyToSelected"/>, the selected road's: its points keep their centres and headings).</summary>
+    public void SetWidth(float width, bool applyToSelected)
+    {
+        Width = width;
+        if (applyToSelected && Active && _sel >= 0 && _sel < Roads.Count && RoadBuilder.IsWideWidth(RoadBuilder.WidthOf(Roads[_sel])) != RoadBuilder.IsWideWidth(width))
+        {
+            int sel = _sel;
+            bool follow = Edit(() => RoadEditing.Retype(Ed.Doc, Roads, sel, Roads[sel].Kind, width), "Change road width");
+            Ed.Toast($"Road {sel + 1}: {Describe(Roads[sel])}{(follow ? "; the junctions beside it changed" : "")}");
+        }
+        _planKey = 0;
+        Ed.RoadToolChanged();
     }
 
     public void SetKind(uint kind, bool applyToSelected)
@@ -567,13 +589,13 @@ public sealed partial class RoadTool : Node
         }
         if (IsStretch) { UpdateStretch(); return; }
         if (_stretch is not null) { _stretch = null; _vis.ShowStretch(null, _ => null, _ => 0); }
-        int key = HashCode.Combine(_snap.Point, _draft.Clicks.Count, _draft.Done.Count, Mode, Cubic, Kind, MaxGrade, Conform) ^ HashCode.Combine(Shoulder, _snap.Kind, _snap.Road);
+        int key = HashCode.Combine(_snap.Point, _draft.Clicks.Count, _draft.Done.Count, Mode, Cubic, Kind, MaxGrade, Conform) ^ HashCode.Combine(Shoulder, _snap.Kind, _snap.Road, Width);
         if (key == _planKey) return;
         _planKey = key;
         var path = RoadPlanner.DraftPath(_draft, _snap.Point);
         var endSnap = _snap.Kind is SnapKind.Structure or SnapKind.RoadEnd or SnapKind.RoadMiddle ? _snap : (SnapResult?)null;
         // a piece not yet at its end (a curve waiting for its control point) is only a guide
-        _plan = RoadPlanner.Plan(path, Kind, _draft.Start is { Kind: SnapKind.Structure or SnapKind.RoadEnd } s ? s : null, endSnap, Roads);
+        _plan = RoadPlanner.Plan(path, Kind, _draft.Start is { Kind: SnapKind.Structure or SnapKind.RoadEnd } s ? s : null, endSnap, Roads, Width);
         _problem = _plan.Problem ?? "";
         if (_plan.Centres.Count < RoadCurves.MinPoints) { _vis.ShowRoad(null, null); _vis.ShowGrade(null, null, null, 0); _proposals = []; _pieceView.Show(_proposals, GroundV); _hint = ""; return; }
         var c = _plan.Centres;
@@ -583,7 +605,7 @@ public sealed partial class RoadTool : Node
         _cut = _fill = 0;
         for (int i = 0; i < c.Count; i++) { float dlt = _profile[i] - GroundV(c[i]); if (dlt > 0) _fill = Math.Max(_fill, dlt); else _cut = Math.Max(_cut, -dlt); }
         // an extension is of the road it extends (its kind), whatever the panel has chosen for new roads
-        var preview = RoadBuilder.Build(c, _plan.ExtendRoad >= 0 && _plan.ExtendRoad < Roads.Count ? Roads[_plan.ExtendRoad].Kind : Kind, _plan.StartDir, _plan.EndDir, _plan.Closes);
+        var preview = RoadBuilder.Build(c, _plan.ExtendRoad >= 0 && _plan.ExtendRoad < Roads.Count ? Roads[_plan.ExtendRoad].Kind : Kind, _plan.StartDir, _plan.EndDir, _plan.Closes, _plan.Width);
         // the road mesh stands a hair above its profile so it draws over the ground it is being cut into
         // (where the profile is below the ground, the mesh would be buried: it stands on the ground there, and the ribbon shows the profile)
         var edges = preview.Points.Select((p, i) => Math.Max(_profile[i], (float)Math.Max(Ground(p.Centre.X, p.Centre.Y), Math.Max(Ground(p.Left.X, p.Left.Y), Ground(p.Right.X, p.Right.Y)))) + 0.1f).ToArray();
@@ -598,12 +620,18 @@ public sealed partial class RoadTool : Node
         if (_proposals.Count > 0)
             notes.Add($"{string.Join(" and ", _proposals.Select(p => p.Describe))}: the roads are cut at its arms. AI cars drive one road at a time: they will not turn here.");
         else if (_snap.Hint is not null)
-            notes.Add(_snap.Kind == SnapKind.RoadMiddle ? _snap.Hint + " No piece fits (square on or about 41 degrees, 12 m or more of road, not planks)." : _snap.Hint);
+            notes.Add(_snap.Kind != SnapKind.RoadMiddle ? _snap.Hint
+                : RoadBuilder.IsWideWidth(_plan.Width) || (_snap.Road >= 0 && _snap.Road < Roads.Count && !RoadBuilder.IsStandard(Roads[_snap.Road])) ? _snap.Hint + " The intersection pieces are 10 m wide: a wide road gets none."
+                : _snap.Hint + " No piece fits (square on or about 41 degrees, 12 m or more of road, not planks).");
         if (bare > 0) notes.Add($"Crosses {bare} road{(bare > 1 ? "s" : "")} with no piece to fit: the game has no junctions, cars will not turn there.");
         float worst = RoadGrade.MaxAbs(_natural);
         if (worst > MaxGrade) notes.Add($"The ground is up to {worst * 100:0}% steep here (limit {MaxGrade * 100:0}%): {(Conform ? "cut and fill will level it" : "the road follows it")}.");
         if (_plan.ExtendRoad >= 0) notes.Add(_plan.Closes ? "Closes the loop." : "Extends the road you started on.");
         if (_snap.Kind == SnapKind.Structure) notes.Add(_snap.Structure?.Source is { } src ? $"Meets the free arm of a junction ({src}): square on, at its height." : "Meets a bridge or ramp: heading and height follow it.");
+        if (_plan.ExtendRoad >= 0 && _plan.ExtendRoad < Roads.Count && RoadBuilder.IsWideWidth(_plan.Width) != RoadBuilder.IsWideWidth(Width))
+            notes.Add($"An extension keeps its road's width ({_plan.Width:0} m).");
+        if (RoadBuilder.IsWideWidth(_plan.Width) && (_snap.Kind == SnapKind.Structure || _draft.Start?.Kind == SnapKind.Structure))
+            notes.Add($"The structure's end is {(_snap.Kind == SnapKind.Structure ? _snap.Structure : _draft.Start?.Structure)?.Width ?? RoadBuilder.Width:0} m wide: a {_plan.Width:0} m road overhangs it.");
         _hint = string.Join("  ", notes);
     }
 
@@ -621,7 +649,7 @@ public sealed partial class RoadTool : Node
         _vis.ShowSelection(_hoverRoad >= 0 ? Roads[_hoverRoad] : null, GroundV, col);
         _vis.ShowHandles(null, GroundV, -1, -1, 1);
         _vis.ShowRoad(null, null); _vis.ShowGrade(null, null, null, 0);
-        _hint = _hoverRoad >= 0 ? $"Road {_hoverRoad + 1}: {RoadBuilder.KindName(Roads[_hoverRoad].Kind)}, {Roads[_hoverRoad].Points.Count} points, {Roads[_hoverRoad].Length():0} m" : "";
+        _hint = _hoverRoad >= 0 ? $"Road {_hoverRoad + 1}: {Describe(Roads[_hoverRoad])}, {Roads[_hoverRoad].Points.Count} points, {Roads[_hoverRoad].Length():0} m" : "";
     }
 
     private void UpdateSelect(V2 cur, float scale)
@@ -667,7 +695,7 @@ public sealed partial class RoadTool : Node
         _vis.ShowHandles(road, GroundV, _selPt, _hoverPt, scale);
         _vis.ShowRoad(null, null); _vis.ShowGrade(null, null, null, 0);
         _hint = road is null ? (_hoverRoad >= 0 ? "Click to select this road." : "Click a road to select it.")
-            : $"Road {_sel + 1}: {RoadBuilder.KindName(road.Kind)}, {road.Points.Count} points, {road.Length():0} m{(_selPt >= 0 ? $", point {_selPt + 1} selected" : "")}.";
+            : $"Road {_sel + 1}: {Describe(road)}, {road.Points.Count} points, {road.Length():0} m{(_selPt >= 0 ? $", point {_selPt + 1} selected" : "")}.";
     }
 
     // ---- readouts for the panel ----------------------------------------------------------------------------------------------------
@@ -676,7 +704,7 @@ public sealed partial class RoadTool : Node
     {
         if (IsStretch) return StretchReadout();
         if (_plan is { } p && _draft is not null && p.Centres.Count >= 3)
-            return $"{RoadCurves.Length(p.Centres):0} m   {p.Centres.Count} points\nsteepest ground {RoadGrade.MaxAbs(_natural ?? [0]) * 100:0}%   limit {MaxGrade * 100:0}%\ncut {_cut:0.0} m   fill {_fill:0.0} m";
+            return $"{RoadCurves.Length(p.Centres):0} m   {p.Centres.Count} points   {p.Width:0} m wide\nsteepest ground {RoadGrade.MaxAbs(_natural ?? [0]) * 100:0}%   limit {MaxGrade * 100:0}%\ncut {_cut:0.0} m   fill {_fill:0.0} m";
         return "";
     }
 

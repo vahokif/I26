@@ -283,8 +283,8 @@ A tile the ZMAP grid shows in more than one cell is one set of samples, so an ed
 
 The road tool (`game/Scripts/Editor/Roads`, the maths in `src/I76.Editor/Roads`) draws roads in the original format. `7` `8` `9` `0` `U` `X`
 or the palette's ROADS group turn it on; a brush key (`1`-`6`) turns it off. The panel at the right replaces the brush's: the type of new
-roads (ASPHALT, DIRT, PLANKS: the three texture families of RSEG kind % 3), the snaps, chaining, whether the ground is cut and filled, the
-maximum grade and the shoulder.
+roads (ASPHALT, DIRT, PLANKS: the three texture families of RSEG kind % 3), their width (STANDARD 10 m or WIDE 20 m, see Wide roads), the
+snaps, chaining, whether the ground is cut and filled, the maximum grade and the shoulder.
 
 **What a road is in the file.** One RSEG per road: a polyline of points with the left and right edge of the road at each, nothing joins two
 roads, and the AI routes along one road only. The tool writes what the 1501 stock roads of both installs
@@ -295,6 +295,20 @@ least 3 points (the engine builds nothing from two). A road's y is not in the fi
 height at load, so a road follows the ground, which is why the tool shapes the ground (below). The survey and the conventions are in
 docs/map-format-writing.md.
 
+**Wide roads.** The original's own map builder lays a road as "2 Lanes" or "4 Lanes" and writes its edges 10 or 20 apart (the same kinds and
+textures; its manual says the four-lane roads were cut from the game, and no stock road is wider than 10). The game takes the edges as they
+are: it draws each quad between them with one texture across, puts both edges on the ground and drives on the ground, so a 20 m road draws
+and drives like any other, its texture stretched to twice the width (both looks; the modern look's road layer and gap filling work from the
+quads too). The AI's lane is 2.45 m in from an edge, as on any road, so AI cars keep to the outer part of a wide road. WIDTH in the panel
+sets new roads' width (`road:width,m` in a script); with a road selected, or in UPGRADE, it widens or narrows that road: each point keeps its
+centre and heading and the edges move out or in (`RoadOps.Retype`, `RoadBuilder.Rewidth`). Everything else follows the road's own width
+(`RoadBuilder.WidthOf`, the median distance between its edges): an extension, a dragged or inserted point, a split; the flat band of the cut
+and fill (half the width and 3 m: 13 m for a wide road), the surface band (5 m past the edges: 15 m from the centre line), and the tightest
+bend (half the width and 1 m: 11 m). The intersection pieces, bridges, ramps and tunnels are all 10 m wide, so a wide road gets no junction
+piece (ending on or crossing another road, it stays separate with the usual hint), widening a road at a piece takes the piece away as
+bulldozing it would, and ending a wide road on a bridge or ramp end works but the hint says it overhangs it. Tests: `WideRoadTests` (Editor),
+`EditorRoadTests` (Sim: an AI car follows a wide road).
+
 **Drawing.** Click to start, click to end (`Esc` cancels, `Backspace` takes the last click back, `Enter` or a double click finishes).
 - Straight: start, end. Hold Shift on a click (or turn Chain on with `C`) and the next piece goes on from it: one road, its corners
   rounded to a radius of about 32 (stock roads turn under 9 degrees a point in 99 % of cases).
@@ -302,7 +316,7 @@ docs/map-format-writing.md.
 - Freeform (`9`): click points, a spline passes through them.
 - The preview is the real road mesh and texture (`RoadNode`, both looks) with a ribbon over it for the grade: green up to 60 % of the
   limit, yellow up to the limit, red beyond, for the ground's own steepness along the path. The panel says the length, the points, the
-  steepest ground, the cut and fill the grading will need; a bend tighter than 6 units is refused (the quads would fold).
+  steepest ground, the cut and fill the grading will need; a bend tighter than 6 units (11 for a wide road) is refused (the quads would fold).
 
 **Snapping** (rings show what the cursor has found; strongest first):
 - the end of a bridge deck, the foot of a jump or ramp (cyan): the point lands on the end edge's middle, the road meets it square and at
@@ -346,12 +360,12 @@ survey are in docs/map-format-writing.md, "Intersections"). The game's junctions
   layer's copies, in the same places in the file for the map's own pieces (new ones last: object order is the file's, scripts may count on it).
   An edit script has `road:pieces` to list them.
 
-**Surface.** The ground's surface nibble under a road is set as the stock maps' is (0x4 asphalt, 0x6 dirt, 0x8 planks, within 10 m of the centre line and 2.5 m past the ends; `RoadSurface`, `i76 roadsurf` for the survey, docs/map-format-writing.md "The ground under a road"), so tyre grip, rolling, bump and the tyre sounds are the road's: a car reads it through the sim's `SurfaceId`. The nibble goes in the road's own undo step (the `HeightRecorder` of the road's `RoadCommand`) for drawing, extending, dragging points, retyping and bulldozing; the ground a road leaves (moved, retyped, bulldozed) takes the commonest nibble beside it, a crossing road keeps its own band, and the ground under an intersection piece (0xc, 0xe) is never overwritten. `O` (conform) governs the heights only. Tests: `RoadSurfaceTests` (Editor; the band against 1500 stock roads), `EditorRoadSurfaceTests` (Sim).
+**Surface.** The ground's surface nibble under a road is set as the stock maps' is (0x4 asphalt, 0x6 dirt, 0x8 planks, within 10 m of the centre line (15 m for a wide road) and 2.5 m past the ends; `RoadSurface`, `i76 roadsurf` for the survey, docs/map-format-writing.md "The ground under a road"), so tyre grip, rolling, bump and the tyre sounds are the road's: a car reads it through the sim's `SurfaceId`. The nibble goes in the road's own undo step (the `HeightRecorder` of the road's `RoadCommand`) for drawing, extending, dragging points, retyping and bulldozing; the ground a road leaves (moved, retyped, bulldozed) takes the commonest nibble beside it, a crossing road keeps its own band, and the ground under an intersection piece (0xc, 0xe) is never overwritten. `O` (conform) governs the heights only. Tests: `RoadSurfaceTests` (Editor; the band against 1500 stock roads), `EditorRoadSurfaceTests` (Sim).
 
 **Grade and ground.** The profile starts from the ground along the centre line, is smoothed (sigma 15 m) and held to the maximum grade
 (default 10 %: the median of the stock roads' own steepest 5 % of steps, 0.095; settable 2 to 40 %), with the heights of what the road
 meets pinned (a deck, the ground an extended road already stands on). With `O` on (the default) the ground is cut and filled to that
-profile: the samples within 8 m of the centre line take the profile's height (so the quads, which the engine puts on the bilinear ground,
+profile: the samples within 8 m of the centre line (13 m for a wide road) take the profile's height (so the quads, which the engine puts on the bilinear ground,
 have no cross slope and no bump: the road's edges land within 0.35 m of the profile in the tests), and a shoulder (default 14 m, 0 to 40)
 blends back to the old ground with a smoothstep. With it off, the road is laid on the ground as it is. The road and its ground are one
 undo step (`RoadCommand`: the road list change and the height deltas). Moving a road or bulldozing it leaves the ground as it was graded.

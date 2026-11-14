@@ -5,7 +5,7 @@ namespace I76.Editor.Roads;
 
 /// <summary>
 /// Edits of one road: they return the new road (the old one is untouched, for undo). Edges are recomputed for the points that moved
-/// and their neighbours; the points that did not are the file's own, byte for byte.
+/// and their neighbours, at the road's own width; the points that did not are the file's own, byte for byte.
 /// </summary>
 public static class RoadOps
 {
@@ -36,7 +36,7 @@ public static class RoadOps
         if (heading is { } h && (index == 0 || index == c.Count - 1) && !loop)
         {
             var pts = moved.Points; var flag = pts[index].Flag;
-            pts[index] = RoadBuilder.Point(c[index], Vector2.Normalize(h), flag);
+            pts[index] = RoadBuilder.Point(c[index], Vector2.Normalize(h), flag, RoadBuilder.WidthOf(road));
         }
         return moved;
     }
@@ -47,7 +47,7 @@ public static class RoadOps
         var c = RoadBuilder.Centres(road);
         c.Insert(after + 1, centre);
         var pts = road.Points.Select(p => p.Clone()).ToList();
-        pts.Insert(after + 1, RoadBuilder.Point(centre, new Vector2(0, 1)));
+        pts.Insert(after + 1, RoadBuilder.Point(centre, new Vector2(0, 1), width: RoadBuilder.WidthOf(road)));
         return Refit(new RoadEdit(road.Kind, pts) { Tail = (byte[])road.Tail.Clone() }, c, [after, after + 1, after + 2]);
     }
 
@@ -72,6 +72,15 @@ public static class RoadOps
 
     public static RoadEdit Retype(RoadEdit road, uint kind) => new(kind, road.Points.Select(p => p.Clone()).ToList()) { Tail = (byte[])road.Tail.Clone() };
 
+    /// <summary>The road with another kind and, when <paramref name="width"/> is given and differs from the road's, its edges moved to that width (<see cref="RoadBuilder.Rewidth"/>).</summary>
+    public static RoadEdit Retype(RoadEdit road, uint kind, float? width)
+    {
+        if (width is not { } w || MathF.Abs(w - RoadBuilder.WidthOf(road)) < 0.01f) return Retype(road, kind);
+        var r = RoadBuilder.Rewidth(road, w);
+        r.Kind = kind;
+        return r;
+    }
+
     /// <summary>The road with the edges of <paramref name="touched"/> (and one point either side) rebuilt from the centres <paramref name="c"/>.</summary>
     private static RoadEdit Refit(RoadEdit road, List<Vector2> c, IEnumerable<int> touched)
     {
@@ -80,6 +89,7 @@ public static class RoadOps
         foreach (int i in touched) for (int k = i - 1; k <= i + 1; k++) if (k >= 0 && k < pts.Count) redo.Add(k);
         int n = c.Count;
         bool loop = RoadBuilder.IsClosed(road);
+        float width = RoadBuilder.WidthOf(road);
         foreach (int i in redo)
         {
             Vector2 t;
@@ -89,7 +99,7 @@ public static class RoadOps
             else t = c[i + 1] - c[i - 1];
             t = t.LengthSquared() < 1e-12f ? new Vector2(0, 1) : Vector2.Normalize(t);
             var flag = pts[i].Flag;
-            pts[i] = RoadBuilder.Point(c[i], t, flag);
+            pts[i] = RoadBuilder.Point(c[i], t, flag, width);
         }
         return new RoadEdit(road.Kind, pts) { Tail = (byte[])road.Tail.Clone() };
     }

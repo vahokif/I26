@@ -75,14 +75,17 @@ public sealed class Junctions(RoadStore roads, PieceStore pieces, Func<Vector2, 
 
     // ---- detecting ---------------------------------------------------------------------------------------------------------------
 
-    /// <summary>The pieces the rules would place for <paramref name="road"/> against the roads of the store (itself and <paramref name="ignore"/> left out): a T or a fork where an end meets another road, an X where it crosses one.</summary>
+    /// <summary>
+    /// The pieces the rules would place for <paramref name="road"/> against the roads of the store (itself and <paramref name="ignore"/> left out): a T or a fork where an end meets another road, an X where it crosses one.
+    /// Standard roads only: the pieces are 10 wide, so a wide road gets none and none is placed on one.
+    /// </summary>
     public List<Proposal> Detect(RoadEdit road, RoadEdit? ignore = null, int variant = 0)
     {
         var o = new List<Proposal>();
-        if (road.Points.Count < RoadCurves.MinPoints || RoadBuilder.IsClosed(road)) return o;
+        if (road.Points.Count < RoadCurves.MinPoints || RoadBuilder.IsClosed(road) || !RoadBuilder.IsStandard(road)) return o;
         if (variant == 0) variant = Variant();
         var pr = Poly.Of(road);
-        var others = roads.Roads.Where(r => !ReferenceEquals(r, road) && !ReferenceEquals(r, ignore) && r.Points.Count >= 2 && !RoadBuilder.IsClosed(r)).ToList();
+        var others = roads.Roads.Where(r => !ReferenceEquals(r, road) && !ReferenceEquals(r, ignore) && r.Points.Count >= 2 && !RoadBuilder.IsClosed(r) && RoadBuilder.IsStandard(r)).ToList();
         var polys = others.Select(Poly.Of).ToList();
 
         // ends on the middle of another road: T or fork
@@ -185,13 +188,13 @@ public sealed class Junctions(RoadStore roads, PieceStore pieces, Func<Vector2, 
 
     // ---- connections --------------------------------------------------------------------------------------------------------------
 
-    /// <summary>The road ends of the store: where, and the direction from the end into the road.</summary>
+    /// <summary>The road ends of the store: where, and the direction from the end into the road. A wide road's are not among them: it is no piece's road (a road widened at an arm leaves the piece as a bulldozed one would).</summary>
     private List<(RoadEdit Road, bool AtStart, Vector2 At, Vector2 Body)> Ends()
     {
         var o = new List<(RoadEdit, bool, Vector2, Vector2)>();
         foreach (var r in roads.Roads)
         {
-            if (r.Points.Count < 2 || RoadBuilder.IsClosed(r)) continue;
+            if (r.Points.Count < 2 || RoadBuilder.IsClosed(r) || !RoadBuilder.IsStandard(r)) continue;
             var poly = Poly.Of(r);
             float back = MathF.Min(6f, poly.Length * 0.5f);
             o.Add((r, true, poly.P[0], Vector2.Normalize(poly.At(back) - poly.P[0])));
@@ -460,7 +463,7 @@ public sealed class Junctions(RoadStore roads, PieceStore pieces, Func<Vector2, 
         int steps = (int)MathF.Round(gap / RoadCurves.Spacing);
         for (int k = 1; k < steps; k++) all.Add(Vector2.Lerp(ca[^1], cb[0], k / (float)steps));
         all.AddRange(cb);
-        var merged = RoadBuilder.Build(all, a.Road.Kind);
+        var merged = RoadBuilder.Build(all, a.Road.Kind, width: RoadBuilder.WidthOf(a.Road));
         ReplaceRoad(rec, a.Road, merged);
         RemoveRoad(rec, b.Road);
     }

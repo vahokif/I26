@@ -9,7 +9,7 @@ public static class RoadEditing
     /// <summary>
     /// Replaces road <paramref name="index"/> by <paramref name="after"/>. With <paramref name="conform"/> the ground under points
     /// <paramref name="from"/>..<paramref name="to"/> of the new road is cut and filled to a profile that starts and ends on the ground
-    /// where it stands, so a drag reshapes the ground only where the road moved.
+    /// where it stands, so a drag reshapes the ground only where the road moved (<paramref name="shoulder"/>'s flat band widened to the road's width).
     /// </summary>
     public static RoadCommand Replace(IMapDocument doc, RoadStore roads, int index, RoadEdit after, int from, int to, bool conform,
         RoadGrade.Settings? grade = null, RoadTerrain.Settings? shoulder = null, string name = "Edit road")
@@ -23,7 +23,7 @@ public static class RoadEditing
             {
                 var pins = new Dictionary<int, float> { [0] = RoadTerrain.Ground(doc, span[0].X, span[0].Y), [span.Count - 1] = RoadTerrain.Ground(doc, span[^1].X, span[^1].Y) };
                 var h = RoadGrade.Profile(span, p => RoadTerrain.Ground(doc, p.X, p.Y), grade, pins);
-                RoadTerrain.Conform(doc, rec, span, h, shoulder);
+                RoadTerrain.Conform(doc, rec, span, h, RoadPlanner.Widened(shoulder, RoadBuilder.WidthOf(after)));
             }
         }
         RoadSurface.Update(doc, rec, roads[index], after, Others(roads, index));
@@ -45,9 +45,10 @@ public static class RoadEditing
         return new RoadCommand("Bulldoze road", roads, [new RoadOp.Remove(index, roads[index])], tiles).Apply();
     }
 
-    public static RoadCommand Retype(IMapDocument? doc, RoadStore roads, int index, uint kind)
+    /// <summary>Gives a road another kind and, with <paramref name="width"/>, another width (its points keep their centres and headings); the ground's surface follows, in the same undo step.</summary>
+    public static RoadCommand Retype(IMapDocument? doc, RoadStore roads, int index, uint kind, float? width = null)
     {
-        var after = RoadOps.Retype(roads[index], kind);
+        var after = RoadOps.Retype(roads[index], kind, width);
         Dictionary<int, TileDelta>? tiles = null;
         if (doc is not null)
         {

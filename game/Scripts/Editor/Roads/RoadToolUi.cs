@@ -8,6 +8,7 @@ public sealed partial class RoadTool
 {
     private readonly Dictionary<RoadMode, Button> _modeButtons = [];
     private readonly Dictionary<uint, Button> _kindButtons = [];
+    private readonly Dictionary<float, Button> _widthButtons = [];
     private Button? _angleB, _gridB, _roadsB, _structB, _chainB, _conformB;
     private HSlider? _gradeS, _shoulderS;
     private Label? _gradeL, _shoulderL, _readout, _hintL;
@@ -130,6 +131,7 @@ public sealed partial class RoadTool
     {
         _brushPanel = brushPanel;
         _kindButtons.Clear();
+        _widthButtons.Clear();
         _panel = new PanelContainer { Name = "RoadPanel", Visible = false };
         _panel.AnchorLeft = 1; _panel.AnchorRight = 1; _panel.AnchorTop = 0; _panel.AnchorBottom = 0;
         _panel.OffsetRight = -14 * s; _panel.OffsetTop = 70 * s; _panel.GrowHorizontal = Control.GrowDirection.Begin;
@@ -158,6 +160,25 @@ public sealed partial class RoadTool
             _kindButtons[k] = b;
         }
         bx.AddChild(kinds);
+
+        var wl = new Label { Text = "WIDTH   (changes the selected road's)" };
+        EditorStyle.Body(wl, 15 * s);
+        bx.AddChild(wl);
+        var widths = new HBoxContainer();
+        widths.AddThemeConstantOverride("separation", (int)(6 * s));
+        var wg = new ButtonGroup();
+        foreach (float w in RoadBuilder.Widths)
+        {
+            float ww = w;
+            var b = EditorStyle.Button($"{RoadBuilder.WidthName(w).ToUpperInvariant()}   {w:0} m", () => SetWidth(ww, true), s, 17, toggle: true);
+            b.ButtonGroup = wg; b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            b.TooltipText = RoadBuilder.IsWideWidth(w)
+                ? "A road twice as wide, the original builder's \"4 Lanes\" (the textures are stretched across it). The intersection pieces, bridges and ramps are 10 m wide: a wide road gets no junction pieces"
+                : "The width of every stock road";
+            widths.AddChild(b);
+            _widthButtons[w] = b;
+        }
+        bx.AddChild(widths);
         bx.AddChild(new HSeparator());
 
         Button Toggle(string text, string tip, Func<bool> get, Action<bool> set)
@@ -206,6 +227,7 @@ public sealed partial class RoadTool
         if (_brushPanel is not null && IsInstanceValid(_brushPanel)) _brushPanel.Visible = !Active;
         foreach (var (m, b) in _modeButtons) b.SetPressedNoSignal(Active && m == Mode);
         foreach (var (k, b) in _kindButtons) b.SetPressedNoSignal(k == Kind);
+        foreach (var (w, b) in _widthButtons) b.SetPressedNoSignal(RoadBuilder.IsWideWidth(w) == RoadBuilder.IsWideWidth(Width));
         SyncBuild();
         _angleB?.SetPressedNoSignal(Snap.Angle); _gridB?.SetPressedNoSignal(Snap.Grid); _roadsB?.SetPressedNoSignal(Snap.Roads);
         _structB?.SetPressedNoSignal(Snap.Structures); _chainB?.SetPressedNoSignal(Chain); _conformB?.SetPressedNoSignal(Conform);

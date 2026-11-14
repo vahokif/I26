@@ -43,8 +43,10 @@ public class EditorRoadTests(ITestOutputHelper log) : IDisposable
         return dir;
     }
 
-    [Fact]
-    public void AnAiCarRoutedAlongARoadTheToolMadeFollowsIt()
+    [Theory]
+    [InlineData(RoadBuilder.Width)]
+    [InlineData(RoadBuilder.WideWidth)]
+    public void AnAiCarRoutedAlongARoadTheToolMadeFollowsIt(float width)
     {
         if (NitroDir is null) return;
         var dir = Scratch(NitroDir);
@@ -60,7 +62,7 @@ public class EditorRoadTests(ITestOutputHelper log) : IDisposable
                 doc.SetHeight(sx, sz, 200 + (int)(30 * System.Math.Sin(sx * 0.05) + 25 * System.Math.Cos(sz * 0.04)));
         float ox = 4 * 128 * 5 + 100, oz = 72 * 128 * 5 + 100;
         var path = RoadCurves.Spline([new(ox, oz), new(ox + 200, oz + 80), new(ox + 400, oz), new(ox + 600, oz + 100)]);
-        var plan = RoadPlanner.Plan(path, 0, null, null, store);
+        var plan = RoadPlanner.Plan(path, 0, null, null, store, width);
         Assert.Null(plan.Problem);
         Assert.NotNull(RoadPlanner.Commit(doc, store, plan, conform: true));
         doc.Save();
@@ -69,7 +71,9 @@ public class EditorRoadTests(ITestOutputHelper log) : IDisposable
         var vfs = new AssetVfs(install);
         var asm = new ModelAssembler(vfs);
         var world = new MissionWorld(vfs, asm, mission);
-        Assert.Single(world.Mission.RoadSegments());
+        // as the game builds it (Roads.Segments: the edges read as they are, on the ground)
+        var seg = Assert.Single(Roads.Segments(world.Mission, (_, _) => 0));
+        Assert.All(seg.Points, e => Assert.Equal(width, Vector3.Distance(e.Left, e.Right), 2));
         var s = MissionSetup.Build(vfs, world, asm, "vppirna1.vcf", rand: new I76.Sim.Rng.CrtRand(1), melee: ["vppirna1.vcf"]);
         // the route: start and goal within 10.5 of the road, on that one road
         var net = RoadNetwork.Build(world.Mission, (x, z) => s.Ground.BareHeight(x, z));
@@ -79,13 +83,13 @@ public class EditorRoadTests(ITestOutputHelper log) : IDisposable
         var route = RoadRoute.TryRoute(net, start.X, start.Y, goal.X, goal.Y);
         Assert.NotNull(route);
         Assert.True(route!.Count > c.Count - 8, $"{route.Count} waypoints for {c.Count} road points");
-        // the waypoints lie in a lane: 2.45 inside the edge, so about 2.5 from the centre line
+        // the waypoints lie in a lane: 2.45 inside the edge, so about 2.5 from the centre line (7.5 on a wide road: the original's rule is from the edge)
         foreach (var n in route.Skip(1).Take(route.Count - 2))
         {
             float d = c.Min(p => Vector2.Distance(p, n.P));
-            Assert.InRange(d, 1.5f, 3.5f);
+            Assert.InRange(d, width / 2 - 2.45f - 1f, width / 2 - 2.45f + 1f);
         }
-        // and a car sent from beside the road drives it: it stays on the road's 10 m and gets there
+        // and a car sent from beside the road drives it: it stays on the road and gets there
         float dt = SimRate.R20.TickSeconds;
         var h = s.Script!.Host;
         var v = VehicleFactory.Create(vfs, "vppirna1.vcf");
@@ -108,7 +112,7 @@ public class EditorRoadTests(ITestOutputHelper log) : IDisposable
             hh.Ptable.EndFrame();
             s.World.Frame(dt);
             var p = new Vector2((float)v.Pos.X, (float)v.Pos.Z);
-            if (Vector2.Distance(p, c[3]) > 40) { total++; float off = DistanceToRoad(c, p); worst = MathF.Max(worst, off); if (off <= 5f) onRoad++; }
+            if (Vector2.Distance(p, c[3]) > 40) { total++; float off = DistanceToRoad(c, p); worst = MathF.Max(worst, off); if (off <= width / 2) onRoad++; }
             onGroundWorst = MathF.Max(onGroundWorst, MathF.Abs((float)v.Pos.Y - s.Ground.BareHeight(p.X, p.Y)) - 1.5f);
             arrived = Vector2.Distance(p, goal) < 30;
         }

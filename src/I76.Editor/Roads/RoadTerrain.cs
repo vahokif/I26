@@ -52,12 +52,13 @@ public sealed class HeightRecorder(IMapDocument doc)
 }
 
 /// <summary>
-/// Cuts and fills the ground to a road's profile: the samples within <see cref="Settings.Flat"/> of the centre line take the profile's
+/// Cuts and fills the ground to a road's profile: the samples within <see cref="Settings.Flat"/> of the centre line (half the road's width and 3 m) take the profile's
 /// height there (so the road's quads, which the engine puts on the bilinear ground, have no cross slope and no bump), and the samples
 /// within <see cref="Settings.Shoulder"/> beyond them blend from it back to the old ground with a smoothstep.
 /// </summary>
 public static class RoadTerrain
 {
+    /// <summary>The flat band and the shoulder, for a standard road (<see cref="RoadPlanner.Widened"/> widens the band for a wide one).</summary>
     public sealed record Settings(float Flat = RoadBuilder.HalfWidth + 3f, float Shoulder = 14f);
 
     public sealed record Result(float MaxCut, float MaxFill, int Samples, SampleRect? Rect);

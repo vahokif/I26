@@ -16,7 +16,7 @@ public sealed class RoadDraft
     public SnapResult? Start, End;
 }
 
-/// <summary>The road about to be made: its centres (resampled), the road it extends if any, the ends' headings and pinned heights.</summary>
+/// <summary>The road about to be made: its centres (resampled), the road it extends if any, the ends' headings and pinned heights, its width.</summary>
 public sealed record RoadPlan(
     IReadOnlyList<Vector2> Centres,
     uint Kind,
@@ -27,12 +27,16 @@ public sealed record RoadPlan(
     IReadOnlyDictionary<int, float> Pins,
     bool Closes,
     float MinRadius,
-    string? Problem);
+    string? Problem,
+    float Width = RoadBuilder.Width);
 
 public static class RoadPlanner
 {
-    /// <summary>A bend tighter than this folds the quads on the inside (the road is 10 wide).</summary>
+    /// <summary>A bend tighter than this folds the quads on the inside (a standard road, 10 wide: <see cref="FoldRadiusFor"/>).</summary>
     public const float FoldRadius = 6f;
+
+    /// <summary>The tightest bend a road of <paramref name="width"/> takes: its half width and 1 m (6 for a standard road, 11 for a wide one).</summary>
+    public static float FoldRadiusFor(float width) => width / 2 + 1f;
 
     /// <summary>The flattened path of the clicks for a mode, as drawn (not yet resampled).</summary>
     public static List<Vector2> Path(DrawMode mode, IReadOnlyList<Vector2> clicks)
@@ -76,13 +80,13 @@ public static class RoadPlanner
     /// <summary>
     /// Turns a drawn path into a plan. The first/last snaps decide what the road is: a structure's end fixes the heading and the height
     /// at that end; the end of an existing road at the start makes this road its extension (at the end, the same, drawn backwards);
-    /// the same road's other end closes a loop.
+    /// the same road's other end closes a loop. <paramref name="width"/> is a new road's; an extension keeps the width of the road it extends.
     /// </summary>
-    public static RoadPlan Plan(IReadOnlyList<Vector2> path, uint kind, SnapResult? start, SnapResult? end, RoadStore roads)
+    public static RoadPlan Plan(IReadOnlyList<Vector2> path, uint kind, SnapResult? start, SnapResult? end, RoadStore roads, float width = RoadBuilder.Width)
     {
         var centres = RoadCurves.Resample(path);
         if (centres.Count < RoadCurves.MinPoints || RoadCurves.Length(path) < 10f)
-            return new RoadPlan(centres, kind, -1, false, null, null, new Dictionary<int, float>(), false, float.PositiveInfinity, "Too short: a road needs at least 10 units");
+            return new RoadPlan(centres, kind, -1, false, null, null, new Dictionary<int, float>(), false, float.PositiveInfinity, "Too short: a road needs at least 10 units", width);
         // pin the ends to what they meet
         var pins = new Dictionary<int, float>();
         Vector2? sd = null, ed = null;
@@ -112,8 +116,9 @@ public static class RoadPlanner
                 }
             }
         }
-        float radius = RoadCurves.MinRadius(centres);
-        string? problem = radius < FoldRadius ? $"Bend too tight ({radius:0} units): the road would fold over itself" : null;
+        if (extend >= 0 && roads.Count > extend) width = RoadBuilder.WidthOf(roads[extend]);
+        float radius = RoadCurves.MinRadius(centres), fold = FoldRadiusFor(width);
+        string? problem = radius < fold ? $"Bend too tight ({radius:0} units; {fold:0} at least for a road {width:0} wide): the road would fold over itself" : null;
         if (extend >= 0 && roads.Count > extend)
         {
             // the join is the road's own end point: the new points start from it
@@ -121,7 +126,7 @@ public static class RoadPlanner
             centres[0] = join;
         }
         if (closes) centres[^1] = roads[extend].Points[atStart ? ^1 : 0].Centre;
-        return new RoadPlan(centres, kind, extend, atStart, sd, ed, pins, closes, radius, problem);
+        return new RoadPlan(centres, kind, extend, atStart, sd, ed, pins, closes, radius, problem, width);
     }
 
     /// <summary>The heights the plan's profile must keep: a structure's deck, and the ground an extended (or closed) road already stands on.</summary>
@@ -136,7 +141,8 @@ public static class RoadPlanner
 
     /// <summary>
     /// Makes the plan real: the road (new, or the extended one), and with <paramref name="conform"/> the ground cut and filled to its
-    /// profile. Applies it to the store and the document; the command can be pushed on the undo stack.
+    /// profile (<paramref name="shoulder"/>'s flat band is widened by as much as the road is wider than a standard one). Applies it to the
+    /// store and the document; the command can be pushed on the undo stack.
     /// </summary>
     public static (RoadCommand Command, RoadTerrain.Result? Terrain)? Commit(IMapDocument doc, RoadStore roads, RoadPlan plan, bool conform,
         RoadGrade.Settings? grade = null, RoadTerrain.Settings? shoulder = null, string? name = null)
@@ -149,7 +155,7 @@ public static class RoadPlanner
         if (conform)
         {
             var h = RoadGrade.Profile(c, p => RoadTerrain.Ground(doc, p.X, p.Y), grade, pins);
-            result = RoadTerrain.Conform(doc, rec, c, h, shoulder);
+            result = RoadTerrain.Conform(doc, rec, c, h, Widened(shoulder, plan.Width));
         }
         RoadOp op;
         if (plan.ExtendRoad >= 0)
@@ -158,10 +164,17 @@ public static class RoadPlanner
             var after = RoadBuilder.Extend(before, plan.ExtendAtStart, c.Skip(1).ToList(), plan.EndDir);
             op = new RoadOp.Replace(plan.ExtendRoad, before, after);
         }
-        else op = new RoadOp.Insert(roads.Count, RoadBuilder.Build(c, plan.Kind, plan.StartDir, plan.EndDir, plan.Closes));
+        else op = new RoadOp.Insert(roads.Count, RoadBuilder.Build(c, plan.Kind, plan.StartDir, plan.EndDir, plan.Closes, plan.Width));
         RoadSurface.Update(doc, rec, plan.ExtendRoad >= 0 ? roads[plan.ExtendRoad] : null, op is RoadOp.Replace rp ? rp.After : ((RoadOp.Insert)op).Road,
             plan.ExtendRoad >= 0 ? roads.Roads.Where((_, i) => i != plan.ExtendRoad) : roads.Roads);
         var cmd = new RoadCommand(name ?? (plan.ExtendRoad >= 0 ? "Extend road" : "Road"), roads, [op], rec.Tiles()).Apply();
         return (cmd, result);
+    }
+
+    /// <summary>Shoulder settings (made for a standard road, or null: the defaults) with the flat band widened for a road of <paramref name="width"/>.</summary>
+    public static RoadTerrain.Settings Widened(RoadTerrain.Settings? shoulder, float width)
+    {
+        shoulder ??= new RoadTerrain.Settings();
+        return shoulder with { Flat = shoulder.Flat + (width - RoadBuilder.Width) / 2 };
     }
 }

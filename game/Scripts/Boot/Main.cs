@@ -355,7 +355,14 @@ public partial class Main : Node3D
                 Install = install, Name = "Shell", Faithful = _opt.Mode1997,
                 Developer = _opt.Dev || System.Environment.GetEnvironmentVariable("I76_DEV") == "1",
                 LastResult = _lastResult, LastLaunch = _lastLaunch, LastTrip = _lastTrip, LastMelee = _lastMelee, LastNet = lastNet, LoadError = loadError,
-                OnLaunch = l => { GD.Print($"shell: launch {l.Mission} ({l.Kind})"); _launch = l; DebugCar = null; DevCar = null; NextMission = l.Mission; GetTree().ReloadCurrentScene(); },
+                OnLaunch = l =>
+                {
+                    GD.Print($"shell: launch {l.Mission} ({l.Kind})");
+                    // a checkpoint bookmark's: taken once, for this start (a Replay of it starts the mission over)
+                    if (l.Resume is { } resume) { l = l with { Resume = null }; ResumeFromBookmark(l, resume); }
+                    else (_retry, _resumeNotice) = (null, null);
+                    _launch = l; DebugCar = null; DevCar = null; NextMission = l.Mission; GetTree().ReloadCurrentScene();
+                },
                 OnEditor = () =>
                 {
                     GetNodeOrNull("Shell")?.QueueFree();
@@ -432,6 +439,7 @@ public partial class Main : Node3D
         if (briefing is not null && loading is not null)
         {
             if (!await LoadUnderBriefing(briefing, loading)) return;
+            ShowResumeNotice();
             StartMissionMusic();   // its briefing played over the build
             return;
         }
@@ -454,6 +462,7 @@ public partial class Main : Node3D
         }
         _loading = false;
         if (_playtestNote is { } note && _opt.Install is not null) { AddChild(new CheckpointNotice { InstallDir = _opt.Install, Faithful = _mode1997, Text = note, Hold = 4.0, Name = "PlaytestNote" }); _playtestNote = null; }
+        ShowResumeNotice();
         // a checkpoint's retry goes on from where it was: the music there, no briefing
         if (_resumed) { ResumeMusic(); return; }
         if (_editorMode) return;
@@ -573,6 +582,7 @@ public partial class Main : Node3D
         {
             Vfs = _builder.Vfs, Palette = pal, InstallDir = _opt.Install, Mission = mission, NoReconfigure = four, Faithful = _mode1997, End = end, Net = _net is not null,
             Live = s => { ApplyAudio(s); ApplyGraphics(s); }, CheatsOff = I76.Game.Shell.CheatMarker.Clear, CanRetry = CanRetry, Developer = DevOn,
+            SaveBookmark = CanSaveBookmark ? SaveCheckpointBookmark : null,
             Closed = o => { layer.QueueFree(); _menu = null; MenuClosed(o); },
         };
         layer.AddChild(_menu);

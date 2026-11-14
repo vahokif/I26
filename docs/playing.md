@@ -78,6 +78,14 @@ shell.cfg or `--dev`; Interstate '76 only, the Nitro Pack has no trip):
 
 Both end on Load Bookmark with the new bookmarks listed.
 
+**Checkpoints.** With Play Options' Checkpoints on, a trip mission keeps a checkpoint once its intro is over and at each
+objective done, and Retry from Checkpoint (the Esc menu's Abort Mission pad, and the menu after a failure) starts again
+from the latest. Beside it, **Save Bookmark** adds a new "Scene N. Checkpoint" row to Load Bookmark: your trip as the
+mission started, with that checkpoint. Loading it starts the mission and puts you back at the checkpoint, with the car,
+its weapons and damage and the mission as they were; your current trip is not changed by saving one. A checkpoint
+bookmark is for this version of I26: after an update the bookmark still loads, and the mission starts from its beginning
+(a note says so).
+
 **Log file.** Off by default, so it cannot grow. For a bug report, start the game once with `--log` (or the environment
 variable `I76_LOG=1`) and attach `logs/godot.log` from the user folder (the last three runs' logs are kept as
 `logs/godot<date>.log`); Graphic Detail's Log (restart) switch keeps it on for every start. Logs from older versions

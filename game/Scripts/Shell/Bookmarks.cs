@@ -10,13 +10,15 @@ namespace I76.Game.Shell;
 /// file stem save%03d, the game state at saving (1 = between a won mission
 /// and the next) and whether salvage management was off. Kept in
 /// user://saves/bookmarks.cfg. The car and its inventory (the .cmp body) join
-/// with the garage.
+/// with the garage. The port's checkpoint bookmarks (<see cref="CheckpointBookmarks"/>)
+/// keep a mission's checkpoint beside them.
 /// </summary>
 public sealed class Bookmarks
 {
     private const string Path = "user://saves/bookmarks.cfg";
 
-    public sealed record Entry(int Mission, string Name, string Stem, int State, bool NoSalvage)
+    /// <param name="Checkpoint">The port's: saved in the mission with its checkpoint (bookmark_saveNNN.snap); Load resumes there.</param>
+    public sealed record Entry(int Mission, string Name, string Stem, int State, bool NoSalvage, bool Checkpoint = false)
     {
         /// <summary>"Scene %d. " — one on when the entry was saved after a win.</summary>
         public int Scene => Mission + (State == 1 ? 1 : 0);
@@ -31,7 +33,7 @@ public sealed class Bookmarks
         if (c.Load(Path) != Error.Ok) return b;
         foreach (var sec in c.GetSections())
             b.Entries.Add(new Entry((int)c.GetValue(sec, "mission", 1), (string)c.GetValue(sec, "name", ""), sec,
-                (int)c.GetValue(sec, "state", 0), (bool)c.GetValue(sec, "nosalvage", false)));
+                (int)c.GetValue(sec, "state", 0), (bool)c.GetValue(sec, "nosalvage", false), (bool)c.GetValue(sec, "checkpoint", false)));
         b.Entries.Sort((x, y) => string.CompareOrdinal(x.Stem, y.Stem));
         return b;
     }
@@ -45,6 +47,7 @@ public sealed class Bookmarks
             c.SetValue(e.Stem, "name", e.Name);
             c.SetValue(e.Stem, "state", e.State);
             c.SetValue(e.Stem, "nosalvage", e.NoSalvage);
+            if (e.Checkpoint) c.SetValue(e.Stem, "checkpoint", true);
         }
         DirAccess.MakeDirRecursiveAbsolute("user://saves");
         c.Save(Path);
@@ -88,6 +91,28 @@ public sealed class Bookmarks
     public static void DeleteCar(string stem)
     {
         if (Godot.FileAccess.FileExists(CarPath(stem))) DirAccess.RemoveAbsolute(CarPath(stem));
+    }
+
+    /// <summary>A checkpoint bookmark's checkpoint (<see cref="CheckpointBookmarks"/>): user://saves/bookmark_save000.snap.</summary>
+    private static string CheckpointPath(string stem) => $"user://saves/bookmark_{stem}.snap";
+
+    public static void WriteCheckpoint(string stem, byte[] data)
+    {
+        DirAccess.MakeDirRecursiveAbsolute("user://saves");
+        using var f = Godot.FileAccess.Open(CheckpointPath(stem), Godot.FileAccess.ModeFlags.Write);
+        f?.StoreBuffer(data);
+    }
+
+    /// <summary>The kept checkpoint's bytes, or null.</summary>
+    public static byte[]? ReadCheckpoint(string stem)
+    {
+        using var f = Godot.FileAccess.Open(CheckpointPath(stem), Godot.FileAccess.ModeFlags.Read);
+        return f?.GetBuffer((long)f.GetLength());
+    }
+
+    public static void DeleteCheckpoint(string stem)
+    {
+        if (Godot.FileAccess.FileExists(CheckpointPath(stem))) DirAccess.RemoveAbsolute(CheckpointPath(stem));
     }
 
     /// <summary>A new entry's stem: save%03d with the number one past the largest (parsed back from the stem).</summary>
@@ -257,6 +282,7 @@ public sealed class SaveBookmarkScreen : BookmarkScreen
         Marks.Entries.Sort((x, y) => string.CompareOrdinal(x.Stem, y.Stem));
         // the .cmp: the car, its parts (the garage's current lists, the field salvage still waiting) and its repair order
         if (Shell.Trip.Inventory(Shell) is { } inv) Bookmarks.WriteCar(stem, inv.Save());
+        Bookmarks.DeleteCheckpoint(stem);   // a checkpoint bookmark written over is an ordinary one now
         Marks.Save();
         Shell.Overlay(null);    // Back to the screen underneath; only Cancel and Esc return to Options
     }
@@ -304,6 +330,7 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
             {
                 if (!yes || row >= Marks.Entries.Count) return;
                 Bookmarks.DeleteCar(Marks.Entries[row].Stem);
+                Bookmarks.DeleteCheckpoint(Marks.Entries[row].Stem);
                 Picked = Marks.RemoveAt(row);
                 Marks.Save();
                 Top = Math.Clamp(Top, 0, Math.Max(0, Marks.Entries.Count - 10));
@@ -323,11 +350,19 @@ public sealed class LoadBookmarkScreen : BookmarkScreen
         Shell.Trip.Highest = Math.Max(Shell.Trip.Highest, e.Scene);
         Shell.Trip.FromBookmark = true;
         // the saved car and parts replace the trip's (a bookmark from before they were kept leaves them as they are)
-        if (Bookmarks.ReadCar(e.Stem, Shell.Parts, Shell.Vfs) is { } car) Shell.Trip.SetInventory(car);
+        var car = Bookmarks.ReadCar(e.Stem, Shell.Parts, Shell.Vfs);
+        if (car is not null) Shell.Trip.SetInventory(car);
         Shell.Trip.Save();
         if (e.NoSalvage) Shell.Settings.PlayOptions |= 2; else Shell.Settings.PlayOptions &= ~2;
         Shell.Settings.Save();      // I76PLYR.DEF is written at once
         Shell.Overlay(null);
+        // a checkpoint bookmark: its mission at once, in its car, as the trip launches a mission, resuming at the checkpoint
+        // (the game drops a checkpoint it cannot use, and the mission starts from its beginning)
+        if (e.Checkpoint && car is not null && Bookmarks.ReadCheckpoint(e.Stem) is { } checkpoint)
+        {
+            Shell.LaunchTrip(car, checkpoint);
+            return;
+        }
         Shell.Go(new TripRouterScreen());
     }
 }

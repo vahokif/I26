@@ -82,6 +82,11 @@ public sealed partial class EscapeMenu : Control
     public Action? CheatsOff { get; init; }
     /// <summary>The port's Checkpoints: a checkpoint is kept, so the end menu after a failure and the Abort pad offer "Retry from Checkpoint".</summary>
     public bool CanRetry { get; init; }
+    /// <summary>
+    /// The port's checkpoint bookmarks: in a trip mission, wherever Retry from Checkpoint is offered, Save Bookmark on the free line under
+    /// it saves a new Load Bookmark entry with the checkpoint (true when it was written); null: not offered.
+    /// </summary>
+    public Func<bool>? SaveBookmark { get; init; }
     /// <summary>The port's Developer panel is on (docs/dev-hooks.md): the main pad offers it on the free line under Control Configuration.</summary>
     public bool Developer { get; init; }
 
@@ -210,6 +215,7 @@ public sealed partial class EscapeMenu : Control
         _abort.Items.Add(Action("Exit Game", four ? 5 : 7, () => AskExit(_abort, MenuOutcome.Exit)));
         // the port's own: the checkpoint on the next free line under Exit Game
         if (CanRetry) _abort.Items.Add(Action("Retry from Checkpoint", four ? 7 : 9, () => Close(MenuOutcome.RetryCheckpoint)));
+        if (CanRetry && SaveBookmark is not null) _abort.Items.Add(SaveBookmarkItem(_abort, four ? 9 : 11));
         _abort.Items.Add(CancelButton());
 
         _exit.Items = [
@@ -398,6 +404,7 @@ public sealed partial class EscapeMenu : Control
             if (!four) _end.Items.Add(Action("Reconfigure", 9, () => Close(MenuOutcome.Reconfigure)));
             _end.Items.Add(Action("Abort Mission", 10, () => AskExit(_end, MenuOutcome.Abort)));
             _end.Items.Add(Action("Exit Game", 11, () => AskExit(_end, MenuOutcome.Exit)));
+            if (!end.Cheated && CanRetry && SaveBookmark is not null) _end.Items.Add(SaveBookmarkItem(_end, 12));
             _end.Selected = end.Cheated || CanRetry ? 1 : 2;
         }
 
@@ -428,6 +435,22 @@ public sealed partial class EscapeMenu : Control
         Settings.VSync = true;
         Live?.Invoke(Settings);
         Switch(_graphics);
+    }
+
+    /// <summary>Save Bookmark: once written, the line says so and is no longer chosen (a second press would only save the same checkpoint again).</summary>
+    private Item SaveBookmarkItem(Screen on, int pair)
+    {
+        Item it = null!;
+        it = Action("Save Bookmark", pair, () =>
+        {
+            if (SaveBookmark?.Invoke() != true) return;
+            int at = on.Items.IndexOf(it);
+            if (at < 0) return;
+            on.Items[at] = Text("Bookmark Saved", pair);
+            if (on.Selected == at) on.Selected = Next(on, at, -1);
+            QueueRedraw();
+        });
+        return it;
     }
 
     private void CheaterOff()

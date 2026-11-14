@@ -144,6 +144,15 @@ its place and the briefing is not played; Modern Physics is created after the re
 restored car's pose and motion. `CheckpointTests` checks the policy and a T14 retry against the checkpoint's own
 state; the captures `I76_CHECKPOINT_SHOT` / `I76_CHECKPOINT_HOLD` give a before/after pair of the frame.
 
+A checkpoint can also go into a trip bookmark (the escape menu's Save Bookmark, docs/deviations.md): `Checkpoint.ToBytes`
+(`game/Scripts/Boot/Checkpoint.cs`) writes `bookmark_saveNNN.snap` beside the bookmark's car, the snapshot first.
+Loading the bookmark hands its bytes to the trip launch (`ShellLaunch.Resume`); `Checkpoint.ForLaunch` reads the
+snapshot's header (its format version) before anything else uses it, and a file of another version, a damaged one or
+another mission's is dropped there without a throw: the mission starts from its beginning with a notice. One that reads
+but does not fit the rebuilt mission (another install or car) fails in `Restore` as a retry's would, and the mission is
+built again from its beginning, with the same notice. These files are not migrated either: a new format version makes
+them ordinary bookmarks.
+
 ## What the game layer re-syncs after a restore
 
 The sim's objects are restored in place where they exist, so the game's references to cars, the session, the

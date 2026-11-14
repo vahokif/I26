@@ -36,8 +36,10 @@ public partial class CheckpointNotice : CanvasLayer
         float k = size.Y / 480f;
         _label.AddThemeFontSizeOverride("font_size", Mathf.Max(12, (int)(26 * k)));
         _label.AddThemeConstantOverride("outline_size", Mathf.Max(2, (int)(5 * k)));
-        _label.Size = new Vector2(size.X, 40 * k);
-        _label.Position = new Vector2(0, size.Y - 172 * k);
+        // a longer word (a bookmark's checkpoint that could not be used) on more lines, its last where the one-line notice is
+        int lines = Text.Count(c => c == '\n') + 1;
+        _label.Size = new Vector2(size.X, 40 * k * lines);
+        _label.Position = new Vector2(0, size.Y - 172 * k - 32 * k * (lines - 1));
     }
 
     public override void _Process(double delta)

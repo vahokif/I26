@@ -23,7 +23,14 @@ public sealed record ShellLaunch(string Mission, GameKind Kind, string? Car = nu
     public int ModelIndex { get; init; } = -1;
     /// <summary>A network melee (kind 5): host it or join it.</summary>
     public NetLaunch? Net { get; init; }
+    /// <summary>A trip launch's trip as it stands at the mission's start (its mission number, its car and parts): what a checkpoint bookmark saved in the mission keeps.</summary>
+    public TripStart? TripStart { get; init; }
+    /// <summary>A checkpoint bookmark's checkpoint (its file's bytes): the mission resumes there (docs/savestate.md). The game reads it, and drops it if it cannot be used.</summary>
+    public byte[]? Resume { get; init; }
 }
+
+/// <summary>The trip at a mission's launch: the mission number (trip.cfg's) and the car with its parts (the bookmark .cmp body, <see cref="I76.Sim.Trip.TripInventory.Save"/>).</summary>
+public sealed record TripStart(int Mission, string Car);
 
 /// <summary>
 /// A network melee from the MULTI MELEE forms (melee modes 3/4 host, 7/8
@@ -638,12 +645,16 @@ public partial class Shell : CanvasLayer
     /// <summary>
     /// A trip launch (0xc010 after garage DONE, NEW TRIP, NEXT MISSION, CHOOSE
     /// YOUR VEHICLE): the car written as addon\vehscn.vcf and
-    /// its state as the shell's vsf, the next mission in it.
+    /// its state as the shell's vsf, the next mission in it. A checkpoint bookmark's load
+    /// launches the same way, with its checkpoint (<paramref name="resume"/>).
     /// </summary>
-    public void LaunchTrip(I76.Sim.Trip.TripInventory inv)
+    public void LaunchTrip(I76.Sim.Trip.TripInventory inv, byte[]? resume = null)
     {
         I76.Formats.Vfs.AssetVfs.Addon["vehscn.vcf"] = inv.ToCar().ToVcf();
-        Launch(new ShellLaunch(Trip.Stem, GameKind.Trip, "vehscn.vcf") { State = inv.State(), NoSalvage = (Settings.PlayOptions & 2) != 0 });
+        Launch(new ShellLaunch(Trip.Stem, GameKind.Trip, "vehscn.vcf")
+        {
+            State = inv.State(), NoSalvage = (Settings.PlayOptions & 2) != 0, TripStart = new TripStart(Trip.Mission, inv.Save()), Resume = resume,
+        });
     }
 
     /// <summary>Quit to the desktop (0xc002, the original front end's main loop returns 0xff).</summary>

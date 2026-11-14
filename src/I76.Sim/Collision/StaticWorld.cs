@@ -142,8 +142,8 @@ public sealed partial class StaticObject
     public string Sound { get; set; } = "vexplode.wav";
     /// <summary>
     /// What a destroyed structure leaves to collide with: its 'A' geometry
-    /// (the grain hopper's fallen bin, a ramp). Null when it leaves nothing
-    /// or is type 3, whose dead nodes give no response.
+    /// (the grain hopper's fallen bin, a ramp, a barn's wreck). Null when it leaves nothing.
+    /// A car meets none of a dead type-3 node's (<see cref="Unfelt"/>); rounds stop on all of it.
     /// </summary>
     public StaticObject? Remains { get; set; }
     /// <summary>Some of its remains are swapped in: those collide again, but take no more damage.</summary>
@@ -263,9 +263,24 @@ public sealed partial class StaticObject
     /// <summary>Its gates were set from outside (a network mirror): the colliders follow.</summary>
     public void GatesMoved() { _gates = true; Refresh(); }
 
-    /// <summary>The destroyed state on the wire: bit 0 the root, bit n + 1 node n.</summary>
     /// <summary>Whether the node is a <see cref="StructureNode.Sign"/> (−1, the root, is not).</summary>
     public bool SignNode(int node) => node >= 0 && node < Nodes.Count && Nodes[node].Sign;
+
+    /// <summary>
+    /// The type of what a contact or a round touched: a node's own (its SGEO record's), or for −1 the root's, which is the
+    /// placement's. The original's collide callbacks and damage dispatch go by it, not by the placement's type: a building
+    /// placed as type 3 is still made of type-2 nodes.
+    /// </summary>
+    public uint TypeAt(int node) => node >= 0 && node < Nodes.Count ? Nodes[node].Type : Type;
+
+    /// <summary>
+    /// A dead type-3 node (or a dead type-3 root): the car's collide callback gives it no response, so a car drives
+    /// through its remains (a saguaro's stump). A type-2 node's remains stay solid whatever the placement's type
+    /// (measured in the original: T15's barn, placed as type 3, stops the car as a wreck).
+    /// </summary>
+    public bool Unfelt(int node) => TypeAt(node) == 3 && (node >= 0 && node < Nodes.Count ? Nodes[node].Destroyed : Destroyed);
+
+    /// <summary>The destroyed state on the wire: bit 0 the root, bit n + 1 node n.</summary>
 
     /// <summary>
     /// The sign slot's throw on the node's root: the root's HP to 0 and the whole placement

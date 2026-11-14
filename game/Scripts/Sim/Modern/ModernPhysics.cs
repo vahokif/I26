@@ -242,7 +242,7 @@ public partial class ModernPhysics : Node
         var seen = new HashSet<Poly>();
         foreach (var poly in o.Polys.Concat(o.Surfaces))
         {
-            if (!seen.Add(poly) || poly.V.Length < 3 || o.SignNode(poly.Node)) continue;
+            if (!seen.Add(poly) || poly.V.Length < 3 || o.SignNode(poly.Node) || o.Unfelt(poly.Node)) continue;
             for (int i = 1; i + 1 < poly.V.Length; i++)
             {
                 tris.Add(G(poly.V[0] - c));
@@ -253,7 +253,7 @@ public partial class ModernPhysics : Node
         if (tris.Count > 0) body.AddChild(new CollisionShape3D { Shape = new ConcavePolygonShape3D { Data = [.. tris], BackfaceCollision = true } });
         foreach (var bx in o.Boxes)
         {
-            if (o.SignNode(bx.Node)) continue;
+            if (o.SignNode(bx.Node) || o.Unfelt(bx.Node)) continue;
             var size = G(bx.Max - bx.Min);
             if (size.X < 1e-3f || size.Y < 1e-3f || size.Z < 1e-3f) continue;
             var centre = G(bx.Origin + bx.Rot.ToWorld((bx.Min + bx.Max) * 0.5f) - c);
@@ -262,7 +262,7 @@ public partial class ModernPhysics : Node
         // the class-0x4000 / 0x5000 parts' spheres (a breakable's are knocked off, never met: the sim's sign pass has them)
         foreach (var sp in o.Spheres)
         {
-            if (o.Type == 4 || o.SignNode(sp.Node) || sp.Radius < 1e-3f) continue;
+            if (o.Type == 4 || o.SignNode(sp.Node) || o.Unfelt(sp.Node) || sp.Radius < 1e-3f) continue;
             body.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = sp.Radius }, Position = G(sp.Centre - c) });
         }
         if (body.GetChildCount() == 0) { body.Free(); return null; }

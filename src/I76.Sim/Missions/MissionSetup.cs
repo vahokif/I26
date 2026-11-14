@@ -255,8 +255,9 @@ public sealed partial class MissionSetup
                 so.Explosion = sd.Explosion;
                 so.Sound = sd.Sound;
                 if (sd.Marker is { } mk) so.Marker = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p)).Apply(mk.Apply(System.Numerics.Vector3.Zero));
-                // what it leaves when destroyed: the 'A' geometry, if any (type 3's dead nodes give no response)
-                if (type != 3 && type != 4 && destroyedAsm.Assemble(p.Definition) is { } dm
+                // what it leaves when destroyed: the 'A' geometry, if any, whatever the placement's type (a dead
+                // type-3 node gives the car no response: StaticObject.Unfelt, by the node's own type)
+                if (type != 4 && destroyedAsm.Assemble(p.Definition) is { } dm
                     && !dm.Parts.Select(x => x.NodeName).SequenceEqual(m.Parts.Select(x => x.NodeName)))
                     so.Remains = StaticWorld.Build(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), dm, classes[p.Definition], types[p.Definition], nodeIndex, nodeSphere: NodeSpheres(vfs, p.Definition));
             }

@@ -570,10 +570,12 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     {
         if (o.Type == 4 || o.SignNode(rec.Node ?? -1)) { KnockSign(o); return; }
         var impact = -v.Vel;
-        if (o.Type != 3) VehicleSlot(v, Impact(null, v.P.Mass, KOther, rec.N, impact), rec.C);
+        int node = rec.Node ?? (o.Vehicle is null ? NearestNode(o, v.Pos.ToVector3() + v.Rot.ToWorld(rec.C)) : -1);
+        // the car's own damage by the struck node's type: a type-3 node never damages it, a type-2 one of a type-3 placement does
+        if (o.TypeAt(node) != 3) VehicleSlot(v, Impact(null, v.P.Mass, KOther, rec.N, impact), rec.C);
         if (o.Vehicle is not null) return;   // an emplacement has no collide callback: rams do it no harm
         var sp = Impact(v, v.P.Mass, KVehicle, -rec.N, v.Vel);
-        StructureSlot(o, rec.Node ?? NearestNode(o, v.Pos.ToVector3() + v.Rot.ToWorld(rec.C)), sp);
+        StructureSlot(o, node, sp);
     }
 
     /// <summary>A contact that does not say which node it touched (the modern physics' hull): the live node whose base is nearest.</summary>

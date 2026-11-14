@@ -111,15 +111,13 @@ public partial class TargetIndicator : Control
             }
         }
 
-        // the health bar over the box, in the original's bands; the distance under it
-        float hp = Health(t);
-        float bw = Mathf.Max(max.X - min.X, 60 * u), bh = 6 * u;
-        var bar = new Rect2(new Vector2(mid.X - bw / 2, min.Y - 6 * u - bh), new Vector2(bw, bh));
-        DrawRect(bar.Grow(1), outline);
-        DrawRect(bar, new Color(0.15f, 0.15f, 0.15f, 0.7f));
-        // white unhurt, then green, yellow and red by thirds (the colours the original builds)
-        var fill = hp >= 1 ? new Color(1f, 1f, 1f) : hp > 2 / 3f ? new Color(0.32f, 0.61f, 0.32f) : hp > 1 / 3f ? new Color(0.8f, 0.78f, 0.13f) : new Color(0.82f, 0f, 0.16f);
-        DrawRect(new Rect2(new Vector2(Mirror ? bar.End.X - bw * hp : bar.Position.X, bar.Position.Y), new Vector2(bw * hp, bh)), fill);
+        // the health bar over the box, the original's size and place (TargetHealthBar) at the window's scale; the distance under it
+        float hp = TargetHealthBar.Percent(Health(t));
+        var (outer, inner) = TargetHealthBar.Rects(hp, mid.X, min.Y, Mirror ? u : size.Y / 480f);
+        // white unhurt, then red, yellow and green by thirds (the colours the original builds)
+        var fill = TargetHealthBar.Band(hp) switch { 3 => new Color(1f, 1f, 1f), 2 => new Color(0.32f, 0.61f, 0.32f), 1 => new Color(0.8f, 0.78f, 0.13f), _ => new Color(0.82f, 0f, 0.16f) };
+        if (outer.HasArea()) DrawRect(outer.Grow(1), outline);
+        if (inner.HasArea()) DrawRect(inner, fill);
         if (!Mirror) DrawString(font, new Vector2(mid.X - 40, max.Y + 18), $"{dist:0} m", HorizontalAlignment.Center, 80, 13, col);
     }
 }

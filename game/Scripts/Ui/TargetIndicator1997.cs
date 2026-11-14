@@ -148,14 +148,12 @@ public sealed class TargetIndicator1997
         DrawSprite(ci, $"ztarg{team}03", x - a, y2 - c);
         DrawSprite(ci, $"ztarg{team}04", x + a - w4, y2 - c);
 
-        // the bar: hp = clamp(%, 0.1, 100), white whole, else red/yellow/green by thirds; width trunc(30·√(hp/100) + 0.5)
-        float hp = Math.Clamp(health * 100f, 0.1f, 100f);
-        int band = hp == 100f ? 3 : hp <= 33.333332f ? 0 : hp <= 66.666664f ? 1 : 2;
-        int bw = (int)(30 * Math.Sqrt(hp * 0.01) + 0.5);
-        int x0 = x - (bw >> 1), y0 = y2 - c - 5;
+        // the bar (TargetHealthBar), in the frame's pixels: the canvas is already scaled
+        float hp = TargetHealthBar.Percent(health);
+        var (outer, inner) = TargetHealthBar.Rects(hp, x, y2 - c, 1);
         // the original fills (x, y)..(x + w, y + h): the 0xfe frame shows on the top and left only
-        if (bw - 1 > 0) ci.DrawRect(new Rect2(x0, y0, bw - 1, 4), _frame);
-        if (bw - 2 > 0) ci.DrawRect(new Rect2(x0 + 1, y0 + 1, bw - 2, 3), _bands[band]);
+        if (outer.HasArea()) ci.DrawRect(outer, _frame);
+        if (inner.HasArea()) ci.DrawRect(inner, _bands[TargetHealthBar.Band(hp)]);
         ci.DrawSetTransform(Vector2.Zero, 0, Vector2.One);
     }
 

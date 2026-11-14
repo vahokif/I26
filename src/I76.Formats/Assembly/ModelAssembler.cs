@@ -18,6 +18,10 @@ public sealed class AssembledModel
     public List<string> TopNodes { get; } = [];
     /// <summary>Each part's top-level node (its own name for a top-level part), by part name.</summary>
     public Dictionary<string, string> TopOf { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Scenery: the SGEO nodes of type 0x51, a building's lot (the original takes a top-level one out of the structure and draws it with the ground).</summary>
+    public HashSet<string> Lots { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Scenery: the SGEO nodes flagged 1, the markers, none of whose own geometry the original draws.</summary>
+    public HashSet<string> Markers { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>For vehicles: the texture set's .TMT names, which faces' slots resolve against.</summary>
     public List<string> TmtNames { get; } = [];
     /// <summary>For vehicles: the .map names the texture set lists directly (the body texture among them).</summary>
@@ -292,6 +296,11 @@ public sealed class ModelAssembler(AssetVfs vfs)
 
         var code = unique.Select(n => n.Name).FirstOrDefault(n => n.Length >= 4 && char.IsDigit(n[2]))?[..2].ToUpperInvariant();
         var m = new AssembledModel { Definition = definition, Kind = kind, ObjectCode = code };
+        if (chunk == "SGEO")
+        {
+            m.Lots.UnionWith(def.NodesOfType(0x51));
+            m.Markers.UnionWith(def.NodesFlagged(1));
+        }
         var allNames = new HashSet<string>(unique.Select(n => n.Name), StringComparer.OrdinalIgnoreCase);
         variantOk ??= n => SceneryVariantOk(n, Detail, allNames, Destroyed, DestroyedNode);
         if (kind == "vcf" && PartCondition is { } want)

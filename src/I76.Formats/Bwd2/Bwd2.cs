@@ -292,6 +292,21 @@ public sealed class Bwd2File
         return o;
     }
 
+    /// <summary>A .sdf's SGEO nodes with any of these flags (record +0x60), by name.</summary>
+    public HashSet<string> NodesFlagged(uint flags)
+    {
+        var o = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (First("SGEO") is not { } c) return o;
+        int stride = GeoStride["SGEO"];
+        for (int q = c.PayloadOffset + 4; q + stride <= c.PayloadOffset + c.PayloadSize; q += stride)
+        {
+            if ((Bin.U32(Data, q + NodeFlagsAt) & flags) == 0) continue;
+            var name = Bin.CStr(Data, q, 8);
+            if (name.Length > 0 && !name.Equals(NullName, StringComparison.OrdinalIgnoreCase)) o.Add(name);
+        }
+        return o;
+    }
+
     /// <summary>A .sdf's SGEO nodes of one type (record +0x5c), by name: type 7 the gates.</summary>
     public HashSet<string> NodesOfType(uint type)
     {

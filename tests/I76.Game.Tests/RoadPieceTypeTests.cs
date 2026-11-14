@@ -78,13 +78,35 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
         Assert.Equal(["AA1_RMP1"], RoadPieceObjects.Drawn(ramp).Parts.Select(p => p.NodeName));
         // the bridge's last top-level node is its marker: the original shows nothing of it (seen in the game: T01, 2026-11)
         var bridge = asm.Assemble("bebridg2.sdf")!;
-        Assert.Equal(["EB1_ZZZ2"], RoadPieceObjects.Drawn(bridge).Parts.Select(p => p.NodeName));
+        Assert.Empty(RoadPieceObjects.Drawn(bridge).Parts);
         Assert.False(RoadPieceObjects.Painted(0x50, bridge));
         // a fence of three sections shows its last, the gate (seen in the game)
         Assert.Equal(["AF1_GAT5"], RoadPieceObjects.Drawn(asm.Assemble("afence5.sdf")!).Parts.Select(p => p.NodeName));
         // the same models as a ramp, a bridge: whole
         Assert.False(RoadPieceObjects.Painted(0xb, ramp));
         Assert.True(bridge.Parts.Count > 1);
+    }
+
+    /// <summary>
+    /// A building given the Intersection class id (a community mission maker's sheet, checked against the original's loader):
+    /// its lot shows, drawn with the ground as the original takes every top-level lot out of the structure; of the rest only the
+    /// last top-level node, alone, and nothing of a marker. The bank, the church and the hotel end on their marker (the church's
+    /// marker carries its wall: not drawn); the finish-line sign's last node is a post carrying the sign: the post alone.
+    /// </summary>
+    [InstallTheory]
+    [InlineData("bcbank1.sdf", "CB1_LOT1")]
+    [InlineData("bhchrch1.sdf", "HC1_LOT1")]
+    [InlineData("bhhouse1.sdf", "HH1_LOT1")]
+    [InlineData("bchotel1.sdf", null)]
+    [InlineData("a2finsg1.sdf", "A21_PS11")]
+    public void APieceTypedBuildingShowsItsLotAndItsLastNodeAlone(string def, string? shown)
+    {
+        var asm = new ModelAssembler(TestInstall.Vfs);
+        var m = asm.Assemble(def)!;
+        var drawn = RoadPieceObjects.Drawn(m).Parts.Select(p => p.NodeName).ToList();
+        Assert.Equal(shown is null ? [] : [shown], drawn);
+        // a building whose piece is its flat lot is painted into the ground like an intersection
+        if (shown?.EndsWith("LOT1") == true) Assert.True(RoadPieceObjects.Painted(0x50, m), $"{def}: its lot is not painted");
     }
 
     /// <summary>

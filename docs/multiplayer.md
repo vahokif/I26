@@ -1951,6 +1951,11 @@ tick (not a replay) also runs the own car's weapons, and only for drawing (`SimS
   the server held, shots before the prediction began) and that many of the newest server rounds of that weapon are
   drawn. The counts start again from the server's at a new car or a renewal. The flashes and sounds of a refused shot
   have already played; nothing takes them back.
+- **Damaged weapons.** A weapon under 70 % of its hit points can jam online, and the jam's roll is the server's
+  (`Combat.Jam`, a rand() a tick while the trigger is held): drawn at once, 62-63 % of a 20 % weapon's shots were taken
+  back (measured over 240 s, two clients). The prediction runs its timers and ammo but draws none of its shots
+  (`Combat.ShotsAreServers`); the server's shot events for it are drawn and its rounds adopted, a round trip late. A
+  flame thrower's stream stays predicted.
 - **Impacts and damage stay the server's**, drawn when the view reaches them: a predicted round vanishes where it meets
   something, and the server's impact comes about a round trip and 100 ms later, at the server's point (which, with the
   car predicted exactly, is the same for a hit on scenery; a car is drawn 100 ms behind, so a hit on one can differ).

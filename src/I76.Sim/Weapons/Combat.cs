@@ -177,7 +177,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
     /// (here every human's car): of its hardpoint weapons (not the handguns) with the trigger set, one with no ammo
     /// lets go (so the network never hears wclick.wav), and a damaged one jams with p = min(0.5, (1 − HP/max) − 0.3):
     /// one rand() each while p &gt; 0, and on a jam the trigger is cleared and ammo −= ftol(dt·rate), which can take it
-    /// below 0 (the next shot clamps it). The server's alone: a client's prediction fires and the server corrects it.
+    /// below 0 (the next shot clamps it). The server's alone: a client's prediction draws no shot of such a weapon
+    /// (<see cref="ShotsAreServers"/>) and shows the server's.
     /// </summary>
     private void Jam(Vehicle v, Armory a, float dt)
     {
@@ -194,6 +195,15 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             }
         }
     }
+
+    /// <summary>Whether the network jam can catch the weapon (its p above 0: under 70 % of its hit points).</summary>
+    public static bool CanJam(Weapon w) => 1f - w.HpRatio - 0.3f > 0;
+
+    /// <summary>
+    /// A network client's own weapon whose shots it leaves to the server: one the jam can catch, as the roll is the
+    /// server's (drawn at once, about half its shots were taken back). A flame thrower's stream stays predicted.
+    /// </summary>
+    public static bool ShotsAreServers(Weapon w) => CanJam(w) && w.Def.Kind is not (9 or 10 or 11);
 
     private static bool Dropper(GizmoDef def) => def.Kind is 0xc or 0x11 or 0xe;
 
@@ -237,7 +247,13 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 AimTurrets(v, a, dt);
                 AimFixed(v, a, dt);
                 Lock(v, a, dt);
-                foreach (var w in a.Weapons) Timing(v, w, dt);
+                foreach (var w in a.Weapons)
+                {
+                    // the timers and ammo run, the shots are not drawn: the server's are (OwnShots adopts them)
+                    _silent = !fresh || ShotsAreServers(w);
+                    Timing(v, w, dt);
+                }
+                _silent = !fresh;
                 foreach (var w in a.Handguns) if (w is not null) Timing(v, w, dt);
             }
             if (fresh) FlameFrame(dt, v);

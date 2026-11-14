@@ -626,8 +626,8 @@ public sealed class ClientWorld
         var damage = Setup.Damage.Events;
         switch (e)
         {
-            // the own car's shots were drawn when they were fired, from the predicted car
-            case ShotEvent s when OwnShots is not null && s.Car == OwnSerial:
+            // the own car's shots were drawn when they were fired, from the predicted car (a damaged weapon's are the server's)
+            case ShotEvent s when OwnShots is not null && s.Car == OwnSerial && !(Car(s.Car) is { } ov && RoundState.WeaponOf(ov, s.Weapon) is { } ow && Combat.ShotsAreServers(ow)):
                 break;
             case ShotEvent s when Car(s.Car) is { } v && RoundState.WeaponOf(v, s.Weapon) is { } w:
                 combat.Events.Add(new ShotFired(v, w, s.Muzzle, s.Forward));

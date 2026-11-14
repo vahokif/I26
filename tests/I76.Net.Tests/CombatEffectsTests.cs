@@ -223,6 +223,63 @@ public partial class CombatEffectsTests(Xunit.Abstractions.ITestOutputHelper out
     }
 
     /// <summary>
+    /// A weapon under 70 % of its hit points can jam online, and the jam is the server's roll: the client draws none of
+    /// its shots at once (drawn, 62-63 % of them were taken back, measured at 20 % over 240 s) and shows the server's
+    /// shots and rounds as they come. A healthy one is drawn at once.
+    /// </summary>
+    [Fact]
+    public void ADamagedWeaponsShotsAreTheServers()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Seed = 3 });
+        var seat = host.Join("a", "vppirna1.vcf", 0);
+        var c = Connect(host, seat, HostTests.Mirror("m01"));
+        var rig = new Rig(host, late: 4);
+        rig.Clients.Add(c);
+        var gun = seat.Player.Car.Armory!.Weapons.First(w => w.Def.Kind == 1);
+        var key = Key(seat.Player.Car, w => w == gun);
+        int slot = seat.Player.Car.Armory!.Weapons.IndexOf(gun);
+        bool fire = false;
+        CarInput Input(Client _) => new() { Buttons = fire ? key : 0 };
+        for (int i = 0; i < 20; i++) rig.Tick(Input);
+        // healthy: drawn at once
+        fire = true;
+        for (int i = 0; i < 20; i++) rig.Tick(Input);
+        fire = false;
+        for (int i = 0; i < 20; i++) rig.Tick(Input);
+        int healthyDrawn = rig.DrawnShots.GetValueOrDefault(c)?.Count ?? 0;
+        Assert.True(healthyDrawn > 0, "a healthy gun's shots were not drawn at once");
+        Assert.Equal(rig.ServerShots[c].Count, healthyDrawn);
+        Assert.Equal(0, rig.ServerShotsDrawn[c]);
+
+        // damaged to 20 %: the client hears of it, then fires
+        gun.Hp = gun.MaxHp / 5;
+        for (int i = 0; i < 10; i++) rig.Tick(Input);
+        var own = c.Mirror.Own!.Vehicle.Armory!.Weapons[slot];
+        Assert.True(Combat.CanJam(own), "the client did not hear of the damage");
+        int serverBefore = rig.ServerShots[c].Count, rejectedBefore = c.Predictor!.Shots!.Rejected;
+        fire = true;
+        int shownRounds = 0;
+        for (int i = 0; i < 60; i++)
+        {
+            rig.Tick(Input);
+            shownRounds = Math.Max(shownRounds, c.Combat.Rounds.Count(r => r.Shooter == c.Mirror.Own!.Vehicle && r.Def == own.Def));
+        }
+        fire = false;
+        for (int i = 0; i < 10; i++) rig.Tick(Input);
+        int served = rig.ServerShots[c].Count - serverBefore;
+        output.WriteLine($"damaged gun: {served} fired by the server, {rig.DrawnShots[c].Count - healthyDrawn} drawn at once, {rig.ServerShotsDrawn[c]} server shots drawn; " +
+            $"rejected {c.Predictor.Shots.Rejected - rejectedBefore}, adopted {c.Predictor.Shots.Adopted}, server rounds in view up to {shownRounds}");
+        Assert.True(served > 10, "the server fired too little to tell");
+        Assert.Equal(healthyDrawn, rig.DrawnShots[c].Count);
+        Assert.Equal(rejectedBefore, c.Predictor.Shots.Rejected);
+        Assert.DoesNotContain(c.Combat.PredictedRounds, r => r.Def == own.Def);
+        Assert.Equal(served, rig.ServerShotsDrawn[c]);
+        Assert.True(c.Predictor.Shots.Adopted > 0);
+        Assert.True(shownRounds > 0, "none of the server's rounds was drawn");
+    }
+
+    /// <summary>
     /// A mine dropped by the own car is drawn at once, and when the server's mine reaches the view it takes the predicted
     /// one's place (the server's is the one that counts, for everyone).
     /// </summary>

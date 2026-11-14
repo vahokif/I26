@@ -19,22 +19,13 @@ public partial class VegetationNode : Node3D
     /// <summary>A layer's chunk side (metres): the shrubs' reach is long, so theirs are larger (fewer nodes to draw).</summary>
     public static float ChunkSize(VegLayer layer) => layer == VegLayer.Shrub ? 160f : 80f;
 
-    /// <summary>
-    /// Graphic Detail's Vegetation, Low and High: the density, where each layer fades out, where a plant changes to
-    /// its middle and its far mesh (per plant: tier 1 and 2), how near shrubs cast sun shadows, and where the shade
-    /// under the shrubs fades out.
-    /// </summary>
-    public sealed record Level(float Density, float ShrubFade, float ShrubEnd, float GroundFade, float GroundEnd, float ShadowRange,
-        float ShrubMid, float ShrubFar, float GroundMid, float GroundFar, float ShadeFade, float ShadeEnd);
-
-    public static readonly Level Low = new(0.6f, 120, 160, 35, 50, 0, 20, 50, 9, 22, 35, 50);
-    public static readonly Level High = new(1f, 190, 250, 60, 85, 60, 30, 70, 12, 35, 55, 75);
-
-    private Level _level = Low;
+    private VegLevels.Level _level = VegLevels.Low;
+    private int _levelIndex;
+    private bool _night;
     private VegetationPlacer _placer = null!;
-    // one material a layer: they differ in how far their plants reach
-    // and per detail tier, which differ in the band they cross-fade in (TierBands); [layer][tier], the shrubs' first
-    private readonly ShaderMaterial[][] _mats = [.. Enumerable.Range(0, 2).Select(_ => Enumerable.Range(0, 3).Select(_ => new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/vegetation.gdshader") }).ToArray())];
+    // one material a kind of plant (Kind: the shrubs, the grass tufts, the ground layer's larger plants), which differ in how
+    // far they reach, and per detail tier, which differ in the band they cross-fade in (TierBands); [kind][tier]
+    private readonly ShaderMaterial[][] _mats = [.. Enumerable.Range(0, 3).Select(_ => Enumerable.Range(0, 3).Select(_ => new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/vegetation.gdshader") }).ToArray())];
     private ShaderMaterial _material => _mats[0][0];
     private ShaderMaterial _groundMaterial => _mats[1][0];
     private void Both(string p, Variant v) { foreach (var l in _mats) foreach (var m in l) m.SetShaderParameter(p, v); }
@@ -44,6 +35,13 @@ public partial class VegetationNode : Node3D
     // per species (the placer's order), per variant: the full, middle and far meshes, the plant's height, and its shade on the ground
     private (ArrayMesh[] Tiers, float Height, float Shade, float ShadeRadius)[][] _meshes = [];
     private float[] _stiffness = [];
+    private bool[] _grass = [];
+
+    /// <summary>
+    /// What a plant is drawn as (its material, its reach): 0 a shrub, 1 a grass tuft, 2 the ground layer's other plants (the
+    /// forbs, weeds and rosettes: a tumbleweed or a snakeweed is a small bush in the headlamps, and reaches as far as the shrubs).
+    /// </summary>
+    private int Kind(VegLayer layer, int species) => layer == VegLayer.Shrub ? 0 : _grass[species] ? 1 : 2;
 
     /// <summary>A chunk's plants of one species variant: their MultiMesh data, and a node per detail tier in use.</summary>
     private sealed class Group
@@ -59,10 +57,13 @@ public partial class VegetationNode : Node3D
         public VegLayer Layer;
         public Task<List<Group>>? Job;
         public List<Group> Groups = [];
+        public List<Group> FarGroups = [];   // the groups merged by species (variant 0's meshes): the chunk's draws while it lies wholly in the far tier, or in the middle one far off
         public bool Attached;
         public int Tier = -1;        // every plant in this tier, or 3: split per plant
         public System.Numerics.Vector2 SplitAt;   // where the eye was at the last per-plant split
         public bool Casting;
+        public bool GrassOn;         // the ground layer's grass tufts drawn (the chunk within their reach; its other plants reach farther)
+        public bool Merged;          // drawn by FarGroups now
         public float Distance, Far;
         public float[] Shade = [];   // the shrubs' shade quads (16 floats each: the transform's rows, custom data), made with the groups
         public MultiMeshInstance3D? ShadeNode;
@@ -78,6 +79,13 @@ public partial class VegetationNode : Node3D
     private const float GroundShadeMin = 0.28f;
     /// <summary>A chunk split per plant redoes the split when the eye has moved this far.</summary>
     private const float Resplit = 2.5f;
+    /// <summary>The eye moves this far (metres) between looks for chunks to place (well inside the 40 m they are placed ahead).</summary>
+    private const float LookEvery = 4f;
+    private System.Numerics.Vector2 _lookedAt = new(float.MaxValue, float.MaxValue);
+    private bool _lookPending;
+    private static readonly bool StatsOn = System.Environment.GetEnvironmentVariable("I76_VEG_STATS") == "1";
+    /// <summary>A chunk wholly in the middle tier merges its variants too from this far (metres): past the beam's brightest part, where one crown shape a species does not show.</summary>
+    private const float MergeMiddleFrom = 60f;
     public int Instances { get; private set; }
     public int DrawnNodes { get; private set; }
     public string Stats { get; private set; } = "";
@@ -124,6 +132,7 @@ public partial class VegetationNode : Node3D
         MissionBuilder.Trace("veg: meshes");
         node._meshes = [.. meshData.Select(vs => vs.Select(p => (p.Select(ToMesh).ToArray(), p[0].Bounds().Max.Y, p[0].GroundShade, p[0].GroundRadius)).ToArray())];
         node._stiffness = [.. species.Select(s => s.Stiffness)];
+        node._grass = [.. species.Select(s => s.Grass)];
         node.Both("atlas", AtlasTexture());
         float low = lowTask.Result;
         MissionBuilder.Trace("veg: low level");
@@ -211,11 +220,24 @@ public partial class VegetationNode : Node3D
     {
         Clear();
         Visible = level > 0;
+        _levelIndex = level;
         _tumble?.SetLevel(level);
         if (level == 0) { _placer = null!; UpdateSward(0, now: true); return; }
-        _level = level >= 2 ? High : Low;
+        ApplyReach();
         _placer = new VegetationPlacer(_region.Biome, new VegetationParams { Density = _level.Density * _region.Density, LowLevel = _lowLevel, LowGround = _region.LowGround }, _terrain, _mask, _seed);
-        for (int l = 0; l < 2; l++)
+    }
+
+    /// <summary>
+    /// The level's distances for the headlamps' reach and the mission's light now (VegLevels.For) into the materials; the chunks
+    /// are re-tiered at the next frame and placed or dropped by the new reach (nothing is placed again).
+    /// </summary>
+    private void ApplyReach()
+    {
+        _night = I76.Game.Sim.Daylight.Current <= 0;
+        _level = VegLevels.For(_levelIndex, VegLevels.LampReach, _night);
+        foreach (var c in _chunks.Values) c.Tier = -1;
+        _lookPending = true;
+        for (int l = 0; l < 3; l++)
         {
             float mid = l == 0 ? _level.ShrubMid : _level.GroundMid, far = l == 0 ? _level.ShrubFar : _level.GroundFar;
             var (m0, m1) = TierBands.Band(mid);
@@ -223,8 +245,10 @@ public partial class VegetationNode : Node3D
             for (int t = 0; t < 3; t++)
             {
                 var m = _mats[l][t];
-                m.SetShaderParameter("fade_start", l == 0 ? _level.ShrubFade : _level.GroundFade);
-                m.SetShaderParameter("fade_end", l == 0 ? _level.ShrubEnd : _level.GroundEnd);
+                m.SetShaderParameter("fade_start", l == 0 ? _level.ShrubFade : l == 1 ? _level.GrassFade : _level.ForbFade);
+                m.SetShaderParameter("fade_end", l == 0 ? _level.ShrubEnd : l == 1 ? _level.GrassEnd : _level.ForbEnd);
+                // the grass tufts fade in within the beam: they grow out of the sward as they do
+                m.SetShaderParameter("grow_in", l == 1);
                 m.SetShaderParameter("tier_in", t == 1 ? new Vector2(m0, m1) : t == 2 ? new Vector2(f0, f1) : Vector2.Zero);
                 m.SetShaderParameter("tier_out", t == 0 ? new Vector2(m0, m1) : t == 1 ? new Vector2(f0, f1) : Vector2.Zero);
             }
@@ -304,6 +328,7 @@ public partial class VegetationNode : Node3D
         }
         if (drop is null) return 0;
         foreach (var k in drop) { Detach(_chunks[k]); _chunks.Remove(k); }
+        _lookPending = true;
         return drop.Count;
     }
 
@@ -312,12 +337,14 @@ public partial class VegetationNode : Node3D
         foreach (var c in _chunks.Values) Detach(c);
         _chunks.Clear();
         Instances = 0;
+        _lookPending = true;
     }
 
     private void Detach(Chunk c)
     {
-        foreach (var g in c.Groups)
+        foreach (var g in c.Groups.Concat(c.FarGroups))
             for (int t = 0; t < 3; t++) { g.Nodes[t]?.QueueFree(); g.Nodes[t] = null; }
+        c.FarGroups.Clear();
         if (c.Attached) Instances -= c.Groups.Sum(g => g.Count);
         c.ShadeNode?.QueueFree();
         c.ShadeNode = null;
@@ -457,6 +484,7 @@ public partial class VegetationNode : Node3D
     // ---- chunks ----------------------------------------------------------------------------------------------
 
     private float Reach(VegLayer layer) => layer == VegLayer.Shrub ? _level.ShrubEnd : _level.GroundEnd;
+    private bool GrassReach(Chunk c, float d) => c.Layer == VegLayer.Ground && d <= _level.GrassEnd;
 
     /// <summary>The camera in the game frame (this node sits in the world root, which is the game frame mirrored).</summary>
     private System.Numerics.Vector3? CameraGame()
@@ -613,6 +641,17 @@ public partial class VegetationNode : Node3D
             }
             o.Add(new Group { Species = sp, Variant = v, Count = list.Count, Buffer = buf });
         }
+        // the far tier's groups: a species' variants in one buffer under its first variant's far mesh (a far crown's variants
+        // differ little at that size, and a chunk wholly in the far tier then draws one node a species, not one a variant)
+        c.FarGroups = [.. o.GroupBy(g => g.Species).Select(sg =>
+        {
+            var list = sg.ToList();
+            if (list.Count == 1) return new Group { Species = list[0].Species, Variant = list[0].Variant, Count = list[0].Count, Buffer = list[0].Buffer };
+            var buf = new float[list.Sum(g => g.Buffer.Length)];
+            int at = 0;
+            foreach (var g in list) { Array.Copy(g.Buffer, 0, buf, at, g.Buffer.Length); at += g.Buffer.Length; }
+            return new Group { Species = sg.Key, Variant = 0, Count = list.Sum(g => g.Count), Buffer = buf };
+        })];
         return o;
     }
 
@@ -652,12 +691,28 @@ public partial class VegetationNode : Node3D
         int need = TierBands.TiersBetween(c.Distance, c.Far, mid, far);
         int tier = need switch { TierBands.Full => 0, TierBands.Middle => 1, TierBands.Far => 2, _ => 3 };
         var e2 = new System.Numerics.Vector2(eye.X, eye.Z);
-        if (tier == c.Tier && (tier != 3 || System.Numerics.Vector2.Distance(e2, c.SplitAt) < Resplit)) return;
+        // wholly in the far tier, or in the middle one and far off (by night the shrubs' middle mesh reaches to their end): the
+        // merged groups, one node a species
+        bool merged = (tier == 2 || (tier == 1 && c.Distance >= MergeMiddleFrom));
+        if (tier == c.Tier && merged == c.Merged && (tier != 3 || System.Numerics.Vector2.Distance(e2, c.SplitAt) < Resplit)) return;
         c.Tier = tier;
+        c.Merged = merged;
         c.SplitAt = e2;
+        c.GrassOn = GrassReach(c, c.Distance);
         float side = ChunkSize(c.Layer), ox = c.Cx * side, oz = c.Cz * side;
+        foreach (var g in c.FarGroups)
+        {
+            bool on = merged && !(c.Layer == VegLayer.Ground && _grass[g.Species] && !c.GrassOn);
+            for (int t = 0; t < 3; t++) Show(c, g, t, on && t == tier ? g.Buffer : null, g.Count);
+        }
         foreach (var g in c.Groups)
         {
+            // a chunk beyond the grass tufts' reach draws only its larger plants (no tuft's buffer is sent)
+            if (merged || (c.Layer == VegLayer.Ground && _grass[g.Species] && !c.GrassOn))
+            {
+                for (int t = 0; t < 3; t++) Show(c, g, t, null, 0);
+                continue;
+            }
             if (tier < 3)
             {
                 for (int t = 0; t < 3; t++) Show(c, g, t, t == tier ? g.Buffer : null, g.Count);
@@ -699,7 +754,7 @@ public partial class VegetationNode : Node3D
             var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseCustomData = true, Mesh = _meshes[g.Species][g.Variant].Tiers[tier] };
             node = g.Nodes[tier] = new MultiMeshInstance3D
             {
-                Multimesh = mm, MaterialOverride = _mats[c.Layer == VegLayer.Shrub ? 0 : 1][tier], Position = Coords.ToGodot(c.Cx * side, 0, c.Cz * side),
+                Multimesh = mm, MaterialOverride = _mats[Kind(c.Layer, g.Species)][tier], Position = Coords.ToGodot(c.Cx * side, 0, c.Cz * side),
                 Layers = TerrainNode.TerrainLayer, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, GIMode = GeometryInstance3D.GIModeEnum.Disabled,
             };
             AddChild(node);
@@ -726,16 +781,26 @@ public partial class VegetationNode : Node3D
     public override void _Process(double delta)
     {
         UpdateSward(delta);
+        // night or day (the mission's light, set after the plants are made): by night the shrubs' far mesh stays out of the beam
+        if (_levelIndex > 0 && (I76.Game.Sim.Daylight.Current <= 0) != _night) ApplyReach();
         if (!Visible || _placer is null || CameraGame() is not { } eye) return;
         Update(eye, attachAll: false);
     }
 
     private void Update(System.Numerics.Vector3 eye, bool attachAll)
     {
-        // new chunks a little beyond the reach, so they are placed before they fade in; the nearest first (a camera cut leaves many to do)
-        foreach (var key in Wanted(eye, 40f).Where(k => !_chunks.ContainsKey(k)).OrderBy(k => ChunkDistance(k.Item1, k.Item2, k.Item3, eye)))
+        // new chunks a little beyond the reach, so they are placed before they fade in; the nearest first (a camera cut leaves many to do).
+        // Looked for when the eye has moved a few metres or the last look left some for want of a worker (40 m of slack covers it)
+        var e2 = new System.Numerics.Vector2(eye.X, eye.Z);
+        bool look = _lookPending || attachAll || System.Numerics.Vector2.DistanceSquared(e2, _lookedAt) > LookEvery * LookEvery;
+        if (look)
         {
-            if (_jobs >= MaxJobs) break;
+            _lookedAt = e2;
+            _lookPending = false;
+        }
+        foreach (var key in look ? Wanted(eye, 40f).Where(k => !_chunks.ContainsKey(k)).OrderBy(k => ChunkDistance(k.Item1, k.Item2, k.Item3, eye)) : Enumerable.Empty<(int, int, VegLayer)>())
+        {
+            if (_jobs >= MaxJobs) { _lookPending = true; break; }
             var c = new Chunk { Cx = key.Item1, Cz = key.Item2, Layer = key.Item3 };
             _chunks[key] = c;
             System.Threading.Interlocked.Increment(ref _jobs);
@@ -756,24 +821,31 @@ public partial class VegetationNode : Node3D
         // drop the far ones; the near shrubs cast shadows; each plant's tier
         List<(int, int, VegLayer)>? drop = null;
         int nodes = 0;
+        // the nodes drawn (a figure for the stats and the profiles) counted twice a second, not every frame
+        bool count = ++_statFrame % 30 == 0;
         foreach (var (key, c) in _chunks)
         {
             float d = ChunkDistance(c.Cx, c.Cz, c.Layer, eye);
             if (d > Reach(c.Layer) + 80f && c.Job is { IsCompleted: true }) { (drop ??= []).Add(key); continue; }
             if (!c.Attached) continue;
-            if (c.ShadeNode is { } sn) sn.Visible = PlantsOn && d < _level.ShadeEnd;
+            if (c.ShadeNode is { } sn && sn.Visible != (PlantsOn && d < _level.ShadeEnd)) sn.Visible = !sn.Visible;
             bool cast = c.Layer == VegLayer.Shrub && d < _level.ShadowRange;
             if (cast != c.Casting) { c.Casting = cast; c.Tier = -1; }
+            if (c.Layer == VegLayer.Ground && GrassReach(c, d) != c.GrassOn) c.Tier = -1;
             Retier(c, eye);
-            foreach (var g in c.Groups) foreach (var n in g.Nodes) if (n is { Visible: true }) nodes++;
+            if (count)
+            {
+                foreach (var g in c.Groups) foreach (var n in g.Nodes) if (n is { Visible: true }) nodes++;
+                foreach (var g in c.FarGroups) foreach (var n in g.Nodes) if (n is { Visible: true }) nodes++;
+            }
         }
         if (drop is not null) foreach (var k in drop) { Detach(_chunks[k]); _chunks.Remove(k); }
-        DrawnNodes = nodes;
-        if (System.Environment.GetEnvironmentVariable("I76_VEG_STATS") == "1" && ++_statFrame % 60 == 0)
+        if (count) DrawnNodes = nodes;
+        if (StatsOn && _statFrame % 60 == 0)
         {
             var tiers = new int[3];
             foreach (var c in _chunks.Values)
-                foreach (var g in c.Groups)
+                foreach (var g in c.Groups.Concat(c.FarGroups))
                     for (int t = 0; t < 3; t++) if (g.Nodes[t] is { Visible: true } n) tiers[t] += n.Multimesh.InstanceCount;
             if (System.Environment.GetEnvironmentVariable("I76_VEG_PROBE")?.Split(',').Select(float.Parse).ToArray() is { Length: 4 } r)
                 foreach (var layer in new[] { VegLayer.Shrub, VegLayer.Ground })

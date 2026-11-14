@@ -136,8 +136,14 @@ public sealed class TumbleweedField
     /// <summary>How many roll at Vegetation Off (0), Low (1) and High (2) for a biome's rate (0..1): up to 4 on Low, 7 on High.</summary>
     public static int CountFor(float rate, int level) => level <= 0 || rate <= 0 ? 0 : (int)MathF.Round(Math.Clamp(rate, 0, 1) * (level >= 2 ? 7 : 4));
 
-    /// <summary>The range round the camera at Low and High (metres).</summary>
-    public static float RangeFor(int level) => level >= 2 ? 180f : 150f;
+    /// <summary>
+    /// The range round the camera at Low and High (metres). One fades in from 12 m inside it to 45 m inside (<see cref="FadeIn"/>):
+    /// Low's 175 (150 before) keeps that beyond the headlamps' reach and the chase view's offset, as High's 180 does.
+    /// </summary>
+    public static float RangeFor(int level) => level >= 2 ? 180f : 175f;
+
+    /// <summary>Where one rolling in from the ring fades in, for a range (metres from the camera): fully drawn at Start, gone at End.</summary>
+    public static (float Start, float End) FadeIn(float range) => (range - 45f, range - 12f);
 
     /// <summary>How many there are; new ones are scattered round the last eye and fade in, extra ones go at once.</summary>
     public int Count

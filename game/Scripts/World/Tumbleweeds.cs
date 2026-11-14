@@ -93,9 +93,10 @@ public partial class TumbleweedNode : Node3D
     {
         int count = level <= 0 ? 0 : Override ?? TumbleweedField.CountFor(_rate, level);
         _field.Count = Math.Min(count, 16);
-        _field.Range = TumbleweedField.RangeFor(level);
-        _material.SetShaderParameter("fade_start", _field.Range - 45f);
-        _material.SetShaderParameter("fade_end", _field.Range - 12f);
+        _field.Range = VegLevels.TumbleRange(level, VegLevels.LampReach);
+        var (fs, fe) = TumbleweedField.FadeIn(_field.Range);
+        _material.SetShaderParameter("fade_start", fs);
+        _material.SetShaderParameter("fade_end", fe);
         _shadeMaterial.SetShaderParameter("fade_start", 60f);
         _shadeMaterial.SetShaderParameter("fade_end", 90f);
         foreach (var n in _nodes) n.CastShadow = level >= 2 ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off;

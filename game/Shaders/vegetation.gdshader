@@ -20,6 +20,9 @@ uniform float saturation = 1.0;
 // where plants fade out, from the main camera (MAIN_CAM_INV_VIEW_MATRIX: the shadow pass's camera is the light's)
 uniform float fade_start = 200.0;
 uniform float fade_end = 250.0;
+// grow in as well as dither in across the fade band (the grass tufts, whose band lies in the headlamps' beam): from a
+// fifth of its size at fade_end to its own at fade_start, about its root, so a tuft rises out of the sward, never pops
+uniform bool grow_in = false;
 // the detail tiers cross-fade (TierBands): this tier's fade-in band and fade-out band, in ground metres from the camera
 // (start, end; none when end <= start). In its fade-in a plant is drawn where the dither passes it, in its fade-out
 // where it does not pass the complement, so two tiers about a boundary together cover every pixel once.
@@ -123,6 +126,7 @@ void vertex() {
 		VERTEX.xz += d / max(dist, 0.05) * (t * give * height * 0.7);
 		VERTEX.y -= t * give * height * 0.6;
 	}
+	if (grow_in && !rolling) VERTEX = origin + (VERTEX - origin) * mix(0.2, 1.0, v_fade);
 }
 
 // a 4x4 ordered dither: the fade thins plants out pixel by pixel, never pops them

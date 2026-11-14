@@ -800,7 +800,9 @@ public partial class CarNode : Node3D
 
     // The modern look's headlamps (GitHub #52): a long, wide, soft-edged beam, pitched a little down so it lays on the road
     // out to about 50 m. The player's car casts shadows from it; of the others, only the nearest few carry a real light.
-    private const float HeadRange = 110f, HeadAngle = 42f, HeadEnergy = 14f, HeadPitch = -2.5f;
+    private const float HeadAngle = 42f, HeadEnergy = 14f, HeadPitch = -2.5f;
+    /// <summary>The beam's range (metres) and its distance fall-off (Godot's spot attenuation), for what follows the lamps' reach (VegLevels).</summary>
+    public const float HeadRange = 110f, HeadAttenuation = 0.6f;
     /// <summary>How many other cars' headlamps cast real light at once (the nearest to the camera); I76_HEADLIGHTS overrides it. The player's always do.</summary>
     public static readonly int MaxHeadLit = int.TryParse(System.Environment.GetEnvironmentVariable("I76_HEADLIGHTS"), out int hn) ? hn : 6;
     private static readonly List<CarNode> HeadCars = [];
@@ -844,7 +846,7 @@ public partial class CarNode : Node3D
         if (!HeadCars.Contains(this)) HeadCars.Add(this);
         _lamps = at.Select(p =>
         {
-            var l = new SpotLight3D { Position = Coords.ToGodot(p), RotationDegrees = new Vector3(HeadPitch, 0, 0), SpotRange = HeadRange, SpotAngle = HeadAngle, SpotAttenuation = 0.6f,
+            var l = new SpotLight3D { Position = Coords.ToGodot(p), RotationDegrees = new Vector3(HeadPitch, 0, 0), SpotRange = HeadRange, SpotAngle = HeadAngle, SpotAttenuation = HeadAttenuation,
                 SpotAngleAttenuation = 0.7f, LightEnergy = HeadEnergy, LightColor = new Color(1f, 0.95f, 0.8f), ShadowEnabled = player, ShadowBias = 0.08f, ShadowNormalBias = 2.5f, Visible = false };
             AddChild(l);
             return l;

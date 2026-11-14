@@ -13,7 +13,10 @@ public struct TelemetryFrame
     public uint Seq;
     public uint Tick;
     public float Alpha;
+    /// <summary>Sim time, seconds (a Developer panel Restore or Freeze stops it or takes it back).</summary>
     public float Time;
+    /// <summary>Milliseconds since the feed started, on the platform's clock: never goes back (Live for Speed's readers order packets by it).</summary>
+    public uint Ms;
     public TelemetryStatus Status;
     /// <summary>0 reverse, 1 to 4 forward.</summary>
     public byte Gear;
@@ -122,7 +125,7 @@ public static class TelemetryPackets
     }
 
     /// <summary>
-    /// Live for Speed's OutSim (classic): time in ms, angular velocity, heading (anticlockwise from above), pitch, roll,
+    /// Live for Speed's OutSim (classic): time in ms (the feed's own, <see cref="TelemetryFrame.Ms"/>), angular velocity, heading (anticlockwise from above), pitch, roll,
     /// acceleration and velocity in world axes (x right, y forward, z up), position in 1/65536 m. Returns its length.
     /// </summary>
     public static int WriteOutSim(Span<byte> b, in TelemetryFrame f, int id = 0)
@@ -131,7 +134,7 @@ public static class TelemetryPackets
         // the body rates back to a world vector about Live for Speed's axes (yaw there is anticlockwise)
         var w = f.Rates.X * ToLfs(r.Right) - f.Rates.Y * ToLfs(r.Up) + f.Rates.Z * ToLfs(r.Forward);
         var att = Attitude(r);
-        BinaryPrimitives.WriteUInt32LittleEndian(b, unchecked((uint)(long)System.Math.Round(f.Time * 1000.0)));
+        BinaryPrimitives.WriteUInt32LittleEndian(b, f.Ms);
         V(b, 4, w);
         F(b, 16, -att.X); F(b, 20, att.Y); F(b, 24, att.Z);
         V(b, 28, ToLfs(f.Accel));
@@ -149,13 +152,13 @@ public static class TelemetryPackets
     public const uint DlFullBeam = 1 << 1, DlHandbrake = 1 << 2, DlOilWarn = 1 << 8;
 
     /// <summary>
-    /// Live for Speed's OutGauge: time, car, flags, gear (0 reverse, 1 neutral, 2 first), speed m/s, rpm, the dials the game
+    /// Live for Speed's OutGauge: time (the feed's own ms, <see cref="TelemetryFrame.Ms"/>), car, flags, gear (0 reverse, 1 neutral, 2 first), speed m/s, rpm, the dials the game
     /// does not have left at rest (no turbo, 90 C, a full tank), the lights, throttle and brake 0..1, two 16-character displays.
     /// </summary>
     public static int WriteOutGauge(Span<byte> b, in TelemetryFrame f, string display1 = "", string display2 = "", int id = 0)
     {
         b[..OutGaugeSize].Clear();
-        BinaryPrimitives.WriteUInt32LittleEndian(b, unchecked((uint)(long)System.Math.Round(f.Time * 1000.0)));
+        BinaryPrimitives.WriteUInt32LittleEndian(b, f.Ms);
         Ascii(b.Slice(4, 4), f.Car ?? "");
         BinaryPrimitives.WriteUInt16LittleEndian(b[8..], 0);
         bool on = (f.Status & TelemetryStatus.EngineOn) != 0;

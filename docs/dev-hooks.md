@@ -296,7 +296,7 @@ Turn off Cheater Options clears it. Not there yet: freezing the AI and spawning 
 
 | Variable | Kind | What it does |
 |---|---|---|
-| `I76_TELEMETRY_UDP` | setup | `[FORMAT@]HOST:PORT[,...]`: once a drawn frame, a UDP datagram to each target about the player's car (single player and network games alike). HOST is a numeric IPv4 address or `localhost` (no name lookup). Off unless set; shell.cfg `[port] telemetry` takes the same text when the variable is absent. A packet that cannot go at once is dropped; nothing waits. Not `I76_TELEMETRY`, which is DriveTest's log line. |
+| `I76_TELEMETRY_UDP` | setup | `[FORMAT@]HOST:PORT[,...]`: once a drawn frame, at most 60 a second (frames between wait; their events go in the next), a UDP datagram to each target about the player's car (single player and network games alike). HOST is a numeric IPv4 address or `localhost` (no name lookup). Off unless set; shell.cfg `[port] telemetry` takes the same text when the variable is absent. A packet that cannot go at once is dropped; nothing waits. Not `I76_TELEMETRY`, which is DriveTest's log line. |
 | `I76_TELEMETRY_FORMAT` | setup | The format of the targets without one: `i26` (default), `outsim` or `outgauge`; shell.cfg `[port] telemetry_format`. |
 
 For example `I76_TELEMETRY_UDP=outsim@127.0.0.1:4123,outgauge@127.0.0.1:4124` feeds motion and dashboard software that reads
@@ -345,11 +345,12 @@ An event: u8 kind, u8 a, u16 b, u32 tick, f32 v0..v3.
 | 3 collision of the player's car | 0 ground or a body, 1 a car, 2 scenery | 0 | relative speed, the contact normal (world) |
 | 4 explosion anywhere | 0 | 0 | distance from the player, the offset from the player (world) |
 
-**`outsim`:** Live for Speed's classic OutSim, 64 bytes (68 with an id): u32 time ms; f32 angular velocity x, y, z; f32
+**`outsim`:** Live for Speed's classic OutSim, 64 bytes (68 with an id): u32 time ms (since the feed started, on the
+platform's clock: it never goes back, where sim time stops under Freeze and goes back on a Restore); f32 angular velocity x, y, z; f32
 heading (anticlockwise from above), pitch, roll; f32 acceleration x, y, z; f32 velocity x, y, z; i32 position x, y, z in
 1/65536 m (wrapping past 32 km). Its axes are x and y on the ground (x the game's x, y its z) and z up.
 
-**`outgauge`:** Live for Speed's OutGauge, 92 bytes: u32 time ms; char[4] car (the .vcf's first four letters); u16 flags 0;
+**`outgauge`:** Live for Speed's OutGauge, 92 bytes: u32 time ms (as OutSim's); char[4] car (the .vcf's first four letters); u16 flags 0;
 u8 gear (0 reverse, 1 neutral (engine off), 2 first...); u8 player id 0; f32 speed, rpm, turbo 0, engine 90 C, fuel 1,
 oil pressure 0, oil 90 C; u32 dash lights available (full beam, handbrake, oil warning) and lit (the lights, the
 handbrake, health under a quarter); f32 throttle, brake, clutch 0; char[16] display 1 (the selected weapon), display 2

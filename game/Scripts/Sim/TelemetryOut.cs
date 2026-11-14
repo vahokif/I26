@@ -8,7 +8,7 @@ namespace I76.Game.Sim;
 
 /// <summary>
 /// The telemetry feed (I76_TELEMETRY_UDP or shell.cfg [port] telemetry, docs/dev-hooks.md "Telemetry out"): once a
-/// drawn frame, the player's car as drawn (interpolated), its motion and controls and the events of the ticks since the
+/// drawn frame, at most 60 a second (TelemetryPacer), the player's car as drawn (interpolated), its motion and controls and the events of the ticks since the
 /// last packet, as UDP datagrams in this port's format or Live for Speed's OutSim / OutGauge, for motion seats, dashboards
 /// and loggers. Reads the sim, never writes it; a send that cannot go at once is dropped.
 /// </summary>
@@ -23,6 +23,8 @@ public partial class TelemetryOut : Node
     private System.Numerics.Vector3 _velPrev, _velCur, _rates;
     private Vehicle? _carSeen;
     private int _errors;
+    private readonly TelemetryPacer _pacer = new();
+    private ulong _startUsec = ulong.MaxValue;
 
     /// <summary>
     /// The feed's targets from I76_TELEMETRY_UDP (or the settings' key): <c>[format@]host:port[,...]</c>, the format
@@ -124,7 +126,10 @@ public partial class TelemetryOut : Node
     public override void _Process(double delta)
     {
         if (_driver is null) return;
-        var f = new TelemetryFrame { Seq = _seq++, Tick = TickNow, Alpha = _driver.Alpha, Car = "I26" };
+        ulong usec = Time.GetTicksUsec();
+        if (_startUsec == ulong.MaxValue) _startUsec = usec;
+        if (!_pacer.Due((usec - _startUsec) / 1e6)) return;   // the events wait for the next packet
+        var f = new TelemetryFrame { Seq = _seq++, Tick = TickNow, Alpha = _driver.Alpha, Car = "I26", Ms = (uint)((usec - _startUsec) / 1000) };
         float dt = _driver.Tick;
         f.Time = System.Math.Max(0, (f.Tick - 1 + f.Alpha) * dt);
         if (GetTree().Paused) f.Status |= TelemetryStatus.Paused;

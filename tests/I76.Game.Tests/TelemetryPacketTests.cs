@@ -20,7 +20,7 @@ public class TelemetryPacketTests
 
     private static TelemetryFrame Frame() => new()
     {
-        Seq = 7, Tick = 400, Alpha = 0.25f, Time = 19.9f,
+        Seq = 7, Tick = 400, Alpha = 0.25f, Time = 19.9f, Ms = 123456,
         Status = TelemetryStatus.Present | TelemetryStatus.EngineOn | TelemetryStatus.Lights,
         Gear = 3, SkidMask = 0b0101, BlownMask = 0b1000,
         Pos = new Double3(1812.5, 100.25, 50532.5), Rot = Pose(MathF.PI / 2),
@@ -73,7 +73,7 @@ public class TelemetryPacketTests
         var b = new byte[68];
         var f = Frame();
         Assert.Equal(64, TelemetryPackets.WriteOutSim(b, f));
-        Assert.Equal(19900u, BinaryPrimitives.ReadUInt32LittleEndian(b));
+        Assert.Equal(123456u, BinaryPrimitives.ReadUInt32LittleEndian(b));   // the feed's own ms, not sim time (which a Restore takes back)
         Assert.Equal(-MathF.PI / 2, F(b, 16), 5);       // facing east: anticlockwise heading -90 degrees
         Assert.Equal(0f, F(b, 20), 5);
         Assert.Equal(0f, F(b, 24), 5);
@@ -96,7 +96,7 @@ public class TelemetryPacketTests
         var b = new byte[96];
         var f = Frame() with { Status = TelemetryStatus.Present | TelemetryStatus.EngineOn | TelemetryStatus.Handbrake, Brake = 0.4f };
         Assert.Equal(92, TelemetryPackets.WriteOutGauge(b, f, "RKT LNCHR"));
-        Assert.Equal(19900u, BinaryPrimitives.ReadUInt32LittleEndian(b));
+        Assert.Equal(123456u, BinaryPrimitives.ReadUInt32LittleEndian(b));   // the feed's own ms, not sim time (which a Restore takes back)
         Assert.Equal("vppi"u8.ToArray(), b[4..8]);
         Assert.Equal(4, b[10]);                         // third gear: 0 reverse, 1 neutral, 2 first
         Assert.Equal((20.03f, 3500f), (F(b, 12), F(b, 16)));
@@ -141,4 +141,25 @@ public class TelemetryPacketTests
     }
 
     private static (string, TelemetryFormat)? Show((System.Net.IPEndPoint To, TelemetryFormat Format)? t) => t is { } x ? (x.To.ToString(), x.Format) : null;
+
+    /// <summary>The feed sends at most 60 packets a second whatever the frame rate, and every frame of a 60 Hz display.</summary>
+    [Theory]
+    [InlineData(30.0, 30.0)]
+    [InlineData(59.94, 59.94)]
+    [InlineData(60.0, 60.0)]
+    [InlineData(75.0, 60.0)]
+    [InlineData(144.0, 60.0)]
+    [InlineData(400.0, 60.0)]
+    public void TheFeedSendsAtMost60ASecond(double fps, double expected)
+    {
+        var pacer = new TelemetryPacer();
+        int sent = 0;
+        for (int i = 0; i < (int)(fps * 10); i++) if (pacer.Due(i / fps)) sent++;
+        Assert.InRange(sent / 10.0, expected - 1, expected + 0.5);
+        // a hitch: a frame 2 s late sends once, not a burst to catch up
+        var p = new TelemetryPacer();
+        Assert.True(p.Due(0));
+        Assert.True(p.Due(2));
+        Assert.False(p.Due(2.001));
+    }
 }

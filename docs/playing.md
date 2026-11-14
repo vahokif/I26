@@ -165,7 +165,9 @@ target, the D-pad links, reverses and changes target. Start opens the game menu 
 command on the Controller screen and they do only that command instead. The pad also drives every menu
 (D-pad or left stick to move, A to click, B and Start to go back); A, B or Start skips a movie, and B or Start a
 skippable cut-scene, as Esc does. Everything is rebindable on the Controller
-screen (Control Configuration > Calibrate).
+screen (Control Configuration > Calibrate): click an input or its row, or push a stick, pull a trigger or pick one with
+the D-pad and press A. A stick's top and bottom on the drawing are its up / down axis, its sides its left / right and its
+middle its press, so for example the right stick's up / down can accelerate and brake while the left stick steers.
 
 **Rumble.** A pad's rumble follows the game's own force-feedback effects (Play Options' Force Feedback row). Further down
 Play Options' list the Rumble row steps Original (those effects only, the default), Enhanced (and short pulses for a nitrous kick, the handbrake,

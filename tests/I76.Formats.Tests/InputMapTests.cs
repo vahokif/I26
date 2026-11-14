@@ -426,4 +426,45 @@ public class InputMapTests
         // a chord's term counts too
         Assert.True(BindingTable.Parse("e_brake {\n   + joystick1   Button1\n   + joystick1   Button7\n}\n").PadButtonBound(PadButton.Back));
     }
+
+    private sealed class OnePad : IPadSource
+    {
+        public PadRaw Now;
+        public IReadOnlyList<PadRaw> Read() => [Now];
+    }
+
+    [Fact]
+    public void ASavedMapWithTheThrottleOnTheRightSticksUpDownLoadsAndDrivesByIt()
+    {
+        // the right stick's up / down accelerates and brakes, the left stick's left / right steers, the right's left / right the camera
+        var made = PadPreset.Build((string?)null);
+        made.AssignAxis("throttle", "joystick1", "5thAxis");
+        var text = made.ToText();
+        Assert.Contains("- joystick1 5thAxis", text.Replace("  ", " ").Replace("  ", " "));
+        // as the game loads it
+        var t = BindingTable.Parse(text);
+        if (InputMapFile.NeedsMigration(text)) t = t.Migrate();
+        Assert.False(t.AddPadSideIfNone(PadPreset.Build((string?)null)));
+        t = t.WithScoreboardOnTab();
+        Assert.Equal(new InputTerm(false, "joystick1", "5thAxis"), t.AxisOf("throttle"));
+        Assert.Equal("Right Stick Y", PadNames.Of(t.AxisOf("throttle")));
+        var pad = new OnePad();
+        var bank = new JoystickBank(pad);
+        var axes = new AxisControls(t.Blocks);
+        pad.Now = new PadRaw(0, 0, 0, -1, 0, 0, 0);       // the right stick pushed up
+        bank.Poll(true);
+        axes.Update(bank, _ => false);
+        Assert.Equal(65536, axes.Throttle);
+        Assert.Equal(0, axes.Steer);
+        pad.Now = new PadRaw(0, 0, 1, 0, 0, 0, 0);        // and to the right: the camera, not the throttle
+        bank.Poll(true);
+        axes.Update(bank, _ => false);
+        Assert.Equal(0, axes.Throttle);
+        Assert.NotEqual(0, axes.Yaw);
+        pad.Now = new PadRaw(-1, 0, 0, 0, 0, 0, 0);       // the left stick to the left steers left
+        bank.Poll(true);
+        axes.Update(bank, _ => false);
+        Assert.Equal(65536, axes.Steer);
+        Assert.Equal(0, axes.Throttle);
+    }
 }

@@ -2,6 +2,9 @@ using Godot;
 using I76.Formats.Input;
 using I76.Formats.Shell;
 
+// the drawing's hit test and the stick picks are checked without the engine
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("I76.Game.Tests")]
+
 namespace I76.Game.Shell;
 
 /// <summary>
@@ -10,8 +13,10 @@ namespace I76.Game.Shell;
 /// alone) -- the paper, the title in heavy caps, the double-ruled frame round a table of rows a font height + 5 apart, the flat orange
 /// buttons on the original's slots -- with a vector pad in the middle, in ink. Each pad input that does something has a row in the
 /// column on its side, in the shell's handwriting, and a leader to it. Pressing a pad input marks it on the drawing and its row.
-/// A click on an input or its row, or A on the one the D-pad has selected, opens the shell's list of what it can do.
-/// The D-pad, A, B and Start drive the screen; the sticks, triggers and other buttons only show (PadMenu). In the 1997 look the
+/// A click on an input or its row, or A on the one the D-pad has selected, opens the shell's list of what it can do. A stick on the
+/// drawing is its axes by direction (top and bottom up / down, sides left / right) round its middle (the press); a stick's one row for
+/// both axes (the camera) is the whole stick. The D-pad, A, B and Start drive the screen; pushing a stick or pulling a trigger selects it
+/// (a stick's axis by the way it went), the other buttons only show (PadMenu). In the 1997 look the
 /// sheet, its rules and its words are the shell's pixels (its palette and bitmap fonts) and the drawing is made at 640x480.
 /// It edits only the joystick blocks of its own copy of the bindings (the Control Configuration screen edits keys and mouse only);
 /// Done hands the copy back to that screen, Cancel and Esc hand back what it gave.
@@ -25,6 +30,7 @@ public sealed class ControllerScreen : OverlayScreen
     private Control? _layer;
     private int _sel;
     private readonly PadMenu _menu = new();
+    private PadRaw _lastPad;
     private bool _replugged, _hadPad;
 
     public ControllerScreen(BindingTable pending)
@@ -153,6 +159,22 @@ public sealed class ControllerScreen : OverlayScreen
 
     internal static readonly Vector2 LeftStick = new(-55, -18), RightStick = new(29, 12), DPad = new(-29, 12);
     internal const float StickR = 19, CapR = 15, FaceR = 7.5f;
+    /// <summary>A stick's middle, half its cap: a click there is the stick pressed (L3, R3).</summary>
+    internal const float PressR = CapR / 2;
+
+    internal enum StickPart { None, Press, X, Y }
+
+    /// <summary>
+    /// What a click at <paramref name="d"/> from a stick's middle is: its middle the press, the rest of the stick (cap and ring) the axis that
+    /// way, its top and bottom up / down, its sides left / right: each a target a click finds, the up / down too when it has no row.
+    /// </summary>
+    internal static StickPart PartOf(Vector2 d)
+    {
+        float r = d.Length();
+        if (r > StickR + 2) return StickPart.None;
+        if (r <= PressR) return StickPart.Press;
+        return Math.Abs(d.Y) > Math.Abs(d.X) ? StickPart.Y : StickPart.X;
+    }
     /// <summary>The D-pad cross: half an arm's width and an arm's length from the middle (about 12 % of the body's width across).</summary>
     internal const float DpA = 4.8f, DpR = 14.5f;
     internal static readonly Vector2 BackAt = new(-17, -27), StartAt = new(17, -27), GuideAt = new(0, -41);
@@ -217,14 +239,13 @@ public sealed class ControllerScreen : OverlayScreen
 
     internal readonly El[] Els = Make();
 
-    private static El[] Make()
+    internal static El[] Make()
     {
-        El B(string key, string ch, int btn, bool left, Vector2[] poly, string? group = null, Vector2? tip = null) => new()
-        { Key = key, Channel = ch, Group = group ?? key, Left = left, Poly = poly, Tip = tip, Live = p => Pad(p, btn) };
+        El B(string key, string ch, int btn, bool left, Vector2[] poly, string? group = null, Vector2? tip = null, Func<Vector2, bool>? hit = null) => new()
+        { Key = key, Channel = ch, Group = group ?? key, Left = left, Poly = poly, Tip = tip, Live = p => Pad(p, btn), Hit = hit };
         El Ax(string key, string ch, bool left, Vector2[] poly, Func<PadRaw, float> live, string? group = null, Func<Vector2, bool>? hit = null) => new()
         { Key = key, Channel = ch, Group = group ?? key, Axis = true, Left = left, Poly = poly, Live = live, Hit = hit };
-        bool In(Vector2 v, Vector2 c, out Vector2 d) { d = v - c; return d.Length() <= StickR + 2; }
-        Func<Vector2, bool> Dir(Vector2 c, bool y) => v => In(v, c, out var d) && d.Length() >= CapR - 2 && (Math.Abs(d.Y) > Math.Abs(d.X)) == y;
+        Func<Vector2, bool> Part(Vector2 c, StickPart part) => v => PartOf(v - c) == part;
         var ls = Circle(LeftStick, StickR); var rs = Circle(RightStick, StickR);
         float a = DpA, r = DpR;
         Vector2 dp = DPad;
@@ -232,9 +253,9 @@ public sealed class ControllerScreen : OverlayScreen
         [
             Ax("LT", "Throttle", true, Band(-100, -64, 8, 19), p => p.TriggerLeft),
             B("LB", "Button5", PadButton.LeftShoulder, true, Band(-102, -40, 2, 10)),
-            Ax("LSY", "Down/Up", true, ls, p => Math.Abs(p.LeftY), "LS", Dir(LeftStick, true)),
-            Ax("LSX", "Left/Right", true, ls, p => Math.Abs(p.LeftX), "LS", Dir(LeftStick, false)),
-            B("L3", "Button9", PadButton.LeftStick, true, Circle(LeftStick, CapR), "LS"),
+            Ax("LSY", "Down/Up", true, ls, p => Math.Abs(p.LeftY), "LS", Part(LeftStick, StickPart.Y)),
+            Ax("LSX", "Left/Right", true, ls, p => Math.Abs(p.LeftX), "LS", Part(LeftStick, StickPart.X)),
+            B("L3", "Button9", PadButton.LeftStick, true, Circle(LeftStick, CapR), "LS", hit: Part(LeftStick, StickPart.Press)),
             B("Back", "Button7", PadButton.Back, true, Circle(BackAt, 4.5f, 16)),
             B("DUp", "HatUp", PadButton.DpadUp, true, Box(dp.X - a, dp.Y - r, dp.X + a, dp.Y - a), "D", dp + new Vector2(0, -r)),
             B("DLeft", "HatLeft", PadButton.DpadLeft, true, Box(dp.X - r, dp.Y - a, dp.X - a, dp.Y + a), "D", dp + new Vector2(-r, 0)),
@@ -245,9 +266,9 @@ public sealed class ControllerScreen : OverlayScreen
             B("RB", "Button6", PadButton.RightShoulder, false, Band(40, 102, 2, 10)),
             .. Face.Select(f => B(f.Key, f.Key switch { "A" => "Button1", "B" => "Button2", "X" => "Button3", _ => "Button4" },
                 f.Key switch { "A" => PadButton.A, "B" => PadButton.B, "X" => PadButton.X, _ => PadButton.Y }, false, Circle(f.At, FaceR, 20))),
-            Ax("RSY", "5thAxis", false, rs, p => Math.Abs(p.RightY), "RS", Dir(RightStick, true)),
-            Ax("RSX", "Rudder", false, rs, p => Math.Abs(p.RightX), "RS", Dir(RightStick, false)),
-            B("R3", "Button10", PadButton.RightStick, false, Circle(RightStick, CapR), "RS"),
+            Ax("RSY", "5thAxis", false, rs, p => Math.Abs(p.RightY), "RS", Part(RightStick, StickPart.Y)),
+            Ax("RSX", "Rudder", false, rs, p => Math.Abs(p.RightX), "RS", Part(RightStick, StickPart.X)),
+            B("R3", "Button10", PadButton.RightStick, false, Circle(RightStick, CapR), "RS", hit: Part(RightStick, StickPart.Press)),
         ];
     }
 
@@ -359,11 +380,29 @@ public sealed class ControllerScreen : OverlayScreen
         float bd = float.MaxValue;
         for (int i = 0; i < poly.Length; i++)
         {
-            var q = Geometry2D.GetClosestPointToSegment(p, poly[i], poly[(i + 1) % poly.Length]);
+            var q = OnSegment(p, poly[i], poly[(i + 1) % poly.Length]);
             float d = q.DistanceSquaredTo(p);
             if (d < bd) { bd = d; best = q; }
         }
         return best;
+    }
+
+    /// <summary>The point of segment a..b nearest p.</summary>
+    private static Vector2 OnSegment(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a;
+        float len = ab.LengthSquared();
+        return len <= 0 ? a : a + ab * Math.Clamp((p - a).Dot(ab) / len, 0f, 1f);
+    }
+
+    /// <summary>Whether p is inside the closed outline (even-odd).</summary>
+    private static bool Inside(Vector2[] poly, Vector2 p)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+            if ((poly[i].Y > p.Y) != (poly[j].Y > p.Y) && p.X < (poly[j].X - poly[i].X) * (p.Y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X)
+                inside = !inside;
+        return inside;
     }
 
     private static bool Cross(Vector2 a, Vector2 b, Vector2 c, Vector2 d) => Geometry2D.SegmentIntersectsSegment(a, b, c, d).VariantType != Variant.Type.Nil;
@@ -437,15 +476,16 @@ public sealed class ControllerScreen : OverlayScreen
 
     /// <summary>The notice under the frame's top and the help over its foot, in the middle of the sheet.</summary>
     private static string[] Notice => Controls.HasPad
-        ? ["Click an input, or pick it with the D-pad", "and press A, to choose what it does"]
+        ? ["Click an input, or pick it with the D-pad (or push a stick, pull a trigger) and press A, to choose what it does."]
         : ["No controller connected"];
-    private static readonly string[] Help = ["Right-click or Delete clears the selected input.", "Start is Done, B is Cancel."];
+    private static readonly string[] Help =
+        ["A stick's top and bottom are its up / down, its sides its left / right, its middle its press.", "Right-click or Delete clears the selected input.", "Start is Done, B is Cancel."];
 
     protected override void DrawExtra()
     {
         Layout();
         if (Shell.Faithful) DrawSheet1997();
-        var notice = Notice;
+        var notice = Notice.SelectMany(n => Words(n, RightRule - LeftRule - 12)).ToArray();
         for (int k = 0; k < notice.Length; k++) Center(_f, 320, RowY(k) + 3, notice[k]);
         // the help between the columns' rules, wrapped to their room and set on the bottom rows
         var help = Help.SelectMany(h => Words(h, RightRule - LeftRule - 12)).ToArray();
@@ -504,27 +544,73 @@ public sealed class ControllerScreen : OverlayScreen
 
     // ---- editing ---------------------------------------------------------------------------------
 
-    private El? ElementAt(Vector2I m)
+    private El? RowAt(Vector2I m) => Els.FirstOrDefault(e => e.HasRow && e.Row.HasPoint(m));
+
+    private El? ElementAt(Vector2I m) => RowAt(m) ?? At(Els, (Vector2)m - C);
+
+    /// <summary>The input drawn at <paramref name="rel"/> (pad coordinates): a stick's parts by <see cref="PartOf"/>, any other by its outline (or 2 px off it).</summary>
+    internal static El? At(IReadOnlyList<El> els, Vector2 rel)
     {
-        foreach (var e in Els)
-            if (e.HasRow && e.Row.HasPoint(m)) return e;
-        var rel = (Vector2)m - C;
-        foreach (var e in Els.Reverse())
+        for (int i = els.Count - 1; i >= 0; i--)
         {
+            var e = els[i];
             if (e.Hit is { } h) { if (h(rel)) return e; continue; }
-            if (Geometry2D.IsPointInPolygon(rel, e.Poly) || Nearest(e.Poly, rel).DistanceTo(rel) <= 2) return e;
+            if (Inside(e.Poly, rel) || Nearest(e.Poly, rel).DistanceTo(rel) <= 2) return e;
         }
         return null;
     }
 
-    private void Clear(El e)
+    /// <summary>A stick axis's other axis (LSX's is LSY), or null.</summary>
+    private El? Twin(El e) => e.Key is "LSX" or "LSY" or "RSX" or "RSY" ? Els.First(o => o.Key == e.Key[..2] + (e.Key[2] == 'X' ? "Y" : "X")) : null;
+
+    /// <summary>A stick's one row for both its axes (they do the one thing, the camera): the row is the whole stick.</summary>
+    private bool Whole(El row) => row.HasRow && row.Key is "LSX" or "RSX" && Twin(row) is { HasRow: false, Lines.Length: > 0 };
+
+    /// <summary>
+    /// The item picked from an axis's list (1 Accelerate / Brake, 2 Steer, 3 Camera / Look; 0 none) for a stick's axes: for the whole stick
+    /// (<paramref name="y"/> given, its one row picked) the throttle goes on its up / down and the steer on its left / right, as a stick has
+    /// them in the stock joystick map, and the camera on both; otherwise on the one axis.
+    /// </summary>
+    internal static void PickAxis(BindingTable map, int item, string channel, string? y = null)
+    {
+        if (y is not null)
+        {
+            if (item == 0) { map.ClearInput(channel); map.ClearInput(y); }
+            else if (item == 1) map.AssignAxis("throttle", "joystick1", y);
+            else if (item == 2) map.AssignAxis("steer", "joystick1", channel);
+            else if (item == 3) { map.AssignAxis("track_yaw_delta", "joystick1", channel); map.AssignAxis("track_pitch_delta", "joystick1", y); }
+            return;
+        }
+        if (item == 0) map.ClearInput(channel);
+        else if (item > 0) map.AssignAxis(item switch { 1 => "throttle", 2 => "steer", _ => IsY(channel) ? "track_pitch_delta" : "track_yaw_delta" }, "joystick1", channel);
+    }
+
+    /// <summary>How far a stick is pushed (its larger axis) or a trigger pulled to pick it on the drawing.</summary>
+    internal const float PushAt = 0.6f;
+
+    /// <summary>
+    /// The input a pad's stick or trigger was just pushed to: a stick going out past <see cref="PushAt"/>, the axis it went along (up / down or
+    /// left / right, the larger); a trigger pulled past it. Null when nothing went out this frame.
+    /// </summary>
+    internal static string? Pushed(in PadRaw before, in PadRaw now)
+    {
+        static bool Out(float x, float y) => Math.Max(Math.Abs(x), Math.Abs(y)) > PushAt;
+        if (Out(now.LeftX, now.LeftY) && !Out(before.LeftX, before.LeftY)) return Math.Abs(now.LeftY) > Math.Abs(now.LeftX) ? "LSY" : "LSX";
+        if (Out(now.RightX, now.RightY) && !Out(before.RightX, before.RightY)) return Math.Abs(now.RightY) > Math.Abs(now.RightX) ? "RSY" : "RSX";
+        if (now.TriggerLeft > PushAt && before.TriggerLeft <= PushAt) return "LT";
+        if (now.TriggerRight > PushAt && before.TriggerRight <= PushAt) return "RT";
+        return null;
+    }
+
+    private void Clear(El e, bool whole = false)
     {
         Shell.Sound(82);
         _map.ClearInput(e.Channel);
+        if (whole && Twin(e) is { } y) _map.ClearInput(y.Channel);
         Redraw();
     }
 
-    private void Open(El e, bool byPad)
+    private void Open(El e, bool byPad, bool whole = false)
     {
         Shell.Sound(82);
         _sel = Array.IndexOf(Walk, e.Key);
@@ -543,8 +629,8 @@ public sealed class ControllerScreen : OverlayScreen
             {
                 _menu.Settle();      // the A that picked (or the B that cancelled) does nothing here when the list closes
                 ShowPad = true;
-                if (i == 0) _map.ClearInput(e.Channel);
-                else if (i > 0 && e.Axis) _map.AssignAxis(i switch { 1 => "throttle", 2 => "steer", _ => IsY(e.Channel) ? "track_pitch_delta" : "track_yaw_delta" }, "joystick1", e.Channel);
+                if (e.Axis) PickAxis(_map, i, e.Channel, whole ? Twin(e)?.Channel : null);
+                else if (i == 0) _map.ClearInput(e.Channel);
                 else if (i > 0) _map.Assign(Controls.Commands[Entries[i - 1]], "joystick1", e.Channel);
                 Redraw();
             },
@@ -562,7 +648,8 @@ public sealed class ControllerScreen : OverlayScreen
                 else if (i == 2) Done(); else Back();
                 return;
             }
-        if (ElementAt(m) is { } e) Open(e, false);
+        if (RowAt(m) is { } row) Open(row, false, Whole(row));
+        else if (At(Els, (Vector2)m - C) is { } e) Open(e, false);
     }
 
     internal PadRaw ReadPad() => Controls.PadSource.Read() is { Count: > 0 } l ? l[0] : default;
@@ -581,7 +668,11 @@ public sealed class ControllerScreen : OverlayScreen
         // a pad plugged in or pulled out: the notice says so at once
         if (_replugged || Controls.HasPad != _hadPad) { _replugged = false; _hadPad = Controls.HasPad; Redraw(); }
         // the D-pad, A, B and Start only; a stick, a trigger or any other button just shows on the drawing
-        var act = _menu.Update(ReadPad());
+        var pad = ReadPad();
+        var act = _menu.Update(pad);
+        // a stick pushed or a trigger pulled is picked (a stick's axis by the way it went), for A to open
+        if (Pushed(_lastPad, pad) is { } pushed && Array.IndexOf(Walk, pushed) is var at && at != _sel) { _sel = at; Shell.Sound(82); }
+        _lastPad = pad;
         if ((act & PadMenu.Act.Prev) != 0) Step(-1);
         if ((act & PadMenu.Act.Next) != 0) Step(1);
         if ((act & PadMenu.Act.Open) != 0) { Open(Selected, true); return; }
@@ -594,7 +685,7 @@ public sealed class ControllerScreen : OverlayScreen
             else if (k is Key.Enter or Key.Space or Key.KpEnter) { Open(Selected, false); return; }
             else if (k is Key.Delete or Key.Backspace) Clear(Selected);
         }
-        if (Shell.RightClicked && ElementAt(Shell.Mouse) is { } e) { _sel = Array.IndexOf(Walk, e.Key); Clear(e); return; }
+        if (Shell.RightClicked && ElementAt(Shell.Mouse) is { } e) { _sel = Array.IndexOf(Walk, e.Key); Clear(e, RowAt(Shell.Mouse) == e && Whole(e)); return; }
         base.Tick();
     }
 }
@@ -949,7 +1040,7 @@ public partial class PadDiagram : Control
             Fine(a, b, _ink, 0.9f);
             DrawCircle(Faithful ? b.Round() : b, (Faithful ? 1.2f : 1.7f) * _s, _ink);
             var twin = e.Key is "LSX" or "RSX" ? El(e.Key[..2] + "Y") : null;
-            bool live = e.Live(pad) > (e.Axis ? 0.3f : 0.5f) || (twin is { HasRow: false } && twin.Live(pad) > 0.3f);
+            bool live = e.Live(pad) > (e.Axis ? 0.3f : 0.5f) || (twin is { HasRow: false, Lines.Length: > 0 } && twin.Live(pad) > 0.3f);
             if (!live) continue;
             // a highlighter run under the words (in the modern look under them, in the 1997 one below them)
             var row = e.Row;
@@ -964,7 +1055,8 @@ public partial class PadDiagram : Control
     private void Selection()
     {
         var sel = Screen.Current;
-        var shown = sel.HasRow ? sel : sel.Key is "LSY" or "RSY" ? El(sel.Key[..2] + "X") : sel;
+        // a stick's up / down shares its left / right's row only when the two do the one thing; with nothing on it, it has no row to mark
+        var shown = sel.HasRow ? sel : sel.Key is "LSY" or "RSY" && sel.Lines.Length > 0 ? El(sel.Key[..2] + "X") : sel;
         var pts = sel.Poly.Select(ControllerScreen.P).ToArray();
         var lo = pts.Aggregate((a, b) => a.Min(b)); var hi = pts.Aggregate((a, b) => a.Max(b));
         var c = (lo + hi) / 2; var half = (hi - lo) / 2;

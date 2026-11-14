@@ -1191,6 +1191,10 @@ public sealed class ShellSettings
     public bool DevFps { get; set; }
     /// <summary>[port] muzzle_reach (no row; the Developer panel's Settings): how far the modern look's muzzle light reaches round a firing gun, in percent: 100 the ground and the cliffs ahead at night, 0 the light before the key, on the firing car alone (MuzzleReach; written when not the default).</summary>
     public int MuzzleReach { get; set; } = I76.Game.Sim.MuzzleReach.Default;
+    /// <summary>[port] lamp_ramp (no row; the Developer panel's Settings): the modern look's lamps warm up and cool down as 1976's incandescent bulbs did instead of switching in one frame (LampRamp; written when off).</summary>
+    public bool LampRamp { get; set; } = true;
+    /// <summary>[port] lamp_halo (no row; the Developer panel's Settings): the modern look's lamp lens glows and glares in percent (LampHalo, 65; written when not the default).</summary>
+    public int LampHalo { get; set; } = I76.Game.Sim.LampHalo.Default;
 
     /// <summary>A hand-written flag's word: true, 1, on or yes (any case) turn it on; anything else, or nothing, leaves it off.</summary>
     public static bool DeveloperWord(string? word) => word?.Trim().ToLowerInvariant() is "true" or "1" or "on" or "yes";
@@ -1428,6 +1432,8 @@ public sealed class ShellSettings
         s.DeveloperTools = DeveloperWord(c.GetValue("port", "developer", false).ToString()) || DeveloperWord(c.GetValue("port", "developer_tools", false).ToString());
         s.DevFps = (bool)c.GetValue("port", "dev_fps", false);
         s.MuzzleReach = I76.Game.Sim.MuzzleReach.Parse(c.GetValue("port", "muzzle_reach", "").ToString());
+        s.LampRamp = !string.Equals(c.GetValue("port", "lamp_ramp", "on").ToString(), "off", StringComparison.OrdinalIgnoreCase);
+        s.LampHalo = I76.Game.Sim.LampHalo.Parse(c.GetValue("port", "lamp_halo", "").ToString());
         s.Renderer = Enum.TryParse<I76.Game.Boot.RendererChoice>((string)c.GetValue("port", "renderer", "Auto"), true, out var rc) ? rc : I76.Game.Boot.RendererChoice.Auto;
         // no version step: absent, a pack's audio plays
         s.HiFiAudio = (bool)c.GetValue("port", "hd_sounds", true);
@@ -1470,6 +1476,8 @@ public sealed class ShellSettings
         if (DeveloperTools) c.SetValue("port", "developer", true);
         if (DevFps) c.SetValue("port", "dev_fps", true);
         if (MuzzleReach != I76.Game.Sim.MuzzleReach.Default) c.SetValue("port", "muzzle_reach", MuzzleReach);
+        if (!LampRamp) c.SetValue("port", "lamp_ramp", "off");
+        if (LampHalo != I76.Game.Sim.LampHalo.Default) c.SetValue("port", "lamp_halo", LampHalo);
         c.SetValue("port", "hd_menu_art", HdMenuArt);
         if (!HiFiAudio) c.SetValue("port", "hd_sounds", false);
         c.SetValue("shell", "graphics", Graphics);

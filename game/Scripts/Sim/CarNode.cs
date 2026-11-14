@@ -462,7 +462,7 @@ public partial class CarNode : Node3D
     /// <summary>One glow material per texture; weakly keyed, so a finished scene's car textures are not held for the rest of the run.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Texture2D, ShaderMaterial> GlowMats = new();
     internal static void ResetForGameSwitch() => GlowMats.Clear();
-    private const float BrakeLevel = 1.3f, TailLevel = 0.6f;
+    private const float BrakeLevel = 1.3f, TailLevel = 0.6f, BrakeLightEnergy = 1.0f;
 
     /// <summary>The tail lamp mesh's glow twin: each surface's own texture under the red-lens shader.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Mesh, Mesh?> GlowTwins = new();
@@ -495,6 +495,12 @@ public partial class CarNode : Node3D
     private OmniLight3D? _brakeLight;
     private ulong _brakeSeenMs;
     private float _rearLevel = -1;
+    // the modern look's filament ramp (LampRamp): each lamp kind's drawn level follows its switch with a lag; the first
+    // frame stands them at their switches. What the lights, glares and glows were last set to, so a steady lamp costs nothing
+    private float _headRamp, _brakeRamp, _tailRamp, _rearRamp;
+    private bool _rampFresh = true;
+    private float _headApplied = -1, _brakeApplied = -1, _brakeGlowApplied = -1, _tailGlowApplied = -1, _haloApplied = -1;
+    private static readonly Color HeadColour = new(1f, 0.95f, 0.8f);
     /// <summary>The modern look: the headlamps flare towards the camera.</summary>
     public bool Modern { get; set; } = true;
 
@@ -733,7 +739,7 @@ public partial class CarNode : Node3D
             return g;
         }).ToArray();
         var mid = at.Aggregate(System.Numerics.Vector3.Zero, (a, b) => a + b) / at.Length;
-        _brakeLight = new OmniLight3D { Position = Coords.ToGodot(mid) + new Vector3(0, -0.15f, 0.6f), OmniRange = 4.5f, LightEnergy = 1.0f,
+        _brakeLight = new OmniLight3D { Position = Coords.ToGodot(mid) + new Vector3(0, -0.15f, 0.6f), OmniRange = 4.5f, LightEnergy = BrakeLightEnergy,
             LightColor = new Color(1f, 0.08f, 0.04f), ShadowEnabled = false, Visible = false, Name = "BrakeLight" };
         AddChild(_brakeLight);
     }
@@ -1014,10 +1020,33 @@ public partial class CarNode : Node3D
             _body.Position = Wrecked && Modern ? new Vector3(0, _wreckGap * Mathf.Max(0, -rows.Up.Y), 0) : Vector3.Zero;
         bool shown = (_body?.Visible ?? true) && !Wrecked;
         bool lit = (Sim.Flags & VehicleFlags.Lights) != 0 && frontOk;
+        bool lampsOn = lit && !Wrecked;
+        bool lightsOn = (Sim.Flags & VehicleFlags.Lights) != 0 && rearOk;
+        // The modern look's filaments (LampRamp): the headlamps' level follows the lights flag, the brake lamp's the braking
+        // rule, the tail lamp's the lights, and the rear glare's its own three steps, each with a lag; off, or in the 1997
+        // look, every level is its switch, as the original draws them. A fresh car's lamps stand at their switches
+        bool ramp = Modern && LampRamp.Enabled;
+        // the glows' and glares' share ([port] lamp_halo); a change (the Developer panel) re-applies every level
+        float halo = LampHalo.Factor;
+        if (halo != _haloApplied) (_haloApplied, _headApplied, _rearLevel, _brakeGlowApplied, _tailGlowApplied) = (halo, -1, -1, -1, -1);
+        float headTarget = lampsOn ? 1f : 0f, brakeTarget = Modern && shown && braking ? 1f : 0f, tailTarget = Modern && shown && lit ? 1f : 0f;
+        float rearTarget = !Modern || !shown ? 0f : braking ? 1f : lightsOn ? 0.3f : 0f;
+        if (ramp && !_rampFresh)
+        {
+            float dt = (float)GetProcessDeltaTime();
+            _headRamp = LampRamp.Head(_headRamp, headTarget, dt);
+            _brakeRamp = LampRamp.Rear(_brakeRamp, brakeTarget, dt);
+            _tailRamp = LampRamp.Rear(_tailRamp, tailTarget, dt);
+            _rearRamp = LampRamp.Rear(_rearRamp, rearTarget, dt);
+        }
+        else (_headRamp, _brakeRamp, _tailRamp, _rearRamp, _rampFresh) = (headTarget, brakeTarget, tailTarget, rearTarget, false);
         // The brake lamp's lit faces (BLGT) show while braking; the tail lamp (TLGT) is the headlamps' child
         // node, so it shows only with the lights on (and the front holding up): with them off and the brake off the lamp
-        // is the body's own unlit lens. Both looks; the modern look adds its glow over the lit faces
-        var (brakeOn, tailOn) = I76.Formats.Assembly.LampSupport.RearFaces(braking, (Sim.Flags & VehicleFlags.Lights) != 0, frontOk, _brake is not null);
+        // is the body's own unlit lens. Both looks; the modern look adds its glow over the lit faces, and under the ramp a
+        // lit face shows from the filament's half-way (the face is a texture: lit or not)
+        var (brakeOn, tailOn) = ramp
+            ? I76.Formats.Assembly.LampSupport.RearFaces(_brakeRamp >= 0.5f, _tailRamp >= 0.5f, true, _brake is not null)
+            : I76.Formats.Assembly.LampSupport.RearFaces(braking, (Sim.Flags & VehicleFlags.Lights) != 0, frontOk, _brake is not null);
         bool brakeFaces = shown && brakeOn, tailFaces = shown && tailOn;
         if (_brake is not null) _brake.Visible = brakeFaces && !(Modern && _brakeHeld is not null);
         if (_brakeHeld is not null) _brakeHeld.Visible = brakeFaces && Modern;
@@ -1026,33 +1055,50 @@ public partial class CarNode : Node3D
         if (_tailHeld is not null) _tailHeld.Visible = tailFaces && Modern;
         if (_brakeGlow is not null)
         {
-            _brakeGlow.Visible = Modern && shown && braking;
-            if (_brakeGlow.Visible) _brakeGlow.SetInstanceShaderParameter("level", BrakeLevel);
+            float level = Modern && shown ? BrakeLevel * _brakeRamp * halo : 0f;
+            _brakeGlow.Visible = level > 0f;
+            if (_brakeGlow.Visible && level != _brakeGlowApplied) _brakeGlow.SetInstanceShaderParameter("level", _brakeGlowApplied = level);
         }
         if (_tailGlow is not null)
         {
-            _tailGlow.Visible = Modern && shown && !braking && lit && rearOk;
-            if (_tailGlow.Visible) _tailGlow.SetInstanceShaderParameter("level", TailLevel);
+            // the tail filament stays lit under the brake's brighter one (a dual-filament bulb): its glow gives way as the brake's rises
+            float level = Modern && shown && rearOk ? TailLevel * _tailRamp * (1f - _brakeRamp) * halo : 0f;
+            _tailGlow.Visible = level > 0f;
+            if (_tailGlow.Visible && level != _tailGlowApplied) _tailGlow.SetInstanceShaderParameter("level", _tailGlowApplied = level);
         }
         if (_head is not null) _head.Visible = shown && lit && !Modern;   // the original's flat lit faces: the 1997 look only (the modern look has its glare and spotlights)
         // the headlamps' real lights: the player's always, the others' only for the nearest few to the camera
-        bool lampsOn = lit && !Wrecked;
         _lampsOn = lampsOn;
+        bool headLit = _headRamp > 0f;
         var headCam = GetViewport()?.GetCamera3D();
-        _headDist2 = lampsOn && headCam is not null ? headCam.GlobalPosition.DistanceSquaredTo(GlobalPosition) : float.MaxValue;
-        bool lampLights = lampsOn && (_isPlayer || (_headDist2 < HeadFar * HeadFar && HeadRank() < MaxHeadLit));
+        _headDist2 = headLit && headCam is not null ? headCam.GlobalPosition.DistanceSquaredTo(GlobalPosition) : float.MaxValue;
+        bool lampLights = headLit && (_isPlayer || (_headDist2 < HeadFar * HeadFar && HeadRank() < MaxHeadLit));
         for (int i = 0; i < _lamps.Length; i++) _lamps[i].Visible = lampLights && HeadHeld(i);
+        if (_headRamp != _headApplied)
+        {
+            // the filament's level on the energy, its colour cooling toward orange over the last of a fall (LampRamp.Warmth)
+            _headApplied = _headRamp;
+            var (wr, wg, wb) = LampRamp.Warmth(_headRamp);
+            var warm = new Color(HeadColour.R * wr, HeadColour.G * wg, HeadColour.B * wb);
+            foreach (var l in _lamps) { l.LightEnergy = HeadEnergy * _headRamp; l.LightColor = warm; }
+            if (Modern)
+                foreach (var g in _glare) { g.SetInstanceShaderParameter("level", _headRamp * halo); g.SetInstanceShaderParameter("warmth", new Vector3(wr, wg, wb)); }
+        }
+        if (_brakeLight is not null && _brakeRamp != _brakeApplied)
+        {
+            _brakeApplied = _brakeRamp;
+            _brakeLight.LightEnergy = BrakeLightEnergy * _brakeRamp;
+            _brakeLight.Visible = _brakeRamp > 0f && (RearHeld(0) || RearHeld(1));
+        }
         // the pool lies on the road ahead, so it shows from the cockpit too (the body hidden there)
         if (_lightPool is not null) _lightPool.Visible = !Wrecked && lit && !Modern;
-        for (int i = 0; i < _glare.Length; i++) _glare[i].Visible = shown && lit && Modern && HeadHeld(i);
+        for (int i = 0; i < _glare.Length; i++) _glare[i].Visible = shown && headLit && Modern && HeadHeld(i);
         // the rear glow: full while braking, a tail-lamp glimmer with the lights on, nothing otherwise
-        bool lightsOn = (Sim.Flags & VehicleFlags.Lights) != 0 && rearOk;
-        float rear = !Modern || !shown ? 0f : braking ? 1f : lightsOn ? 0.3f : 0f;
+        float rear = _rearRamp * halo;
         if (rear != _rearLevel)
         {
             _rearLevel = rear;
             for (int i = 0; i < _rearGlare.Length; i++) { _rearGlare[i].Visible = rear > 0 && RearHeld(i); _rearGlare[i].SetInstanceShaderParameter("level", rear); }
-            if (_brakeLight is not null) _brakeLight.Visible = rear >= 1f && (RearHeld(0) || RearHeld(1));
         }
         _siren?.Update(shown, !Wrecked, Modern);
         if (_engine is not null) _engine.PitchScale = _engineRevable ? EngineSoundPitch.Scale(Sim.Engine.Rpm, _engineRate) : 1f;

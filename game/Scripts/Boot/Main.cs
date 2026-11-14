@@ -735,6 +735,8 @@ public partial class Main : Node3D
     {
         ApplyDevFps(s);
         I76.Game.Sim.MuzzleReach.Percent = s.MuzzleReach;
+        I76.Game.Sim.LampRamp.Setting = s.LampRamp;
+        I76.Game.Sim.LampHalo.Percent = s.LampHalo;
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(s.CarInteriors);
         I76.Game.World.BrushImpacts.Enabled = s.BrushImpacts;
         if (_modernEnv is not null) { _modernEnv.AdjustmentEnabled = true; _modernEnv.AdjustmentBrightness = ModernBrightness(s.Graphics[0xc]); }

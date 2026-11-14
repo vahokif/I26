@@ -25,6 +25,7 @@ uniform float streak_amount = 0.45;
 uniform float halo_amount = 0.18;
 uniform float day_floor = 0.25;    // how much is left at full sun
 instance uniform float level = 1.0;
+instance uniform vec3 warmth = vec3(1.0);   // the filament's colour on the tint as it cools (LampRamp.Warmth)
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
 varying float facing;
@@ -71,5 +72,5 @@ void fragment() {
 	// the smoke layer (smoke_layer.gdshader) is drawn under this: dim the glare where smoke lies in front of the lamp
 	vec4 sm = texture(i76_smoke, SCREEN_UV);
 	float veil = sm.a > 0.002 && sm.r < -lamp_view.z * sm.a ? i76_smoke_alpha(sm.a) : 0.0;
-	ALBEDO = tint * (core + halo + streak) * aim * strength * day * seen * level * (1.0 - veil);
+	ALBEDO = tint * warmth * (core + halo + streak) * aim * strength * day * seen * level * (1.0 - veil);
 }

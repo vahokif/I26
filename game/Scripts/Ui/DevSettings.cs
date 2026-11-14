@@ -30,6 +30,9 @@ public static class DevSettings
     /// <summary>The muzzle light's reaches offered (MuzzleReach): 0 the light before the key, on the firing car alone; a value set by hand shows as the nearest.</summary>
     public static readonly int[] MuzzleReachSteps = [0, 25, 50, 75, 100, 125, 150, 200];
     private static readonly string[] MuzzleReachNames = [.. MuzzleReachSteps.Select(p => p == MuzzleReach.Default ? $"{p}" : $"{p}{M}")];
+    /// <summary>The lamp halo's strengths offered (LampHalo): 100 the strength before the key.</summary>
+    public static readonly int[] HaloSteps = [25, 50, 65, 75, 100, 125, 150];
+    private static readonly string[] HaloNames = [.. HaloSteps.Select(p => p == LampHalo.Default ? $"{p}" : $"{p}{M}")];
     private static int Nearest(int[] steps, int value) => Array.IndexOf(steps, steps.MinBy(p => Math.Abs(p - value)));
 
     public static readonly DevSetting[] All =
@@ -48,6 +51,9 @@ public static class DevSettings
         // the modern look's muzzle light: how far a shot's flash lights the ground ahead, in percent (0 the light before the key)
         new("muzzle_reach", MuzzleReachNames, s => Nearest(MuzzleReachSteps, s.MuzzleReach), (s, v) => s.MuzzleReach = MuzzleReachSteps[v], DevWhen.Live,
             s => MuzzleReach.Percent = s.MuzzleReach),
+        // the modern look's lamps: a filament's warm-up and cool-down (off: one frame, as the original), and the halo round them
+        new("lamp_ramp", ["off", "on" + M], s => s.LampRamp ? 1 : 0, (s, v) => s.LampRamp = v != 0, DevWhen.Live, s => LampRamp.Setting = s.LampRamp),
+        new("lamp_halo", HaloNames, s => Nearest(HaloSteps, s.LampHalo), (s, v) => s.LampHalo = HaloSteps[v], DevWhen.Live, s => LampHalo.Percent = s.LampHalo),
     ];
 
     public static string WhenText(DevWhen w) => w switch { DevWhen.Live => "live", DevWhen.NextScreen => "next screen", DevWhen.NextMission => "next mission", _ => "next start" };

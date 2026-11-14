@@ -568,9 +568,10 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// </summary>
     public void StaticContact(Vehicle v, StaticObject o, Contact rec)
     {
-        if (o.Type == 4 || o.SignNode(rec.Node ?? -1)) { KnockSign(o); return; }
+        if (o.SignPlacement || o.SignNode(rec.Node ?? -1)) { KnockSign(o); return; }
         var impact = -v.Vel;
         int node = rec.Node ?? (o.Vehicle is null ? NearestNode(o, v.Pos.ToVector3() + v.Rot.ToWorld(rec.C)) : -1);
+        if (node < 0 && o.Type == 4) { KnockSign(o); return; }   // the root itself is the sign
         // the car's own damage by the struck node's type: a type-3 node never damages it, a type-2 one of a type-3 placement does
         if (o.TypeAt(node) != 3) VehicleSlot(v, Impact(null, v.P.Mass, KOther, rec.N, impact), rec.C);
         if (o.Vehicle is not null) return;   // an emplacement has no collide callback: rams do it no harm

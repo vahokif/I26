@@ -212,7 +212,7 @@ public partial class ModernPhysics : Node
     {
         foreach (var o in Statics.Objects)
         {
-            if (o.Type == 4) continue;
+            if (o.SignPlacement) continue;
             double dx = o.Centre.X - Origin.X, dz = o.Centre.Z - Origin.Z;
             double d = Math.Sqrt(dx * dx + dz * dz) - o.Radius;
             _statics.TryGetValue(o, out var have);
@@ -262,7 +262,7 @@ public partial class ModernPhysics : Node
         // the class-0x4000 / 0x5000 parts' spheres (a breakable's are knocked off, never met: the sim's sign pass has them)
         foreach (var sp in o.Spheres)
         {
-            if (o.Type == 4 || o.SignNode(sp.Node) || o.Unfelt(sp.Node) || sp.Radius < 1e-3f) continue;
+            if (o.SignPlacement || o.SignNode(sp.Node) || o.Unfelt(sp.Node) || sp.Radius < 1e-3f) continue;
             body.AddChild(new CollisionShape3D { Shape = new SphereShape3D { Radius = sp.Radius }, Position = G(sp.Centre - c) });
         }
         if (body.GetChildCount() == 0) { body.Free(); return null; }

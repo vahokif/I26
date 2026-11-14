@@ -219,7 +219,8 @@ public sealed partial class Combat
                 float tt = poly is not null ? tm : 2f;
                 int node = poly?.Node ?? -1;
                 if (StaticWorld.RayBoxes(o.Boxes, p, d, 1f) is { } bh && bh.T < tt) { tt = bh.T; node = bh.Box.Node; }
-                if (o.Type == 4 && RaySign(o, p, d) is { } sh && sh.T < tt) { tt = sh.T; node = -1; }
+                if (o.SignPlacement && RaySign(o, p, d) is { } sh && sh.T < tt) { tt = sh.T; node = -1; }
+                else if (o.Type == 4 && StaticWorld.RaySpheres(o.Spheres, p, d, 1f) is { } sp && sp.T < tt) { tt = sp.T; node = sp.Sphere.Node; }
                 if (tt > 1f) continue;
                 any = true;
                 Sink?.Apply(o, Packet(), Local(o, p + d * tt), node);
@@ -338,7 +339,8 @@ public sealed partial class Combat
                 var (t, poly) = StaticWorld.RayMesh(o.Polys, p0, d, 1f);
                 if (poly is not null && t < best) { best = t; victim = o; node = poly.Node; }
                 if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; node = bh.Box.Node; }
-                if (o.Type == 4 && RaySign(o, p0, d) is { } sh && sh.T < best) { best = sh.T; victim = o; node = -1; }
+                if (o.SignPlacement && RaySign(o, p0, d) is { } sh && sh.T < best) { best = sh.T; victim = o; node = -1; }
+                else if (o.Type == 4 && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sp && sp.T < best) { best = sp.T; victim = o; node = sp.Sphere.Node; }
             }
         return victim is null ? null : (victim, p0 + d * best, victim is StaticObject ? node : -1);
     }

@@ -160,6 +160,10 @@ public sealed partial class MissionSetup
         return n => map.GetValueOrDefault(n);
     }
 
+    /// <summary>Whether a part's node is a sign by its own type (a part of no node: as the placement is).</summary>
+    private static Func<string, bool> SignPart(List<StructureNode> nodes, Func<string, int> nodeIndex) =>
+        n => nodeIndex(n) is var i and >= 0 ? nodes[i].Sign : nodes.TrueForAll(x => x.Sign);
+
     /// <summary>Each SGEO node's sphere, by name: its centre (+0x40, part space) and radius (+0x4c).</summary>
     private static Func<string, (System.Numerics.Vector3 Centre, float Radius)?> NodeSpheres(AssetVfs vfs, string? sdf)
     {
@@ -243,7 +247,7 @@ public sealed partial class MissionSetup
             if (asm.Assemble(p.Definition) is { } m && statics.Add(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), m,
                     classes.TryGetValue(p.Definition, out var nc) ? nc : classes[p.Definition] = NodeClasses(vfs, p.Definition),
                     types.TryGetValue(p.Definition, out var nt) ? nt : types[p.Definition] = NodeTypes(vfs, p.Definition),
-                    nodeIndex, (i, b) => nodes[i].Base ??= b, NodeSpheres(vfs, p.Definition)) is { } so)
+                    nodeIndex, (i, b) => nodes[i].Base ??= b, NodeSpheres(vfs, p.Definition), SignPart(nodes, nodeIndex)) is { } so)
             {
                 staticOf[p] = so;
                 so.Nodes.AddRange(nodes);
@@ -257,9 +261,9 @@ public sealed partial class MissionSetup
                 if (sd.Marker is { } mk) so.Marker = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p)).Apply(mk.Apply(System.Numerics.Vector3.Zero));
                 // what it leaves when destroyed: the 'A' geometry, if any, whatever the placement's type (a dead
                 // type-3 node gives the car no response: StaticObject.Unfelt, by the node's own type)
-                if (type != 4 && destroyedAsm.Assemble(p.Definition) is { } dm
+                if ((type != 4 || nodes.Exists(n => !n.Sign)) && destroyedAsm.Assemble(p.Definition) is { } dm
                     && !dm.Parts.Select(x => x.NodeName).SequenceEqual(m.Parts.Select(x => x.NodeName)))
-                    so.Remains = StaticWorld.Build(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), dm, classes[p.Definition], types[p.Definition], nodeIndex, nodeSphere: NodeSpheres(vfs, p.Definition));
+                    so.Remains = StaticWorld.Build(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), dm, classes[p.Definition], types[p.Definition], nodeIndex, nodeSphere: NodeSpheres(vfs, p.Definition), signPart: SignPart(nodes, nodeIndex));
             }
         }
         var ground = new WorldGround(terrain, statics);

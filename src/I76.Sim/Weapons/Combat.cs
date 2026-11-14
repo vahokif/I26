@@ -742,7 +742,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             // one made without parts (a test's box, a sign without its nodes): its whole sphere, or its polygons' bounds
             if (o.Boxes.Count + o.MeshBounds.Count + o.Spheres.Count == 0)
             {
-                if (o.Type == 4) { if (SegmentNear(a, d, o.Centre, o.SphereRadius + 3f)) return true; }
+                if (o.SignPlacement) { if (SegmentNear(a, d, o.Centre, o.SphereRadius + 3f)) return true; }
                 else if (o.Polys.Count > 0)
                 {
                     var lo = o.Polys.SelectMany(q => q.V).Aggregate(Vector3.Min); var hi = o.Polys.SelectMany(q => q.V).Aggregate(Vector3.Max);
@@ -1463,9 +1463,9 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 var (t, poly) = StaticWorld.RayMesh(o.Polys, p0, d, 1f);
                 if (poly is not null && t < best) { best = t; victim = o; normal = poly.N; node = poly.Node; }
                 if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; normal = bh.N; node = bh.Box.Node; }
-                if (o.Type != 4 && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sh && sh.T < best) { best = sh.T; victim = o; normal = sh.N; node = sh.Sphere.Node; }
+                if (!o.SignPlacement && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sh && sh.T < best) { best = sh.T; victim = o; normal = sh.N; node = sh.Sphere.Node; }
                 // a sign or post stops the round on one of its parts' spheres; its own slot knocks it off for an explosive one
-                if (o.Type == 4 && RaySign(o, p0, d) is { } sg && sg.T < best) { best = sg.T; victim = o; normal = sg.N; node = -1; }
+                if (o.SignPlacement && RaySign(o, p0, d) is { } sg && sg.T < best) { best = sg.T; victim = o; normal = sg.N; node = -1; }
             }
         }
         Vector3 at;

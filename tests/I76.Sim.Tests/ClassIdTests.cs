@@ -167,3 +167,80 @@ public class ClassIdTests
         Assert.True(lost > 0, "the ram cost no armour");
     }
 }
+
+/// <summary>
+/// The Sign class id (type 4) on something that is not a sign. The root takes the placement's type 4, but its nodes keep
+/// their own: a billboard's or a building's are type 2. Measured in the original on M10, whose
+/// billboards are placed as type 4: a car run into aobilbd2 at 15 u/s meets node AO1_SGN2 (type 2, its class the root
+/// type's default sphere), is thrown back at 4 u/s, and the node goes to the structure slot (HP 50 to 43: the impact of
+/// 29 quartered as type 2's are); the sign slot is never called and nothing is thrown. A splash reaches the root, the
+/// sign's slot, which throws the whole placement.
+/// </summary>
+public class SignClassTests
+{
+    private static string? InstallDir =>
+        Environment.GetEnvironmentVariable("I76_INSTALL") is { Length: > 0 } d && Directory.Exists(d) ? d : null;
+
+    [Fact]
+    public void M10sBillboardPlacedAsASignStopsTheCarAndStands()
+    {
+        if (InstallDir is null) return;
+        var (setup, s) = ClassIdTests.Build("m10.msn");
+        var board = ClassIdTests.At(setup, "aobilbd2", 2025, 47980);
+        Assert.Equal(4u, board.Type);
+        Assert.False(board.SignPlacement);
+        Assert.All(board.Nodes, n => Assert.Equal(2u, n.Type));
+        // the measured run-up: from 30 m in front of the board's face, along its normal
+        var (hit, reached, _) = ClassIdTests.Ram(setup, s, new Vector2(2000.9f, 47961.5f), new Vector2(0.69f, 0.72f));
+        Assert.Equal("aobilbd2", hit);
+        Assert.True(reached < 30, $"the car got {reached:0.0} m: through the board");
+        Assert.False(board.Destroyed);
+        Assert.True(board.Solid);
+        Assert.DoesNotContain(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked);
+        Assert.Contains(board.Nodes, n => n.Hp < n.MaxHp);
+    }
+
+    [Fact]
+    public void ASplashThrowsABillboardPlacedAsASign()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("m10.msn");
+        var board = ClassIdTests.At(setup, "aobilbd2", 2025, 47980);
+        var p = new DamagePacket { Mask = 2 };
+        p.Ch[1] = 15;
+        setup.Damage.Apply(board, p, Vector3.Zero, -1);
+        Assert.True(board.Knocked);
+        Assert.False(board.Solid);
+        Assert.Contains(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == board);
+    }
+
+    /// <summary>A building given the Sign class id is no paper: the car meets it as a building, and it is not thrown.</summary>
+    [Fact]
+    public void ABuildingPlacedAsASignIsSolid()
+    {
+        if (InstallDir is null) return;
+        var (setup, s) = ClassIdTests.Build("t01.msn", ("bcbank1", 4u, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "bcbank1", 4100, 36700);
+        Assert.Equal(4u, o.Type);
+        var (hit, reached, _) = ClassIdTests.Ram(setup, s, new Vector2(o.Centre.X + 45, o.Centre.Z), new Vector2(-1, 0));
+        Assert.Equal("bcbank1", hit);
+        Assert.True(reached < 45, $"the car got {reached:0.0} m, past the bank's centre");
+        Assert.False(o.Knocked);
+        Assert.True(o.Solid);
+    }
+
+    /// <summary>A road sign is still the paper it always was: driven through, knocked off.</summary>
+    [Fact]
+    public void ARoadSignIsStillKnockedOff()
+    {
+        if (InstallDir is null) return;
+        var (setup, s) = ClassIdTests.Build("t01.msn", ("sstop_1", 4u, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "sstop_1", 4100, 36700);
+        Assert.True(o.SignPlacement);
+        var (hit, reached, _) = ClassIdTests.Ram(setup, s, new Vector2(o.Centre.X + 30, o.Centre.Z), new Vector2(-1, 0));
+        Assert.Equal("sstop_1", hit);
+        Assert.True(reached > 35, $"the car got {reached:0.0} m: stopped by a sign");
+        Assert.True(o.Destroyed);
+        Assert.False(o.Solid);
+    }
+}

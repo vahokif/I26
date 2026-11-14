@@ -578,7 +578,7 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         foreach (var o in wg.World.Objects)
         {
             if (!o.Solid) continue;
-            if (o.Type == 4)
+            if (o.SignPlacement)
             {
                 // a sign: each part's sphere against the car's box, now and at the end of the frame; no response, it is knocked off
                 foreach (var sp in o.Spheres.Count > 0 ? o.Spheres : [new Collision.NodeSphere(o.Centre, o.SphereRadius)])
@@ -634,7 +634,7 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         {
             var so = (Collision.StaticObject)rec.Other!;
             // A type-4 node (signs, pickups, a structure's sign nodes) returns before copying the record -- no response at all
-            bool sign = so.Type == 4 || so.SignNode(rec.Node ?? -1);
+            bool sign = rec.Node is null or < 0 ? so.Type == 4 : so.SignNode(rec.Node.Value);
             if (!sign) v.Rec = rec;
             ObjectHits.Add((v, so.Name, sign ? 4u : so.TypeAt(rec.Node ?? -1), rec.N, v.Speed));
             Damage?.StaticContact(v, so, rec);

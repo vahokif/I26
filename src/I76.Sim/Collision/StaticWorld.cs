@@ -150,8 +150,20 @@ public sealed partial class StaticObject
     public bool Collapsed { get; private set; }
     /// <summary>Counts the geometry swaps, for whatever mirrors the colliders.</summary>
     public int Revision { get; private set; }
+    /// <summary>
+    /// A sign as a whole (type 4, every node a sign, or made without nodes): the car passes through it and any touch
+    /// knocks it off. A type-4 placement of anything else (a billboard or a building given the Sign class id) is made of
+    /// its own nodes: they collide and take hits by their own types, and only what reaches the root itself (a splash,
+    /// a sign node) goes to the sign's slot (measured in the original: M10's billboards, placed as type 4, are type-2
+    /// nodes that stop a car and lose HP to it, and are not thrown).
+    /// </summary>
+    public bool SignPlacement => Type == 4 && Nodes.TrueForAll(n => n.Sign);
+
+    /// <summary>Thrown by the sign's slot: the root's HP zeroed by it (a root that only lost a child keeps its 400). Its collider is gone.</summary>
+    public bool Knocked => Type == 4 && Destroyed && Hp == 0;
+
     /// <summary>Whether it still collides and carries cars.</summary>
-    public bool Solid => Nodes.Count == 0 || Type == 4 ? !Destroyed || Collapsed : Polys.Count + Boxes.Count + Spheres.Count + Surfaces.Count > 0;
+    public bool Solid => Nodes.Count == 0 || SignPlacement ? !Destroyed || Collapsed : !Knocked && Polys.Count + Boxes.Count + Spheres.Count + Surfaces.Count > 0;
 
     /// <summary>The whole placement's destruction geometry swap (then the rebuild): an emplacement's wreck, or a collider without nodes.</summary>
     public void Collapse()
@@ -381,9 +393,9 @@ public sealed class StaticWorld
     /// default; 0x1000 nodes do not collide.
     /// </summary>
     public StaticObject? Add(string name, uint type, float[] engineRotation, Vector3 position, AssembledModel model, Func<string, uint>? nodeClass = null, Func<string, uint>? nodeType = null,
-        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null, Func<string, (Vector3 Centre, float Radius)?>? nodeSphere = null)
+        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null, Func<string, (Vector3 Centre, float Radius)?>? nodeSphere = null, Func<string, bool>? signPart = null)
     {
-        if (Build(name, type, engineRotation, position, model, nodeClass, nodeType, nodeIndex, nodeBase, nodeSphere) is not { } o) return null;
+        if (Build(name, type, engineRotation, position, model, nodeClass, nodeType, nodeIndex, nodeBase, nodeSphere, signPart) is not { } o) return null;
         Objects.Add(o);
         return o;
     }
@@ -398,8 +410,12 @@ public sealed class StaticWorld
     /// <param name="nodeIndex">A part's structure node (<see cref="StaticObject.Nodes"/>) by part name, −1 for none: its polygons and boxes carry it.</param>
     /// <param name="nodeBase">Told each node's <see cref="StructureNode.Base"/>, from its part's geometry.</param>
     /// <param name="nodeSphere">A part's SGEO sphere (centre in part space, radius), for its class-0x4000 / 0x5000 collider; null takes the geometry's bounds.</param>
+    /// <param name="signPart">
+    /// Of a type-4 placement: whether a part's node is a sign (its own type 4). Null takes every part as one, as for a
+    /// road sign. Any other part is the structure's own: a box or a sphere like any other placement's.
+    /// </param>
     public static StaticObject? Build(string name, uint type, float[] engineRotation, Vector3 position, AssembledModel model, Func<string, uint>? nodeClass = null, Func<string, uint>? nodeType = null,
-        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null, Func<string, (Vector3 Centre, float Radius)?>? nodeSphere = null)
+        Func<string, int>? nodeIndex = null, Action<int, Vector3>? nodeBase = null, Func<string, (Vector3 Centre, float Radius)?>? nodeSphere = null, Func<string, bool>? signPart = null)
     {
         if (!Collides(type)) return null;
         var place = Affine.FromEngine(engineRotation, position);
@@ -430,6 +446,7 @@ public sealed class StaticWorld
                 nodeBase(node, place.Apply(part.ToModel.Apply(new Vector3((lo.X + hi.X) * 0.5f, lo.Y, (lo.Z + hi.Z) * 0.5f))));
             }
             uint cls = nodeClass?.Invoke(part.NodeName) ?? 0;
+            bool sign = type == 4 && (signPart?.Invoke(part.NodeName) ?? true);
             if (cls == 0) cls = DefaultClass(type);
             if (cls == 0x1000) continue;
             if (cls is 0x4000 or 0x5000)
@@ -442,10 +459,10 @@ public sealed class StaticWorld
                 var sw = place.Apply(part.ToModel.Apply(sc));
                 o.Spheres.Add(new NodeSphere(sw, sr * (cls == 0x4000 ? 1f : 0.75f)) { Node = node });
                 // a breakable's bounds stay its vertices' (the spawn spacing's sphere)
-                if (type != 4) { all.Add(sw - new Vector3(sr)); all.Add(sw + new Vector3(sr)); }
+                if (!sign) { all.Add(sw - new Vector3(sr)); all.Add(sw + new Vector3(sr)); }
                 continue;
             }
-            if (cls == 0x2000 && type != 4)
+            if (cls == 0x2000 && !sign)
             {
                 var rot = Frame();
                 var bmin = g.Vertices.Aggregate(Vector3.Min); var bmax = g.Vertices.Aggregate(Vector3.Max);

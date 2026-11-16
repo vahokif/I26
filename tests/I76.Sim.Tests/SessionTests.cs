@@ -713,6 +713,43 @@ public class AutoReverseTests
         Assert.Equal(CarCommands.None, again.Commands);
     }
 
+    /// <summary>
+    /// The keys' throttle climbs a tick at a time and only neither key sets it to 0: turned round from a held brake (−1) the
+    /// other key would take two ticks to bring it past 0, so the tick that turns the keys holds neither, once.
+    /// </summary>
+    [Fact]
+    public void TurningRoundFromAHeldBrakeLiftsBothKeysForOneTick()
+    {
+        const CarButtons pedals = CarButtons.ThrottleUp | CarButtons.ThrottleDown;
+        var a = new AutoReverse();
+        // braked to rest (the throttle at −1): the shift's tick has neither key, then the brake key drives backward
+        var o = a.Apply(Keys(CarButtons.ThrottleDown | CarButtons.SteerLeft), false, 0f, -0.9999f);
+        Assert.True((o.Commands & CarCommands.Reverse) != 0);
+        Assert.Equal(CarButtons.SteerLeft, o.Buttons & (pedals | CarButtons.SteerLeft));   // steering untouched
+        Assert.True(a.Apply(Keys(CarButtons.ThrottleDown), true, 0f, 0f).Has(CarButtons.ThrottleUp));
+        // never two in a row (a network client's car may not show the lifted tick yet)
+        var b = new AutoReverse();
+        b.Apply(Keys(CarButtons.ThrottleDown), false, 0f, -0.9999f);
+        Assert.True(b.Apply(Keys(CarButtons.ThrottleDown), true, 0f, -0.9999f).Has(CarButtons.ThrottleUp));
+        // a light brake (a tick of the other key brings it past 0) and a car at rest with no throttle swap at once
+        Assert.True(new AutoReverse().Apply(Keys(CarButtons.ThrottleDown), false, 0f, -0.3f).Has(CarButtons.ThrottleUp));
+        Assert.True(new AutoReverse().Apply(Keys(CarButtons.ThrottleDown), false, 0f, 0f).Has(CarButtons.ThrottleUp));
+        // accelerate while backing up at full throttle: neither key for a tick, then the brake
+        var c = new AutoReverse();
+        Assert.Equal(CarButtons.None, c.Apply(Keys(CarButtons.ThrottleUp), true, -5f, 0.9999f).Buttons & pedals);
+        Assert.True(c.Apply(Keys(CarButtons.ThrottleUp), true, -4.8f, 0f).Has(CarButtons.ThrottleDown));
+        // braked to rest in reverse, into drive: neither key for the shift's tick
+        var d = new AutoReverse();
+        o = d.Apply(Keys(CarButtons.ThrottleUp), true, 0f, -0.9999f);
+        Assert.True((o.Commands & CarCommands.Reverse) != 0);
+        Assert.Equal(CarButtons.None, o.Buttons & pedals);
+        // the original's own brake at speed (no swap) keeps its ramp, and the pad's axis has none to wait for
+        Assert.True(new AutoReverse().Apply(Keys(CarButtons.ThrottleDown), false, 10f, 0.9999f).Has(CarButtons.ThrottleDown));
+        var axis = new AutoReverse().Apply(new CarInput { Buttons = CarButtons.Analog, Throttle = -32767 }, false, 0f, -0.9999f);
+        Assert.Equal(32767, axis.Throttle);
+        Assert.True((axis.Commands & CarCommands.Reverse) != 0);
+    }
+
     [Fact]
     public void BothOrNeitherKeyIsLeftAlone()
     {

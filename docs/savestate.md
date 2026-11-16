@@ -173,7 +173,7 @@ combat and the script stay good; drivers are kept when their slot and car match.
 - **HUD**: radar target and range, weapons, objectives, the map: read from the sim each frame.
 - **Sounds**: the engine loops and the CB line on the air (`CbRadio.Current`, started at `StartedMs`) start
   again; one-shots are not replayed.
-- **Game-side state that is not the sim's**: the input latch and `CommandQueue`, `AutoReverse`'s hold, the
+- **Game-side state that is not the sim's**: the input latch and `CommandQueue`, `AutoReverse`'s hold and lifted tick, the
   cheat typer, Modern Physics' own body (rebuild it from the car, or switch it off and on), the trip's
   salvage pool (pass it as the snapshot's `host` bytes), the play options (apply them again; the snapshot's
   copies of difficulty and unlimited ammo/armour are what the session had).

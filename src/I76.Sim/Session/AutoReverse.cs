@@ -17,15 +17,19 @@ public sealed class AutoReverse
     /// <summary>That, in ticks of the session's rate.</summary>
     public int HoldTicks { get; }
     private int _hold;
+    private bool _lifted;
 
     public AutoReverse(SimRate? rate = null) => HoldTicks = System.Math.Max(1, (int)MathF.Round(HoldSeconds / (rate ?? SimRate.Default).TickSeconds));
 
     /// <param name="input">The keys as pressed.</param>
     /// <param name="reversing">The car is in reverse gear.</param>
     /// <param name="forwardSpeed">Velocity along the car's heading, negative when rolling backwards.</param>
-    public CarInput Apply(CarInput input, bool reversing, float forwardSpeed)
+    /// <param name="throttle">The car's throttle as the last tick left it (−1 full brake … 1 full throttle).</param>
+    public CarInput Apply(CarInput input, bool reversing, float forwardSpeed, float throttle = 0f)
     {
         if (_hold > 0) _hold--;
+        bool lifted = _lifted;
+        _lifted = false;
         // a pad's throttle axis counts as the keys past a tenth of its travel (the triggers' accelerate and brake), and a swap flips its sign
         bool analog = input.Has(CarButtons.Analog);
         bool up = analog ? input.Throttle > AnalogDead : input.Has(CarButtons.ThrottleUp);
@@ -49,7 +53,17 @@ public sealed class AutoReverse
             else shift = true;
         }
         if (swap && analog) input.Throttle = (short)System.Math.Clamp(-input.Throttle, -32767, 32767);
-        else if (swap) input.Buttons = (input.Buttons & ~(CarButtons.ThrottleUp | CarButtons.ThrottleDown)) | (up ? CarButtons.ThrottleDown : CarButtons.ThrottleUp);
+        else if (!analog && (swap || shift))
+        {
+            // the keys' throttle ramps a tick at a time and only a tick with neither key sets it to 0 (KeyRamp): turned
+            // round from a held brake (−1) the other key takes two ticks to bring it back past 0, so the tick that turns it
+            // holds neither, as a player lifting one key before pressing the other
+            bool drive = swap ? down : up;
+            var keys = drive ? CarButtons.ThrottleUp : CarButtons.ThrottleDown;
+            // (once: a network client's car may not show the lifted tick yet)
+            if (!lifted && (drive ? throttle + KeyRamp.UpPerTick <= 0 : throttle - KeyRamp.DownPerTick >= 0)) { keys = CarButtons.None; _lifted = true; }
+            input.Buttons = (input.Buttons & ~(CarButtons.ThrottleUp | CarButtons.ThrottleDown)) | keys;
+        }
         if (shift) { input.Commands |= CarCommands.Reverse; _hold = HoldTicks; }
         return input;
     }

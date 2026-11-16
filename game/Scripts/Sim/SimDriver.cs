@@ -272,14 +272,15 @@ public partial class SimDriver : Node
 
     /// <summary>
     /// The driving keys or the pad as held this instant, for one of Modern Physics' own steps of <paramref name="dt"/> seconds (null
-    /// while a test script drives or the script holds the camera). Auto Reverse's swap of the brake and accelerate keys follows the
-    /// sim's last decision; Keyboard Steering Assist runs at the step's length.
+    /// while a test script drives or the script holds the camera). Auto Reverse's swap of the brake and accelerate keys (or its tick
+    /// with neither) follows the sim's last decision; Keyboard Steering Assist runs at the step's length.
     /// </summary>
     public CarInput? LiveDriving(float dt)
     {
         if (_test is { Drives: true } || Session.Cutscene || Remote is not null) return null;
         var input = DrivingKeys();
-        if (_arSwapped && input.Has(CarButtons.Analog)) input.Throttle = (short)System.Math.Clamp(-input.Throttle, -32767, 32767);
+        if (_arNeutral && !input.Has(CarButtons.Analog)) input.Buttons &= ~(CarButtons.ThrottleUp | CarButtons.ThrottleDown);
+        else if (_arSwapped && input.Has(CarButtons.Analog)) input.Throttle = (short)System.Math.Clamp(-input.Throttle, -32767, 32767);
         else if (_arSwapped)
         {
             bool up = input.Has(CarButtons.ThrottleUp), down = input.Has(CarButtons.ThrottleDown);
@@ -342,7 +343,7 @@ public partial class SimDriver : Node
     private readonly KeyStick _keysTick = new(), _keysLive = new();
     private int _liveTick = int.MinValue;
 
-    private bool _arSwapped;
+    private bool _arSwapped, _arNeutral;
 
     private CarInput DrivingKeys()
     {
@@ -394,12 +395,12 @@ public partial class SimDriver : Node
         if (AutoReverse && Player?.Sim is { ObjectClass: 1 } car && (car.Flags & I76.Sim.Vehicles.VehicleFlags.Dead) == 0)
         {
             var raw = input;
-            input = (_autoReverse ??= new I76.Sim.Session.AutoReverse(Session.Rate)).Apply(input, car.Gear < 0, System.Numerics.Vector3.Dot(car.Vel, car.Rot.Forward));
-            _arSwapped = input.Has(CarButtons.Analog)
-                ? raw.Throttle != input.Throttle
-                : (raw.Buttons & (CarButtons.ThrottleUp | CarButtons.ThrottleDown)) != (input.Buttons & (CarButtons.ThrottleUp | CarButtons.ThrottleDown));
+            input = (_autoReverse ??= new I76.Sim.Session.AutoReverse(Session.Rate)).Apply(input, car.Gear < 0, System.Numerics.Vector3.Dot(car.Vel, car.Rot.Forward), car.Throttle);
+            const CarButtons pedals = CarButtons.ThrottleUp | CarButtons.ThrottleDown;
+            _arNeutral = !input.Has(CarButtons.Analog) && (raw.Buttons & pedals) != 0 && (input.Buttons & pedals) == 0;
+            _arSwapped = !_arNeutral && (input.Has(CarButtons.Analog) ? raw.Throttle != input.Throttle : (raw.Buttons & pedals) != (input.Buttons & pedals));
         }
-        else _arSwapped = false;
+        else _arSwapped = _arNeutral = false;
         _rawInput = input;
         // Keyboard Steering Assist: the keys as the pad's input (after Auto Reverse, which reads and swaps the keys)
         // (it reads the own car's motion as this machine has it: the sim's car, or a network game's predicted one)

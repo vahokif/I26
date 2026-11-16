@@ -128,7 +128,7 @@ public class ScrollRowsTests
     {
         Assert.Equal(
             ["Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
-             "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing", "Turrets"],
+             "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing", "Turrets", "Keyboard Steering Assist"],
             PlayOptionsScreen.PortRows);
     }
 }

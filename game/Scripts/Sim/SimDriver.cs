@@ -92,7 +92,31 @@ public partial class SimDriver : Node
     public int Ticks => Remote?.Tick ?? Session.Ticks;
     private readonly bool _debugCam = System.Environment.GetEnvironmentVariable("I76_DEBUG_CAM") is not null;
     private readonly bool _holdBrake = System.Environment.GetEnvironmentVariable("I76_HOLD_BRAKE") is not null;
-    private readonly string? _holdSteer = System.Environment.GetEnvironmentVariable("I76_HOLD_STEER");
+    /// <summary>I76_HOLD_STEER: <c>left</c> or <c>right</c> held throughout, or <c>left@A-B;right@C-D</c> over those sim ticks, for captures.</summary>
+    private readonly (int Dir, int A, int B)[] _holdSteer = ParseHoldSteer(System.Environment.GetEnvironmentVariable("I76_HOLD_STEER"));
+
+    private static (int Dir, int A, int B)[] ParseHoldSteer(string? v)
+    {
+        if (string.IsNullOrEmpty(v)) return [];
+        var list = new List<(int, int, int)>();
+        foreach (var part in v.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var at = part.Split('@');
+            int dir = at[0] == "left" ? 1 : at[0] == "right" ? -1 : 0;
+            if (dir == 0) continue;
+            if (at.Length > 1 && at[1].Split('-') is [var a, var b] && int.TryParse(a, out int ia) && int.TryParse(b, out int ib)) list.Add((dir, ia, ib));
+            else list.Add((dir, int.MinValue, int.MaxValue));
+        }
+        return [.. list];
+    }
+
+    /// <summary>The steer key I76_HOLD_STEER holds now: +1 left, −1 right, 0 none.</summary>
+    private int HeldSteer()
+    {
+        foreach (var (dir, a, b) in _holdSteer)
+            if (Ticks >= a && Ticks <= b) return dir;
+        return 0;
+    }
     private readonly bool _autoTarget = System.Environment.GetEnvironmentVariable("I76_AUTO_TARGET") is not null;
     // I76_HOLD_HARDPOINT=N: keep hardpoint key N (1-5) down, for off-screen captures
     private readonly int _holdHardpoint = int.TryParse(System.Environment.GetEnvironmentVariable("I76_HOLD_HARDPOINT"), out int hk) && hk is >= 1 and <= 5 ? hk : 0;
@@ -171,7 +195,7 @@ public partial class SimDriver : Node
         SimClock.Ticks = () => Ticks;
     }
 
-    public override void _ExitTree() { Voice3D.Followed = null; Voice3D.PlayerCar = null; Voice3D.InCockpit = null; if (SimClock.Ticks is not null) SimClock.Ticks = null; }
+    public override void _ExitTree() { _inputLog?.Dispose(); _inputLog = null; Voice3D.Followed = null; Voice3D.PlayerCar = null; Voice3D.InCockpit = null; if (SimClock.Ticks is not null) SimClock.Ticks = null; }
 
     public override void _Ready()
     {
@@ -247,10 +271,11 @@ public partial class SimDriver : Node
     private static readonly string[] HardpointKeys = [.. Enumerable.Range(1, 5).Select(n => $"hardpoint{n}_fire")];
 
     /// <summary>
-    /// The driving keys or the pad as held this instant, for Modern Physics' own steps (null while a test script
-    /// drives or the script holds the camera). Auto Reverse's swap of the brake and accelerate keys follows the sim's last decision.
+    /// The driving keys or the pad as held this instant, for one of Modern Physics' own steps of <paramref name="dt"/> seconds (null
+    /// while a test script drives or the script holds the camera). Auto Reverse's swap of the brake and accelerate keys follows the
+    /// sim's last decision; Keyboard Steering Assist runs at the step's length.
     /// </summary>
-    public CarInput? LiveDriving()
+    public CarInput? LiveDriving(float dt)
     {
         if (_test is { Drives: true } || Session.Cutscene || Remote is not null) return null;
         var input = DrivingKeys();
@@ -260,8 +285,62 @@ public partial class SimDriver : Node
             bool up = input.Has(CarButtons.ThrottleUp), down = input.Has(CarButtons.ThrottleDown);
             if (up != down) input.Buttons = (input.Buttons & ~(CarButtons.ThrottleUp | CarButtons.ThrottleDown)) | (up ? CarButtons.ThrottleDown : CarButtons.ThrottleUp);
         }
-        return input;
+        // its own ramp, from rest if Modern Physics did not read the keys through the last tick (the tick's ramp is Sample's)
+        if (_liveTick < Ticks - 1) _keysLive.Reset();
+        _liveTick = Ticks;
+        if (!AssistedSteering) return input;
+        return _keysLive.Apply(input, dt, Session.Rate.TickSeconds, Player?.Sim is { } car ? KeyStick.MotionOf(car, World.Ground) : default);
     }
+
+    /// <summary>The input as the keys and the pad made it, before Keyboard Steering Assist (for the input log).</summary>
+    private CarInput _rawInput;
+
+    /// <summary>I76_INPUT_LOG=file: a line a sim tick of the player's keys, Keyboard Steering Assist's parts and the car (docs/dev-hooks.md); appended, a header at each mission start.</summary>
+    private static readonly string? InputLogPath = System.Environment.GetEnvironmentVariable("I76_INPUT_LOG") is { Length: > 0 } ilp ? ilp : null;
+    /// <summary>The log stops growing past this many bytes (some 15 hours of play at 20 Hz).</summary>
+    private const long InputLogCap = 256L << 20;
+    private System.IO.StreamWriter? _inputLog;
+    private readonly List<string> _sounds = [];
+
+    private void LogInput(CarInput sent)
+    {
+        if (Player?.Sim is not { } car) return;
+        try
+        {
+            if (_inputLog is null)
+            {
+                var dir = System.IO.Path.GetDirectoryName(InputLogPath);
+                if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+                _inputLog = new System.IO.StreamWriter(InputLogPath!, append: true) { AutoFlush = false };
+                if (_inputLog.BaseStream.Length > InputLogCap) { _inputLog.Dispose(); _inputLog = null; return; }
+                _inputLog.WriteLine(FormattableString.Invariant($"# i26-input 1\tmission {Session.Build?.Mission}\tcar {car.Definition}\trate {Session.Rate.Label}\tassisted {(AssistedSteering ? 1 : 0)}\tstarted {System.DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+                _inputLog.WriteLine("tick\ttime\tkeys\tcmd\tmode\tramp\tcounter\tlimit\tsent_steer\tsent_thr\tsteer\tthrottle\tspeed\tslip\tyaw\tx\ty\tz\tfx\tfz\tvx\tvz\tgear\tsurface\tgrip\tload\tair\tslide\tblend\tsound");
+            }
+            if (_inputLog.BaseStream.Length > InputLogCap) return;
+            var raw = _rawInput.Buttons;
+            string keys = $"{((raw & CarButtons.SteerLeft) != 0 ? "L" : "")}{((raw & CarButtons.SteerRight) != 0 ? "R" : "")}{((raw & CarButtons.ThrottleUp) != 0 ? "U" : "")}{((raw & CarButtons.ThrottleDown) != 0 ? "D" : "")}{((raw & CarButtons.EBrake) != 0 ? "E" : "")}";
+            if (keys.Length == 0) keys = "-";
+            var m = KeyStick.MotionOf(car, World.Ground);
+            I76.Sim.Sound.TyreSounds.Wanted(car, true, false, _sounds);
+            string sound = string.Join(",", _sounds.Where(n => n.StartsWith("tturn", System.StringComparison.OrdinalIgnoreCase) || n.StartsWith("tskid", System.StringComparison.OrdinalIgnoreCase)));
+            bool ramped = AssistedSteering;
+            var f = car.Flags;
+            _inputLog.WriteLine(FormattableString.Invariant(
+                $"{Session.Ticks}\t{Session.Ticks * Session.TickSeconds:0.000}\t{keys}\t{(uint)_rawInput.Commands:x}\t{(AssistedSteering ? "Assisted" : "Original")}\t{(ramped ? _keysTick.LastRamp : float.NaN):0.0000}\t{(ramped ? _keysTick.LastCountersteer : float.NaN):0.0000}\t{(ramped ? _keysTick.LastLimit : float.NaN):0.0000}\t{(sent.Has(CarButtons.Analog) ? sent.Steer / 32767f : float.NaN):0.0000}\t{(sent.Has(CarButtons.Analog) ? sent.Throttle / 32767f : float.NaN):0.0000}\t{car.Steer:0.0000}\t{car.Throttle:0.0000}\t{car.Speed:0.000}\t{m.Slip * 57.29578f:0.00}\t{car.AngVel.Y:0.0000}\t{car.Pos.X:0.00}\t{car.Pos.Y:0.00}\t{car.Pos.Z:0.00}\t{car.Rot.Forward.X:0.0000}\t{car.Rot.Forward.Z:0.0000}\t{car.Vel.X:0.000}\t{car.Vel.Z:0.000}\t{car.Gear:0}\t{car.Surface}\t{KeyStick.SurfaceGrip(car, World.Ground):0.00}\t{car.NormalLoad:0.00}\t{((f & I76.Sim.Vehicles.VehicleFlags.Airborne) != 0 ? 1 : 0)}\t{((f & I76.Sim.Vehicles.VehicleFlags.Sliding) != 0 ? 1 : 0)}\t{((f & I76.Sim.Vehicles.VehicleFlags.Blending) != 0 ? 1 : 0)}\t{(sound.Length == 0 ? "-" : sound)}"));
+            if (Session.Ticks % 100 == 0) _inputLog.Flush();
+        }
+        catch (System.Exception e) { GD.PushWarning($"input log: {e.Message}"); _inputLog = null; }
+    }
+
+    /// <summary>
+    /// Play Options' Keyboard Steering Assist (shell.cfg [port] assisted_steering, applied as the settings load and as the row
+    /// changes): on, the steer keys go out as the pad's input (<see cref="KeyStick"/>), so the sim and the wire are the
+    /// original's; off, the keys are left be, the original's ramp.
+    /// </summary>
+    public static bool AssistedSteering = true;
+    /// <summary>Assisted's state: one a tick for the input that goes to the sim, one for Modern Physics' own steps.</summary>
+    private readonly KeyStick _keysTick = new(), _keysLive = new();
+    private int _liveTick = int.MinValue;
 
     private bool _arSwapped;
 
@@ -270,8 +349,8 @@ public partial class SimDriver : Node
         var b = CarButtons.None;
         if (HoldThrottle || Controls.Down("throttle_up")) b |= CarButtons.ThrottleUp;
         if (Controls.Down("throttle_down") || _holdBrake) b |= CarButtons.ThrottleDown;
-        if (Controls.Down("steer_left")) b |= CarButtons.SteerLeft;
-        if (Controls.Down("steer_right")) b |= CarButtons.SteerRight;
+        if (Controls.Down("steer_left") || HeldSteer() > 0) b |= CarButtons.SteerLeft;
+        if (Controls.Down("steer_right") || HeldSteer() < 0) b |= CarButtons.SteerRight;
         if (Controls.Down("e_brake")) b |= CarButtons.EBrake;
         Controls.PollAxes();
         var input = new CarInput { Buttons = b };
@@ -287,8 +366,8 @@ public partial class SimDriver : Node
         var b = CarButtons.None;
         if (HoldThrottle || Controls.Down("throttle_up")) b |= CarButtons.ThrottleUp;
         if (Controls.Down("throttle_down") || _holdBrake) b |= CarButtons.ThrottleDown;   // I76_HOLD_BRAKE: the brake held, for captures
-        if (Controls.Down("steer_left") || _holdSteer == "left") b |= CarButtons.SteerLeft;
-        if (Controls.Down("steer_right") || _holdSteer == "right") b |= CarButtons.SteerRight;   // I76_HOLD_STEER: for captures
+        if (Controls.Down("steer_left") || HeldSteer() > 0) b |= CarButtons.SteerLeft;
+        if (Controls.Down("steer_right") || HeldSteer() < 0) b |= CarButtons.SteerRight;   // I76_HOLD_STEER: for captures
         if (Controls.Down("e_brake")) b |= CarButtons.EBrake;
         if (HoldFire || Controls.Down("weapon_fire")) b |= CarButtons.Fire;
         for (int i = 0; i < 5; i++)
@@ -321,6 +400,14 @@ public partial class SimDriver : Node
                 : (raw.Buttons & (CarButtons.ThrottleUp | CarButtons.ThrottleDown)) != (input.Buttons & (CarButtons.ThrottleUp | CarButtons.ThrottleDown));
         }
         else _arSwapped = false;
+        _rawInput = input;
+        // Keyboard Steering Assist: the keys as the pad's input (after Auto Reverse, which reads and swaps the keys)
+        // (it reads the own car's motion as this machine has it: the sim's car, or a network game's predicted one)
+        if (AssistedSteering)
+        {
+            input = _keysTick.Apply(input, Session.TickSeconds, null, Player?.Sim is { } own ? KeyStick.MotionOf(own, World.Ground) : default);
+        }
+        else _keysTick.Reset();
         return input;   // while a chat line is typed Controls reads the pad alone
     }
 
@@ -418,6 +505,7 @@ public partial class SimDriver : Node
         int shots = Combat?.Events.Count ?? 0;
         var sampled = Sample();
         using (Hitch.Time(Hitch.Phase.Sim)) Session.Tick([sampled]);
+        if (InputLogPath is not null) LogInput(sampled);
         // I76_STATE_HASH=N: the session's state hash every 100 ticks up to tick N (two starts compared: the same game?)
         if (StateHashUntil > 0 && Session.Ticks <= StateHashUntil && (Session.Ticks % 100 == 0 || Session.Ticks == StateHashUntil))
             GD.Print($"state hash: tick {Session.Ticks} {Session.StateHash():x16}");

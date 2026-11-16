@@ -1156,7 +1156,7 @@ public partial class Main : Node3D
         {
             Name = "ModernPhysics", World = world, Car = world.Player!, Statics = setup.Statics, Ground = setup.Ground,
             Cutscene = () => _sim?.Script?.Host.View.Active == true,
-            Live = () => _sim?.LiveDriving(),
+            Live = dt => _sim?.LiveDriving(dt),
             Rate = session.Rate,
         };
         // (after a retry's restore: the body takes the restored car's pose and motion, ModernCar.TakeOver)

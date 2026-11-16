@@ -1178,6 +1178,8 @@ public sealed class ShellSettings
     public bool HdMenuArt { get; set; } = true;
     /// <summary>The port's own: HiFi Audio's sounds and movie tracks in place of the original's (Audio Control, shown only when a pack is installed); on unless the player turned it off. Stored as [port] hd_sounds, its first name.</summary>
     public bool HiFiAudio { get; set; } = true;
+    /// <summary>The port's own: Play Options' Keyboard Steering Assist (I76.Sim.Session.KeyStick), on unless the player turned it off ([port] assisted_steering, written when off; the older keyboard_steering key's "original" reads as off).</summary>
+    public bool AssistedSteering { get; set; } = true;
     /// <summary>The port's own: the brake key on a stopped car shifts into reverse, accelerate on a reversing one into drive (Play Options; off, as the original).</summary>
     public bool AutoReverse { get; set; }
     /// <summary>The port's own: the pad's rumble for the original's force-feedback events (Play Options; on, and without a pad it does nothing; both looks).</summary>
@@ -1392,6 +1394,10 @@ public sealed class ShellSettings
         s.ChaseCrosshair = (bool)c.GetValue("port", "chase_crosshair", false);
         s.BriefingWhileLoading = (bool)c.GetValue("port", "briefing_while_loading", true);
         s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
+        // no version step: absent (a new player, or a file from before the key), on; the branch-era keyboard_steering key's "original" is off
+        s.AssistedSteering = c.HasSectionKey("port", "assisted_steering")
+            ? (bool)c.GetValue("port", "assisted_steering", true)
+            : I76.Sim.Session.KeyStick.AssistedFromKeyboardSteering(c.GetValue("port", "keyboard_steering", "").ToString());
         // no version step: absent, the desktop
         s.Resolution = I76.Game.Boot.WindowSizes.Parse((string)c.GetValue("port", "resolution", "")) is { } rs ? I76.Game.Boot.WindowSizes.Format(rs.W, rs.H) : "";
         // no version step: absent, 100 %
@@ -1450,6 +1456,7 @@ public sealed class ShellSettings
         s.HiFiAudio = (bool)c.GetValue("port", "hd_sounds", true);
         HdAssets.Enabled = s.HdMenuArt;
         I76.Game.Assets.HiFiAudio.Enabled = s.HiFiAudio;
+        I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering;
         return s;
     }
 
@@ -1478,6 +1485,7 @@ public sealed class ShellSettings
         if (ChaseCrosshair) c.SetValue("port", "chase_crosshair", true);
         if (!BriefingWhileLoading) c.SetValue("port", "briefing_while_loading", false);
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
+        if (!AssistedSteering) c.SetValue("port", "assisted_steering", false);
         if (Resolution.Length > 0) c.SetValue("port", "resolution", Resolution);
         if (RenderScale != 0) c.SetValue("port", "render_scale", I76.Game.Boot.RenderScale.Percents[Math.Clamp(RenderScale, 0, I76.Game.Boot.RenderScale.Percents.Length - 1)]);
         if (FieldOfView != 0) c.SetValue("port", "fov", I76.Sim.Views.ViewFov.Across[Math.Clamp(FieldOfView, 0, I76.Sim.Views.ViewFov.Across.Length - 1)]);

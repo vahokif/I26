@@ -291,6 +291,17 @@ public sealed partial class EscapeMenu : Control
                 else if (m == 9) { Settings.AutoReverse = _snap.AutoReverse; it.Value = Settings.AutoReverse ? 1 : 0; }
             },
         });
+        // Keyboard Steering Assist: from the resume on
+        _play.Items.Add(new Item
+        {
+            Flags = Check, Label = "Keyboard Steering Assist", Pair = 25, N = 2,
+            Cb = (it, m) =>
+            {
+                if (m == 6) it.Value = Settings.AssistedSteering ? 1 : 0;
+                else if (m == 8) { Settings.AssistedSteering = _snap.AssistedSteering = it.Value != 0; I76.Game.Sim.SimDriver.AssistedSteering = Settings.AssistedSteering; }
+                else if (m == 9) { Settings.AssistedSteering = _snap.AssistedSteering; it.Value = Settings.AssistedSteering ? 1 : 0; I76.Game.Sim.SimDriver.AssistedSteering = Settings.AssistedSteering; }
+            },
+        });
         // Chase Crosshair: the F2 chase view's aiming mark, from the resume on (Play Options is not on a network game's pad)
         _play.Items.Add(new Item
         {

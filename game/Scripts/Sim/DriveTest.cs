@@ -101,7 +101,7 @@ public sealed class DriveTest
         var (h, _) = ground.Query(v.Pos.X, v.Pos.Y, v.Pos.Z);
         float pitch = MathF.Asin(Math.Clamp(f.Y, -1, 1)), roll = MathF.Asin(Math.Clamp(v.Rot.Right.Y, -1, 1));
         float slip = N.Vector3.Dot(v.Vel, v.Rot.Right);
-        GD.Print(FormattableString.Invariant($"tel {tick} x {v.Pos.X:0.00} y {v.Pos.Y:0.000} z {v.Pos.Z:0.00} v {v.Speed:0.000} yawrate {rate:0.0000} heading {heading:0.0000} above {v.Pos.Y - h:0.000} pitch {pitch:0.0000} roll {roll:0.0000} slip {slip:0.000} steer {v.Steer:0.000} thr {v.Throttle:0.000} air {((v.Flags & VehicleFlags.Airborne) != 0 ? 1 : 0)} vy {v.Vel.Y:0.000} gear {v.Engine.Gear} eforce {v.Engine.Force:0}"));
+        GD.Print(FormattableString.Invariant($"tel {tick} x {v.Pos.X:0.00} y {v.Pos.Y:0.000} z {v.Pos.Z:0.00} v {v.Speed:0.000} yawrate {rate:0.0000} heading {heading:0.0000} above {v.Pos.Y - h:0.000} pitch {pitch:0.0000} roll {roll:0.0000} slip {slip:0.000} steer {v.Steer:0.000} thr {v.Throttle:0.000} air {((v.Flags & VehicleFlags.Airborne) != 0 ? 1 : 0)} slide {((v.Flags & VehicleFlags.Sliding) != 0 ? 1 : 0)} blend {((v.Flags & VehicleFlags.Blending) != 0 ? 1 : 0)} vy {v.Vel.Y:0.000} gear {v.Engine.Gear} eforce {v.Engine.Force:0}"));
     }
 
     private static float Wrap(float a) => a > MathF.PI ? a - 2 * MathF.PI : a < -MathF.PI ? a + 2 * MathF.PI : a;

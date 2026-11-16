@@ -36,10 +36,10 @@ public partial class ModernPhysics : Node
     /// <summary>On or off; switching takes effect on the next physics step.</summary>
     public bool Enabled { get; set; } = true;
     /// <summary>
-    /// The player's keys or pad as they are held now (null: none to read, so the car keeps the controls the sim
-    /// or a test script wrote). Read at every physics step, so the throttle and steering do not wait for the sim's tick.
+    /// The player's keys or pad as they are held now, for a step of the given seconds (null: none to read, so the car keeps the
+    /// controls the sim or a test script wrote). Read at every physics step, so the throttle and steering do not wait for the sim's tick.
     /// </summary>
-    public Func<I76.Sim.Session.CarInput?>? Live { get; set; }
+    public Func<float, I76.Sim.Session.CarInput?>? Live { get; set; }
     public ModernCar.Tuning Tuning { get; } = new();
     /// <summary>The session's Simulation Rate: the body steps at 120 Hz whatever it is, but its handling and the keys'
     /// ramp follow the original's at this rate (<see cref="I76.Sim.Session.ModernRateTuning"/>). A switch mid-mission
@@ -148,11 +148,11 @@ public partial class ModernPhysics : Node
     /// <summary>
     /// The controls for one physics step of dt seconds, from the live keys: the throttle ramp by time
     /// (<see cref="I76.Sim.Session.KeyRamp"/>, the original's per-tick ramp at the session's rate, per second), steering's √(t/3), or
-    /// the pad's axes. Written to the Vehicle, which the sim's tick reads for the HUD and the engine's sound.
+    /// the pad's axes (Keyboard Steering Assist comes as those, made from the keys at this step's length). Written to the Vehicle, which the sim's tick reads for the HUD and the engine's sound.
     /// </summary>
     public void Control(float dt)
     {
-        if (Live?.Invoke() is not { } input || (Car.Flags & VehicleFlags.Dead) != 0) return;
+        if (Live?.Invoke(dt) is not { } input || (Car.Flags & VehicleFlags.Dead) != 0) return;
         float throttle = Car.Throttle, steer = Car.Steer;
         I76.Sim.Session.KeyRamp.Apply(ref _keys, input, dt, Rate.TickSeconds, ref throttle, ref steer);
         Car.Throttle = throttle;

@@ -221,6 +221,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private int _savedFlags;
     private I76.Formats.Input.RumbleMode _savedRumble;
     private int _savedRumbleStrength;
+    private bool _savedSteering;
     private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997;
     private int _savedRate, _savedDownloads;
     /// <summary>The original's six check rows and their bits (Nitro's sheet has only Arcade Phys. and Unlim. Wiper Fluid).</summary>
@@ -252,7 +253,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
         "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
-        "Turrets",
+        "Turrets", "Keyboard Steering Assist",
     ];
 
     /// <summary>Every row of the list, in order: the original's check rows (Nitro's two), Difficulty, then the port's rows.</summary>
@@ -278,6 +279,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedRumbleStrength = s.RumbleStrength;
         _savedBriefing = s.BriefingWhileLoading;
         _savedTurrets1997 = s.Turrets1997;
+        _savedSteering = s.AssistedSteering;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
 
@@ -333,6 +335,8 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         // Turrets (docs/deviations.md): the turret slew of the 1998 build (GOG's and the Nitro Pack's, the default) or the 1997 CD
         // build's; a network game plays the host's
         Step(PortRows[14], () => s.Turrets1997 = !s.Turrets1997, () => HostFormLayout.TurretsShort(s.Turrets1997));
+        // Keyboard Steering Assist (docs/deviations.md): the steer keys eased, held inside the grip and steering into a slide; off, the original's ramp; in play at once
+        Toggle(PortRows[15], () => s.AssistedSteering, () => I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = !s.AssistedSteering);
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
     }
@@ -375,6 +379,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     {
         var s = Shell.Settings;
         s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing; s.Turrets1997 = _savedTurrets1997;
+        I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = _savedSteering;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored
         Shell.Overlay(new OptionsScreen());

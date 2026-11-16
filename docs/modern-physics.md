@@ -183,7 +183,9 @@ higher Simulation Rate; here it is by time, the original's per second at the
 session's tick (0.4/tick·(1 − hold/3) up, 0.5/tick·(1 − hold/3) down: 8.0 and
 10.0 a second at 20 Hz, 24.1 and 30.1 at 60; held 3 s at most, caps ±0.9999).
 The original model keeps its per-tick ramp. The pad's axes pass straight through, also every
-step. Throttle builds over the hold, steering is √(t/3) of full lock, and Tab
+step. Throttle builds over the hold, steering is √(t/3) of full lock (with
+Keyboard Steering Assist off; on, the default, the keys come in as the pad's
+input, made from them at each step, tuned on the original model), and Tab
 flips the gear for reverse. Full lock is 0.6 rad at a standstill. At speed it
 falls to what turns the car at about 16 u/s² plus the front tyres' slip
 (wheelbase·16/v² + 0.11), so the keyboard's full lock asks for the limit and
@@ -294,7 +296,8 @@ tick, not a fit:
 
 - **Keys:** the throttle ramp is the original's per tick at the session's
   rate, per second (`KeyRamp.UpPerSecond`: 0.4/tick, 0.5/tick down); steering
-  is √(t/3) of full lock by the time held, as the original's.
+  is √(t/3) of full lock by the time held, as the original's (Assisted Keyboard
+  Steer's: by time, at any rate).
 - **The yaw's answer:** `YawResponse` = tick/2 − 1/240 s (at least 4 ms). The
   original answers a key within the tick that samples it, half a tick later on
   average; the body samples every 120 Hz step, half a step on average.

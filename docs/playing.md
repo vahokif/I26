@@ -119,6 +119,13 @@ included) and what the wheel does (View Zoom or Cycle Weapon). Chase Crosshair, 
 for keyboard, pad and mouse alike, is in Play Options (the last row of the shell sheet's scrolling list, and the in-mission Esc menu's
 Play Options); in a network game it shows only if the host allows it.
 
+**Keyboard Steering Assist** (Play Options, the last row; the in-mission Esc menu's Play Options too; on unless you turn
+it off): a held steer key eases the wheels in quickly instead of the original's slow ramp (√(t/3) of full lock by the time
+held, full lock after 3 s, which runs wide in sharp turns), keeps a short press inside the tyres' grip and to a sane
+cornering force (so corrections do not squeal or twitch; a key held past 0.6 s gets the whole lock), and steers into a
+slide by itself, so a car that has stepped out comes back in line with no key held. Off is the original's ramp. The
+throttle keys are the original's either way, and a pad is unaffected.
+
 | Action | Default |
 |---|---|
 | Drive | W/A/S/D or keypad 8/4/2/6 |

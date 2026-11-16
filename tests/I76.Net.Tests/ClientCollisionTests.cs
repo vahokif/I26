@@ -38,7 +38,8 @@ public partial class CoopNetTests
 
     private static void AssertSame(Game g, Player p, string what)
     {
-        g.Wait(() => false, 600);
+        // until the snapshots carrying the change are in (a fixed pause is too short on a loaded machine)
+        g.Wait(() => FirstDifference(g, p) is null, 10000);
         Assert.True(FirstDifference(g, p) is null, $"{what}: {FirstDifference(g, p)}");
     }
 

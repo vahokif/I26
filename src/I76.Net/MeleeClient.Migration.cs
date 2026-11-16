@@ -202,7 +202,7 @@ public sealed partial class MeleeClient
         (_request with { Version = Protocol.Version, Rejoin = (Accept?.Slot ?? SuccessorInfo.Nobody, s.SeatToken) }).Write(nw);
         var w = new NetDataWriter();
         w.Put(nw.ToArray());
-        _net.Connect(at, w);
+        _layer.ConnectFiled(() => _net.Connect(at, w));
     }
 
     /// <summary>The successor seated us again: the same game goes on, its snapshots and events from a new connection.</summary>

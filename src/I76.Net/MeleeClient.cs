@@ -55,6 +55,8 @@ public sealed partial class MeleeClient : IDisposable
     public ClientState State { get; private set; } = ClientState.Idle;
     /// <summary>Why the join was refused or the connection ended.</summary>
     public string? Reason { get; private set; }
+    /// <summary>The socket's port (tests).</summary>
+    internal int LocalPort => _net.LocalPort;
     public JoinAccept? Accept { get; private set; }
     public Scoreboard? Scores { get; private set; }
     /// <summary>The server tick of the game's end event (a win or the time limit): its next tick on, the own car brakes (<see cref="SimSession.NetEndTick"/>).</summary>
@@ -220,7 +222,7 @@ public sealed partial class MeleeClient : IDisposable
         _net.Start();
         State = ClientState.Connecting;
         _request = new JoinRequest(Protocol.Version, name, car, team, config ?? [], password, paint);
-        _net.Connect(host, port, JoinData(name, car, team, config, password, paint));
+        _layer.ConnectFiled(() => _net.Connect(host, port, JoinData(name, car, team, config, password, paint)));
     }
 
     private static NetDataWriter JoinData(string name, string car, byte team, byte[]? config, string password = "", byte[]? paint = null)
@@ -265,7 +267,7 @@ public sealed partial class MeleeClient : IDisposable
         if (j.Reached is { } at)
         {
             Log?.Invoke($"connecting to the host at {at}");
-            _net.Connect(at, _joinData!);
+            _layer.ConnectFiled(() => _net.Connect(at, _joinData!));
             j.Dispose();
             _joiner = null;
         }

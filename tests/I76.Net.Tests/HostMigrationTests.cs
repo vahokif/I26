@@ -66,8 +66,6 @@ public class HostMigrationTests(ITestOutputHelper output)
         public readonly List<(MeleeClient Client, MigrationStandby Standby, LagProxy? Proxy)> Players = [];
         public readonly Stopwatch Clock = Stopwatch.StartNew();
         private double _input;
-        /// <summary>Called after every round of polls (a test keeping what the clients were sent).</summary>
-        public Action? Polled;
         /// <summary>With mirrors on, every joined client draws a world as the game does (ClientWorld), and what they logged is kept.</summary>
         public bool Mirrors;
         public readonly Dictionary<MeleeClient, (JoinAccept Accept, ClientWorld World)> Worlds = [];
@@ -83,7 +81,6 @@ public class HostMigrationTests(ITestOutputHelper output)
             while (!done() && t.ElapsedMilliseconds < ms)
             {
                 foreach (var c in Clients) c.Poll();
-                Polled?.Invoke();
                 if (Mirrors) Frame();
                 if (Clock.Elapsed.TotalSeconds - _input >= 0.05)
                 {
@@ -262,8 +259,8 @@ public class HostMigrationTests(ITestOutputHelper output)
         var state = link.State!;
         uint stateTick = link.StateTick;
         var log = new SortedDictionary<uint, LoggedTick>();
-        g.Polled = () => { foreach (var t in link.Log) if (t.Tick > stateTick) log[t.Tick] = t; };
-        g.Polled();
+        foreach (var t in link.Log) if (t.Tick > stateTick) log[t.Tick] = t;
+        link.Logged = t => { if (t.Tick > stateTick) log[t.Tick] = t; };
         Assert.True(g.Wait(() => g.Server.Invoke(h => h.Tick) >= stateTick + 20, 30000), "the host did not get on");
         g.Server.Stop();
         var (tick, hash, body) = g.Server.Invoke(h => (h.Tick, h.Session.StateHash(), Body(h.Session)));

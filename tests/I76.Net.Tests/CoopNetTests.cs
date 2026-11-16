@@ -316,9 +316,12 @@ public partial class CoopNetTests(ITestOutputHelper output)
         Assert.True(g.Wait(() => g.Server.Invoke(h => gate.Nodes.Any(n => n.Gate is { X: > 0 }))));
         Assert.True(g.Wait(() => g.Server.Invoke(h => gate.Nodes.All(n => n.Gate is not { Moving: true }))));
         Assert.True(g.Wait(() => mirror.Nodes.Any(n => n.Gate is { X: > 0.9f }) || mirror.Nodes.Any(n => n.Gate is { X: 0 }) && false, 5000), "the gate did not reach the client");
-        g.Wait(() => false, 300);
-        var host = g.Server.Invoke(h => gate.Boxes.Select(b => b.Origin).Concat(gate.Polys.Select(p => p.V[0])).ToList());
-        var seen = mirror.Boxes.Select(b => b.Origin).Concat(mirror.Polys.Select(p => p.V[0])).ToList();
+        List<Vector3> OnHost() => g.Server.Invoke(h => gate.Boxes.Select(b => b.Origin).Concat(gate.Polys.Select(p => p.V[0])).ToList());
+        List<Vector3> OnClient() => mirror.Boxes.Select(b => b.Origin).Concat(mirror.Polys.Select(p => p.V[0])).ToList();
+        // until the gate's last snapshots are in (a fixed pause is too short on a loaded machine)
+        g.Wait(() => OnHost() is var a && OnClient() is var b && a.Count == b.Count && a.Zip(b).All(x => Vector3.Distance(x.First, x.Second) < 0.05f), 5000);
+        var host = OnHost();
+        var seen = OnClient();
         Assert.Equal(host.Count, seen.Count);
         for (int i = 0; i < host.Count; i++) Assert.True(Vector3.Distance(host[i], seen[i]) < 0.05f, $"collider {i}: host {host[i]}, client {seen[i]}");
     }
@@ -466,18 +469,22 @@ public partial class CoopNetTests(ITestOutputHelper output)
         var state = link.State!;
         uint stateTick = link.StateTick;
         var log = new SortedDictionary<uint, LoggedTick>();
-        void Keep() { foreach (var t in link.Log) if (t.Tick > stateTick) log[t.Tick] = t; }
-        Assert.True(g.Wait(() => { Keep(); return g.Server.Invoke(h => h.Tick) >= stateTick + 6 * 20; }, 30000), "the host did not get on");
+        // every tick's inputs as they come: a newer savestate drops the older ticks from the link in the poll that reads it, so
+        // looking at the link between polls misses some on a loaded machine
+        foreach (var t in link.Log) if (t.Tick > stateTick) log[t.Tick] = t;
+        link.Logged = t => { if (t.Tick > stateTick) log[t.Tick] = t; };
+        Assert.True(g.Wait(() => g.Server.Invoke(h => h.Tick) >= stateTick + 6 * 20, 30000), "the host did not get on");
         g.Server.Stop();
         var (tick, hash, body) = g.Server.Invoke(h => (h.Tick, h.Session.StateHash(), Body(h.Session)));
-        Assert.True(g.Wait(() => { Keep(); return log.ContainsKey(tick); }, 10000), $"the inputs reached tick {(log.Count == 0 ? stateTick : log.Keys.Max())}, the host stopped at {tick}");
+        Assert.True(g.Wait(() => log.ContainsKey(tick), 10000), $"the inputs reached tick {(log.Count == 0 ? stateTick : log.Keys.Max())}, the host stopped at {tick}");
         var (o, _, _) = NetMeleeServer.ReadMigrationOptions(state, install);
         Assert.Equal(mission, o.Coop);
         var fresh = new MeleeHost(o);
         Assert.IsType<CoopMode>(fresh.Mode);
         fresh.RestoreMigrated(state, new Dictionary<int, string> { [hal.Client.Accept.Slot] = "Hal", [ann.Client.Accept!.Slot] = "Ann" });
         var (replayed, held) = fresh.ReplayMigrated([.. log.Values], 0);
-        output.WriteLine($"state at tick {stateTick}, replayed {replayed} ticks to {fresh.Tick} (host at {tick}); seats {string.Join(", ", fresh.Seats.Select(s => $"{s.Slot} {s.Name}"))}");
+        output.WriteLine($"state at tick {stateTick}, replayed {replayed} ticks to {fresh.Tick} (host at {tick}); seats {string.Join(", ", fresh.Seats.Select(s => $"{s.Slot} {s.Name}"))}; "
+            + $"logged {log.Count} ticks, {log.Keys.Min()} to {log.Keys.Max()}, barriers at {string.Join(", ", log.Values.Where(t => t.Barrier).Select(t => t.Tick))}");
         Assert.Equal((tick, 0), (fresh.Tick, held));
         Assert.True(hash == fresh.Session.StateHash(), HostMigrationFirstDifference(body, Body(fresh.Session)));
         Assert.Equal(3, fresh.Seats.Count);

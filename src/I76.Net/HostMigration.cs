@@ -168,6 +168,8 @@ public sealed class MigrationBuffer
     private int _have;
 
     public IReadOnlyList<LoggedTick> Log => _log;
+    /// <summary>Each tick's inputs as they come (tests: a newer savestate drops the older ticks from <see cref="Log"/>, in the same poll that read them).</summary>
+    internal Action<LoggedTick>? Logged;
 
     /// <summary>Takes a piece of a savestate (the type byte read); true when one has just become complete.</summary>
     public bool AddState(ref NetReader r, int size)
@@ -205,7 +207,9 @@ public sealed class MigrationBuffer
         int max = _cur.Count == 0 ? 0 : _cur.Keys.Max() + 1;
         var inputs = new CarInput[max];
         foreach (var (s, i) in _cur) inputs[s] = i;
-        _log.Add(new LoggedTick(tick, inputs, (flags & 1) != 0));
+        var logged = new LoggedTick(tick, inputs, (flags & 1) != 0);
+        _log.Add(logged);
+        Logged?.Invoke(logged);
         // nothing older than what the next state will need (a state comes every 1.5 s; 15 s of ticks at most)
         if (_log.Count > 1200) _log.RemoveRange(0, _log.Count - 1200);
     }

@@ -483,7 +483,7 @@ public class VoiceTests(ITestOutputHelper output)
             Assert.All(cs, c => { Assert.Equal(ClientState.Joined, c.State); Assert.False(c.Accept!.Cb); Assert.False(c.CbAllowed); });
             Assert.Equal("CB is off in this game", server.CbMute("Ann", true));
             Assert.Equal(0, server.VoiceRelayed);
-            Assert.False(server.Host.Info().Cb);
+            Assert.False(server.Invoke(h => h.Info()).Cb);
             // a client of this build does not send; one that does is not relayed (the server's own rule)
             cs[0].SendVoice(new VoicePacket(0, 1, VoiceFlags.Start, [1]));
             Pump(cs, 500);

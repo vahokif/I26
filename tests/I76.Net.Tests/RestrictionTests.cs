@@ -134,7 +134,7 @@ public class RestrictionTests
         Assert.Equal(ClientState.Rejected, client.State);
         Assert.Contains("Landmines", client.Reason);
         client.Dispose();
-        Assert.Empty(server.Host.Seats);
+        Assert.Empty(server.Invoke(h => h.Seats.ToList()));
     }
 
     /// <summary>A player's own variant with specials (the stock melee variants carry none) is checked against the restricted ones, named by the garage's names.</summary>
@@ -174,7 +174,7 @@ public class RestrictionTests
         Assert.Equal(ClientState.Rejected, client.State);
         Assert.Contains("Restricted specials: Blower", client.Reason);
         client.Dispose();
-        Assert.Empty(server.Host.Seats);
+        Assert.Empty(server.Invoke(h => h.Seats.ToList()));
     }
 
     [Fact]

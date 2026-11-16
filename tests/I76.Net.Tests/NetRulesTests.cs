@@ -260,7 +260,7 @@ public class NetRulesTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(ClientState.Joined, a.State);
         Assert.Equal(allowed, a.Accept!.Crosshair);
         Assert.Equal(allowed, a.CrosshairAllowed);
-        Assert.Equal(allowed, server.Host.Info().Crosshair);
+        Assert.Equal(allowed, server.Invoke(h => h.Info()).Crosshair);
         Assert.Equal(allowed, I76.Sim.Views.CrosshairPolicy.Shown(true, network: true, a.CrosshairAllowed));
         Assert.False(I76.Sim.Views.CrosshairPolicy.Shown(false, network: true, a.CrosshairAllowed));
         Assert.True(I76.Sim.Views.CrosshairPolicy.Shown(true, network: false, hostAllows: false));
@@ -285,7 +285,7 @@ public class NetRulesTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(ClientState.Joined, a.State);
         Assert.Equal(cd1997, a.Accept!.Turrets1997);
         Assert.Equal(cd1997, new ClientWorld(HostTests.Mirror("m01"), a.Accept).Setup.Combat.TurretSlew1997);
-        Assert.Equal(cd1997, server.Host.Info().Turrets1997);
+        Assert.Equal(cd1997, server.Invoke(h => h.Info()).Turrets1997);
         var json = new System.Text.Json.JsonSerializerOptions { IncludeFields = true };
         Assert.Equal(cd1997, System.Text.Json.JsonSerializer.Deserialize<ServerOptions>(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(server.Options with { Install = "" }, json), json)!.Turrets1997);
         Assert.False(new ServerOptions { Install = install }.Turrets1997);

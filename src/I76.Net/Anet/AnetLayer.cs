@@ -47,8 +47,32 @@ public sealed class AnetLayer : PacketLayerBase
     /// <summary>Anet datagrams taken out so far (diagnostics).</summary>
     public long Taken;
 
+    private readonly ManualResetEventSlim _inboundOpen = new(true);
+    private readonly object _connectGate = new();
+    private int _connecting;
+
+    /// <summary>A connect is under way and the socket's reading is held (tests).</summary>
+    internal bool InboundHeld => !_inboundOpen.IsSet;
+
+    /// <summary>
+    /// Connects with the socket's reading held until the connection is filed. LiteNetLib's Connect sends the connect request
+    /// before it files the new connection, and a datagram read in between is taken as from nobody: an answer from a host on
+    /// the same machine can come that soon when the connecting thread is held up (a busy machine). A refusal is lost (the client
+    /// asks again, the host hears a new request, and the client takes the answer to that), and an accept is followed by the
+    /// host's first messages, which the client answers "who are you?" and the host drops the new connection. Connects that
+    /// overlap are counted: reading resumes when the last of them has filed its connection, not when the first has.
+    /// </summary>
+    public T ConnectFiled<T>(Func<T> connect)
+    {
+        lock (_connectGate) if (_connecting++ == 0) _inboundOpen.Reset();
+        try { return connect(); }
+        finally { lock (_connectGate) if (--_connecting == 0) _inboundOpen.Set(); }
+    }
+
     public override void ProcessInboundPacket(ref IPEndPoint endPoint, ref byte[] data, ref int length)
     {
+        // (bounded: a reading thread is never stuck behind a connect that went wrong)
+        _inboundOpen.Wait(1000);
         _inner?.ProcessInboundPacket(ref endPoint, ref data, ref length);
         if (length < 2 || data[0] != AnetWire.Initial || data[1] is < 0x20 or >= 0x7f) return;
         if (!_servers.TryGetValue(Normal(endPoint), out var inbox)) return;

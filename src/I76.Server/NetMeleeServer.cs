@@ -157,7 +157,7 @@ public sealed partial class NetMeleeServer : IDisposable
         // a player of the game this one took over, coming back to its seat (host migration)
         if (j.Rejoin is not null) { RequestRejoin(req, j); return; }
         string? why = j.Version != Protocol.Version ? $"protocol {j.Version}; this server speaks {Protocol.Version}"
-            : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint.Address, j.Password)
+            : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint, j.Password)
             ?? (_lobbyClosed ? LobbyClosedText : Host.Seats.Count + _lobby.Count + _requests.Count + _waiting.Count + _invites.Count >= Options.MaxPlayers ? "the server is full"
             : Host.Over ? (CarriesOn ? "between rounds: try again in a few seconds" : Options.Coop is not null ? "the mission is over" : "the melee is over")
             : Host.Mode.CanJoin() ?? Host.CheckJoin(j.Car, j.Config));
@@ -174,17 +174,40 @@ public sealed partial class NetMeleeServer : IDisposable
     }
 
     private readonly Dictionary<System.Net.IPAddress, double> _wrongAt = [];
+    /// <summary>The password's answer to each address and port lately, with the password it was given and when.</summary>
+    private readonly Dictionary<System.Net.IPEndPoint, (string Given, string? Why, double At)> _passwordAnswers = [];
+    /// <summary>
+    /// How long a join request from the same address and port with the same password counts as the same try. LiteNetLib sends a
+    /// connect request again every half second (ten times) until it hears back, and when the client misses the first answer (lost
+    /// on the way, or read by an older client before it had filed its own connection: <c>AnetLayer.ConnectFiled</c>) each repeat
+    /// comes here as a new request, and the client takes the answer to a repeat. A repeat that counted as a try would turn a
+    /// wrong password into "too many tries", and push the wait on for the right one after it.
+    /// </summary>
+    internal const double PasswordRepeatSeconds = 5;
+    /// <summary>The password limiter's clock, in seconds (tests stand it still or move it on).</summary>
+    internal Func<double> PasswordClock { get; set; } = () => Now;
 
     /// <summary>
     /// Why the password turns a join away (null: it is right, or the game is open). A wrong one blocks that address's next
     /// try for <see cref="Protocol.PasswordRetrySeconds"/>, whatever it holds, so guessing is not quick. Asking without a
-    /// password (to learn that one is needed) does not count as a try.
+    /// password (to learn that one is needed) does not count as a try, nor does the same request again
+    /// (<see cref="PasswordRepeatSeconds"/>): it has the answer it had.
     /// </summary>
-    private string? CheckPassword(System.Net.IPAddress from, string given)
+    internal string? CheckPassword(System.Net.IPEndPoint from, string given)
+    {
+        if (Options.Password.Length == 0) return null;
+        double now = PasswordClock();
+        from = new System.Net.IPEndPoint(from.Address, from.Port);   // a plain key (LiteNetLib's may be one of its own)
+        if (_passwordAnswers.TryGetValue(from, out var last) && last.Given == given && now - last.At < PasswordRepeatSeconds) return last.Why;
+        var why = CheckPassword(from.Address, given, now);
+        if (_passwordAnswers.Count > 1024) _passwordAnswers.Clear();
+        _passwordAnswers[from] = (given, why, now);
+        return why;
+    }
+
+    private string? CheckPassword(System.Net.IPAddress from, string given, double now)
     {
         var want = Options.Password;
-        if (want.Length == 0) return null;
-        double now = Now;
         if (_wrongAt.TryGetValue(from, out var at) && now - at < Protocol.PasswordRetrySeconds)
         {
             _wrongAt[from] = now;

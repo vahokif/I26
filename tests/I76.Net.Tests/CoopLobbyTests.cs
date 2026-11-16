@@ -144,12 +144,13 @@ public class CoopLobbyTests(ITestOutputHelper output)
         var hal = g.Join("Hal");
         var ann = g.Join("Ann");
         ann.SendLobbySet(true);
-        Assert.True(g.Wait(() => hal.Lobby!.Members.Single(m => m.Name == "Ann").Ready));
+        // Hal's list may not hold Ann yet (her join waited only for her own): wait for the entry, not just its mark
+        Assert.True(g.Wait(() => hal.Lobby!.Members.Any(m => m is { Name: "Ann", Ready: true })));
         // a new car is checked, answered, and takes the ready mark off
         ann.SendLobbySet(true, "vcgcour1.vcf");
         Assert.True(g.Wait(() => ann.ReconfigureAnswers.Count > 0));
         Assert.True(ann.ReconfigureAnswers.Dequeue().Taken);
-        Assert.True(g.Wait(() => hal.Lobby!.Members.Single(m => m.Name == "Ann") is { Car: "vcgcour1.vcf", Ready: false }));
+        Assert.True(g.Wait(() => hal.Lobby!.Members.Any(m => m is { Name: "Ann", Car: "vcgcour1.vcf", Ready: false })));
         // chat reaches everyone in the lobby
         ann.SendChat("let's go");
         Assert.True(g.Wait(() => hal.LobbyLines.Count > 0 && ann.LobbyLines.Count > 0));
@@ -176,7 +177,8 @@ public class CoopLobbyTests(ITestOutputHelper output)
         Assert.All(g.Players, p => Assert.Null(p.Client.Accept));
         ann.SendLobbySet(true);
         bob.SendLobbySet(true);
-        Assert.True(g.Wait(() => hal.Lobby!.Members.Where(m => m.Name != "Hal").All(m => m.Ready)));
+        // all three in Hal's list: All() over a list that has not got Bob yet is true too early, and the start would be refused
+        Assert.True(g.Wait(() => hal.Lobby!.Members.Count == 3 && hal.Lobby.Members.Where(m => m.Name != "Hal").All(m => m.Ready)));
         hal.SendLobbyStart(false);
         Assert.True(g.Wait(() => g.Players.All(p => p.Client.State == ClientState.Joined)), string.Join(", ", g.Players.Select(p => $"{p.Name} {p.Client.State}")));
         Assert.Equal([0, 1, 2], g.Players.Select(p => (int)p.Client.Accept!.Coop!.Seat));
@@ -209,6 +211,8 @@ public class CoopLobbyTests(ITestOutputHelper output)
     {
         if (Install is not { } install) return;
         using var g = new Lobby(install, output, loadSeconds: 3);
+        // the load wait's clock stands still: however slowly a loaded machine pumps, the timeout never comes
+        g.Server.Invoke(h => ((CoopMode)h.Mode).LoadClock = () => 0);
         var hal = g.Join("Hal");
         var ann = g.Join("Ann");
         var bob = g.Join("Bob");
@@ -234,6 +238,9 @@ public class CoopLobbyTests(ITestOutputHelper output)
     {
         if (Install is not { } install) return;
         using var g = new Lobby(install, output, loadSeconds: 1.5);
+        // the load wait's clock moves only when the test says: a loaded machine's slow pumping does not run the timeout out early
+        double now = 0;
+        g.Server.Invoke(h => ((CoopMode)h.Mode).LoadClock = () => Volatile.Read(ref now));
         var hal = g.Join("Hal");
         var ann = g.Join("Ann");
         hal.SendLobbyStart(true);
@@ -242,7 +249,11 @@ public class CoopLobbyTests(ITestOutputHelper output)
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < 800) { hal.SendInput(new CarInput()); g.Pump(40); }
         Assert.Equal(tick, g.Tick);
+        Volatile.Write(ref now, 1.4);
+        g.Pump(200);
+        Assert.Equal(tick, g.Tick);
         // Ann never sent: the mission starts without her once the time is up, and she is still seated
+        Volatile.Write(ref now, 1.51);
         Assert.True(g.Wait(() => { hal.SendInput(new CarInput()); return g.Tick > tick + 5; }, 8000), "the mission never started without the straggler");
         Assert.Equal(2, g.Server.Invoke(h => h.Seats.Count));
         // she plays in when she is loaded, as a late joiner does: her inputs are taken from then

@@ -201,7 +201,9 @@ public sealed class CoopMode : IHostMode
         return !_started || _movie is not null;
     }
 
-    private long _loadAt;
+    private double _loadAt = double.NaN;
+    /// <summary>The load wait's clock, in seconds (tests stand it still or move it on).</summary>
+    internal Func<double> LoadClock { get; set; } = () => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency * NetClock.Scale;
 
     /// <summary>
     /// A lobby's start (docs/multiplayer.md "The co-op lobby"): every seat was dealt at once, and the mission's first tick waits until each
@@ -211,9 +213,9 @@ public sealed class CoopMode : IHostMode
     private bool AllLoaded(IReadOnlyList<Seat> seats)
     {
         if (seats.Count == 0) return false;
-        if (_loadAt == 0) _loadAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (double.IsNaN(_loadAt)) _loadAt = LoadClock();
         if (seats.All(s => s.Inputs.LastReceived > 0)) { _host.Log("co-op: every player has loaded: the mission starts"); return true; }
-        if (System.Diagnostics.Stopwatch.GetElapsedTime(_loadAt).TotalSeconds * NetClock.Scale < _o.LoadSeconds) return false;
+        if (LoadClock() - _loadAt < _o.LoadSeconds) return false;
         _host.Log($"co-op: {string.Join(", ", seats.Where(s => s.Inputs.LastReceived == 0).Select(s => s.Name))} did not load in {_o.LoadSeconds:0} s: the mission starts without them");
         return true;
     }

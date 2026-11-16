@@ -8,7 +8,8 @@ namespace I76.Net.Tests;
 /// <summary>A game's password (protocol 12): the join request, the refusals and their reasons, the locked flag in both listings.</summary>
 public class PasswordTests
 {
-    private static ClientState Join(NetMeleeServer server, string password, out string? reason, int port = -1, bool leave = true)
+    /// <summary>Joins with a password and says how it went; the client is closed, or kept open in <paramref name="keep"/> (its port then stays its own).</summary>
+    private static ClientState Join(NetMeleeServer server, string password, out string? reason, int port = -1, bool leave = true, List<MeleeClient>? keep = null)
     {
         var client = new MeleeClient();
         client.Connect("127.0.0.1", port < 0 ? server.Port : port, "Groover", "vcgcour1.vcf", password: password);
@@ -16,7 +17,8 @@ public class PasswordTests
         var state = client.State;
         reason = client.Reason;
         if (leave && state == ClientState.Joined) client.Leave();
-        client.Dispose();
+        if (keep is not null) keep.Add(client);
+        else client.Dispose();
         return state;
     }
 
@@ -62,13 +64,59 @@ public class PasswordTests
     {
         if (HostTests.InstallDir is not { } install) return;
         using var server = Locked(install);
-        Assert.Equal(ClientState.Rejected, Join(server, "nope", out var why));
-        Assert.Equal(Protocol.WrongPassword, why);
-        // at once: refused even with the right word
-        Assert.Equal(ClientState.Rejected, Join(server, "hunter2", out why));
-        Assert.Equal(Protocol.PasswordTooSoon, why);
-        Thread.Sleep((int)(Protocol.PasswordRetrySeconds * 1000) + 300);
-        Assert.Equal(ClientState.Joined, Join(server, "hunter2", out _));
+        // the limiter's clock stands still between the tries, however long a loaded machine takes over them
+        double now = 1000;
+        server.PasswordClock = () => Volatile.Read(ref now);
+        // every client is kept open to the end: a later one cannot be given an earlier one's port (the same address, port and
+        // password soon after is the same request again, PasswordRepeatSeconds)
+        var clients = new List<MeleeClient>();
+        try
+        {
+            Assert.Equal(ClientState.Rejected, Join(server, "nope", out var why, keep: clients));
+            Assert.Equal(Protocol.WrongPassword, why);
+            // at once: refused even with the right word
+            Assert.Equal(ClientState.Rejected, Join(server, "hunter2", out why, keep: clients));
+            Assert.Equal(Protocol.PasswordTooSoon, why);
+            // that too was a try: the wait counts from it
+            Volatile.Write(ref now, now + Protocol.PasswordRetrySeconds * 0.6);
+            Assert.Equal(ClientState.Rejected, Join(server, "hunter2", out why, keep: clients));
+            Assert.Equal(Protocol.PasswordTooSoon, why);
+            Volatile.Write(ref now, now + Protocol.PasswordRetrySeconds + 0.01);
+            Assert.Equal(ClientState.Joined, Join(server, "hunter2", out _, keep: clients));
+        }
+        finally { foreach (var c in clients) c.Dispose(); }
+    }
+
+    /// <summary>
+    /// LiteNetLib sends a connect request again until it hears back, and a request repeated after its answer comes to the server
+    /// as a new one (the client missed the first answer): a repeat has the answer the request had and is not another try. A
+    /// wrong password's repeats answered "too many tries" (and the client took one of those), and each pushed the wait on.
+    /// </summary>
+    [Fact]
+    public void TheSameRequestAgainIsNotAnotherTry()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        using var server = Locked(install);
+        double now = 1000;
+        server.PasswordClock = () => Volatile.Read(ref now);
+        string? Ask(System.Net.IPEndPoint ep, string password) => server.Invoke(_ => server.CheckPassword(ep, password));
+        System.Net.IPEndPoint Port(int p) => new(System.Net.IPAddress.Loopback, p);
+        void At(double t) => Volatile.Write(ref now, 1000 + t);
+        Assert.Equal(Protocol.WrongPassword, Ask(Port(40000), "nope"));
+        // its repeat, while a client still sends them
+        At(0.5);
+        Assert.Equal(Protocol.WrongPassword, Ask(Port(40000), "nope"));
+        // another client at the address is another try: too soon after the wrong one, and it pushes the wait on
+        Assert.Equal(Protocol.PasswordTooSoon, Ask(Port(40001), "hunter2"));
+        // repeats do not push it on: a second after that try, not after the repeats, the right password is in
+        At(0.9);
+        Assert.Equal(Protocol.WrongPassword, Ask(Port(40000), "nope"));
+        Assert.Equal(Protocol.PasswordTooSoon, Ask(Port(40001), "hunter2"));
+        At(0.5 + Protocol.PasswordRetrySeconds + 0.01);
+        Assert.Null(Ask(Port(40002), "hunter2"));
+        // asking without a password is still no try
+        Assert.Equal(Protocol.NeedsPassword, Ask(Port(40003), ""));
+        Assert.Null(Ask(Port(40004), "hunter2"));
     }
 
     [Fact]
@@ -78,10 +126,10 @@ public class PasswordTests
         using var open = new NetMeleeServer(new ServerOptions { Install = install, Arena = "m01", Port = 0, Name = "Open melee" });
         open.Start();
         Assert.Equal(ClientState.Joined, Join(open, "whatever", out _));
-        Assert.False(open.Host.Info().Locked);
+        Assert.False(open.Invoke(h => h.Info()).Locked);   // under the server's lock: its thread may still be seating or dropping the joiner
 
         using var locked = Locked(install);
-        var info = locked.Host.Info();
+        var info = locked.Invoke(h => h.Info());
         Assert.True(info.Locked);
         var w = new NetWriter();
         info.Write(w);

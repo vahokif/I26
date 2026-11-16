@@ -505,7 +505,7 @@ public sealed partial class MeleeScreen
         [24] = (31, 193, 310, 326),
     };
 
-    /// <summary>The host form's WEAPON RESTRICTIONS, kept for the shell's run as the original keeps its table (not saved).</summary>
+    /// <summary>The host form's WEAPON RESTRICTIONS and its SPECIALS page, kept for the shell's run as the original keeps its table (not saved).</summary>
     private static WeaponRestrictions _restrictions = WeaponRestrictions.None;
     private static (List<I76.Formats.Shell.RestrictionRow> Rows, int Original, int[] X, int[] Y)? _checklist;
 
@@ -522,14 +522,18 @@ public sealed partial class MeleeScreen
         return _checklist = (rows, original, x, y);
     }
 
-    /// <summary>A restriction list in words: All Weapons, or the checklist's names (a whole class by its header).</summary>
-    internal static string RestrictionText(WeaponRestrictions w, IReadOnlyList<I76.Formats.Shell.RestrictionRow>? rows) => string.Join(", ", RestrictionNames(w, rows));
+    /// <summary>A restriction list in words: All Weapons, or the checklist's names (a whole class by its header); then All Specials or the specials by the garage's names.</summary>
+    internal static string RestrictionText(WeaponRestrictions w, IReadOnlyList<I76.Formats.Shell.RestrictionRow>? rows, bool nitro) => string.Join(", ", RestrictionNames(w, rows, nitro));
 
     /// <summary>The same as a list, one name a row (the Nitro session popup's WEAPONS NOT ALLOWED).</summary>
-    internal static List<string> RestrictionNames(WeaponRestrictions w, IReadOnlyList<I76.Formats.Shell.RestrictionRow>? rows)
+    internal static List<string> RestrictionNames(WeaponRestrictions w, IReadOnlyList<I76.Formats.Shell.RestrictionRow>? rows, bool nitro)
     {
-        if (w.All) return ["All Weapons"];
-        return [.. w.Pairs.Select(p => rows?.FirstOrDefault(r => r.Class == p.Class && r.Tier == p.Tier)?.Name ?? $"class {p.Class}{(p.Tier >= 0 ? $" tier {p.Tier}" : "")}")];
+        List<string> l = w.All ? ["All Weapons"]
+            : [.. w.Pairs.Select(p => rows?.FirstOrDefault(r => r.Class == p.Class && r.Tier == p.Tier)?.Name ?? $"class {p.Class}{(p.Tier >= 0 ? $" tier {p.Tier}" : "")}")];
+        // every special this install's garage offers: one row, as All Weapons is
+        if (w.Specials.Count > 0 && Enumerable.Range(1, PartsDatabase.SpecialCount(nitro)).All(w.RestrictsSpecial)) l.Add("All Specials");
+        else l.AddRange(w.Specials.Select(WeaponRestrictions.SpecialName));
+        return l;
     }
 
     private void OpenRestrictions()
@@ -537,9 +541,11 @@ public sealed partial class MeleeScreen
         if (Checklist() is not { } c) { Say("This install has no weapon restrictions table."); return; }
         var list = new RestrictionChecklist(c.Rows);
         list.Load(_restrictions);
+        var specials = new SpecialChecklist(Shell.Install.IsNitro);
+        specials.Load(_restrictions);
         Shell.Modal(new RestrictionsPopup
         {
-            Font = _font, List = list, Original = c.Original, ColumnX = c.X, RowY = c.Y,
+            Font = _font, List = list, Specials = specials, Original = c.Original, ColumnX = c.X, RowY = c.Y,
             Closed = w => { if (w is not null) _restrictions = w; Draw(); },
         });
     }
@@ -884,7 +890,7 @@ public sealed partial class MeleeScreen
     {
         var parts = new List<string>();
         if (g.RateHz > 0) parts.Add($"Sim rate {g.RateHz} Hz");
-        if (!g.Restricted.IsEmpty) parts.Add($"Restricted: {RestrictionText(g.Restricted, Nitro ? Checklist()?.Rows : null)}");
+        if (!g.Restricted.IsEmpty) parts.Add($"Restricted: {RestrictionText(g.Restricted, Nitro ? Checklist()?.Rows : null, Nitro)}");
         if (g.Hidden) parts.Add("Hidden weapons & cars allowed");
         if (g.Turrets) parts.Add("Unlimited turrets");
         if (!g.CarReset) parts.Add("No car reset");
@@ -908,7 +914,7 @@ public sealed partial class MeleeScreen
     /// <summary>The Nitro popup's WEAPONS NOT ALLOWED rows: "No Restrictions", "All Weapons" or the names, then the port's Hidden Weapons &amp; Cars.</summary>
     private List<string> RuleRows(SessionInfo g)
     {
-        var rows = g.Restricted.IsEmpty ? new List<string> { "No Restrictions" } : RestrictionNames(g.Restricted, Checklist()?.Rows);
+        var rows = g.Restricted.IsEmpty ? new List<string> { "No Restrictions" } : RestrictionNames(g.Restricted, Checklist()?.Rows, Nitro);
         if (g.Hidden) rows.Add("Hidden cars allowed");
         if (g.Turrets) rows.Add("Unlim. turrets allowed");
         if (!g.CarReset) rows.Add("No car reset");
@@ -942,7 +948,9 @@ public sealed partial class MeleeScreen
         if (!g.Turrets && CarConfigCheck.Strict(vfs, car, _data.Models[model].Stem) is { } strict && strict.StartsWith("a second turret"))
             return $"This game allows one turret on a car ({strict}). Change your car's weapons.";
         var bad = g.Restricted.Violations(vfs, guns);
-        return bad.Count > 0 ? $"This game does not allow {string.Join(", ", bad.Select(b => HiddenContent.WeaponName(vfs, b)))}. Change your car's weapons." : null;
+        if (bad.Count > 0) return $"This game does not allow {string.Join(", ", bad.Select(b => HiddenContent.WeaponName(vfs, b)))}. Change your car's weapons.";
+        var badSpecials = g.Restricted.SpecialViolations(car.Specials);
+        return badSpecials.Count > 0 ? $"This game does not allow {string.Join(", ", badSpecials.Select(WeaponRestrictions.SpecialName))}. Change your car's specials." : null;
     }
 
     /// <summary>JOIN GAME: the highlighted game ("There are no games to join." without one), CHOOSE A TEAM if it plays teams, then in.</summary>
@@ -1614,48 +1622,81 @@ public sealed class PasswordPopup : ShellScreen
 /// The Nitro host form's WEAPON RESTRICTIONS (docs/hidden-content.md §4): bank 30 sprite
 /// 43 at (34, 25), the boxes of the original's 43 rows at the table's grid (read from the install's Nitro shell DLL), a check the
 /// form font's "x" at (x+1, y−2); DONE (400..471, 400..416) keeps the edits, CANCEL (479..550) or Esc drops them. The port adds
-/// boxes and names of its own for the complete hidden weapons in the art's empty lines (<see cref="HiddenContent.ChecklistRows"/>).
+/// boxes and names of its own for the complete hidden weapons in the art's empty lines (<see cref="HiddenContent.ChecklistRows"/>),
+/// and a second page for the specials (<see cref="SpecialChecklist"/>; the art has no room for them), reached by SPECIALS
+/// left of DONE and left by WEAPONS there: the same art with its words and boxes taken off, "SPECIALS" lettered where it says
+/// "WEAPONS", the boxes on its grid and the garage's names in its face. DONE and CANCEL keep or drop both pages' edits.
 /// </summary>
 public sealed class RestrictionsPopup : ShellScreen
 {
     public required ShellFont Font { get; init; }
     public required RestrictionChecklist List { get; init; }
+    /// <summary>The SPECIALS page's boxes; null: no such page.</summary>
+    public SpecialChecklist? Specials { get; init; }
     /// <summary>The rows from the original's table; the ones after are the port's.</summary>
     public required int Original { get; init; }
     public required int[] ColumnX { get; init; }
     public required int[] RowY { get; init; }
-    /// <summary>DONE gives the boxes' list, CANCEL null.</summary>
+    /// <summary>DONE gives the boxes' list (the specials' with it), CANCEL null.</summary>
     public required Action<WeaponRestrictions?> Closed { get; init; }
     public override bool EscapeOpensOptions => false;
     private const int X = 34, Y = 25, W = 573, H = 430, Box = 12;
     private static readonly (int X0, int X1, int Y0, int Y1) Done = (400, 471, 400, 416), Cancel = (479, 550, 400, 416);
-    private bool[] _was = [];
+    /// <summary>The page button (the port's): left of DONE, on the art's inner frame's left edge, as tall as DONE's border.</summary>
+    private static readonly (int X0, int X1, int Y0, int Y1) Page = (18, 108, 400, 416);
+    private bool[] _was = [], _wasSpecials = [];
+    private bool _specials;
+    private byte[]? _page;
 
     public override void Enter()
     {
         _was = (bool[])List.Checked.Clone();
+        _wasSpecials = Specials is { } s ? (bool[])s.Checked.Clone() : [];
         Draw();
     }
 
     private Vector2I BoxAt(RestrictionRow r) => new(ColumnX[Math.Clamp(r.Column, 0, ColumnX.Length - 1)], RowY[Math.Clamp(r.Row, 0, RowY.Length - 1)]);
 
+    private IReadOnlyList<RestrictionRow> Rows => _specials && Specials is { } s ? s.Rows : List.Rows;
+    private bool[] Checks => _specials && Specials is { } s ? s.Checked : List.Checked;
+
     private void Draw()
     {
         var art = Shell.Db.BankNative(30)[43];
         Frame.Restore(X, Y, W + 6, H + 6);
-        Frame.Blit(art, X, Y);
+        if (_specials && art is not null) DrawSpecials(art);
+        else DrawWeapons(art);
         Frame.Fill(X + 6, Y + H, W, 6, 0x0f);
         Frame.Fill(X + W, Y + 6, 6, H, 0x0f);
-        // the port's rows: a box like the art's (its ink taken from the first box of the art) and the weapon's name on the right of
-        // its row's first box, where the art prints its own names
-        byte ink = art is { } a && ColumnX.Length > 1 && RowY.Length > 1 && a.Width > ColumnX[1] && a.Height > RowY[1] ? a.Pixels[RowY[1] * a.Width + ColumnX[1]] : (byte)0x0f;
+        var rows = Rows;
+        var checks = Checks;
+        for (int i = 0; i < rows.Count; i++)
+            if (checks[i]) { var p = BoxAt(rows[i]); Frame.Text(Font, X + p.X + 1, Y + p.Y - 2, "x"); }
+        if (Specials is not null && art is not null) DrawPageButton(art);
+    }
+
+    /// <summary>A box like the art's, in its ink (taken from the first box of the art).</summary>
+    private void DrawBox(Sprite? art, Vector2I at)
+    {
+        byte ink = Ink(art);
+        var p = at + new Vector2I(X, Y);
+        Frame.Fill(p.X, p.Y, Box, 1, ink); Frame.Fill(p.X, p.Y + Box - 1, Box, 1, ink);
+        Frame.Fill(p.X, p.Y, 1, Box, ink); Frame.Fill(p.X + Box - 1, p.Y, 1, Box, ink);
+    }
+
+    private byte Ink(Sprite? art) =>
+        art is { } a && ColumnX.Length > 1 && RowY.Length > 1 && a.Width > ColumnX[1] && a.Height > RowY[1] ? a.Pixels[RowY[1] * a.Width + ColumnX[1]] : (byte)0x0f;
+
+    private void DrawWeapons(Sprite? art)
+    {
+        Frame.Blit(art, X, Y);
+        // the port's rows: a box like the art's and the weapon's name on the right of its row's first box, where the art prints its own names
         var labelled = new HashSet<int>();
         for (int i = Original; i < List.Rows.Count; i++)
         {
             var r = List.Rows[i];
+            DrawBox(art, BoxAt(r));
             var p = BoxAt(r) + new Vector2I(X, Y);
-            Frame.Fill(p.X, p.Y, Box, 1, ink); Frame.Fill(p.X, p.Y + Box - 1, Box, 1, ink);
-            Frame.Fill(p.X, p.Y, 1, Box, ink); Frame.Fill(p.X + Box - 1, p.Y, 1, Box, ink);
             if (labelled.Add(r.Row * 2 + (r.Column >= 3 ? 1 : 0)))
             {
                 if (art is { } sp && Frame.HasHdSprite?.Invoke(sp) != true)
@@ -1669,14 +1710,128 @@ public sealed class RestrictionsPopup : ShellScreen
                 else Frame.Text(Font, X + (r.Column >= 3 ? 398 : 115), p.Y - 1, r.Name);
             }
         }
-        for (int i = 0; i < List.Rows.Count; i++)
-            if (List.Checked[i]) { var p = BoxAt(List.Rows[i]); Frame.Text(Font, X + p.X + 1, Y + p.Y - 2, "x"); }
+    }
+
+    // The SPECIALS page, measured from bank 30 sprite 43: the inner frame's inside below the subtitle (its checklist; NO WEAPONS IN
+    // GAME's box, NO and IN GAME stay), "WEAPONS" in the title bar, in the subtitle and in NO WEAPONS IN GAME, and the plain bands each
+    // takes its paper from (the gutter between the halves, the subtitle's left, the title bar's left).
+    private static readonly Rect2I Sheet = new(19, 58, 532, 333), TitleWord = new(191, 18, 76, 15), SubtitleWord = new(190, 41, 75, 15),
+        AllWord = new(369, 369, 75, 14), TitleCaps = new(191, 18, 76, 13);
+    private static readonly Rect2I[] Kept = [new(318, 367, 18, 18), new(345, 369, 24, 14), new(446, 369, 63, 15)];
+    private const int SheetBand0 = 290, SheetBand1 = 318, SubtitleBand0 = 25, SubtitleBand1 = 125, TitleBand0 = 30, TitleBand1 = 180;
+    /// <summary>A name's pen: this far right of its box's left edge (the art's NO WEAPONS IN GAME starts so far from its box).</summary>
+    private const int LabelDx = 26;
+
+    /// <summary>
+    /// The art's pixels with its checklist and those words taken off: each pixel of ink (or beside ink) in them replaced by the paper of
+    /// the same row in a plain band of the art, mirrored back and forth across it, shifted by how much lighter or darker the paper round
+    /// it is than the band's there (the nearest colour of the palette), so the parchment's grain and shading stay.
+    /// </summary>
+    private byte[] SpecialsPage(Sprite art)
+    {
+        if (_page is not null) return _page;
+        var src = art.Pixels;
+        var px = (byte[])src.Clone();
+        if (art.Width != W || art.Height != H) return _page = px;
+        var pal = Frame.Palette;
+        int w = art.Width, h = art.Height;
+        bool Ink(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && (pal[src[y * w + x] * 3] + pal[src[y * w + x] * 3 + 1] + pal[src[y * w + x] * 3 + 2]) / 3f < 150f;
+        var nearest = new Dictionary<int, byte>();
+        byte Nearest(float r, float g, float b)
+        {
+            int key = ((int)Math.Clamp(r, 0, 255) >> 1) << 16 | ((int)Math.Clamp(g, 0, 255) >> 1) << 8 | (int)Math.Clamp(b, 0, 255) >> 1;
+            if (nearest.TryGetValue(key, out var hit)) return hit;
+            int best = 0; float bd = float.MaxValue;
+            for (int i = 0; i < 256; i++)
+            {
+                float dr = pal[i * 3] - r, dg = pal[i * 3 + 1] - g, db = pal[i * 3 + 2] - b, d = dr * dr + dg * dg + db * db;
+                if (d < bd) { bd = d; best = i; }
+            }
+            return nearest[key] = (byte)best;
+        }
+        void Wipe(Rect2I r, int b0, int b1, bool keep)
+        {
+            const int R = 8;
+            int n = b1 - b0;
+            var mask = new bool[w * h];
+            for (int y = r.Position.Y; y < r.End.Y; y++)
+                for (int x = r.Position.X; x < r.End.X; x++)
+                {
+                    if (keep && Kept.Any(k => k.HasPoint(new Vector2I(x, y)))) continue;
+                    bool near = false;
+                    for (int dy = -1; dy <= 1 && !near; dy++) for (int dx = -1; dx <= 1 && !near; dx++) near = Ink(x + dx, y + dy);
+                    mask[y * w + x] = near;
+                }
+            for (int y = r.Position.Y; y < r.End.Y; y++)
+                for (int x = r.Position.X; x < r.End.X; x++)
+                {
+                    if (!mask[y * w + x]) continue;
+                    // the paper round it (in the rectangle, not ink) and the band's in the same rows
+                    float lr = 0, lg = 0, lb = 0, br = 0, bg = 0, bb = 0;
+                    int ln = 0, bn = 0;
+                    for (int yy = Math.Max(r.Position.Y, y - R); yy < Math.Min(r.End.Y, y + R + 1); yy++)
+                    {
+                        for (int xx = Math.Max(r.Position.X, x - R); xx < Math.Min(r.End.X, x + R + 1); xx++)
+                        {
+                            if (mask[yy * w + xx]) continue;
+                            int c = src[yy * w + xx] * 3;
+                            lr += pal[c]; lg += pal[c + 1]; lb += pal[c + 2]; ln++;
+                        }
+                        for (int xx = b0; xx < b1; xx++) { int c = src[yy * w + xx] * 3; br += pal[c]; bg += pal[c + 1]; bb += pal[c + 2]; bn++; }
+                    }
+                    int k = Math.Abs(x - b0) % (2 * n);
+                    byte from = src[y * w + b0 + (k < n ? k : 2 * n - 1 - k)];
+                    if (ln < 8 || bn == 0) { px[y * w + x] = from; continue; }
+                    int f = from * 3;
+                    px[y * w + x] = Nearest(pal[f] + lr / ln - br / bn, pal[f + 1] + lg / ln - bg / bn, pal[f + 2] + lb / ln - bb / bn);
+                }
+        }
+        Wipe(Sheet, SheetBand0, SheetBand1, true);
+        Wipe(SubtitleWord, SubtitleBand0, SubtitleBand1, false);
+        Wipe(TitleWord, TitleBand0, TitleBand1, false);
+        return _page = px;
+    }
+
+    private void DrawSpecials(Sprite art)
+    {
+        var page = SpecialsPage(art);
+        for (int r = 0; r < art.Height; r++)
+            for (int c = 0; c < art.Width; c++)
+                if (art.Opaque[r * art.Width + c]) Frame.Fill(X + c, Y + r, 1, 1, page[r * art.Width + c]);
+        // "SPECIALS" where the art says "WEAPONS", lettered as the art letters that word there
+        var label = Shell.Db.Font(0x47);
+        byte Px(int x, int y) => art.Pixels[Math.Clamp(y - Y, 0, art.Height - 1) * art.Width + Math.Clamp(x - X, 0, art.Width - 1)];
+        if (art.Width == W && art.Height == H)
+            foreach (var word in new[] { TitleCaps, SubtitleWord, AllWord })
+            {
+                var at = new Rect2I(X + word.Position.X, Y + word.Position.Y, word.Size.X, word.Size.Y);
+                if (ArtButtons.Label(Px, Frame.Palette, at) is { } like) ArtButtons.Letter(Frame, label, "SPECIALS", like, "WEAPONS", like.Box);
+            }
+        foreach (var r in Specials!.Rows)
+        {
+            if (r.IsHeader) continue;          // NO SPECIALS IN GAME: the art's box and words
+            DrawBox(art, BoxAt(r));
+            RestrictionLabels.Draw(Frame, art, X, Y, BoxAt(r).X + LabelDx, BoxAt(r).Y + 2, r.Name, page);
+        }
+    }
+
+    /// <summary>SPECIALS (on the weapons page) or WEAPONS (on the specials page): DONE's face without its word, the word lettered as the art letters DONE (ArtButtons).</summary>
+    private void DrawPageButton(Sprite art)
+    {
+        byte Px(int x, int y) => art.Pixels[Math.Clamp(y - Y, 0, art.Height - 1) * art.Width + Math.Clamp(x - X, 0, art.Width - 1)];
+        var pal = Frame.Palette;
+        if (ArtButtons.Label(Px, pal, new Rect2I(X + Done.X0 - 4, Y + Done.Y0 - 4, Done.X1 - Done.X0 + 8, Done.Y1 - Done.Y0 + 8)) is not { } border
+            || ArtButtons.Label(Px, pal, border.Box.Grow(-3)) is not { } word) return;
+        var dest = new Rect2I(X + Page.X0, border.Box.Position.Y, Page.X1 - Page.X0, border.Box.Size.Y);
+        ArtButtons.Face(Frame, Px, border.Box, word.Box.Position.X, dest, 3);
+        ArtButtons.Letter(Frame, Shell.Db.Font(0x47), _specials ? "WEAPONS" : "SPECIALS", word, "DONE", dest);
     }
 
     private static bool In((int X0, int X1, int Y0, int Y1) r, Vector2I p) => r.X0 < p.X && p.X < r.X1 && r.Y0 < p.Y && p.Y < r.Y1;
 
     public override IReadOnlyList<PadRegion> PadRegions =>
-        [.. List.Rows.Select(r => PadRegion.Of((X + BoxAt(r).X, X + BoxAt(r).X + Box, Y + BoxAt(r).Y, Y + BoxAt(r).Y + Box))),
+        [.. Rows.Select(r => PadRegion.Of((X + BoxAt(r).X, X + BoxAt(r).X + Box, Y + BoxAt(r).Y, Y + BoxAt(r).Y + Box))),
+         .. Specials is null ? Array.Empty<PadRegion>() : [PadRegion.Of((X + Page.X0, X + Page.X1, Y + Page.Y0, Y + Page.Y1))],
          PadRegion.Of((X + Done.X0, X + Done.X1, Y + Done.Y0, Y + Done.Y1)), PadRegion.Of((X + Cancel.X0, X + Cancel.X1, Y + Cancel.Y0, Y + Cancel.Y1))];
 
     public override void Tick()
@@ -1685,21 +1840,33 @@ public sealed class RestrictionsPopup : ShellScreen
         if (!Shell.Clicked) return;
         var p = Shell.Mouse - new Vector2I(X, Y);
         // A box is its 12x12 square (the hot area 39..387, 66..382 holds them all)
-        for (int i = 0; i < List.Rows.Count; i++)
+        var rows = Rows;
+        for (int i = 0; i < rows.Count; i++)
         {
-            var b = BoxAt(List.Rows[i]);
-            if (b.X <= p.X && p.X <= b.X + Box && b.Y <= p.Y && p.Y <= b.Y + Box) { Shell.Sound(82); List.Toggle(i); Draw(); return; }
+            var b = BoxAt(rows[i]);
+            if (b.X <= p.X && p.X <= b.X + Box && b.Y <= p.Y && p.Y <= b.Y + Box)
+            {
+                Shell.Sound(82);
+                if (_specials) Specials!.Toggle(i); else List.Toggle(i);
+                Draw();
+                return;
+            }
         }
-        if (In(Done, p)) Close(true);
+        if (Specials is not null && In(Page, p)) { Shell.Sound(82); _specials = !_specials; Draw(); }
+        else if (In(Done, p)) Close(true);
         else if (In(Cancel, p)) Close(false);
     }
 
     private void Close(bool done)
     {
         Shell.Sound(82);
-        if (!done) Array.Copy(_was, List.Checked, _was.Length);
+        if (!done)
+        {
+            Array.Copy(_was, List.Checked, _was.Length);
+            if (Specials is { } s) Array.Copy(_wasSpecials, s.Checked, _wasSpecials.Length);
+        }
         Frame.Restore(X, Y, W + 6, H + 6);
         Shell.Modal(null);
-        Closed(done ? List.Build() : null);
+        Closed(done ? List.Build().WithSpecials(Specials?.Build() ?? []) : null);
     }
 }

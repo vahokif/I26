@@ -164,9 +164,18 @@ It also folds every `.gdf`, the `.vdf`, `.vtf`, wheels and `compnent.cdf` it rea
   for one the server lacks, or a player's own variant after the garage check) is checked against the restrictions
   before the seat is given, by the GDF (class, tier) of the server's own files. A restricted weapon **refuses the join**
   with the weapons named ("Restricted weapons: HADES Cannon"), shown as "Could not join: …" on the joiner's form; nothing
-  is stripped. `i26-server --restrict all|slugs|mortars|missiles|flames|droppers|<gdf>|<class>:<tier>,...` and
+  is stripped. `i26-server --restrict all|slugs|mortars|missiles|flames|droppers|<gdf>|<class>:<tier>|specials|<special>,...` and
   `--host-listen --restrict` do the same without the form.
-- **Joiners** see the restrictions on the join form's game popup ("Restricted: …", by the checklist's names), and JOIN
+- **Specials** (the port's; the original's list holds weapons only, docs/deviations.md): the checklist's second page,
+  SPECIALS (a button left of DONE; WEAPONS turns back), is the same art with its checklist and "WEAPONS" taken off and
+  "SPECIALS" lettered in, a box for each special the garage offers by the garage's name (Radar Jammer, NitrousOxide, Blower,
+  X-Aust Brake, Structo Bmpr, Curb Feelers, Mud Flaps, Heated Seats, Cup Holders; the Nitro Pack's Dashboard Mary and Tire
+  Covers) and NO SPECIALS IN GAME (`SpecialChecklist`). A joiner's car with a restricted special is refused as one with a
+  restricted weapon ("Restricted specials: Radar Jammer"); a bot's loses it (the slot left empty). On the command line a
+  special is `jammer`, `nitro`, `blower`, `exhaust`, `bumper`, `curb`, `mudflaps`, `seats`, `cupholders`, `mary`,
+  `covers`, and `specials` is all of them (docs/multiplayer.md). All Weapons does not cover them. The list travels in
+  the session answer too (protocol 25, at its end).
+- **Joiners** see the restrictions on the join form's game popup ("Restricted: …", by the checklist's names, the specials by the garage's), and JOIN
   checks their car first and says what it must lose, without connecting; the server checks anyway. The list travels in
   the session answer (protocol 12, appended after the locked flag).
 - **Hidden Weapons & Cars** (Play Options' first line and a row on both host forms, Off by default): the complete hidden weapons join the CONFIGURE

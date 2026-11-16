@@ -139,7 +139,7 @@ public sealed class MeleeMode : IHostMode
         string? car = _o.BotChoices.ElementAtOrDefault(Protocol.MaxSeats - 1 - slot) is { Length: > 0 } pick ? _host.BotChoice(pick) : null;
         if (car is null)
         {
-            // Random: under restrictions the host's saved variants that already carry none of the restricted weapons come first
+            // Random: under restrictions the host's saved variants that already carry none of the restricted weapons or specials come first
             var saved = _host.LegalSavedCars();
             var cars = BotCarList();
             if (!_o.Restrictions.IsEmpty && saved.Count > 0) car = saved[_botRng.Next(saved.Count)];

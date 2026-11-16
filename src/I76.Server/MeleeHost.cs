@@ -127,8 +127,8 @@ public sealed record ServerOptions
     /// <summary>Tells this game from others in a session list (a LAN game answers both its LAN and loopback queries).</summary>
     public ulong SessionId { get; init; } = (ulong)Random.Shared.NextInt64();
     /// <summary>
-    /// The weapons no joiner's car may carry (the Nitro host form's WEAPON RESTRICTIONS, --restrict; docs/hidden-content.md).
-    /// The server checks every car against them and refuses a join that breaks them, naming the weapons.
+    /// The weapons and specials no joiner's car may carry (the Nitro host form's WEAPON RESTRICTIONS and its SPECIALS page, --restrict;
+    /// docs/hidden-content.md). The server checks every car against them and refuses a join that breaks them, naming them.
     /// </summary>
     public I76.Sim.Trip.WeaponRestrictions Restrictions { get; init; } = I76.Sim.Trip.WeaponRestrictions.None;
     /// <summary>The host's Hidden Weapons &amp; Cars (--hidden): the complete hidden models and weapons are allowed. Off, a car with any is refused.</summary>
@@ -422,7 +422,7 @@ public sealed partial class MeleeHost : IModeHost
     /// The reason a join's car is refused, or null: checked before the connection is accepted. A configuration must pass the
     /// garage's rules (CarConfigCheck); then the car the player would get (their own variant, the install's car they asked
     /// for, or what stands in for it) must be a melee model with weapons the pickers offer, hidden ones only when the host
-    /// allows them, and none the game's WEAPON RESTRICTIONS forbid (docs/hidden-content.md §5).
+    /// allows them, and none of the weapons or specials the game's WEAPON RESTRICTIONS forbid (docs/hidden-content.md §5).
     /// </summary>
     public string? CheckJoin(string car, byte[]? config)
     {
@@ -455,15 +455,19 @@ public sealed partial class MeleeHost : IModeHost
         if (I76.Sim.Trip.HiddenContent.Check(Vfs, OfferedModels, Vfs.Install.IsNitro, Options.AllowHidden, stem ?? StemOf(file), guns) is { } why)
             return $"{file} refused: {why}";
         if (CarConfigCheck.Strict(Vfs, car, stem ?? StemOf(file), Options.AllowTurrets || anyTurrets) is { } strict) return $"{file} refused: {strict}";
-        var bad = restrictions ? Options.Restrictions.Violations(Vfs, guns) : [];
-        if (bad.Count > 0) return $"Restricted weapons: {string.Join(", ", bad.Select(g => I76.Sim.Trip.HiddenContent.WeaponName(Vfs, g)))}";
-        return null;
+        if (!restrictions) return null;
+        var bad = Options.Restrictions.Violations(Vfs, guns);
+        var badSpecials = Options.Restrictions.SpecialViolations(car.Specials);
+        var reasons = new List<string>();
+        if (bad.Count > 0) reasons.Add($"Restricted weapons: {string.Join(", ", bad.Select(g => I76.Sim.Trip.HiddenContent.WeaponName(Vfs, g)))}");
+        if (badSpecials.Count > 0) reasons.Add($"Restricted specials: {string.Join(", ", badSpecials.Select(I76.Sim.Trip.WeaponRestrictions.SpecialName))}");
+        return reasons.Count > 0 ? string.Join(". ", reasons) : null;
     }
 
     /// <summary>
     /// The car a driver the server runs (a bot, the AI fill) gets under the game's WEAPON RESTRICTIONS: its own car when that
-    /// carries none of the restricted weapons, else the same car with them taken off (all of them under All Weapons), served
-    /// by its content as a player's own variant is. The car is never swapped for another model, and the clients are sent the
+    /// carries none of the restricted weapons and specials, else the same car with them taken off (all the weapons under All
+    /// Weapons; a restricted special leaves its slot empty), served by its content as a player's own variant is. The car is never swapped for another model, and the clients are sent the
     /// file (<see cref="CarInfo.Vcf"/>), so every machine draws the car the server drives, unarmed where the game is.
     /// </summary>
     public string Legal(string car)
@@ -477,6 +481,8 @@ public sealed partial class MeleeHost : IModeHost
         var bad = Options.Restrictions.Violations(Vfs, trip.Weapons.Select(w => w.Gdf));
         bool changed = bad.Count > 0;
         if (changed) trip.Weapons = [.. trip.Weapons.Where(w => !bad.Contains(w.Gdf, StringComparer.OrdinalIgnoreCase))];
+        for (int k = 0; k < trip.Specials.Length; k++)
+            if (trip.Specials[k] > 0 && Options.Restrictions.RestrictsSpecial(trip.Specials[k])) { trip.Specials[k] = 0; changed = true; }
         // several turrets only where the host allows them: the first stays (a bot's car loses the others, as the restricted weapons)
         if (!Options.AllowTurrets && CarConfigCheck.WithoutExtraTurrets(Vfs, trip, stem) is not null) changed = true;
         return changed ? Serve(stem, trip.ToVcf()) : car;
@@ -539,7 +545,7 @@ public sealed partial class MeleeHost : IModeHost
         return l;
     }
 
-    /// <summary>The saved variants that carry none of the restricted weapons and pass the game's rules as they are, served as they stand.</summary>
+    /// <summary>The saved variants that carry none of the restricted weapons or specials and pass the game's rules as they are, served as they stand.</summary>
     public IReadOnlyList<string> LegalSavedCars() =>
         [.. SavedCars().Where(c => CheckCar(c) is null).Select(c => { var served = ServedOwn(c); _origin[served] = c; return served; })];
 

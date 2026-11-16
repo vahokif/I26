@@ -233,6 +233,53 @@ public class BotCarChoiceTests(ITestOutputHelper output)
         finally { AssetVfs.Addon.TryRemove(Saved, out _); AssetVfs.Addon.TryRemove("vfdclyd6.vcf", out _); }
     }
 
+    /// <summary>
+    /// Restricted specials come off the bots' cars as restricted weapons do (the stock melee variants carry none, so the host's saved
+    /// variants): a chosen car loses them (the slot left empty, the rest as it was, served by content), and a bot on Random prefers a saved
+    /// variant that carries none of them.
+    /// </summary>
+    [Fact]
+    public void RestrictedSpecialsComeOffTheBotsCars()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var probe = new MeleeHost(new ServerOptions { Install = install, Arena = "m01" });
+        byte[] With(string name, int[] specials) { var t = TripCar.FromVcf(probe.Vfs.Read("vfdclyd1.vcf")); t.Variant = name; t.Specials = specials; return t.ToVcf(); }
+        var nitro = With("Host's nitro", [2, 3, 0]);
+        var plain = With("Host's plain", [0, 3, 0]);
+        var r = WeaponRestrictions.None.WithSpecials([2]);
+        try
+        {
+            AssetVfs.Addon[Saved] = nitro;
+            // chosen: the Nitrous Oxide comes off, the Blower stays, the weapons stay; on the client too (the file goes by content)
+            using (var server = new NetMeleeServer(new ServerOptions { Install = install, Arena = "m01", Port = 0, ListenHost = true, Seed = 5, Bots = 1, MaxPlayers = 4, BotChoices = [Saved], Restrictions = r }))
+            {
+                server.Start();
+                using var c = new MeleeClient();
+                c.Connect("127.0.0.1", server.Port, "Cy", "vppirna1.vcf");
+                Assert.True(Wait(() => c.State == ClientState.Joined, c.Poll), c.Reason);
+                var (file, serial) = server.Invoke(h => (h.Bots[0].Player.CarFile, h.Bots[0].Player.Car.NetId & 0xffffff));
+                var info = c.Accept!.Cars.Single(x => x.Serial == serial);
+                Assert.Equal(file, info.Def);
+                var t = TripCar.FromVcf(info.Vcf!);
+                Assert.Equal("Host's nitro", t.Variant);
+                Assert.Equal([0, 3, 0], t.Specials);
+                Assert.Equal(TripCar.FromVcf(nitro).Weapons.Order(), t.Weapons.Order());
+                Assert.Null(server.Invoke(h => h.CheckCar(file, "vfdclyd")));
+            }
+            // Random: the saved variant with the restricted special is not taken as it is; with one without it, that one is
+            var h1 = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Bots = 4, MaxPlayers = 8, Seed = 3, Restrictions = r });
+            Assert.Empty(h1.LegalSavedCars());
+            Assert.All(h1.Bots, b => Assert.DoesNotContain(2, TripCar.FromVcf(h1.Vfs.Read(b.Player.CarFile)).Specials));
+            AssetVfs.Addon["vfdclyd6.vcf"] = plain;
+            var h2 = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Bots = 4, MaxPlayers = 8, Seed = 3, Restrictions = r });
+            Assert.All(h2.Bots, b => Assert.Equal("Host's plain", Look(h2.Vfs.Read(b.Player.CarFile)).Variant));
+            // without the restriction the chosen car is the saved one as it is
+            var h3 = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Bots = 1, MaxPlayers = 4, Seed = 3, BotChoices = [Saved] });
+            Assert.Equal([2, 3, 0], TripCar.FromVcf(h3.Vfs.Read(h3.Bots[0].Player.CarFile)).Specials);
+        }
+        finally { AssetVfs.Addon.TryRemove(Saved, out _); AssetVfs.Addon.TryRemove("vfdclyd6.vcf", out _); }
+    }
+
     /// <summary>The successor takes the choices over with the game (they are in the savestate's options): the bots keep their cars, and a seat refilled afterwards is its choice.</summary>
     [Fact]
     public void HostMigrationKeepsTheChoices()

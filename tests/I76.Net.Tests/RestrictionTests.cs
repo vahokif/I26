@@ -137,6 +137,46 @@ public class RestrictionTests
         Assert.Empty(server.Host.Seats);
     }
 
+    /// <summary>A player's own variant with specials (the stock melee variants carry none) is checked against the restricted ones, named by the garage's names.</summary>
+    [Fact]
+    public void ACarWithARestrictedSpecialIsRefusedByName()
+    {
+        if (HostTests.InstallDir is null) return;
+        var vfs = Host().Vfs;
+        var jammer = Custom(vfs, c => c.Specials = [1, 3, 0]);
+        var none = Custom(vfs, c => c.Specials = [0, 3, 0]);
+        var r = WeaponRestrictions.None.WithSpecials([1]);
+        Assert.Equal("Restricted specials: Radar Jammer", Host(r).CheckJoin("vppirna4.vcf", jammer));
+        Assert.Null(Host(r).CheckJoin("vppirna4.vcf", none));
+        Assert.Null(Host(WeaponRestrictions.None.WithSpecials([2])).CheckJoin("vppirna4.vcf", jammer));
+        Assert.Equal("Restricted specials: Radar Jammer, Blower", Host(WeaponRestrictions.None.WithSpecials([1, 3])).CheckJoin("vppirna4.vcf", jammer));
+        // All Weapons does not cover them; both kinds at once are both named
+        Assert.Equal("Restricted weapons: Landmines. Restricted specials: Radar Jammer",
+            Host(WeaponRestrictions.Normalize(false, [(6, 3)]).WithSpecials([1])).CheckJoin("vppirna4.vcf", jammer));
+        Assert.DoesNotContain("specials", Host(WeaponRestrictions.Everything).CheckJoin("vppirna4.vcf", jammer));
+        // an install car asked by name carries none: it goes
+        Assert.Null(Host(WeaponRestrictions.None.WithSpecials(Enumerable.Range(1, 9))).CheckJoin("vcgcour1.vcf", null));
+        // the server's answer says so, for the join form
+        Assert.Equal(r, Host(r).Info().Restricted);
+    }
+
+    [Fact]
+    public void ARestrictedSpecialRefusesTheJoinOverTheWire()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var probe = Host();
+        var mine = Custom(probe.Vfs, c => c.Specials = [2, 3, 0]);
+        using var server = new NetMeleeServer(new ServerOptions { Install = install, Arena = "m01", Port = 0, Restrictions = WeaponRestrictions.None.WithSpecials([3]) });
+        server.Start();
+        var client = new MeleeClient();
+        client.Connect("127.0.0.1", server.Port, "Jade", "vppirna4.vcf", config: mine);
+        for (int t = 0; t < 250 && client.State == ClientState.Connecting; t++) { client.Poll(); Thread.Sleep(20); }
+        Assert.Equal(ClientState.Rejected, client.State);
+        Assert.Contains("Restricted specials: Blower", client.Reason);
+        client.Dispose();
+        Assert.Empty(server.Host.Seats);
+    }
+
     [Fact]
     public void NitrosChecklistIsReadFromItsShell()
     {

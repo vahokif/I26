@@ -12,9 +12,9 @@ public class WireTests
     private static readonly I76.Formats.Imaging.CarPaint Red = new(new I76.Formats.Imaging.PaintColour(200, 10, 20), new I76.Formats.Imaging.PaintColour(1, 2, 3), I76.Formats.Imaging.PaintFinish.Metallic);
 
     [Fact]
-    public void TheProtocolIs24()
+    public void TheProtocolIs25()
     {
-        Assert.Equal(24, Protocol.Version);
+        Assert.Equal(25, Protocol.Version);
         Assert.Equal(17, I76.Sim.Save.SnapshotHeader.CurrentVersion);
     }
 
@@ -233,7 +233,7 @@ public class WireTests
         Assert.Equal((11138u, 0xdeadbeefu, 32768u, 0x12345678u), (fp.MapSize, fp.MapCrc, fp.TerrainSize, fp.TerrainCrc));
 
         // the server's rate rides in the accept; one that is not offered is refused, and so is a client of the old protocol
-        Assert.Equal(24, Protocol.Version);
+        Assert.Equal(25, Protocol.Version);
         Assert.Equal(20, acc2.RateHz);
         w.Clear();
         (acc with { RateHz = 60 }).Write(w);
@@ -584,6 +584,35 @@ public class RestrictionWireTests
         Assert.True(back.Restricted.IsEmpty);
         Assert.True(back.Locked);
         Assert.False(back.Coop);
+    }
+
+    /// <summary>The restricted specials (protocol 25): the answer's last bytes, a count and the types; an older host's answer, which ends before them, reads as none.</summary>
+    [Fact]
+    public void TheRestrictedSpecialsRoundTripAndAnOlderAnswerHasNone()
+    {
+        var weapons = I76.Sim.Trip.WeaponRestrictions.Normalize(false, [(2, 6)]);
+        foreach (var r in new[]
+                 {
+                     I76.Sim.Trip.WeaponRestrictions.None.WithSpecials([1]), weapons.WithSpecials([2, 3, 11]),
+                     I76.Sim.Trip.WeaponRestrictions.Everything.WithSpecials(Enumerable.Range(1, 11)),
+                 })
+        {
+            var w = new NetWriter();
+            Info(r, false).Write(w);
+            var back = SessionInfo.TryRead(w.Span)!;
+            Assert.Equal(r, back.Restricted);
+            Assert.Equal(Info(r, false) with { Drivers = [] }, back with { Drivers = [] });
+            // without the specials' bytes (a protocol 24 host): the weapons as they were, no specials
+            var older = SessionInfo.TryRead(w.Span[..^(1 + r.Specials.Count)])!;
+            Assert.Empty(older.Restricted.Specials);
+            Assert.Equal(r with { Specials = [] }, older.Restricted);
+        }
+        // more types than there are specials is no answer
+        var x = new NetWriter();
+        Info(I76.Sim.Trip.WeaponRestrictions.None.WithSpecials([1]), false).Write(x);
+        var bytes = x.Span.ToArray();
+        bytes[^2] = 12;
+        Assert.Null(SessionInfo.TryRead(bytes));
     }
 
     [Fact]

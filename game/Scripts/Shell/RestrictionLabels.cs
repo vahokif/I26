@@ -82,7 +82,7 @@ public static class RestrictionLabels
     {
         ['1'] = ('I', false, false), ['8'] = ('B', false, false), ['9'] = ('6', true, false),
         ['j'] = ('i', false, false), ['q'] = ('p', false, true), ['z'] = ('Z', false, false),
-        ['J'] = ('I', false, false), ['Q'] = ('O', false, false), ['V'] = ('U', false, false), ['X'] = ('K', false, false), ['Y'] = ('T', false, false),
+        ['Q'] = ('O', false, false), ['V'] = ('U', false, false), ['Y'] = ('T', false, false),
         [','] = ('.', false, false), [':'] = ('.', false, false), [';'] = ('.', false, false), ['!'] = ('I', false, false), ['?'] = ('.', false, false),
         ['/'] = ('I', false, false), ['('] = ('I', false, false), [')'] = ('I', false, false), ['&'] = ('B', false, false),
         ['+'] = ('-', false, false), ['_'] = ('-', false, false),
@@ -91,6 +91,14 @@ public static class RestrictionLabels
     // Lower-case letters the art never prints, made from its capital squeezed to the x-height (caps rows 1..9 of the band
     // into rows 3..9, as its 'x' and 'e' sit), with a lower-case advance: "Howitzer"
     private static readonly Dictionary<char, (char From, int Adv)> Small = new() { ['z'] = ('Z', 667) };
+
+    // Capitals the art never prints, made from its lower-case letter stretched to the caps' height (x-height rows 3..9 of the band
+    // over caps rows 1..9), with a capital's advance: the specials page's "X-Aust Brake"
+    private static readonly Dictionary<char, (char From, int Adv)> Tall = new() { ['X'] = ('x', 800) };
+
+    // Capitals made from another with part of it left out: J is U without its left stem above the bowl ("Radar Jammer"), its
+    // columns 0..Cols-1 blank down to caps row Rows
+    private static readonly Dictionary<char, (char From, int Adv, int Cols, int Rows)> Cut = new() { ['J'] = ('U', 667, 3, 5) };
 
     private static readonly Dictionary<char, (int X, int Y, int W, int Dx, int Adv)> ByChar = BuildTable();
 
@@ -106,24 +114,31 @@ public static class RestrictionLabels
     {
         if (ByChar.TryGetValue(c, out var g)) return g.Adv / 100f;
         if (Small.TryGetValue(c, out var sm)) return sm.Adv / 100f;
+        if (Tall.TryGetValue(c, out var tl)) return tl.Adv / 100f;
+        if (Cut.TryGetValue(c, out var ct)) return ct.Adv / 100f;
         return Fallback.TryGetValue(c, out var f) && ByChar.TryGetValue(f.From, out var h) ? h.Adv / 100f : SpaceAdv / 100f;
     }
 
     /// <summary>
     /// Draws <paramref name="s"/> with its pen at art column <paramref name="penX"/> and the caps' top row at art row
     /// <paramref name="capTop"/> (the caps' top row), into the frame where the art's top-left is
-    /// (ox, oy). Each pixel is the art's own ink blended over the art's paper at the place it lands.
+    /// (ox, oy). Each pixel is the art's own ink blended over the art's paper at the place it lands (or over
+    /// <paramref name="under"/>'s, the art's pixels as a page of the port's has them: the SPECIALS page's, its words taken off).
     /// </summary>
-    public static void Draw(ShellFrame frame, Sprite art, int ox, int oy, float penX, int capTop, string s)
+    public static void Draw(ShellFrame frame, Sprite art, int ox, int oy, float penX, int capTop, string s, byte[]? under = null)
     {
+        under ??= art.Pixels;
         var pal = frame.Palette;
         var cache = new Dictionary<(byte, int), byte>();
         float pen = penX;
         foreach (char ch in s)
         {
-            bool rot = false, mirror = false, small = false;
+            bool rot = false, mirror = false, small = false, tall = false;
+            int blankCols = 0, blankRows = 0;
             char src = ch;
             if (!ByChar.ContainsKey(ch) && Small.TryGetValue(ch, out var sm)) { src = sm.From; small = true; }
+            else if (!ByChar.ContainsKey(ch) && Tall.TryGetValue(ch, out var tl)) { src = tl.From; tall = true; }
+            else if (!ByChar.ContainsKey(ch) && Cut.TryGetValue(ch, out var ct)) { src = ct.From; blankCols = ct.Cols; blankRows = ct.Rows; }
             else if (!ByChar.ContainsKey(ch) && Fallback.TryGetValue(ch, out var f)) { src = f.From; rot = f.Rot; mirror = f.Mirror; }
             if (ByChar.TryGetValue(src, out var g))
             {
@@ -132,10 +147,12 @@ public static class RestrictionLabels
                 {
                     int sr = rot ? 12 - r : r; // a half turn is about the caps' rows (2..10)
                     if (small) { if (r < 3 || r > 9) continue; sr = 1 + (int)MathF.Round((r - 3) * 8 / 6f); }
+                    if (tall) { if (r < 1 || r > 9) continue; sr = 3 + (int)MathF.Round((r - 1) * 6 / 8f); }
                     int ya = capTop - 1 + r;
                     if (sr < 0 || sr >= Rows || ya < 0 || ya >= art.Height) continue;
                     for (int c = 0; c < g.W; c++)
                     {
+                        if (c < blankCols && r <= blankRows) continue;
                         int sc = rot || mirror ? g.W - 1 - c : c;
                         int xa = left + c;
                         if (xa < 0 || xa >= art.Width) continue;
@@ -143,7 +160,7 @@ public static class RestrictionLabels
                         float l = (pal[sp * 3] + pal[sp * 3 + 1] + pal[sp * 3 + 2]) / 3f;
                         float a = Math.Clamp((Parchment - l) / (Parchment - InkLum), 0f, 1f);
                         if (a < 0.1f) continue;
-                        frame.Fill(ox + xa, oy + ya, 1, 1, Blend(art.Pixels[ya * art.Width + xa], a, pal, cache));
+                        frame.Fill(ox + xa, oy + ya, 1, 1, Blend(under[ya * art.Width + xa], a, pal, cache));
                     }
                 }
             }

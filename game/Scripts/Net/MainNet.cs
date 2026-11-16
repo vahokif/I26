@@ -97,7 +97,7 @@ public partial class Main
                     CoopScale = _opt.CoopScale ?? I76.Game.Shell.ShellSettings.Load().CoopScale,
                     CoopRollingStart = _opt.CoopRollingStart ?? I76.Game.Shell.ShellSettings.Load().CoopRollingStart,
                 };
-            GD.Print($"listen server: {o.Arena}, {o.MaxPlayers} seats (about {I76.Game.Shell.MeleeScreen.UploadMbit(o.MaxPlayers):0.#} Mbit/s up when full), rand seed {(uint)o.Seed}{(_opt.FixedSeed is null ? " (clock)" : "")}{(o.Restrictions.IsEmpty ? "" : $", restricted weapons {o.Restrictions}")}{(o.AllowHidden ? ", hidden weapons and cars allowed" : "")}{(o.AllowTurrets ? ", several turrets allowed" : "")}");
+            GD.Print($"listen server: {o.Arena}, {o.MaxPlayers} seats (about {I76.Game.Shell.MeleeScreen.UploadMbit(o.MaxPlayers):0.#} Mbit/s up when full), rand seed {(uint)o.Seed}{(_opt.FixedSeed is null ? " (clock)" : "")}{(o.Restrictions.IsEmpty ? "" : $", restricted {o.Restrictions}")}{(o.AllowHidden ? ", hidden weapons and cars allowed" : "")}{(o.AllowTurrets ? ", several turrets allowed" : "")}");
             try { await _net.Host(o); }
             catch (System.Exception ex)
             {

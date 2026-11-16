@@ -34,7 +34,7 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
     /// </summary>
     public bool MayBringHidden => Hidden || !HiddenKnown;
 
-    /// <summary>The weapons the game does not allow (protocol 12; docs/hidden-content.md), none when the host set none.</summary>
+    /// <summary>The weapons (protocol 12) and specials (protocol 25) the game does not allow (docs/hidden-content.md), none when the host set none.</summary>
     public I76.Sim.Trip.WeaponRestrictions Restricted => Restrictions ?? I76.Sim.Trip.WeaponRestrictions.None;
 
     /// <summary>The arena is a custom map (its hash is known): a player without it downloads it on joining if <see cref="MapShared"/>.</summary>
@@ -96,6 +96,10 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
         u.Bool(IgnitionStaysOn);
         // the turrets turn as the 1997 CD build's (the host's Turrets); an older host says nothing: the 1998 build's
         u.Bool(Turrets1997);
+        // the specials the game does not allow (protocol 25; the port's SPECIALS page): a count and each one's type; an older host says nothing: none
+        var specials = rs.Specials.Take(I76.Sim.Trip.WeaponRestrictions.MaxSpecial).ToList();
+        u.U8((byte)specials.Count);
+        foreach (int sp in specials) u.U8((byte)sp);
         // (the drivers' makes and models follow the tail, a count byte and a string each)
         var shown = Shown(AnswerBytes - w.Length - 1 - t.Length - 1 - u.Length);
         w.U8((byte)shown.Count);
@@ -171,6 +175,14 @@ public sealed record SessionInfo(ulong Id, ushort Version, string Name, string A
             bool rolling = r.Remaining >= 1 && r.Bool();
             bool ignition = r.Remaining >= 1 && r.Bool();
             bool turrets1997 = r.Remaining >= 1 && r.Bool();
+            if (r.Remaining >= 1)
+            {
+                int n = r.U8();
+                if (n > I76.Sim.Trip.WeaponRestrictions.MaxSpecial) return null;
+                var specials = new int[n];
+                for (int i = 0; i < n; i++) specials[i] = r.U8();
+                restricted = restricted.WithSpecials(specials);
+            }
             return new SessionInfo(id, version, name, arena, players, max, team, invite, score, limit, over, drivers, kind, goal, value, teams, hash, shared, size, locked,
                 restricted.IsEmpty ? null : restricted, hidden, Coop: coop, RateHz: rate, Lobby: lobby, Turrets: turrets, CarReset: carReset, Cb: cb, Crosshair: crosshair, ArenaName: arenaName, CoopDamage: coopDamage, CoopScale: coopScale, RollingStart: rolling, IgnitionStaysOn: ignition, Turrets1997: turrets1997);
         }

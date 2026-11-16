@@ -19,7 +19,7 @@ namespace I76.Game.Boot;
 ///   --coop-scale 0-3   (with --host-listen --coop: each enemy car gets a copy per player past the first, up to that many; else the host form's Co-op Scaling)
 ///   --coop-rolling-start   (with --host-listen --coop: a respawn or joiner comes in at a moving teammate's speed; else the host form's Rolling Start)
 ///   --password WORD   (with --host-listen: the game needs it; with --connect or --join-anet: the one to join with; never saved)
-///   --restrict a,b,c   (with --host-listen: WEAPON RESTRICTIONS, as i26-server's: all, slugs, mortars, missiles, flames, droppers, a .gdf, class:tier)
+///   --restrict a,b,c   (with --host-listen: WEAPON RESTRICTIONS, as i26-server's: all, slugs, mortars, missiles, flames, droppers, a .gdf, class:tier; specials, jammer, nitro, blower ...)
 ///   --turrets  (with --host-listen: cars may carry several roof turrets; else the host form's setting)
 ///   --hidden   (with --host-listen: the game allows the hidden weapons and cars; else the Hidden Weapons & Cars setting)
 ///   --invite-only   (with --host-listen: each join waits for the host's Ctrl+Y / Ctrl+N, Ctrl+H to ask about the next first)
@@ -141,7 +141,7 @@ public sealed class LaunchOptions
     public bool InviteOnly { get; set; }
     /// <summary>--password WORD: the password a listen server (--host-listen) asks of joiners, or the one given when joining (--connect, --join-anet). Never saved.</summary>
     public string? Password { get; set; }
-    /// <summary>--restrict SPEC: the listen server's WEAPON RESTRICTIONS (null: none, or the host form's).</summary>
+    /// <summary>--restrict SPEC: the listen server's WEAPON RESTRICTIONS and restricted specials (null: none, or the host form's).</summary>
     public string? Restrict { get; set; }
     /// <summary>--hidden: the listen server allows the hidden weapons and cars (null: the setting).</summary>
     public bool? Hidden { get; set; }

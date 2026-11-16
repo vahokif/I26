@@ -9,7 +9,8 @@ namespace I76.Sim.Trip;
 /// <summary>
 /// The weapons a network game does not allow (the Nitro host form's WEAPON RESTRICTIONS, docs/hidden-content.md §4), as the
 /// original keeps them: every weapon (<see cref="All"/>, the original's count −1), or GDF (class, tier) pairs where tier −1
-/// stands for the whole class. A weapon is matched by its .gdf's GDFC class and tier.
+/// stands for the whole class. A weapon is matched by its .gdf's GDFC class and tier. The port adds the specials no car may
+/// carry (<see cref="Specials"/>; the original restricts none).
 /// </summary>
 public sealed record WeaponRestrictions(bool All, IReadOnlyList<(int Class, int Tier)> Pairs)
 {
@@ -18,14 +19,66 @@ public sealed record WeaponRestrictions(bool All, IReadOnlyList<(int Class, int 
     /// <summary>The most pairs a list carries (the original's block holds 50).</summary>
     public const int MaxPairs = 64;
 
-    public bool IsEmpty => !All && Pairs.Count == 0;
+    /// <summary>
+    /// The specials the game does not allow (the port's SPECIALS page of the checklist, docs/hidden-content.md §5): their types as
+    /// a .vcf's SPEC holds them (1 Radar Jammer .. 11 Tire Covers, <see cref="PartsDatabase.SpecialNames"/>), ascending, each once.
+    /// All Weapons does not cover them.
+    /// </summary>
+    public IReadOnlyList<int> Specials { get; init; } = [];
+
+    /// <summary>The highest special type (Nitro's Tire Covers).</summary>
+    public static int MaxSpecial => PartsDatabase.SpecialNames.Length;
+
+    public bool IsEmpty => !All && Pairs.Count == 0 && Specials.Count == 0;
+
+    /// <summary>No weapon is restricted (specials may be).</summary>
+    public bool NoWeapons => !All && Pairs.Count == 0;
 
     public bool Restricts(int cls, int tier) => All || Pairs.Any(p => p.Class == cls && (p.Tier == -1 || p.Tier == tier));
 
-    /// <summary>Equal by content (a record's own equality would compare the list by reference).</summary>
-    public bool Equals(WeaponRestrictions? o) => o is not null && All == o.All && Pairs.SequenceEqual(o.Pairs);
+    public bool RestrictsSpecial(int type) => Specials.Contains(type);
 
-    public override int GetHashCode() => Pairs.Aggregate(All ? 1 : 0, (h, p) => HashCode.Combine(h, p.Class, p.Tier));
+    /// <summary>Equal by content (a record's own equality would compare the lists by reference).</summary>
+    public bool Equals(WeaponRestrictions? o) => o is not null && All == o.All && Pairs.SequenceEqual(o.Pairs) && Specials.SequenceEqual(o.Specials);
+
+    public override int GetHashCode() =>
+        Specials.Aggregate(Pairs.Aggregate(All ? 1 : 0, (h, p) => HashCode.Combine(h, p.Class, p.Tier)), (h, s) => HashCode.Combine(h, s));
+
+    /// <summary>The same weapons with these specials restricted (only types 1..<see cref="MaxSpecial"/>, ascending, each once); <see cref="None"/> when that leaves nothing.</summary>
+    public WeaponRestrictions WithSpecials(IEnumerable<int> types)
+    {
+        var l = types.Where(t => t >= 1 && t <= MaxSpecial).Distinct().Order().ToList();
+        if (l.Count == 0 && NoWeapons) return None;
+        if (l.SequenceEqual(Specials)) return this;
+        return this with { Specials = l };
+    }
+
+    /// <summary>The restricted specials among a car's (its SPEC types; 0 an empty slot), each once, in slot order.</summary>
+    public List<int> SpecialViolations(IEnumerable<int> specials) => [.. specials.Where(s => s > 0 && RestrictsSpecial(s)).Distinct()];
+
+    /// <summary>A special's name as the garage shows it (<see cref="PartsDatabase.SpecialNames"/>).</summary>
+    public static string SpecialName(int type) => type >= 1 && type <= MaxSpecial ? PartsDatabase.SpecialNames[type - 1] : $"special {type}";
+
+    /// <summary>
+    /// The command line's names for the specials, by type: the first of each is the one <see cref="ToSpec"/> writes. The garage's own name
+    /// without spaces or dashes (<c>radarjammer</c>, <c>xaustbrake</c>) and the part's stem (<c>spc01</c>) are taken too.
+    /// </summary>
+    public static readonly (int Type, string[] Names)[] SpecialKeys =
+    [
+        (1, ["jammer", "radar"]), (2, ["nitro", "nitrous"]), (3, ["blower"]), (4, ["exhaust", "xaust"]), (5, ["bumper", "structo"]),
+        (6, ["curb", "feelers"]), (7, ["mudflaps", "mud"]), (8, ["seats", "heated"]), (9, ["cupholders", "cup"]), (10, ["mary", "dashboard"]),
+        (11, ["covers", "tirecovers"]),
+    ];
+
+    /// <summary>A special by a command-line name (<see cref="SpecialKeys"/>, the garage's name, spcNN), or 0.</summary>
+    public static int SpecialByName(string name)
+    {
+        var t = new string([.. name.ToLowerInvariant().Where(char.IsAsciiLetterOrDigit)]);
+        foreach (var (type, names) in SpecialKeys) if (names.Contains(t)) return type;
+        for (int i = 1; i <= MaxSpecial; i++)
+            if (t == new string([.. SpecialName(i).ToLowerInvariant().Where(char.IsAsciiLetterOrDigit)]) || t == $"spc{i:00}") return i;
+        return 0;
+    }
 
     /// <summary>A .gdf's GDFC class and tier, or null for a file that is not a weapon.</summary>
     public static (int Class, int Tier)? KeyOf(AssetVfs vfs, string gdf)
@@ -55,19 +108,28 @@ public sealed record WeaponRestrictions(bool All, IReadOnlyList<(int Class, int 
         [("slugs", 2), ("mortars", 3), ("missiles", 4), ("flames", 5), ("droppers", 6)];
 
     /// <summary>
-    /// <c>i26-server --restrict</c>: a comma-separated list of <c>all</c>, a group (<c>slugs</c>, <c>mortars</c>, <c>missiles</c>,
-    /// <c>flames</c>, <c>droppers</c>), a weapon's file (<c>gchades</c>, <c>tdumb.gdf</c>) or <c>class:tier</c> (tier −1 or *
-    /// for the whole class). Null with <paramref name="error"/> for a name it does not know.
+    /// <c>i26-server --restrict</c>: a comma-separated list of <c>all</c> (every weapon), a group (<c>slugs</c>, <c>mortars</c>,
+    /// <c>missiles</c>, <c>flames</c>, <c>droppers</c>), a weapon's file (<c>gchades</c>, <c>tdumb.gdf</c>) or <c>class:tier</c> (tier
+    /// −1 or * for the whole class), a special (<see cref="SpecialKeys"/>: <c>jammer</c>, <c>nitro</c>, <c>blower</c> ...) or
+    /// <c>specials</c> (every special the install's garage offers; all eleven without an install). Null with <paramref name="error"/>
+    /// for a name it does not know.
     /// </summary>
     public static WeaponRestrictions? Parse(string spec, AssetVfs? vfs, out string error)
     {
         error = "";
         bool all = false;
         var pairs = new List<(int, int)>();
+        var specials = new List<int>();
         foreach (var raw in spec.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var t = raw.ToLowerInvariant();
             if (t == "all") { all = true; continue; }
+            if (t is "specials" or "special")
+            {
+                specials.AddRange(Enumerable.Range(1, vfs is null ? MaxSpecial : PartsDatabase.SpecialCount(vfs.Install.IsNitro)));
+                continue;
+            }
+            if (SpecialByName(t) is > 0 and var sp) { specials.Add(sp); continue; }
             int group = Array.FindIndex(Groups, g => g.Name == t || g.Name.TrimEnd('s') == t);
             if (group >= 0) { pairs.Add((Groups[group].Class, -1)); continue; }
             var colon = t.Split(':');
@@ -78,16 +140,17 @@ public sealed record WeaponRestrictions(bool All, IReadOnlyList<(int Class, int 
                 continue;
             }
             if (vfs is not null && KeyOf(vfs, t) is { } k) { pairs.Add(k); continue; }
-            error = $"no weapon or group {raw}";
+            error = $"no weapon, special or group {raw}";
             return null;
         }
-        return Normalize(all, pairs);
+        return Normalize(all, pairs).WithSpecials(specials);
     }
 
-    /// <summary>The list as <see cref="Parse"/> reads it back: <c>all</c>, or the pairs as class:tier.</summary>
-    public string ToSpec() => All ? "all" : string.Join(",", Pairs.Select(p => $"{p.Class}:{p.Tier}"));
+    /// <summary>The list as <see cref="Parse"/> reads it back: <c>all</c> or the pairs as class:tier, then the specials by their first names.</summary>
+    public string ToSpec() => string.Join(",", (All ? new[] { "all" } : Pairs.Select(p => $"{p.Class}:{p.Tier}").ToArray())
+        .Concat(Specials.Select(s => SpecialKeys.FirstOrDefault(k => k.Type == s).Names?[0] ?? $"spc{s:00}")));
 
-    /// <summary>All, or the pairs without repeats and without those a whole-class pair already covers, at most <see cref="MaxPairs"/>.</summary>
+    /// <summary>All, or the pairs without repeats and without those a whole-class pair already covers, at most <see cref="MaxPairs"/> (no specials: <see cref="WithSpecials"/>).</summary>
     public static WeaponRestrictions Normalize(bool all, IEnumerable<(int Class, int Tier)> pairs)
     {
         if (all) return Everything;
@@ -158,5 +221,61 @@ public sealed class RestrictionChecklist
             var r = Rows[i];
             Checked[i] = r.Class == -1 ? w.All : w.All ? false : r.IsHeader ? w.Pairs.Contains((r.Class, -1)) : w.Restricts(r.Class, r.Tier);
         }
+    }
+}
+
+/// <summary>
+/// The checklist's SPECIALS page (the port's; docs/hidden-content.md §5): a box for each special the install's garage offers, by
+/// the garage's name, and NO SPECIALS IN GAME, set out on the WEAPONS RESTRICTIONS art's own grid. The clicks follow the
+/// weapons page's: NO SPECIALS IN GAME stands for every special and does not tick the others; any row unchecked clears it.
+/// </summary>
+public sealed class SpecialChecklist
+{
+    /// <summary>The page's rows: NO SPECIALS IN GAME first (class −2, tier −1), then each special (class −2, tier its type).</summary>
+    public IReadOnlyList<RestrictionRow> Rows { get; }
+    public bool[] Checked { get; }
+
+    /// <summary>The marker a special's row carries for its class (no weapon class is negative but All Weapons' −1).</summary>
+    public const int Class = -2;
+
+    public SpecialChecklist(bool nitro)
+    {
+        Rows = ChecklistRows(nitro);
+        Checked = new bool[Rows.Count];
+    }
+
+    /// <summary>
+    /// The rows on the art's grid (its box columns 0..5 and rows 0..17): the specials one under another from the first line under
+    /// the headers, the first six in the left half's header column, the rest in the right half's, and NO SPECIALS IN GAME where the
+    /// weapons page has NO WEAPONS IN GAME (column 3, row 17).
+    /// </summary>
+    public static List<RestrictionRow> ChecklistRows(bool nitro)
+    {
+        var rows = new List<RestrictionRow> { new(0, Class, -1, 3, 17, "No Specials") };
+        int n = PartsDatabase.SpecialCount(nitro);
+        for (int t = 1; t <= n; t++)
+            rows.Add(new RestrictionRow(t <= 6 ? 1 : 2, Class, t, t <= 6 ? 0 : 3, t <= 6 ? t : t - 6, WeaponRestrictions.SpecialName(t)));
+        return rows;
+    }
+
+    public void Toggle(int i)
+    {
+        if (i < 0 || i >= Rows.Count) return;
+        bool on = Checked[i] = !Checked[i];
+        if (!on && !Rows[i].IsHeader) for (int k = 0; k < Rows.Count; k++) if (Rows[k].IsHeader) Checked[k] = false;
+    }
+
+    /// <summary>The specials the boxes restrict: every one of the page's under NO SPECIALS IN GAME, else each checked row's.</summary>
+    public IReadOnlyList<int> Build()
+    {
+        bool all = Rows.Where((r, i) => r.IsHeader && Checked[i]).Any();
+        return [.. Rows.Where((r, i) => !r.IsHeader && (all || Checked[i])).Select(r => r.Tier)];
+    }
+
+    /// <summary>Ticks the boxes a list stands for: NO SPECIALS IN GAME alone when it restricts every special of the page, else each one's row.</summary>
+    public void Load(WeaponRestrictions w)
+    {
+        bool all = Rows.Where(r => !r.IsHeader).All(r => w.RestrictsSpecial(r.Tier));
+        for (int i = 0; i < Rows.Count; i++) Checked[i] = Rows[i].IsHeader ? all : !all && w.RestrictsSpecial(Rows[i].Tier);
     }
 }

@@ -8,8 +8,11 @@ namespace I76.Net.Tests;
 /// <summary>Finding games: the session query and answer, the address book's addresses, a server answering on the LAN.</summary>
 public class DiscoveryTests
 {
-    /// <summary>The host's rules a listing ends with after the makes and models (protocol 23): Co-op Damage, Co-op Scaling, Rolling Start, the ignition lock, the 1997 turrets.</summary>
-    internal const int Rules = 5;
+    /// <summary>
+    /// The host's rules a listing ends with after the makes and models (protocol 23): Co-op Damage, Co-op Scaling, Rolling Start, the
+    /// ignition lock, the 1997 turrets; then the restricted specials' count (protocol 25; none here).
+    /// </summary>
+    internal const int Rules = 6;
 
     /// <summary>What a listing with no drivers and no arena name ends with after the crosshair byte: the arena name's length and the drivers' names' count (protocol 22), then <see cref="Rules"/>.</summary>
     internal const int Names = 2 + Rules;

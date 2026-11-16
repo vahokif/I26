@@ -432,9 +432,9 @@ public sealed partial class MeleeGame
             var path = new List<Vector3>();
             var owner = new List<int>();
             var from = p.Car.Pos.ToVector3();
-            // back at a spawn point: the course from there, as a person drives it, the checkpoints on the way passed but not counted
+            // back at a spawn point: the course from the start, as a person drives it, the checkpoints on the way passed but not counted
             if (fresh && tr.Current >= 0)
-                foreach (var w in LeadIn(tr.Route(tr.Count, out _), from)) { path.Add(w); owner.Add(-1); from = w; }
+                foreach (var w in LeadIn(tr.FromStart(out bool closing), closing, from)) { path.Add(w); owner.Add(-1); from = w; }
             for (int k = 0; k < route.Length; k++)
             {
                 var to = route[k].ToVector3();
@@ -456,36 +456,42 @@ public sealed partial class MeleeGame
     }
 
     /// <summary>
-    /// The points of the course a car at <paramref name="at"/> drives through to reach the checkpoint its tracker wants next
-    /// (<paramref name="lap"/>[0], the rest of the lap after it in order). A car that has come back at a spawn point keeps the
-    /// checkpoint it wants, as a person's car does (the original keeps the race's count through a respawn; every stock arena's
-    /// spawn points are behind check1): straight at it, the planner would take it across the arena, off the edges and into the walls
-    /// the course goes round, again after each death, where a person drives the course to it. The car is on the leg of
-    /// the course nearest it (across the ground): it drives on from that leg's end, or its start if it is behind it, through
-    /// the points in order to the one wanted. On the leg out of the one wanted, past it, it goes straight back for it; on
-    /// the leg into it, on to it. A lap of one point has no course to drive.
+    /// The points of the course a car at <paramref name="at"/>, back at a spawn point, drives through to reach the checkpoint its
+    /// tracker wants next (the last of <paramref name="fromStart"/>, <see cref="RaceTracker.FromStart"/>). The car keeps the
+    /// checkpoint it wants, as a person's car does (the original keeps the race's count through a respawn), and the spawn points are
+    /// the start: behind check1 on every stock arena. Straight at the one it wants, or on from the leg of the course that is nearest
+    /// across the ground, the planner would take it off the edges and into the walls and drops the course goes round (on a map whose
+    /// course comes back past the start, the nearest leg is often across one), again after each death, where a person drives the
+    /// course from the start. So does the car: check1, check2 ... in order (passed, not counted) up to the one wanted, the way the
+    /// race's start takes it. One exception: wanting the last checkpoint of a lap that closes on check1 (<paramref name="closing"/>),
+    /// a car that is nearer that closing leg than any other leg of the lap goes straight back along it.
     /// </summary>
-    internal static List<Vector3> LeadIn(Double3[] lap, Vector3 at)
+    internal static List<Vector3> LeadIn(Double3[] fromStart, bool closing, Vector3 at)
     {
         var lead = new List<Vector3>();
-        int n = lap.Length;
+        int n = fromStart.Length;
         if (n < 2) return lead;
-        int leg = 0;
-        float best = float.MaxValue, bestT = 0;
-        for (int i = 0; i < n; i++)
+        if (closing)
         {
-            var a = lap[i].ToVector3();
-            var c = lap[(i + 1) % n].ToVector3();
-            var ab = new Vector2(c.X - a.X, c.Z - a.Z);
-            var ap = new Vector2(at.X - a.X, at.Z - a.Z);
-            float len2 = ab.LengthSquared();
-            float t = len2 > 0 ? System.Math.Clamp(Vector2.Dot(ap, ab) / len2, 0f, 1f) : 0f;
-            float d = (ap - t * ab).LengthSquared();
-            if (d < best) { best = d; leg = i; bestT = t; }
+            // fromStart is the whole lap: the closing leg is the last one, from the one wanted to check1
+            float best = float.MaxValue;
+            for (int i = 0; i < n - 1; i++) best = System.Math.Min(best, LegDist2(fromStart[i], fromStart[i + 1], at));
+            if (LegDist2(fromStart[n - 1], fromStart[0], at) <= best) return lead;
         }
-        int from = bestT > 0 && leg != 0 ? leg + 1 : leg;
-        for (int i = from; i > 0 && i < n; i++) lead.Add(lap[i].ToVector3());
+        for (int i = 0; i < n - 1; i++) lead.Add(fromStart[i].ToVector3());
         return lead;
+    }
+
+    /// <summary>The squared distance across the ground from <paramref name="at"/> to the leg from <paramref name="a"/> to <paramref name="c"/>.</summary>
+    private static float LegDist2(Double3 a, Double3 c, Vector3 at)
+    {
+        var a3 = a.ToVector3();
+        var c3 = c.ToVector3();
+        var ab = new Vector2(c3.X - a3.X, c3.Z - a3.Z);
+        var ap = new Vector2(at.X - a3.X, at.Z - a3.Z);
+        float len2 = ab.LengthSquared();
+        float t = len2 > 0 ? System.Math.Clamp(Vector2.Dot(ap, ab) / len2, 0f, 1f) : 0f;
+        return (ap - t * ab).LengthSquared();
     }
 
     private const float RaceHop = 100000f;

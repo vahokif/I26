@@ -77,8 +77,8 @@ public class NitroModesTests
 
     /// <summary>
     /// A race bot back at a spawn point (behind check1) keeps the checkpoint its tracker wants, as a person's car does, and drives the
-    /// course to it: the checkpoints from check1 on in order, passed but not counted. On the leg into the one it wants it goes
-    /// on to it; past it (the last checkpoint, from the start) it goes straight back.
+    /// course to it: the checkpoints from check1 on in order, passed but not counted, whatever leg of the course is nearer. Wanting
+    /// the last checkpoint of a lap that closes on check1, from the closing leg, it goes straight back.
     /// </summary>
     [Fact]
     public void ARaceBotBackAtTheStartDrivesTheCourseToTheCheckpointItWants()
@@ -86,25 +86,40 @@ public class NitroModesTests
         var c = new Dictionary<int, Double3> { [1] = new(0, 0, 100), [2] = new(0, 0, 400), [3] = new(300, 0, 400), [4] = new(300, 0, 100) };
         var spawn = new System.Numerics.Vector3(0, 0, 40);
         var r = new RaceTracker(c);
-        System.Numerics.Vector3[] Lead(System.Numerics.Vector3 at) => [.. MeleeGame.LeadIn(r.Route(r.Count, out _), at)];
+        System.Numerics.Vector3[] Lead(System.Numerics.Vector3 at) => [.. MeleeGame.LeadIn(r.FromStart(out bool closing), closing, at)];
         System.Numerics.Vector3 V(int n) => c[n].ToVector3();
         r.Update(c[1]);                                        // wants check2: by check1
         Assert.Equal([V(1)], Lead(spawn));
         r.Update(c[2]);                                        // wants check3: the course round to it, not across
         Assert.Equal([V(1), V(2)], Lead(spawn));
-        Assert.Equal([V(2)], Lead(new(0, 0, 250)));            // on the leg into check2: on through it
-        Assert.Empty(Lead(new(150, 0, 400)));                  // on the leg into check3: on to it
-        Assert.Empty(Lead(new(300, 0, 300)));                  // past it, on the way to check4: straight back
         r.Update(c[3]);                                        // wants check4, the last: back along the leg from it to check1
         Assert.Empty(Lead(spawn));
         Assert.Empty(Lead(new(200, 0, 100)));
+        Assert.Equal([V(1), V(2), V(3)], Lead(new(20, 0, 300))); // nearer the leg out of check1 than the closing one: the course
         r.Update(c[4]);                                        // wants check1 (the wrap): straight on
         Assert.Empty(Lead(spawn));
-        // with a finish the lap goes through it, not check1 (it is passed, not counted, on the way)
+
+        // with a finish the lap goes through it, and the course from the start is check1 on; check1 is not in the lap after the
+        // finish (the finish takes its place), so a car behind it wanting check2 goes by check1
         var f = new Dictionary<int, Double3>(c) { [99] = new(0, 0, 0) };
         r = new RaceTracker(f);
         r.Update(f[1]); r.Update(f[2]);                        // wants check3
-        Assert.Equal([f[99].ToVector3(), f[2].ToVector3()], Lead(new(0, 0, -30)));
+        Assert.Equal([V(1), V(2)], Lead(new(0, 0, -30)));
+        r.Update(f[3]); r.Update(f[4]);                        // wants the finish: the whole course to it
+        Assert.Equal([V(1), V(2), V(3), V(4)], Lead(spawn));
+        r.Update(f[99]);                                       // a lap; wants check2
+        Assert.Equal([V(1)], Lead(spawn));
+
+        // a course that comes back past the start on a lane of its own and ends at a finish far away (two raised lanes, a drop
+        // between them): the nearest leg to the spawn is the second lane's, across the drop; the car still takes the course from check1
+        var g = new Dictionary<int, Double3>
+        {
+            [1] = new(0, 0, 100), [2] = new(0, 0, 250), [3] = new(0, 0, 500), [4] = new(60, 0, 600), [5] = new(120, 0, 500),
+            [6] = new(120, 0, 250), [7] = new(120, 0, 20), [99] = new(120, 0, 400),
+        };
+        r = new RaceTracker(g);
+        r.Update(g[1]); r.Update(g[2]);                        // wants check3
+        Assert.Equal([g[1].ToVector3(), g[2].ToVector3()], Lead(new(0, 0, 0)));
     }
 
     private static MeleePlayer Player(int team, Double3 pos)

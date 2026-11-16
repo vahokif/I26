@@ -66,6 +66,22 @@ public sealed partial class RaceTracker
     /// <summary>The number of numbered checkpoints (check1 ...), not counting the finish.</summary>
     public int Count => _cp.Length;
 
+    /// <summary>
+    /// The course as a car at the start (behind check1) drives it to the point it wants next, that point last: check1, check2 ...
+    /// in order, and the finish after the last numbered one when the finish is the one wanted. <paramref name="closing"/> is
+    /// whether the one wanted is the last numbered checkpoint of a lap that closes on check1 (no finish): then the course goes
+    /// on from it to check1, where the car is.
+    /// </summary>
+    public Double3[] FromStart(out bool closing)
+    {
+        closing = false;
+        if (_cp.Length == 0) return [];
+        int next = _cur + 1;
+        if (next > _cp.Length - 1) return _finish is { } f ? [.. _cp, f] : [_cp[0]];
+        closing = _finish is null && next == _cp.Length - 1 && _cp.Length >= 2;
+        return _cp[..(next + 1)];
+    }
+
     /// <summary>One frame at the car's position; true when this one counted a lap.</summary>
     public bool Update(Double3 pos)
     {

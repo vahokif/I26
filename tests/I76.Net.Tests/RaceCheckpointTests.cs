@@ -1,6 +1,7 @@
 using System.Numerics;
 using I76.Formats.Mission.Edit;
 using I76.Server;
+using I76.Sim.Damage;
 using I76.Sim.Missions;
 using Xunit;
 using Xunit.Abstractions;
@@ -74,5 +75,59 @@ public class RaceCheckpointTests(ITestOutputHelper output) : IDisposable
         }
         output.WriteLine($"{course}: laps " + string.Join(" | ", laps.Values.Select(l => l.Count + " (" + string.Join(", ", l.Select(x => x.ToString("0"))) + ")")));
         Assert.All(laps.Values, l => Assert.True(l.Count >= 3, $"{course}: a bot made {l.Count} laps in two minutes"));
+    }
+
+    /// <summary>
+    /// A race bot killed mid-lap on a course that comes back past the start (docs/multiplayer.md "Bots"): two lanes 100 m up with a
+    /// 50 m drop between them, check1 to check3 up the first, check4 across the top, check5 to check7 down the second to beside the
+    /// start, and a finish far up the second lane (so check1 is not in the lap after it). Back at a spawn point and wanting check3, the
+    /// bot drives the course from check1, up its own lane, and takes check3 without dying again. (The nearest leg to the spawn
+    /// points is the second lane's, across the drop: from there it went off the edge, came back and went off it again.)
+    /// </summary>
+    [Fact]
+    public void AKilledRaceBotTakesTheCourseFromCheck1NotTheNearestLaneAcrossADrop()
+    {
+        if (Nitro is null) return;
+        var inst = _install ??= new ScratchMapInstall(Nitro!, "race");
+        var proj = MapProject.CreateBlank("twolanes", "Two lanes", ".rac", 2, 2, 1000);
+        var b = proj.WorldBounds();
+        var mid = new Vector3((b.X + b.Z) / 2, 100f, (b.Y + b.W) / 2);
+        // the drop: a trench 50 m wide and 660 m long between x 35 and 85, from 160 m behind the start to the top's band
+        for (int sx = MapProject.SampleOf(mid.X + 35); sx <= MapProject.SampleOf(mid.X + 85); sx++)
+            for (int sz = MapProject.SampleOf(mid.Z - 160); sz <= MapProject.SampleOf(mid.Z + 500); sz++)
+                proj.Terrain.SetHeight(sx, sz, 0);
+        Vector2[] checks = [new(0, 100), new(0, 250), new(0, 450), new(60, 580), new(120, 450), new(120, 250), new(120, 20)];
+        for (int i = 0; i < checks.Length; i++) proj.Mission.Objects.Add(MapObject.Checkpoint(i + 1, mid + new Vector3(checks[i].X, 0, checks[i].Y)));
+        proj.Mission.Objects.Add(MapObject.Checkpoint(99, mid + new Vector3(120, 0, 400)));
+        proj.Mission.Objects.Add(MapObject.Spawn(mid + new Vector3(-8, 0, 40), 0));
+        proj.Mission.Objects.Add(MapObject.Spawn(mid + new Vector3(8, 0, 40), 0));
+        foreach (var (name, data) in proj.ToFiles()) inst.Put(name, data);
+
+        var host = new MeleeHost(new ServerOptions { Install = inst.Root, Arena = proj.MissionFileName, Kind = MeleeKind.Race, GoalValue = 0, Bots = 1, MaxPlayers = 2, BotSkill = BotSkill.Hard, Seed = 3, BotCars = ["vppirna1.vcf"] });
+        var game = host.Game;
+        var bot = host.Bots[0].Player;
+        RaceTracker Tracker() => game.RaceOf(bot)!;
+        double dt = host.Session.TickSeconds, t = 0;
+        while (t < 120 && !(game.RaceOf(bot) is { Current: 1 })) { host.Step(); t += dt; }
+        Assert.True(t < 120, "the bot took check1 and check2");
+        Assert.Equal(0, bot.Deaths);
+        host.Setup.Damage.Destroy(bot.Car);
+        while (t < 200 && (bot.Destroyed || DamageModel.IsDead(bot.Car))) { host.Step(); t += dt; }
+        double back = t;
+        output.WriteLine($"killed by check3, back at {bot.Car.Pos.X - mid.X:0},{bot.Car.Pos.Z - mid.Z:0} after {back:0} s");
+        Assert.Equal(1, bot.Deaths);
+        Assert.Equal(1, Tracker().Current);
+        double took = 0, lowest = double.MaxValue;
+        while (t - back < 90 && took == 0)
+        {
+            host.Step(); t += dt;
+            lowest = System.Math.Min(lowest, bot.Car.Pos.Y);
+            if (Tracker().Current != 1) took = t - back;
+        }
+        output.WriteLine($"took check3 {took:0} s after; lowest {lowest:0.0} m");
+        Assert.True(took > 0, "took check3 within 90 s of coming back");
+        Assert.Equal(2, Tracker().Current);
+        Assert.Equal(1, bot.Deaths);
+        Assert.True(lowest > 90, "stayed up on the lane");
     }
 }

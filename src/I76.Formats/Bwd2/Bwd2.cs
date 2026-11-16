@@ -274,14 +274,18 @@ public sealed class Bwd2File
 
     /// <summary>
     /// The names of the nodes flagged <see cref="BillboardFlag"/> in every GEO chunk (SGEO, VGEO, ...): in the stock
-    /// games only the pine trees' SGEO nodes (npinetr1/2, their stumps too). Empty for anything without one.
+    /// games only the trees', fires' and smoke's SGEO nodes (npinetr1/2, their stumps too). An SGEO record's flag is its
+    /// node's (<see cref="SgeoRecords"/>): bhwtowr4's destroyed tower carries the bit in its own record, but the node it
+    /// swaps into is the intact tower's, which does not. Empty for anything without one.
     /// </summary>
     public HashSet<string> BillboardNodes()
     {
         var o = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in SgeoRecords())
+            if ((Bin.U32(Data, r.Node + NodeFlagsAt) & BillboardFlag) != 0) o.Add(r.Name);
         foreach (var c in Chunks)
         {
-            if (!GeoStride.TryGetValue(c.Tag, out var stride)) continue;
+            if (c.Tag == "SGEO" || !GeoStride.TryGetValue(c.Tag, out var stride)) continue;
             for (int q = c.PayloadOffset + 4; q + stride <= c.PayloadOffset + c.PayloadSize; q += stride)
             {
                 if ((Bin.U32(Data, q + NodeFlagsAt) & BillboardFlag) == 0) continue;
@@ -292,33 +296,43 @@ public sealed class Bwd2File
         return o;
     }
 
-    /// <summary>A .sdf's SGEO nodes with any of these flags (record +0x60), by name.</summary>
+    /// <summary>
+    /// A .sdf's SGEO records by name, each with the offset of its own record and of the record its scene node is made from.
+    /// The leading u32 counts the records the engine makes nodes of (the first detail's intact ones); every later record
+    /// (an 'A' twin, another detail's) is only geometry: the node at the same slot (the record's index modulo that count)
+    /// swaps to it when it is destroyed or drawn at that detail, and keeps its own flags (+0x60) and type (+0x5c). In the
+    /// stock files the slot's record is always the twin's by name too ('_' for 'A', detail 1 for 2 and 3).
+    /// </summary>
+    public IEnumerable<(string Name, int Record, int Node)> SgeoRecords()
+    {
+        if (First("SGEO") is not { } c || c.PayloadSize < 4) yield break;
+        int stride = GeoStride["SGEO"], first = c.PayloadOffset + 4;
+        int total = (c.PayloadSize - 4) / stride;
+        int count = (int)Math.Min(Bin.U32(Data, c.PayloadOffset), (uint)total);
+        for (int i = 0; i < total; i++)
+        {
+            int q = first + i * stride;
+            var name = Bin.CStr(Data, q, NodeName);
+            if (name.Length == 0 || name.Equals(NullName, StringComparison.OrdinalIgnoreCase)) continue;
+            yield return (name, q, count > 0 ? first + i % count * stride : q);
+        }
+    }
+
+    /// <summary>A .sdf's SGEO records whose node has any of these flags (+0x60, <see cref="SgeoRecords"/>), by name.</summary>
     public HashSet<string> NodesFlagged(uint flags)
     {
         var o = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (First("SGEO") is not { } c) return o;
-        int stride = GeoStride["SGEO"];
-        for (int q = c.PayloadOffset + 4; q + stride <= c.PayloadOffset + c.PayloadSize; q += stride)
-        {
-            if ((Bin.U32(Data, q + NodeFlagsAt) & flags) == 0) continue;
-            var name = Bin.CStr(Data, q, 8);
-            if (name.Length > 0 && !name.Equals(NullName, StringComparison.OrdinalIgnoreCase)) o.Add(name);
-        }
+        foreach (var r in SgeoRecords())
+            if ((Bin.U32(Data, r.Node + NodeFlagsAt) & flags) != 0) o.Add(r.Name);
         return o;
     }
 
-    /// <summary>A .sdf's SGEO nodes of one type (record +0x5c), by name: type 7 the gates.</summary>
+    /// <summary>A .sdf's SGEO records whose node is of one type (+0x5c, <see cref="SgeoRecords"/>), by name: type 7 the gates.</summary>
     public HashSet<string> NodesOfType(uint type)
     {
         var o = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (First("SGEO") is not { } c) return o;
-        int stride = GeoStride["SGEO"];
-        for (int q = c.PayloadOffset + 4; q + stride <= c.PayloadOffset + c.PayloadSize; q += stride)
-        {
-            if (Bin.U32(Data, q + VgeoTypeAt) != type) continue;
-            var name = Bin.CStr(Data, q, 8);
-            if (name.Length > 0 && !name.Equals(NullName, StringComparison.OrdinalIgnoreCase)) o.Add(name);
-        }
+        foreach (var r in SgeoRecords())
+            if (Bin.U32(Data, r.Node + VgeoTypeAt) == type) o.Add(r.Name);
         return o;
     }
 

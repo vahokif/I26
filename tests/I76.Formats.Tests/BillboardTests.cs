@@ -28,7 +28,7 @@ public class BillboardTests
     }
 
     [InstallFact]
-    public void OnlyTheTreesFiresAndATowerAreCards()
+    public void OnlyTheTreesAndFiresAreCards()
     {
         var vfs = TestInstall.Vfs;
         var found = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -38,11 +38,51 @@ public class BillboardTests
             try { f = new Bwd2File(vfs.Read(n)); } catch (InvalidDataException) { continue; }
             if (f.BillboardNodes() is { Count: > 0 } b) found[n.ToLowerInvariant()] = string.Join(" ", b.Order(StringComparer.OrdinalIgnoreCase));
         }
-        Assert.Equal(["akwreck2.sdf", "amoilpm2.sdf", "bfgastf1.sdf", "bhwtowr4.sdf", "ngscrng1.sdf", "ngscrng2.sdf",
+        Assert.Equal(["akwreck2.sdf", "amoilpm2.sdf", "bfgastf1.sdf", "ngscrng1.sdf", "ngscrng2.sdf",
             "npinetr1.sdf", "npinetr2.sdf", "ntree1.sdf", "ntree2.sdf", "ntree3.sdf", "ntree4.sdf"], found.Keys);
         // the pine's card and its destroyed twin, the stump
         Assert.Equal("NP1ABDY1 NP1_BDY1", found["npinetr1.sdf"]);
         Assert.Equal("AK1AFIR2 AK1_FIR2 AK2_FIR2 AK3_FIR2", found["akwreck2.sdf"]);
+    }
+
+    /// <summary>
+    /// The purple-striped control tower (bhwtowr4): its destroyed twins' own records carry the card bit among other stray
+    /// bits, but the node they swap into is the intact tower's, which does not. The original's wreck stands still; it turned
+    /// with the camera here (a community mission maker's report: only after it was destroyed, in every view but the map's).
+    /// </summary>
+    [InstallFact]
+    public void TheControlTowersWreckIsNoCard()
+    {
+        var f = new Bwd2File(TestInstall.Vfs.Read("bhwtowr4.sdf"));
+        var recs = f.SgeoRecords().ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
+        Assert.NotEqual(0u, Formats.Bin.U32(f.Data, recs["HW1ABLD4"].Record + Bwd2File.NodeFlagsAt) & Bwd2File.BillboardFlag);
+        Assert.Equal(recs["HW1_BLD4"].Record, recs["HW1ABLD4"].Node);
+        Assert.Equal(recs["HW1_BLD4"].Record, recs["HW3ABLD4"].Node);
+        Assert.Empty(f.BillboardNodes());
+    }
+
+    /// <summary>
+    /// Every later SGEO record (a destroyed twin, another detail's) sits at its node's slot: the record's index modulo the
+    /// count of nodes, and in the stock files the slot's record is its twin by name ('_' for 'A', detail 1 for 2 and 3).
+    /// </summary>
+    [InstallFact]
+    public void ATwinsNodeIsItsSlotsRecord()
+    {
+        var vfs = TestInstall.Vfs;
+        int checkedTwins = 0;
+        foreach (var n in vfs.Names.Where(n => n.EndsWith(".sdf", StringComparison.OrdinalIgnoreCase)))
+        {
+            Bwd2File f;
+            try { f = new Bwd2File(vfs.Read(n)); } catch (InvalidDataException) { continue; }
+            foreach (var r in f.SgeoRecords())
+            {
+                if (r.Record == r.Node || !char.IsLetter(r.Name[0])) continue;   // sstop_1's garbage record
+                var node = Formats.Bin.CStr(f.Data, r.Node, Bwd2File.NodeName);
+                Assert.Equal((r.Name[..2] + r.Name[4..]).ToUpperInvariant(), (node[..2] + node[4..]).ToUpperInvariant());
+                checkedTwins++;
+            }
+        }
+        Assert.True(checkedTwins > 1000, $"{checkedTwins} twins");
     }
 }
 

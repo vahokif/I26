@@ -11,7 +11,7 @@ namespace I76.Game.Editor.RoadTools;
 /// code, with the gap fills the modern look has), and the finished layers swap into the chunks' materials a few at a time on the
 /// main thread (TerrainNode.SetRoadLayer).
 /// </summary>
-public sealed class RoadPainter(MissionBuilder builder, RoadStore store)
+public sealed class RoadPainter(MissionBuilder builder)
 {
     private const int Res = MissionBuilder.RoadLayerResolution;
     private System.Numerics.Vector4? _wanted;
@@ -98,6 +98,6 @@ public sealed class RoadPainter(MissionBuilder builder, RoadStore store)
             GC.KeepAlive(f);   // held past the call that copies it (see MeshArrays)
         }
         LastChunks = layers.Count; LastMs = _clock?.Elapsed.TotalMilliseconds ?? 0;
-        GD.Print($"editor roads: {layers.Count} chunks painted anew in {LastMs:0} ms");
+        GD.Print($"roads: {layers.Count} chunks painted anew in {LastMs:0} ms");
     }
 }

@@ -38,4 +38,28 @@ public class WreckDecalTests
         var lot = wreck.Parts.Single(x => x.NodeName.Equals("CB1ALOT1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(lot.Mesh.Faces, f => painted(lot, f));
     }
+
+    /// <summary>
+    /// A tunnel destroyed (a mortar takes a whole tunnel; the mission maker's sheet: nothing remains in the original): its
+    /// road strips ET1_CR11 and ET1_CR21, painted into the terrain at load, have no 'A' twin, so their paint goes. A
+    /// building's lot falls into a lot and stays painted; a part still standing keeps its paint.
+    /// </summary>
+    [InstallFact]
+    public void ADestroyedPartsPaintGoesUnlessItsTwinLiesOnTheGround()
+    {
+        var tunnel = new ModelAssembler(TestInstall.Vfs).Assemble("betunnl1.sdf")!;
+        var tunnelWreck = new ModelAssembler(TestInstall.Vfs) { DestroyedNode = _ => true }.Assemble("betunnl1.sdf");
+        var gone = GroundDecals.PaintedOut(tunnel, tunnelWreck, _ => true);
+        float lowest = GroundDecals.LowestY(tunnel);
+        var painted = tunnel.Parts.Where(p => p.Mesh.Faces.Any(f => GroundDecals.IsGroundFace(p, f, lowest))).Select(p => p.NodeName).ToList();
+        Assert.Equal(["ET1_CR11", "ET1_CR21"], painted);
+        Assert.All(painted, n => Assert.True(gone(n), n));
+        Assert.False(GroundDecals.PaintedOut(tunnel, tunnelWreck, _ => false)("ET1_CR11"));
+
+        var bank = new ModelAssembler(TestInstall.Vfs).Assemble("bcbank1.sdf")!;
+        var bankWreck = new ModelAssembler(TestInstall.Vfs) { DestroyedNode = _ => true }.Assemble("bcbank1.sdf");
+        Assert.False(GroundDecals.PaintedOut(bank, bankWreck, _ => true)("CB1_LOT1"));
+        // nothing drawn at all (a wreck of no parts): every painted part goes
+        Assert.True(GroundDecals.PaintedOut(bank, null, _ => true)("CB1_LOT1"));
+    }
 }

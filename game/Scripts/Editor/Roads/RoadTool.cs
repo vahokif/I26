@@ -73,7 +73,7 @@ public sealed partial class RoadTool : Node
         _worldRoot = (Node3D)Ed.Builder.Terrain!.GetParent();
         _vis = new RoadVisuals(Ed.Builder, Ed.Is1997);
         _worldRoot.AddChild(_vis);
-        _painter = new RoadPainter(Ed.Builder, Roads);
+        _painter = new RoadPainter(Ed.Builder);
         Roads.Changed += OnRoadsChanged;
         var pieces = IntersectionSession.Pieces ?? new PieceStore();
         _junctions = new Junctions(Roads, pieces, GroundV) { LevelDoc = Ed.Doc };

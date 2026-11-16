@@ -343,6 +343,7 @@ public partial class DamageView : Node3D
     {
         using var _view = Hitch.Time(Hitch.Phase.Views);
         _t += delta;
+        _roads?.Pump();
         foreach (var e in Damage.Events)
             switch (e)
             {
@@ -458,14 +459,17 @@ public partial class DamageView : Node3D
     /// sound of each explosion that went with it. Quietly, for one already
     /// down when a network client joins: no sound.
     /// </summary>
+    /// <summary>Paints the road layer of the chunks under a destroyed placement's painted-out ground faces again.</summary>
+    private Editor.RoadTools.RoadPainter? _roads;
+
     public void Destroy(I76.Sim.Collision.StaticObject o, bool quiet, IReadOnlyList<int>? booms = null)
     {
         if (!PlacementOf.TryGetValue(o, out var p)) return;
         Mesh? alt = null;
         I76.Formats.Assembly.AssembledModel? altModel = null;
+        bool Dead(string name) => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed;
         if (p.Definition is { } def && o.Nodes.Count > 0)
         {
-            bool Dead(string name) => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed;
             // a gate is drawn on its own, sliding (ScenerySpawner), whatever else of the structure is down
             if (new ModelAssembler(Builder.Vfs) { DestroyedNode = Dead }.Assemble(def) is { Parts.Count: > 0 } m)
             {
@@ -481,6 +485,10 @@ public partial class DamageView : Node3D
             altModel = m;
         }
         Builder.Scenery!.Destroy(p, alt, altModel, altModel is null ? null : GroundFaces(p, altModel));
+        // the ground faces painted into the terrain at load of what is now gone (a tunnel's road strips) are painted out
+        if (World.GroundDecals.Applies(p) && p.Definition is { } pd && Builder.Assembler!.Assemble(pd) is { } whole
+            && Builder.Unpaint(p, World.GroundDecals.PaintedOut(whole, altModel, Dead)) is { } area)
+            (_roads ??= new Editor.RoadTools.RoadPainter(Builder)).Request(area);
         // A "null" SDFC sound is event 7's vexplode.wav (min distance 100), a named one (10)
         if (quiet || booms is null) return;
         foreach (int b in booms)

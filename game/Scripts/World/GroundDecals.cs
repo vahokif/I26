@@ -44,6 +44,22 @@ public static class GroundDecals
         return (part, f) => grounded.Contains(Twin(part.NodeName)) && IsGroundFace(part, f, lowest);
     }
 
+    /// <summary>
+    /// Of a destroyed placement: whether a part's ground faces, painted into the terrain at load, go. The original drew them
+    /// with their node, so they go with it when it dies into nothing or into a twin that lays nothing on the ground: a
+    /// tunnel's road strips, a roof's or a marker's footprint. A dead part whose twin lies on the ground (a lot) keeps them,
+    /// as <see cref="Painted"/> leaves that twin's out of the wreck. <paramref name="wreck"/> is what is drawn now (each dead
+    /// node's twin, the live ones whole), null for nothing.
+    /// </summary>
+    public static Func<string, bool> PaintedOut(AssembledModel intact, AssembledModel? wreck, Func<string, bool> dead)
+    {
+        float lowest = LowestY(intact);
+        bool Lies(string name) => wreck?.Parts.FirstOrDefault(x => x.NodeName.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } w
+            && w.Mesh.Faces.Any(f => IsGroundFace(w, f, lowest));
+        static string Twin(string n) => n.Length > 4 ? n[..3] + "A" + n[4..] : n;
+        return part => dead(part) && !Lies(Twin(part)) && !Lies(part);
+    }
+
     /// <summary>Whether a placement's ground faces are painted rather than drawn: scenery (not vehicles, road pieces or drive-on structures). The loader stands every placement on the terrain (MissionWorld.GroundedPosition).</summary>
     public static bool Applies(Placement p) =>
         p.Definition is { } d && !d.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) && !RoadPieceObjects.IsRoadPiece(p.Object.ObjectType) && p.Object.ObjectType is not (0xb or 0xc or 0xd);   // drive-on structures keep their decks

@@ -296,8 +296,8 @@ tick, not a fit:
 
 - **Keys:** the throttle ramp is the original's per tick at the session's
   rate, per second (`KeyRamp.UpPerSecond`: 0.4/tick, 0.5/tick down); steering
-  is √(t/3) of full lock by the time held, as the original's (Assisted Keyboard
-  Steer's: by time, at any rate).
+  is √(t/3) of full lock by the time held, as the original's (Keyboard Steering
+  Assist's: by time, at any rate).
 - **The yaw's answer:** `YawResponse` = tick/2 − 1/240 s (at least 4 ms). The
   original answers a key within the tick that samples it, half a tick later on
   average; the body samples every 120 Hz step, half a step on average.

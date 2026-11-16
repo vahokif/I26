@@ -98,6 +98,28 @@ public class RampClassTests
     }
 
     /// <summary>
+    /// The breakable wooden ramps (aaramp5, aaramp7) placed with the Ramp class id: their wreck, a heap of planks, is the
+    /// root's 'A' geometry and so takes the placement's type, a ramp's: driven over, never hit. A mission maker's check in
+    /// the original (the heap keeps the Ramp class; 0.12 drives it so).
+    /// </summary>
+    [Theory]
+    [InlineData("aaramp5")]
+    [InlineData("aaramp7")]
+    public void AWoodenRampsWreckIsDrivenOver(string name)
+    {
+        if (InstallDir is null) return;
+        var (setup, s) = ClassIdTests.Build("t01.msn", (name, 0xbu, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, name, 4100, 36700);
+        setup.Damage.DestroyStructure(o);
+        Assert.True(o.Destroyed);
+        var heap = o.Polys.SelectMany(p => p.V).ToList();
+        float far = heap.Max(v => v.Z);
+        var (hit, _, _) = Run(setup, s, new Vector2(o.Centre.X, heap.Min(v => v.Z) - 10), new Vector2(0, 1), ticks: 60);
+        Assert.Null(hit);
+        Assert.True(setup.World.Player!.Pos.ToVector3().Z > far, "the car did not get past the heap");
+    }
+
+    /// <summary>
     /// The standing water tower's legs (its type-0xb node, walls only) stop a car where they stand: the placement's sphere
     /// is the collider record's, its 3D radius about its middle 6.5 m up, not the 3.5 m the tower spans across. Measured in
     /// the original: run north at it from z 40148, the car met AW1_BAS1 with its middle at z 40157.7, its nose at the legs'

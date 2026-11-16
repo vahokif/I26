@@ -110,6 +110,37 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
     }
 
     /// <summary>
+    /// What the community mission maker saw of objects given the Intersection class id in the original (a second sheet, with
+    /// shots): the shack without its roof, the water tower's legs without the tank, the lean-to missing parts, one of the
+    /// race-track gate's two ticket boxes, Spanner's lot with one building on it (its wall underneath missing, so it seems to
+    /// float). Each is the last top-level node alone, and the lot.
+    /// </summary>
+    [InstallTheory]
+    [InlineData("ashack1.sdf", "AS1_BLD1")]
+    [InlineData("awatert1.sdf", "AW1_BAS1")]
+    [InlineData("aleanto1.sdf", "AL1_BLD1")]
+    [InlineData("bcstrak8.sdf", "CS1_TB28")]
+    [InlineData("bfnspan1.sdf", "FN1_GAR1 FN1_LOT1")]
+    public void APieceTypedObjectShowsWhatTheOriginalShows(string def, string shown)
+    {
+        var m = new ModelAssembler(TestInstall.Vfs).Assemble(def)!;
+        Assert.Equal(shown.Split(' '), RoadPieceObjects.Drawn(m).Parts.Select(p => p.NodeName).Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The Nitro Pack's tunnels given the Intersection class id, as seen in the original: the short one shows only its inner
+    /// tunnel (its last top-level node), the medium and the long ones only their mountain, the tunnel under it left out.
+    /// </summary>
+    [Fact]
+    public void APieceTypedTunnelShowsItsTunnelOrItsMountain()
+    {
+        if (Environment.GetEnvironmentVariable("I76_NITRO_INSTALL") is not { Length: > 0 } dir || !Directory.Exists(dir)) return;
+        var asm = new ModelAssembler(new AssetVfs(new GameInstall(dir)));
+        foreach (var (def, shown) in new[] { ("betunnl1.sdf", "ET1_TUN1"), ("betunnl2.sdf", "ET1_MTN2"), ("betunnl3.sdf", "ET1_MTN3") })
+            Assert.Equal([shown], RoadPieceObjects.Drawn(asm.Assemble(def)!).Parts.Select(p => p.NodeName));
+    }
+
+    /// <summary>
     /// The stock maps' pieces are all painted as before: every road-piece placement a flat piece, its one node its whole model.
     /// The stock maps are miss16\'s: neither GOG install ships a mission in addon\, so a level there is the player's (a played
     /// install with a pack of community levels in it counted hundreds more pieces).

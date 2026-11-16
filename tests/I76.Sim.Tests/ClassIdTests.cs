@@ -244,3 +244,122 @@ public class SignClassTests
         Assert.False(o.Solid);
     }
 }
+
+/// <summary>
+/// A road sign (every node its own type 4) given another class id: Struct1, Struct2, Ramp or Bridge (a community mission
+/// maker's report: ten of ten signs so placed stood through any number of mortar rounds). Measured in the original (stock
+/// sdxin_1 and sl50x_1 placed as types 2, 3, 0xb and 0xc in a test map, explosions set off beside them): a splash reaches
+/// the root, whose type is the placement's, so the structure slot takes it from the root's 400 (25 a blast: sixteen leave
+/// 0, the seventeenth destroys it); every node is marked dead and swapped to its destroyed slot's record, which for a sign
+/// is empty, so nothing of it is drawn. Placed as a Sign, the first splash throws it. Placed as an Intersection it has no
+/// collider at all. A sign node's own hits go to the sign's slot whatever the placement: an explosive round or a car's
+/// impact throws it, a bullet does nothing.
+/// </summary>
+public class SignObjectClassTests
+{
+    private static string? InstallDir =>
+        Environment.GetEnvironmentVariable("I76_INSTALL") is { Length: > 0 } d && Directory.Exists(d) ? d : null;
+
+    /// <summary>What is drawn of the placement: each dead node's destroyed geometry, the live ones' own.</summary>
+    private static List<string> Drawn(StaticObject o) =>
+        new ModelAssembler(new AssetVfs(new GameInstall(InstallDir!)))
+        {
+            DestroyedNode = name => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed,
+        }.Assemble(o.Name + ".sdf")?.Parts.Select(p => p.NodeName).ToList() ?? [];
+
+    /// <summary>The HE mortar's blast (x1_gren1: 95 over 25 m): four leave a sign of any structure class standing, the fifth takes it all.</summary>
+    [Theory]
+    [InlineData("sdxin_1", 2u)]
+    [InlineData("sdxin_1", 3u)]
+    [InlineData("sdxin_1", 0xbu)]
+    [InlineData("sdxin_1", 0xcu)]
+    [InlineData("seair_1", 2u)]
+    [InlineData("seair_1", 0xcu)]
+    public void FiveMortarBlastsTakeARoadSignPlacedAsAStructure(string name, uint type)
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", (name, type, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, name, 4100, 36700);
+        Assert.Equal(type, o.Type);
+        Assert.All(o.Nodes, n => Assert.Equal(4u, n.Type));
+        int parts = Drawn(o).Count;
+        Assert.True(parts > 0);
+        var at = o.Centre + new Vector3(10, 0, 0);
+        for (int i = 0; i < 4; i++) setup.Combat.Explode("x1_gren1", at, null);
+        Assert.False(o.Destroyed);
+        Assert.Equal(400 - 4 * 95, o.Hp);
+        Assert.Equal(parts, Drawn(o).Count);
+        setup.Combat.Explode("x1_gren1", at, null);
+        Assert.True(o.Destroyed);
+        Assert.All(o.Nodes, n => Assert.True(n.Destroyed));
+        Assert.Empty(Drawn(o));
+        Assert.False(o.Solid);
+        Assert.DoesNotContain(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked);
+    }
+
+    [Fact]
+    public void OneMortarBlastThrowsARoadSignPlacedAsASign()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", ("sdxin_1", 4u, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "sdxin_1", 4100, 36700);
+        setup.Combat.Explode("x1_gren1", o.Centre + new Vector3(10, 0, 0), null);
+        Assert.True(o.Knocked);
+        Assert.Contains(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == o);
+    }
+
+    [Fact]
+    public void ARoadSignPlacedAsAnIntersectionHasNoCollider()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", ("sdxin_1", 0x50u, 4100, 36700, 0));
+        Assert.DoesNotContain(setup.Statics.Objects, x => x.Name == "sdxin_1" && new Vector2(x.Centre.X - 4100, x.Centre.Z - 36700).Length() < 10);
+    }
+
+    /// <summary>
+    /// A car run at a sign's face. Struct1's default collider is a box per node: the car meets the post, is let through
+    /// and throws the sign (measured: SD1XINP1 met at 15 u/s, the sign's slot given the impact, the whole placement thrown).
+    /// Struct2's, Ramp's and Bridge's is the nodes' mesh, which only the car's four corners are tested against: a car
+    /// square on to a sign passes between them and nothing happens (measured: no contact for any of the three).
+    /// </summary>
+    [Theory]
+    [InlineData(2u, true)]
+    [InlineData(3u, false)]
+    [InlineData(0xbu, false)]
+    [InlineData(0xcu, false)]
+    public void ACarAtARoadSignPlacedAsAStructure(uint type, bool thrown)
+    {
+        if (InstallDir is null) return;
+        var (setup, s) = ClassIdTests.Build("t01.msn", ("sdxin_1", type, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "sdxin_1", 4100, 36700);
+        // at the board's face (the sign stands in the x-y plane of its placement)
+        var (hit, reached, _) = ClassIdTests.Ram(setup, s, new Vector2(o.Centre.X, o.Centre.Z + 30), new Vector2(0, -1));
+        Assert.True(reached > 35, $"the car got {reached:0.0} m: stopped by the sign");
+        Assert.Equal(thrown ? "sdxin_1" : null, hit);
+        Assert.Equal(thrown, o.Destroyed);
+        Assert.Equal(!thrown, o.Solid);
+        Assert.Equal(thrown, setup.Damage.Events.Any(e => e is I76.Sim.Damage.SignKnocked k && k.Object == o));
+    }
+
+    /// <summary>A round on a sign node of any structure class: a bullet leaves it, an explosive round throws it.</summary>
+    [Theory]
+    [InlineData(2u)]
+    [InlineData(3u)]
+    [InlineData(0xbu)]
+    [InlineData(0xcu)]
+    public void ARoundOnASignNodeGoesToTheSignsSlot(uint type)
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", ("sdxin_1", type, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "sdxin_1", 4100, 36700);
+        var bullet = new DamagePacket { Mask = 1 };
+        bullet.Ch[0] = 50;
+        setup.Damage.Apply(o, bullet, Vector3.Zero, 0);
+        Assert.False(o.Destroyed);
+        var rocket = new DamagePacket { Mask = 2 };
+        rocket.Ch[1] = 120;
+        setup.Damage.Apply(o, rocket, Vector3.Zero, 0);
+        Assert.True(o.Destroyed);
+        Assert.Contains(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == o);
+    }
+}

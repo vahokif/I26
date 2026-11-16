@@ -69,8 +69,9 @@ public sealed class ModelAssembler(AssetVfs vfs)
     public bool Destroyed { get; init; }
     /// <summary>
     /// Scenery, node by node (on the dead ones only):
-    /// whether the node a '_' part is drawn for is dead. A dead node's part
-    /// gives way to its 'A' twin, or to nothing; the rest are drawn intact.
+    /// whether the node a part is drawn for is dead. A dead node's part
+    /// gives way to its 'A' twin, or to nothing (a road sign's post and board
+    /// have no twin); the rest are drawn intact.
     /// Wins over <see cref="Destroyed"/>.
     /// </summary>
     public Func<string, bool>? DestroyedNode { get; init; }
@@ -255,7 +256,9 @@ public sealed class ModelAssembler(AssetVfs vfs)
         {
             if (name[3] == '_') return !dead(name);
             if (name[3] is 'A' or 'a' && names.Contains(name[..3] + "_" + name[4..])) return dead(name[..3] + "_" + name[4..]);
-            return true;
+            // a part outside that naming (every road sign's post and board, SL1ACFP1 too) has an empty record in its
+            // destroyed slot in every stock .sdf: the original loads no geometry for it, so a dead one is drawn as nothing
+            return !dead(name);
         }
         if (!destroyed && name[3] is 'A' or 'a' && names.Contains(name[..3] + "_" + name[4..])) return false;
         // destroyed: each part takes its 'A' geometry, and where the object has

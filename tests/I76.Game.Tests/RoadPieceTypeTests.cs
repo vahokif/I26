@@ -113,7 +113,8 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
     /// What the community mission maker saw of objects given the Intersection class id in the original (a second sheet, with
     /// shots): the shack without its roof, the water tower's legs without the tank, the lean-to missing parts, one of the
     /// race-track gate's two ticket boxes, Spanner's lot with one building on it (its wall underneath missing, so it seems to
-    /// float). Each is the last top-level node alone, and the lot.
+    /// float), a road sign's board without its post (floating too; a later report). Each is the last top-level node alone,
+    /// and the lot.
     /// </summary>
     [InstallTheory]
     [InlineData("ashack1.sdf", "AS1_BLD1")]
@@ -121,6 +122,7 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
     [InlineData("aleanto1.sdf", "AL1_BLD1")]
     [InlineData("bcstrak8.sdf", "CS1_TB28")]
     [InlineData("bfnspan1.sdf", "FN1_GAR1 FN1_LOT1")]
+    [InlineData("sdxin_1.sdf", "SD1XINS1")]
     public void APieceTypedObjectShowsWhatTheOriginalShows(string def, string shown)
     {
         var m = new ModelAssembler(TestInstall.Vfs).Assemble(def)!;

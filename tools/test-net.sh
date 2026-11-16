@@ -9,6 +9,8 @@ filter='Load!=Sensitive'
 want=$(dotnet test tests/I76.Net.Tests --filter "$filter" --list-tests 2>/dev/null | sed -n '/^The following Tests are available/,$p' | tail -n +2 | grep -c .)
 out=$(dotnet test tests/I76.Net.Tests --filter "$filter" "$@" 2>&1); code=$?
 echo "$out" | tail -n 30
+# each failed test's message and stack, which the tail above can cut off
+if echo "$out" | grep -q '^ *Failed [A-Za-z]'; then echo "--- failures:"; echo "$out" | grep -A 40 '^ *Failed [A-Za-z]'; fi
 ran=$(echo "$out" | sed -n 's/.*Total: *\([0-9]*\).*/\1/p' | tail -n 1)
 if [ "$code" -ne 0 ] || echo "$out" | grep -q 'Test Run Aborted'; then echo "FAILED (exit $code)"; exit 1; fi
 if [ "${ran:-0}" -lt "$want" ]; then echo "SHORT RUN: $ran of $want tests ran"; exit 1; fi

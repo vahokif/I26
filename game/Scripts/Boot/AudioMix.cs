@@ -1,30 +1,24 @@
 namespace I76.Game.Boot;
 
 /// <summary>
-/// The in-game bus layout (Main.ApplyAudio). Music, SFX and Voice meet on Mix, whose look-ahead limiter keeps the sum from
-/// clipping at the output; the driver's own cues go on Cues, which joins them only after that limiter, so a loud fight never
-/// pulls a warning down with it. Master keeps a limiter of its own as the last guard (a cue on top of a full mix, and whatever
-/// plays straight on Master: the menus, the movies).
+/// The in-game bus layout (Main.ApplyAudio). Music, SFX, Voice and the driver's cues all send to Master, whose look-ahead
+/// limiter keeps the sum from clipping at the output. The cues are on a bus of their own at the SFX level, but ahead of the
+/// limiter with the rest: the original's mix clipped, which left a cue's level against the fight where the mix put it, and a
+/// limiter that pulls the fight and the cue down together keeps that ratio (a cue mixed after it stood 2-4 dB proud of the
+/// original's, measured).
 /// </summary>
 public static class AudioMix
 {
-    public const string Master = "Master", Mix = "Mix", Music = "Music", Sfx = "SFX", Voice = "Voice", Cues = "Cues";
+    public const string Master = "Master", Music = "Music", Sfx = "SFX", Voice = "Voice", Cues = "Cues";
 
     /// <summary>The buses Main makes, in this order (a bus may only send to one made before it), with where each sends.</summary>
     public static readonly (string Name, string Send)[] Buses =
     [
-        (Mix, Master), (Music, Mix), (Sfx, Mix), (Voice, Mix), (Cues, Master),
+        (Music, Master), (Sfx, Master), (Voice, Master), (Cues, Master),
     ];
 
-    /// <summary>
-    /// Mix's limiter ceiling, Master's: a cue on top of a mix held there loses about 0.8 dB to Master's (measured in a fight; the
-    /// cue lost 1-4 dB under the one limiter it shared with the fight before), and the game is as loud as before. A lower ceiling
-    /// would leave Master less to do but take 1 dB off the whole game.
-    /// </summary>
-    public const float MixCeilingDb = -1f;
-
-    /// <summary>Master's limiter ceiling, the last guard against clipping at the output.</summary>
-    public const float MasterCeilingDb = -1f;
+    /// <summary>Master's limiter ceiling.</summary>
+    public const float CeilingDb = -1f;
 
     /// <summary>
     /// The sounds that speak to the driver rather than come from the fight: the radar missile's lock warning (clockon.wav), the

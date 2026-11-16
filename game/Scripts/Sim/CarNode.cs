@@ -113,9 +113,8 @@ public partial class CarNode : Node3D
     private readonly Dictionary<string, AudioStreamPlayer> _cues = new();
 
     /// <summary>
-    /// One of the driver's own cues (clockon.wav, cammo.wav), which the original plays on the local player's car alone: a voice
-    /// there sits at the listener in the cockpit and within DirectSound's 10 m min distance of the chase camera, so it is heard
-    /// at full volume, centred, in either view. Played as such, unpositioned, on the Cues bus (<see cref="I76.Game.Boot.AudioMix"/>).
+    /// One of the driver's own cues (clockon.wav, cammo.wav), which the original plays for the local player alone as a 2D voice
+    /// (no object): unpositioned, centred, at the effects level, the same in every view. Played so on the Cues bus (<see cref="I76.Game.Boot.AudioMix"/>).
     /// With a <paramref name="single"/> key only one plays at a time, as <see cref="OneShotSingle"/>.
     /// </summary>
     public void Cue(AudioStream? s, string? single = null)

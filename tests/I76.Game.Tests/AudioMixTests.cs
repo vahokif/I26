@@ -3,7 +3,7 @@ using Xunit;
 
 namespace I76.Game.Tests;
 
-/// <summary>The in-game bus layout: the game's sounds limited on Mix, the driver's cues joining after that limiter.</summary>
+/// <summary>The in-game bus layout: every bus, the driver's cues too, into Master's limiter.</summary>
 public class AudioMixTests
 {
     [Fact] public void EveryBusSendsToOneMadeBeforeIt()
@@ -16,15 +16,14 @@ public class AudioMixTests
         }
     }
 
-    [Fact] public void TheGameSoundsMeetOnMix()
+    // the cues go through Master's limiter with the fight: it scales both together, as the original's clipping left their ratio
+    [Fact] public void EverythingMeetsAheadOfMastersLimiter()
     {
-        foreach (var bus in new[] { AudioMix.Music, AudioMix.Sfx, AudioMix.Voice })
-            Assert.Equal(AudioMix.Mix, AudioMix.Buses.Single(b => b.Name == bus).Send);
+        foreach (var bus in new[] { AudioMix.Music, AudioMix.Sfx, AudioMix.Voice, AudioMix.Cues })
+            Assert.Equal(AudioMix.Master, AudioMix.Buses.Single(b => b.Name == bus).Send);
     }
 
-    [Fact] public void TheCuesSkipMixsLimiter() => Assert.Equal(AudioMix.Master, AudioMix.Buses.Single(b => b.Name == AudioMix.Cues).Send);
-
-    [Fact] public void MasterStaysTheLastGuard() => Assert.True(AudioMix.MixCeilingDb <= AudioMix.MasterCeilingDb && AudioMix.MasterCeilingDb < 0);
+    [Fact] public void TheLimiterKeepsHeadroom() => Assert.True(AudioMix.CeilingDb is < 0 and >= -3);
 
     [Theory]
     [InlineData("clockon.wav"), InlineData("CLOCKON.WAV"), InlineData("cammo.wav"), InlineData("msllock1.wav"), InlineData("msllock2.wav"),

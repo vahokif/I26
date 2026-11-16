@@ -847,14 +847,9 @@ public partial class Main : Node3D
     public static void ApplyAudio(I76.Game.Shell.ShellSettings s)
     {
         // the buses sum past full scale (an explosion over the engine peaks at +18 dB, ordinary driving at +1): with nothing on
-        // the way the output stage hard-clips them, which is a crackle, loudest on headphones. Look-ahead limiters keep the peak
-        // under -1 dB: Mix's for the game's sounds, Master's after the driver's cues join them (AudioMix)
-        void Limiter(int bus, float ceiling)
-        {
-            if (!Enumerable.Range(0, AudioServer.GetBusEffectCount(bus)).Any(e => AudioServer.GetBusEffect(bus, e) is AudioEffectHardLimiter))
-                AudioServer.AddBusEffect(bus, new AudioEffectHardLimiter { CeilingDb = ceiling, PreGainDb = 0f, Release = 0.1f }, 0);
-        }
-        Limiter(0, AudioMix.MasterCeilingDb);
+        // Master the output stage hard-clips them, which is a crackle, loudest on headphones. A look-ahead limiter keeps the peak under -1 dB
+        if (!Enumerable.Range(0, AudioServer.GetBusEffectCount(0)).Any(e => AudioServer.GetBusEffect(0, e) is AudioEffectHardLimiter))
+            AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = AudioMix.CeilingDb, PreGainDb = 0f, Release = 0.1f }, 0);
         foreach (var (name, send) in AudioMix.Buses)
         {
             if (AudioServer.GetBusIndex(name) >= 0) continue;
@@ -862,7 +857,6 @@ public partial class Main : Node3D
             int i = AudioServer.BusCount - 1;
             AudioServer.SetBusName(i, name);
             AudioServer.SetBusSend(i, send);
-            if (name == AudioMix.Mix) Limiter(i, AudioMix.MixCeilingDb);
         }
         void Level(string name, float db, bool off)
         {

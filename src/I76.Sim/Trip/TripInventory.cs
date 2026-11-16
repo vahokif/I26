@@ -96,10 +96,36 @@ public sealed class TripInventory
     public PartNode? InSlot(int slot) => Nodes.FirstOrDefault(n => n.State == PartState.Car && n.Slot == slot);
 
     /// <summary>
-    /// A car node that fills one of the car's slots. A dropper stripped in the 2D garage stays marked in the car with none
-    /// ("(C)", as the original's form leaves it): not on the car, so it takes no damage and is no turret.
+    /// A car node that fills one of the car's slots. A trip saved before <see cref="Strip"/> sent a stripped dropper to the
+    /// van has it marked in the car with none; loading moves it to the van, and this keeps such a node out of the damage and the turret checks.
     /// </summary>
     private bool Fitted(PartNode n) => n.State == PartState.Car && n.Slot >= 0 && n.Slot < Slots.Count;
+
+    /// <summary>
+    /// The 2D garage's strip (a click left of a weapon, dropper or special row's arrow): the part out of its slot and into
+    /// the van. The original's form writes the van state for weapons and specials but not for a dropper, which stays
+    /// marked "(C)" in no slot; here it goes to the van as the others do (docs/deviations.md).
+    /// </summary>
+    public void Strip(PartNode n)
+    {
+        if (n.State != PartState.Car) return;
+        n.State = PartState.Van;
+        n.Slot = -1;
+    }
+
+    /// <summary>
+    /// What a slot's picker offers from the trip (2D garage, BUILD AND REPAIR): the parts of that row's kind in the car, the
+    /// van and the repair order, not the ones left in the field. <paramref name="type"/> is the row's: 7 any weapon (6, 7,
+    /// 9, 10, 11), 8 a dropper, 0xc a special (12, 13), 4 brakes (1, 4), else the part type itself.
+    /// </summary>
+    public IEnumerable<PartNode> PickerParts(int type) => Nodes.Where(n => n.State != PartState.Field && n.Part.Type switch
+    {
+        7 or 6 or 9 or 10 or 11 => type == 7,
+        8 => type == 8,
+        12 or 13 => type == 0xc,
+        1 or 4 => type == 4,
+        var t => t == type,
+    });
 
     /// <summary>The van's parts by list (the six inventory lists): engines, suspensions, brakes, tyres, weapons, specials.</summary>
     public static int ListOf(int type) => type switch { 2 => 0, 3 => 1, 1 or 4 => 2, 5 => 3, >= 6 and <= 11 => 4, 12 or 13 => 5, _ => -1 };
@@ -407,6 +433,13 @@ public sealed class TripInventory
         }
         var keep = inv.Nodes.ToList();
         inv.Nodes.RemoveAll(n => n is null);
+        // a dropper stripped before Strip sent it to the van was kept marked in the car in no slot: it is in the van
+        foreach (var n in inv.Nodes)
+        {
+            if (n.Slot >= 0 && n.Slot < inv.Slots.Count) continue;
+            if (n.State == PartState.Car) { n.State = PartState.Van; n.Slot = -1; }
+            else if (n.State == PartState.Repair && n.Saved == PartState.Car) n.Saved = PartState.Van;   // out of the order, to the van
+        }
         foreach (int i in s.Repairs) if (i >= 0 && i < keep.Count && keep[i] is { } r) inv.Repairs.Add(r);
         return inv;
     }

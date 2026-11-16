@@ -684,9 +684,8 @@ public sealed class GarageScreen : GarageBase, IChassisForm
         {
             if (Node(slots[row]) is not { } n) return;
             if (Melee is not null) { Inv.Nodes.Remove(n); _changed = true; Repaint(); return; }
-            // a stripped dropper keeps its "(C)" (the state is not changed), weapons and specials go to the van
-            if (type != 8) n.State = PartState.Van;
-            n.Slot = -1;
+            // weapons, droppers and specials go to the van (the original leaves a dropper marked "(C)": TripInventory.Strip)
+            Inv.Strip(n);
             Repaint();
             return;
         }
@@ -701,14 +700,7 @@ public sealed class GarageScreen : GarageBase, IChassisForm
     private List<PartNode> Candidates(int type)
     {
         if (Melee is not null) return Catalogue(type);
-        var l = Inv.Nodes.Where(n => n.State != PartState.Field && n.Part.Type switch
-        {
-            7 or 6 or 9 or 10 or 11 => type == 7,
-            8 => type == 8,
-            12 or 13 => type == 0xc,
-            1 or 4 => type == 4,
-            var t => t == type,
-        }).ToList();
+        var l = Inv.PickerParts(type).ToList();
         if (type is 7 or 8) return [.. l.OrderBy(n => WeaponClass(n.Part)).ThenBy(n => CodeNumber(n.Part)).ThenBy(n => n.Health)];
         return [.. l.OrderBy(n => n.State == PartState.Car ? 0 : 1)];
     }

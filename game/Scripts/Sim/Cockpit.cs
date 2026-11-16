@@ -95,7 +95,7 @@ public partial class Cockpit : Node
 
     private void Sound(string name)
     {
-        if (Audio?.Get(name) is { } s) Node3D.OneShot(s);
+        if (Audio?.Get(name) is { } s) Node3D.OneShot(s, bus: I76.Game.Boot.AudioMix.BusFor(name));
     }
 
     public override void _Process(double delta)
@@ -717,7 +717,7 @@ public partial class Cockpit : Node
     /// <summary>CRADAR.WAV: its header's one voice, so a ping asked for while one sounds is dropped (a held target beeps at the sample's length).</summary>
     private void RadarPing()
     {
-        if (Audio?.Get("cradar.wav") is { } s) Node3D.OneShotSingle("cradar.wav", s);
+        if (Audio?.Get("cradar.wav") is { } s) Node3D.OneShotSingle("cradar.wav", s, bus: I76.Game.Boot.AudioMix.Cues);
     }
     private readonly Color?[] _softBlips = new Color?[256];
 

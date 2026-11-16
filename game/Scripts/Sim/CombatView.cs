@@ -110,7 +110,7 @@ public partial class CombatView : Node3D
         foreach (var name in _lockWanted)
         {
             if (_lockTones.ContainsKey(name) || Audio?.Get(name, loop: true) is not { } st) continue;
-            var v = new Voice3D { Stream = st, Autoplay = true };
+            var v = new Voice3D { Stream = st, Autoplay = true, Bus = I76.Game.Boot.AudioMix.Cues };
             car.AddChild(v);
             _lockTones[name] = v;
         }
@@ -800,8 +800,8 @@ public partial class CombatView : Node3D
                 case WeaponClick c when Combat.IsDriverSound(c.Sound):
                     if (c.Shooter == Combat.World.Player && CarOf?.Invoke(c.Shooter) is CarNode own)
                     {
-                        if (c.Sound.Equals("clockon.wav", StringComparison.OrdinalIgnoreCase)) own.OneShotSingle("clockon.wav", Audio?.Get(c.Sound));
-                        else own.OneShot(Audio?.Get(c.Sound));
+                        Voice3D.Trace($"driver cue {c.Sound} at {Time.GetTicksMsec()} ms");
+                        own.Cue(Audio?.Get(c.Sound), c.Sound.Equals("clockon.wav", StringComparison.OrdinalIgnoreCase) ? "clockon.wav" : null);
                     }
                     break;
                 case WeaponClick c:

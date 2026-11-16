@@ -843,26 +843,40 @@ public partial class Main : Node3D
     private bool _extInstruments = true;
     private int _skippedTick = int.MinValue;
 
-    /// <summary>The audio levels on their buses: Music, SFX and Voice, level 1 off, 8 as recorded; Music 2 dB a step, SFX and Voice the original's 4 dB per halving (AudioLevels).</summary>
+    /// <summary>The audio levels on their buses: Music, SFX and Voice, level 1 off, 8 as recorded; Music 2 dB a step, SFX and Voice the original's 4 dB per halving (AudioLevels); the driver's cues at the SFX level. Makes the buses (AudioMix) the first time.</summary>
     public static void ApplyAudio(I76.Game.Shell.ShellSettings s)
     {
-        void Bus(string name, int level, bool law = false)
+        // the buses sum past full scale (an explosion over the engine peaks at +18 dB, ordinary driving at +1): with nothing on
+        // the way the output stage hard-clips them, which is a crackle, loudest on headphones. Look-ahead limiters keep the peak
+        // under -1 dB: Mix's for the game's sounds, Master's after the driver's cues join them (AudioMix)
+        void Limiter(int bus, float ceiling)
+        {
+            if (!Enumerable.Range(0, AudioServer.GetBusEffectCount(bus)).Any(e => AudioServer.GetBusEffect(bus, e) is AudioEffectHardLimiter))
+                AudioServer.AddBusEffect(bus, new AudioEffectHardLimiter { CeilingDb = ceiling, PreGainDb = 0f, Release = 0.1f }, 0);
+        }
+        Limiter(0, AudioMix.MasterCeilingDb);
+        foreach (var (name, send) in AudioMix.Buses)
+        {
+            if (AudioServer.GetBusIndex(name) >= 0) continue;
+            AudioServer.AddBus();
+            int i = AudioServer.BusCount - 1;
+            AudioServer.SetBusName(i, name);
+            AudioServer.SetBusSend(i, send);
+            if (name == AudioMix.Mix) Limiter(i, AudioMix.MixCeilingDb);
+        }
+        void Level(string name, float db, bool off)
         {
             int i = AudioServer.GetBusIndex(name);
-            if (i < 0) { AudioServer.AddBus(); i = AudioServer.BusCount - 1; AudioServer.SetBusName(i, name); AudioServer.SetBusSend(i, "Master"); }
-            AudioServer.SetBusMute(i, level < 2);
-            AudioServer.SetBusVolumeDb(i, law ? AudioLevels.EffectDb(level) : (level - 8) * 2f);
+            AudioServer.SetBusMute(i, off);
+            AudioServer.SetBusVolumeDb(i, db);
         }
-        // the buses sum past full scale (an explosion over the engine peaks at +18 dB, ordinary driving at +1): with nothing on
-        // Master the output stage hard-clips them, which is a crackle, loudest on headphones. A look-ahead limiter keeps the peak under -1 dB
-        if (!Enumerable.Range(0, AudioServer.GetBusEffectCount(0)).Any(e => AudioServer.GetBusEffect(0, e) is AudioEffectHardLimiter))
-            AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = -1f, PreGainDb = 0f, Release = 0.1f }, 0);
         I76.Game.Net.CbVoice.Active?.ApplyMic(s.CbMic);
         I76.Game.Assets.HiFiAudio.Enabled = s.HiFiAudio;
         AudioServer.SetBusMute(0, LaunchOptions.Muted);   // --mute
-        Bus("Music", s.Audio[0]);
-        Bus("SFX", s.Audio[1], true);
-        Bus("Voice", s.Audio[2], true);
+        Level(AudioMix.Music, (s.Audio[0] - 8) * 2f, s.Audio[0] < 2);
+        Level(AudioMix.Sfx, AudioLevels.EffectDb(s.Audio[1]), s.Audio[1] < 2);
+        Level(AudioMix.Voice, AudioLevels.EffectDb(s.Audio[2]), s.Audio[2] < 2);
+        Level(AudioMix.Cues, AudioLevels.EffectDb(s.Audio[1]), s.Audio[1] < 2);   // the driver's cues at the SFX level
     }
 
     private void EndMission(bool won)
@@ -3207,14 +3221,26 @@ public partial class Main : Node3D
             }
         }
 
-        private (AudioEffectCapture Cap, Godot.FileAccess File)? _rec;
+        private (AudioEffectCapture Cap, Godot.FileAccess File)? _rec, _recPre;
 
         private void Record()
         {
-            if (_rec is not var (cap, file)) return;
+            // I76_AUDIO_REC_PRE=file.f32: the same taken ahead of Master's limiter (first on the bus, once the limiter is there), so a
+            // recording beside I76_AUDIO_REC's shows what the limiter took off (the two start a mix block or so apart: align them)
+            if (_recPre is null && System.Environment.GetEnvironmentVariable("I76_AUDIO_REC_PRE") is { Length: > 0 } prePath
+                && Enumerable.Range(0, AudioServer.GetBusEffectCount(0)).Any(e => AudioServer.GetBusEffect(0, e) is AudioEffectHardLimiter))
+            {
+                var pre = new AudioEffectCapture { BufferLength = 1f };
+                AudioServer.AddBusEffect(0, pre, 0);
+                _recPre = (pre, Godot.FileAccess.Open(prePath, Godot.FileAccess.ModeFlags.Write));
+            }
             bool stereo = System.Environment.GetEnvironmentVariable("I76_AUDIO_REC_STEREO") == "1";
-            foreach (var f in cap.GetBuffer(cap.GetFramesAvailable())) { file.StoreFloat(f.X); if (stereo) file.StoreFloat(f.Y); }
-            file.Flush();
+            foreach (var r in new[] { _rec, _recPre })
+            {
+                if (r is not var (cap, file)) continue;
+                foreach (var f in cap.GetBuffer(cap.GetFramesAvailable())) { file.StoreFloat(f.X); if (stereo) file.StoreFloat(f.Y); }
+                file.Flush();
+            }
         }
 
         // while the tree is paused only these run: Alt+Enter, and Pause to start the game again (Esc, M and N do nothing then)

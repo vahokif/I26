@@ -22,6 +22,19 @@ public sealed class GeoFace
     public string Texture { get; init; } = "";
     public byte[] Unk_0x32 { get; init; } = [];
     public FaceVertex[] Vertices { get; init; } = [];
+
+    /// <summary>
+    /// Texture coordinates no face uses on purpose: the stock faces stay within ±100 (a texture repeated along a wall), and
+    /// a few the exporter left unwritten hold ±1.7e38 (Santana's broken fence, CG1AFN11; some damaged car bodies).
+    /// </summary>
+    public const float UvLimit = 1e6f;
+
+    /// <summary>
+    /// Whether a corner's texture coordinates are unset (<see cref="UvLimit"/>, or not a number). The original's renderer
+    /// then fills the face with one texel, its texture's first: Santana's broken front fence is a dark board, where a GPU
+    /// spreads the garbage over the fence's keyed rows and the fence all but vanishes.
+    /// </summary>
+    public bool UvsUnset => Vertices.Any(v => !(MathF.Abs(v.U) < UvLimit && MathF.Abs(v.V) < UvLimit));
 }
 
 /// <summary>

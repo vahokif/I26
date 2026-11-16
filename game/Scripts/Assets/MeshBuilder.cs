@@ -199,6 +199,11 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
                 }
                 if (!surfaces.TryGetValue(mat, out var s)) surfaces[mat] = s = new Surface();
                 var fv = f.Vertices;
+                // a face whose texture coordinates were left unset is one texel, its texture's first, as the original draws it
+                Vector2? oneTexel = null;
+                if (f.UvsUnset)
+                    oneTexel = (faceMember ?? (f.Texture.Length > 0 ? resolver.AnimatedFace(f.Texture)?.Frames[0] : null)) is { } tm && materials.TextureOf(tm) is { } tt
+                        ? new Vector2(0.5f / tt.GetWidth(), 0.5f / tt.GetHeight()) : Vector2.Zero;
                 // an overlay (a window, a lamp) lying in an earlier part's face: lifted off it, as drawing it later did
                 var lift = decals.Contains((partIndex, f)) ? faceN * 0.012f : Vector3.Zero;
                 if (faceMember is not null && model.Kind == "vcf") estimate |= EstimatesNormals(I76.Formats.Imaging.CarMaterialTable.StemOf(faceMember));
@@ -230,7 +235,7 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
                         }
                         s.V.Add(placed[v.Index] + lift);
                         s.N.Add(Safe((uint)v.NormalIndex < normals.Length ? normals[v.NormalIndex] : faceN, faceN));
-                        s.UV.Add(new Vector2(v.U, v.V));
+                        s.UV.Add(oneTexel ?? new Vector2(v.U, v.V));
                     }
             }
         }

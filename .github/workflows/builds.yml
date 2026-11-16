@@ -13,6 +13,8 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+  # the Nix store cache below deletes this branch's older store caches once a newer one is saved
+  actions: write
 jobs:
   zips:
     runs-on: ubuntu-latest
@@ -30,6 +32,19 @@ jobs:
           df -h /
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      # The Nix store (the release shell's .NET and Godot, and the 1.1 GiB of Godot's mono export templates) kept in the
+      # Actions cache, so a build downloads from cache.nixos.org only what flake.lock changed since the last saved store
+      # (that store is restored first, by prefix). The store is saved at the end of a run whose flake files changed;
+      # older stores of this branch are deleted then. No garbage collection: the runner's store holds only what this
+      # job used, and the shells are not GC roots, so a collection would drop them.
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
       # NuGet: the Godot SDK and the per-platform .NET runtime packs the self-contained exports take
       - uses: actions/cache@v6
         with:

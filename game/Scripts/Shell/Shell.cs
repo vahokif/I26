@@ -1180,16 +1180,13 @@ public sealed class ShellSettings
     public bool HiFiAudio { get; set; } = true;
     /// <summary>The port's own: Play Options' Keyboard Steering Assist (I76.Sim.Session.KeyStick), on unless the player turned it off ([port] assisted_steering, written when off; the older keyboard_steering key's "original" reads as off).</summary>
     public bool AssistedSteering { get; set; } = true;
-    /// <summary>The port's own: the brake key on a stopped car shifts into reverse, accelerate on a reversing one into drive (Play Options; on unless the player turned it off).</summary>
-    public bool AutoReverse { get; set; } = true;
-    /// <summary>The settings version that made Auto Reverse on by default and writes it either way.</summary>
-    public const int AutoReverseOnVersion = 12;
+    /// <summary>The port's own: the brake key on a stopped car shifts into reverse, accelerate on a reversing one into drive (Play Options; off, as the original).</summary>
+    public bool AutoReverse { get; set; }
     /// <summary>
-    /// Auto Reverse from a shell.cfg of <paramref name="version"/> with [port] auto_reverse as <paramref name="stored"/> (null when absent):
-    /// before version 12 the key was written only when on, so an old file cannot tell off from untouched and every one is on;
-    /// from 12 the key is written either way, and a missing one is the default, on.
+    /// Auto Reverse from shell.cfg's [port] auto_reverse (null when absent): the choice when the key is there, off when it is not.
+    /// Up to settings version 11 the key was written only when on; from 12 it is written either way.
     /// </summary>
-    public static bool AutoReverseFrom(int version, bool? stored) => version < AutoReverseOnVersion || stored != false;
+    public static bool AutoReverseFrom(bool? stored) => stored == true;
     /// <summary>The port's own: the pad's rumble for the original's force-feedback events (Play Options; on, and without a pad it does nothing; both looks).</summary>
     public bool ForceFeedback { get; set; } = true;
     /// <summary>The port's own: Play Options' Rumble (second page): Original (the game's own effects), Enhanced (and pulses for the events they do not cover) or Off ([port] rumble, written when not original).</summary>
@@ -1367,8 +1364,8 @@ public sealed class ShellSettings
         s.ModernPhysics = (bool)c.GetValue("port", "modern_physics", false);
         // version 4 added the HD menu art switch: older files have none, so it is on
         s.HdMenuArt = version < 4 || (bool)c.GetValue("port", "hd_menu_art", true);
-        // version 5 added Auto Reverse (written only when on); version 12 made it on by default: AutoReverseFrom
-        s.AutoReverse = AutoReverseFrom(version, c.HasSectionKey("port", "auto_reverse") ? (bool)c.GetValue("port", "auto_reverse") : null);
+        // version 5 added Auto Reverse (written only when on; from version 12 either way): AutoReverseFrom
+        s.AutoReverse = AutoReverseFrom(c.HasSectionKey("port", "auto_reverse") ? (bool)c.GetValue("port", "auto_reverse") : null);
         // version 6 added the look: older files have none, so it is off
         s.Look1997 = version >= 6 && (bool)c.GetValue("port", "look_1997", false);
         // version 7 added Force Feedback: older files have none, so it is on

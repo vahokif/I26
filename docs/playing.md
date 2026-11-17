@@ -126,7 +126,7 @@ cornering force (so corrections do not squeal or twitch; a key held past 0.6 s g
 slide by itself, so a car that has stepped out comes back in line with no key held. Off is the original's ramp. The
 throttle keys are the original's either way, and a pad is unaffected.
 
-**Auto Reverse.** On by default (Play Options' Auto Reverse row, in the shell and the in-mission Esc menu): hold the
+**Auto Reverse.** Off by default (Play Options' Auto Reverse row, in the shell and the in-mission Esc menu): hold the
 brake on a stopped car and it shifts into reverse and backs up; hold accelerate while backing up and it brakes, then
 shifts to drive. A pad's triggers work the same. Off, reverse is the original's own key (X) and the brake only brakes.
 

@@ -161,6 +161,8 @@ public class RampClassTests
     [InlineData("bcaik_s7", true)]
     [InlineData("bcaik_s3", false)]
     [InlineData("bcaik_s8", false)]
+    [InlineData("bcaik6", true)]
+    [InlineData("bcaik8", false)]
     public void AGaragesRoofHoldsACarWhenTheOriginalListsItFirst(string name, bool holds)
     {
         if (InstallDir is null) return;

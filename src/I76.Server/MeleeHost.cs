@@ -726,7 +726,7 @@ public sealed partial class MeleeHost : IModeHost
         (byte)s.Slot, s.CarSerial, Arena, Tick, s.Actor.CarFile,
         Mode.Rules.TeamPlay, Options.MaxScore, Options.TimeLimit, Options.RespawnDelay,
         [.. Setup.World.Vehicles.Select(Info)],
-        [.. _structureSerial.Where(kv => kv.Key.Destroyed || kv.Key.Nodes.Any(n => n.Destroyed)).Select(kv => new StructureState(kv.Value, kv.Key.DestroyedMask()))],
+        [.. _structureSerial.Where(kv => kv.Key.Destroyed || kv.Key.Thrown || kv.Key.Nodes.Any(n => n.Destroyed)).Select(kv => new StructureState(kv.Value, kv.Key.DestroyedMask()))],
         Mode.Rules.Kind, Mode.Rules.Goal, Mode.Rules.GoalValue, Mode.Rules.CtfTeams, (byte)Session.Rate.Label,
         Map?.MissionSize ?? 0, Map?.MissionCrc ?? 0, Map?.TerrainSize ?? 0, Map?.TerrainCrc ?? 0, MapSet?.Hash) { Coop = Mode.JoinState(s), Cb = Options.AllowCb, Crosshair = Options.AllowCrosshair, IgnitionStaysOn = Options.IgnitionStaysOn, Turrets1997 = Options.Turrets1997 };
 

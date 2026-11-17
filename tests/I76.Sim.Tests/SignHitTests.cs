@@ -75,7 +75,7 @@ public class SignHitTests
         Assert.Same(sign, hit.Victim);
         Assert.InRange(hit.Hit.Z, 19.2f, 19.3f);                  // on the 0.75 sphere's near side
         Assert.Empty(c.Rounds);
-        Assert.False(sign.Destroyed);
+        Assert.False(sign.Knocked);
         Assert.DoesNotContain(dm.Events, e => e is SignKnocked);
         Assert.NotSame(behind, hit.Victim);
     }
@@ -86,7 +86,7 @@ public class SignHitTests
         var (c, dm, sign, _, _) = Rig(2, 2);
         var hit = Assert.Single(Fly(c));
         Assert.Same(sign, hit.Victim);
-        Assert.True(sign.Destroyed);
+        Assert.True(sign.Knocked);
         Assert.Contains(dm.Events, e => e is SignKnocked k && k.Object == sign);
         // the next round goes through to the car behind it
         var (c2, _, sign2, behind2, _) = Rig(1, 1);

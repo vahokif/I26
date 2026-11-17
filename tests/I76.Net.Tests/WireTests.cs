@@ -12,10 +12,10 @@ public class WireTests
     private static readonly I76.Formats.Imaging.CarPaint Red = new(new I76.Formats.Imaging.PaintColour(200, 10, 20), new I76.Formats.Imaging.PaintColour(1, 2, 3), I76.Formats.Imaging.PaintFinish.Metallic);
 
     [Fact]
-    public void TheProtocolIs25()
+    public void TheProtocolIs26()
     {
-        Assert.Equal(25, Protocol.Version);
-        Assert.Equal(17, I76.Sim.Save.SnapshotHeader.CurrentVersion);
+        Assert.Equal(26, Protocol.Version);
+        Assert.Equal(18, I76.Sim.Save.SnapshotHeader.CurrentVersion);
     }
 
     /// <summary>The host's ignition lock (protocol 23): the join accept's last byte and one of the listing's host rules; an older listing without them reads as off.</summary>
@@ -233,7 +233,7 @@ public class WireTests
         Assert.Equal((11138u, 0xdeadbeefu, 32768u, 0x12345678u), (fp.MapSize, fp.MapCrc, fp.TerrainSize, fp.TerrainCrc));
 
         // the server's rate rides in the accept; one that is not offered is refused, and so is a client of the old protocol
-        Assert.Equal(25, Protocol.Version);
+        Assert.Equal(26, Protocol.Version);
         Assert.Equal(20, acc2.RateHz);
         w.Clear();
         (acc with { RateHz = 60 }).Write(w);

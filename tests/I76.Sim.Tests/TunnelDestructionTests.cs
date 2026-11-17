@@ -99,3 +99,96 @@ public class TunnelDestructionTests
         Assert.Equal(before, setup.Statics.Objects.Count(x => x.Name == name));
     }
 }
+
+/// <summary>
+/// The sign slot's throw is not the destroyed flag (measured: a thrown sign's flags unchanged before, after and 28 frames
+/// on). It takes the whole placement off the collider lists whatever the root's flag, so a Sign-class root already flagged
+/// by its root test (a type-2 or tunnel node at its top died first) is still thrown by the next explosion; a script's isDead
+/// stays false after a throw, its building tests no longer see it, and the FSM's destroy on a Sign-class placement throws it.
+/// </summary>
+public class SignThrowTests
+{
+    private static string? InstallDir =>
+        Environment.GetEnvironmentVariable("I76_INSTALL") is { Length: > 0 } d && Directory.Exists(d) ? d : null;
+    private static string? NitroDir =>
+        Environment.GetEnvironmentVariable("I76_NITRO_INSTALL") is { Length: > 0 } d && Directory.Exists(d) ? d : null;
+
+    /// <summary>M10's billboard (placed as a sign, type-2 posts): a post shot down flags the root; the next blast still throws the board.</summary>
+    [Fact]
+    public void M10sBillboardIsThrownAfterAPostIsShotDown()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("m10.msn");
+        var board = ClassIdTests.At(setup, "aobilbd2", 2025, 47980);
+        int post = board.Nodes.FindIndex(n => n.Name == "AO1_PS12");
+        var round = new DamagePacket { Mask = 2 };
+        round.Ch[1] = 60;
+        setup.Damage.Apply(board, round, Vector3.Zero, post);
+        Assert.True(board.Nodes[post].Destroyed);
+        Assert.True(board.Destroyed, "a direct child died: the root is flagged");
+        Assert.False(board.Thrown);
+        Assert.True(board.Solid);
+        setup.Combat.Explode("x1_gren1", board.Centre + new Vector3(8, 0, 0), null);
+        Assert.True(board.Thrown);
+        Assert.False(board.Solid);
+        Assert.Contains(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == board);
+    }
+
+    [Fact]
+    public void AThrownSignIsNotDeadToTheScriptAndNotABuilding()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", ("sdxin_1", 4u, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "sdxin_1", 4100, 36700);
+        var e = setup.Entities.Single(x => x.Static == o);
+        setup.Combat.Explode("x1_gren1", o.Centre + new Vector3(10, 0, 0), null);
+        Assert.True(o.Thrown);
+        Assert.False(o.Destroyed);
+        Assert.False(e.Dead);
+        Assert.All(o.Nodes, n => Assert.False(n.Destroyed));
+        var host = new ScriptHost(setup.World, setup.Entities, (Objectives)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Objectives)), _ => null);
+        Assert.DoesNotContain(e, host.Structures);
+    }
+
+    [Fact]
+    public void TheScriptsDestroyThrowsASignClassPlacement()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", ("bcbank1", 4u, 4100, 36700, 0));
+        var o = ClassIdTests.At(setup, "bcbank1", 4100, 36700);
+        setup.Damage.DestroyStructure(o);
+        Assert.True(o.Thrown);
+        Assert.False(o.Destroyed);
+        Assert.Contains(setup.Damage.Events, x => x is I76.Sim.Damage.SignKnocked k && k.Object == o);
+    }
+
+    /// <summary>The short tunnel given the Sign class id: its inner tunnel shot down first, mortar fire still blows the whole tunnel away.</summary>
+    [Fact]
+    public void TheShortTunnelPlacedAsASignIsBlownAwayAfterItsInnerTunnelIsShot()
+    {
+        if (NitroDir is null) return;
+        var setup = TunnelDestructionTests.Build("p18.msn", ("betunnl1", 4u, new Vector2(150, 0)));
+        var o = setup.Statics.Objects.Where(x => x.Name == "betunnl1").MaxBy(x => x.Centre.X)!;
+        var p = new DamagePacket { Mask = 2 };
+        p.Ch[1] = 1000;
+        setup.Damage.Apply(o, p, Vector3.Zero, o.Nodes.FindIndex(n => n.Name == "ET1_TUN1"));
+        Assert.True(o.Destroyed);
+        setup.Combat.Explode("x1_gren1", o.Centre + new Vector3(10, 0, 0), null);
+        Assert.True(o.Thrown);
+        Assert.False(o.Solid);
+    }
+
+    [Fact]
+    public void TheThrownStateRidesTheDestroyedMask()
+    {
+        var src = new StaticObject { Name = "s", Type = 4 };
+        var dst = new StaticObject { Name = "s", Type = 4 };
+        for (int i = 0; i < 7; i++) { src.Nodes.Add(new StructureNode { Name = $"n{i}", Type = 4 }); dst.Nodes.Add(new StructureNode { Name = $"n{i}", Type = 4 }); }
+        Assert.True(src.Knock());
+        Assert.False(src.Knock());
+        Assert.True(dst.ApplyDestroyedMask(src.DestroyedMask()));
+        Assert.True(dst.Thrown);
+        Assert.False(dst.Destroyed);
+        Assert.All(dst.Nodes, n => Assert.False(n.Destroyed));
+    }
+}

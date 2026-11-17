@@ -180,7 +180,7 @@ public sealed class ClientWorld
         Log?.Invoke($"the game goes on under a new host: {Cars.Count} cars");
     }
     public Vehicle? Car(int serial) => Cars.GetValueOrDefault(serial)?.Vehicle;
-    public IEnumerable<StaticObject> DestroyedStructures => _structures.Values.Where(o => o.Destroyed || o.Nodes.Any(n => n.Destroyed));
+    public IEnumerable<StaticObject> DestroyedStructures => _structures.Values.Where(o => o.Destroyed || o.Thrown || o.Nodes.Any(n => n.Destroyed));
 
     private void Add(CarInfo info)
     {

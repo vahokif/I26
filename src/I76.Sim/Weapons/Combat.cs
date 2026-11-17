@@ -457,7 +457,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
     public object? AimTargetFor(Vehicle me, int mountKind)
     {
         if (TargetFor(me, mountKind) is { } v) return v;
-        if (OwnArcs(me) || !StructureTarget.TryGetValue(me, out var s) || s.Destroyed) return null;
+        if (OwnArcs(me) || !StructureTarget.TryGetValue(me, out var s) || s.Destroyed || s.Thrown) return null;
         // the turrets read the radar's selected target, which the player's jamming empties; the arcs keep the target
         if (mountKind == 4) return AiRadarBlind(me, s) ? null : s;
         return mountKind is 1 or 2 or 8 or 0x10 ? s : null;
@@ -1657,7 +1657,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         if (World.Ground is IHasStatics hs)
             foreach (var o in hs.World.Objects)
             {
-                if (o.Destroyed) continue;
+                // a thrown sign is off the collider lists; a sign root flagged by its root test is still on them, and its slot throws it
+                if (o.Thrown || o.Destroyed && o.Type != 4) continue;
                 var d = o.Centre - at;
                 float reach = (o.BoundRadius > 0 ? o.BoundRadius : o.Radius) + radius;
                 if (d.X * d.X + d.Z * d.Z > reach * reach) continue;

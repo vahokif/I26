@@ -43,7 +43,7 @@ public class BarrierTests
             s.World.Frame(dt);
             if (v.Pos.X > 3210) slowest = MathF.Min(slowest, v.Speed);
         }
-        Assert.True(hit.Destroyed, $"knocked off: car at {v.Pos.X:0.0}, {v.Pos.Z:0.0}");
+        Assert.True(hit.Knocked, $"knocked off: car at {v.Pos.X:0.0}, {v.Pos.Z:0.0}");
         Assert.False(hit.Solid);
         Assert.Contains(s.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == hit);
         Assert.True(v.Pos.X >= 3235, $"the car drove through: x {v.Pos.X:0.0}, speed {v.Speed:0.0}");

@@ -240,7 +240,7 @@ public class SignClassTests
         var (hit, reached, _) = ClassIdTests.Ram(setup, s, new Vector2(o.Centre.X + 30, o.Centre.Z), new Vector2(-1, 0));
         Assert.Equal("sstop_1", hit);
         Assert.True(reached > 35, $"the car got {reached:0.0} m: stopped by a sign");
-        Assert.True(o.Destroyed);
+        Assert.True(o.Knocked);
         Assert.False(o.Solid);
     }
 }
@@ -336,7 +336,7 @@ public class SignObjectClassTests
         var (hit, reached, _) = ClassIdTests.Ram(setup, s, new Vector2(o.Centre.X, o.Centre.Z + 30), new Vector2(0, -1));
         Assert.True(reached > 35, $"the car got {reached:0.0} m: stopped by the sign");
         Assert.Equal(thrown ? "sdxin_1" : null, hit);
-        Assert.Equal(thrown, o.Destroyed);
+        Assert.Equal(thrown, o.Knocked);
         Assert.Equal(!thrown, o.Solid);
         Assert.Equal(thrown, setup.Damage.Events.Any(e => e is I76.Sim.Damage.SignKnocked k && k.Object == o));
     }
@@ -355,11 +355,11 @@ public class SignObjectClassTests
         var bullet = new DamagePacket { Mask = 1 };
         bullet.Ch[0] = 50;
         setup.Damage.Apply(o, bullet, Vector3.Zero, 0);
-        Assert.False(o.Destroyed);
+        Assert.False(o.Knocked);
         var rocket = new DamagePacket { Mask = 2 };
         rocket.Ch[1] = 120;
         setup.Damage.Apply(o, rocket, Vector3.Zero, 0);
-        Assert.True(o.Destroyed);
+        Assert.True(o.Knocked);
         Assert.Contains(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == o);
     }
 }

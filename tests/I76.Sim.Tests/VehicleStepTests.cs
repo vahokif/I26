@@ -130,7 +130,7 @@ public class VehicleStepTests(Xunit.Abstractions.ITestOutputHelper output)
         sim.Vehicles.Add(car); sim.Player = car;
         var damage = new I76.Sim.Damage.DamageModel(sim, new I76.Sim.Weapons.Combat(sim, _ => null));
         for (int f = 0; f < 60; f++) sim.Frame(0.036f);
-        Assert.True(sign.Destroyed);
+        Assert.True(sign.Knocked);
         Assert.Contains(damage.Events, e => e is I76.Sim.Damage.SignKnocked);
         Assert.True(car.Pos.Z > 30, $"the car drove on: z {car.Pos.Z:0.0}, speed {car.Speed:0.0}");
     }
@@ -167,8 +167,8 @@ public class VehicleStepTests(Xunit.Abstractions.ITestOutputHelper output)
         sim.Vehicles.Add(car); sim.Player = car;
         var damage = new I76.Sim.Damage.DamageModel(sim, new I76.Sim.Weapons.Combat(sim, _ => null));
         float before = 0;
-        for (int f = 0; f < 60 && !barrier.Destroyed; f++) { before = car.Speed; sim.Frame(0.036f); }
-        Assert.True(barrier.Destroyed, $"knocked off: z {car.Pos.Z:0.0}");
+        for (int f = 0; f < 60 && !barrier.Knocked; f++) { before = car.Speed; sim.Frame(0.036f); }
+        Assert.True(barrier.Knocked, $"knocked off: z {car.Pos.Z:0.0}");
         Assert.False(barrier.Solid);
         Assert.Contains(damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == barrier);
         Assert.DoesNotContain(damage.Events, e => e is I76.Sim.Damage.StructureDestroyed);
@@ -191,7 +191,7 @@ public class VehicleStepTests(Xunit.Abstractions.ITestOutputHelper output)
         damage.Apply(barrier, round, Vector3.Zero, 0);
         var fire = new I76.Sim.Weapons.DamagePacket { Mask = 4 }; fire.Ch[2] = 50;
         damage.Apply(barrier, fire, Vector3.Zero, 0);
-        Assert.False(barrier.Destroyed);
+        Assert.False(barrier.Knocked);
         Assert.Equal(5, barrier.Nodes[0].Hp);
         // a splash reaches the root, a type-2 structure's 400
         var splash = new I76.Sim.Weapons.DamagePacket { Mask = 2 }; splash.Ch[1] = 30;
@@ -199,8 +199,10 @@ public class VehicleStepTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal((370, false), (barrier.Hp, barrier.Destroyed));
         var rocket = new I76.Sim.Weapons.DamagePacket { Mask = 2 }; rocket.Ch[1] = 1;
         damage.Apply(barrier, rocket, Vector3.Zero, 0);
-        Assert.True(barrier.Destroyed);
-        Assert.True(barrier.Nodes[0].Destroyed);
+        // thrown whole, its flags as they were (measured: no 0x200 after a throw)
+        Assert.True(barrier.Knocked);
+        Assert.False(barrier.Destroyed);
+        Assert.False(barrier.Nodes[0].Destroyed);
         Assert.Single(damage.Events.OfType<I76.Sim.Damage.SignKnocked>());
     }
 

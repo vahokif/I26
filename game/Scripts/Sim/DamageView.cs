@@ -94,7 +94,7 @@ public partial class DamageView : Node3D
     {
         foreach (var (v, car) in Cars) Resync(v, car);
         foreach (var o in PlacementOf.Keys)
-            if (o.Destroyed || o.Nodes.Any(n => n.Destroyed)) Destroy(o, quiet: true);
+            if (o.Destroyed || o.Thrown || o.Nodes.Any(n => n.Destroyed)) Destroy(o, quiet: true);
     }
 
     private void Resync(I76.Sim.Vehicles.Vehicle v, CarNode car)
@@ -411,7 +411,11 @@ public partial class DamageView : Node3D
                 case SignKnocked k when PlacementOf.TryGetValue(k.Object, out var sp):
                 {
                     Builder.Scenery!.Destroy(sp, null);
-                    var model = sp.Definition is { } d ? Builder.Assembler!.Assemble(d) : null;
+                    // the thrown copy is the placement as it stood: a part shot down before is its wreck
+                    var thrown = k.Object;
+                    var model = sp.Definition is not { } d ? null : thrown.Nodes.Any(n => n.Destroyed)
+                        ? new ModelAssembler(Builder.Vfs) { DestroyedNode = name => thrown.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var ni and >= 0 && thrown.Nodes[ni].Destroyed }.Assemble(d)
+                        : Builder.Assembler!.Assemble(d);
                     var mesh = model is null ? null : Builder.Meshes!.Build(model);
                     var body = new RigidBody3D
                     {
@@ -465,6 +469,8 @@ public partial class DamageView : Node3D
     public void Destroy(I76.Sim.Collision.StaticObject o, bool quiet, IReadOnlyList<int>? booms = null)
     {
         if (!PlacementOf.TryGetValue(o, out var p)) return;
+        // thrown (a restore, a join): gone from where it stood
+        if (o.Thrown) { Builder.Scenery!.Destroy(p, null); return; }
         Mesh? alt = null;
         I76.Formats.Assembly.AssembledModel? altModel = null;
         bool Dead(string name) => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed;

@@ -94,7 +94,8 @@ public sealed partial class ScriptHost : IFsmHost
     public int Team(object o) => E(o).Team;
     // (Co-op Scaling's copies are not the script's: CoopExtras)
     public IEnumerable<object> Vehicles => Entities.Where(e => e.Vehicle is not null && !e.Removed && e.ExtraOf is null);
-    public IEnumerable<object> Structures => Entities.Where(e => !e.Removed && IsStructure(e));
+    // a thrown sign is off the collider lists these walk
+    public IEnumerable<object> Structures => Entities.Where(e => !e.Removed && IsStructure(e) && e.Static is not { Thrown: true });
     public IEnumerable<object> AiVehicles => Entities.Where(e => e.Vehicle is { IsEmplacement: false } && !e.Removed && e.ExtraOf is null).OrderBy(e => e.Team);
 
     // ---- AI ----

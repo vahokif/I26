@@ -210,11 +210,19 @@ public sealed partial class StaticObject
     /// </summary>
     public bool SignPlacement => Type == 4 && Nodes.TrueForAll(n => n.Sign);
 
-    /// <summary>Thrown by the sign's slot: the root's HP zeroed by it (a root that only lost a child keeps its 400). Its collider is gone.</summary>
-    public bool Knocked => Type == 4 && Destroyed && Hp == 0;
+    /// <summary>
+    /// Thrown by the sign's slot (<see cref="Knock"/>): the whole placement gone from the collider lists as one tumbling
+    /// piece, so nothing reaches it any more (no contact, round or splash, nor the scripts' building tests). Not the
+    /// destroyed flag: the original's throw leaves the root's flags as they were, so a thrown sign is not dead to a script's
+    /// isDead, and a root already flagged (a direct child died first) is still thrown (measured).
+    /// </summary>
+    public bool Thrown { get; set; }
+
+    /// <summary>The same as <see cref="Thrown"/>.</summary>
+    public bool Knocked => Thrown;
 
     /// <summary>Whether it still collides and carries cars.</summary>
-    public bool Solid => Nodes.Count == 0 || SignPlacement ? !Destroyed || Collapsed : !Knocked && Polys.Count + Boxes.Count + Spheres.Count + Surfaces.Count > 0;
+    public bool Solid => !Thrown && (Nodes.Count == 0 || SignPlacement ? !Destroyed || Collapsed : Polys.Count + Boxes.Count + Spheres.Count + Surfaces.Count > 0);
 
     /// <summary>The whole placement's destruction geometry swap (then the rebuild): an emplacement's wreck, or a collider without nodes.</summary>
     public void Collapse()
@@ -390,27 +398,25 @@ public sealed partial class StaticObject
     /// </summary>
     public bool Unfelt(int node) => TypeAt(node) == 3 && (node >= 0 && node < Nodes.Count ? Nodes[node].Destroyed : Destroyed);
 
-    /// <summary>The destroyed state on the wire: bit 0 the root, bit n + 1 node n.</summary>
-
     /// <summary>
-    /// The sign slot's throw on the node's root: the root's HP to 0 and the whole placement
-    /// out of the collision world as one piece, so it no longer collides or takes hits. True if it was standing.
+    /// The sign slot's throw on the node's root: the root's HP to 0 and the whole placement out of the collision world as
+    /// one piece (<see cref="Thrown"/>), whatever its destroyed flag, which it leaves alone. True if it was still there.
     /// </summary>
     public bool Knock()
     {
-        if (Destroyed) return false;
+        if (Thrown) return false;
         Hp = 0;
-        Destroyed = true;
-        foreach (var n in Nodes) { n.Destroyed = true; n.Hp = 0; }
-        Refresh();
+        Thrown = true;
         return true;
     }
 
+    /// <summary>The destroyed state on the wire: bit 0 the root, bit n + 1 node n, bit count + 1 <see cref="Thrown"/>.</summary>
     public byte[] DestroyedMask()
     {
-        var m = new byte[(Nodes.Count + 8) / 8];
+        var m = new byte[(Nodes.Count + 9) / 8];
         if (Destroyed) m[0] |= 1;
         for (int i = 0; i < Nodes.Count; i++) if (Nodes[i].Destroyed) m[(i + 1) >> 3] |= (byte)(1 << ((i + 1) & 7));
+        if (Thrown) m[(Nodes.Count + 1) >> 3] |= (byte)(1 << ((Nodes.Count + 1) & 7));
         return m;
     }
 
@@ -423,6 +429,7 @@ public sealed partial class StaticObject
         if (Bit(0) && !Destroyed) { Destroyed = true; Hp = 0; changed = true; }
         for (int i = 0; i < Nodes.Count; i++)
             if (Bit(i + 1) && !Nodes[i].Destroyed) { Nodes[i].Destroyed = true; Nodes[i].Hp = 0; changed = true; }
+        if (Bit(Nodes.Count + 1) && !Thrown) { Thrown = true; Hp = 0; changed = true; }
         if (changed) Refresh();
         return changed;
     }

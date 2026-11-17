@@ -718,15 +718,15 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     public void StructureSlot(StaticObject o, DamagePacket p) => StructureSlot(o, -1, p);
 
     /// <summary>
-    /// The script's destroy-object action forces this: an impact of HP + 1 on the root
-    /// (which type 2's quartering can survive), then the root's explosion at
-    /// its marker whatever that did. The script host never calls it twice.
+    /// The script's destroy-object action forces this: an impact of HP + 1 on the root, through the slot of the root's
+    /// type (type 2's quartering can survive it; a Sign-class placement is thrown, a Gate-class one dies as a gate), then
+    /// the root's explosion at its marker whatever that did. The script host never calls it for a dead object.
     /// </summary>
     public void DestroyStructure(StaticObject o)
     {
         var p = new DamagePacket { Mask = 8 };
         p.Ch[3] = o.Hp + 1;
-        StructureSlot(o, -1, p);
+        StaticSlot(o, -1, p);
         var booms = new List<int>();
         RootExplosion(o, booms);
         if (booms.Count > 0) Events.Add(new StructureDestroyed(o, booms));

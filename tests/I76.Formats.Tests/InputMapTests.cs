@@ -401,14 +401,110 @@ public class InputMapTests
     [Fact]
     public void TheScoreboardMovesToTabAndTheTeamKeyGoes()
     {
-        var t = BindingTable.Parse(WithTab).WithScoreboardOnTab();
+        var t = BindingTable.Parse(WithTab).WithReverseOffTab(out _).WithScoreboardOnTab();
         Assert.Equal("Tab", t.Of("show_player_scores").Single().Terms[0].Channel);
         Assert.Empty(t.Of("show_team_scores"));
+        // reverse still on Tab: the standings are not put on it too
+        Assert.Empty(BindingTable.Parse(WithTab).WithScoreboardOnTab().Of("show_player_scores"));
         // not the stock key: somebody's own, kept
         var own = BindingTable.Parse("show_player_scores {\n   + keyboard   F9\n}\n").WithScoreboardOnTab();
         Assert.Equal("F9", own.Of("show_player_scores").Single().Terms[0].Channel);
         // nothing in input.def at all: Tab all the same
         Assert.Equal("Tab", new BindingTable().WithScoreboardOnTab().Of("show_player_scores").Single().Terms[0].Channel);
+    }
+
+    /// <summary>The install's input.def as Done copies it below the bindings: the standings' stock Quote among its blocks.</summary>
+    private const string InputDef = "zoom_factor_reset {\n\t+ keyboard\tGreyEnd\n}\nshow_player_scores {\n\t+ keyboard\tQuote\n}\nshow_team_scores {\n\t+ keyboard\tSemiColon\n}\n";
+
+    /// <summary>The bindings as Done writes them and the game reads them back.</summary>
+    private static BindingTable SavedAndLoaded(BindingTable edit) => BindingTable.Parse(edit.ToText(InputDef)).WithScoreboardOnTab();
+
+    private static string ScoresKey(BindingTable t) => t.KeyText(BindingTable.Scores);
+
+    /// <summary>KEYBOARD.MAP as the port reads it, the standings' Tab added: what Restore loads.</summary>
+    private static BindingTable KeyDefaults() =>
+        BindingTable.Parse("reverse_direction {\n   + keyboard   Tab\n}\nhonk_horn {\n   + keyboard   G\n}\n").WithReverseOffTab(out _).WithScoreboardOnTab().KeysOnly();
+
+    [Fact]
+    public void TheStandingsKeyIsRebindableAndDoneKeepsIt()
+    {
+        var edit = KeyDefaults();
+        Assert.Equal("Tab", ScoresKey(edit));
+        edit.Assign(BindingTable.Scores, "keyboard", "F9");
+        Assert.Equal("F9", ScoresKey(edit));
+        var text = edit.ToText(InputDef);
+        // written above input.def's copy, which stays verbatim (its Quote with it); read back, the Quote is not a binding and Tab is not added
+        Assert.True(text.IndexOf("show_player_scores {\n   + keyboard   F9", StringComparison.Ordinal) is >= 0 and var own && own < text.IndexOf("show_player_scores {\n\t+ keyboard\tQuote", StringComparison.Ordinal));
+        var t = SavedAndLoaded(edit);
+        Assert.Equal("F9", ScoresKey(t));
+        Assert.Equal(["F9"], t.Of(BindingTable.Scores).Select(b => b.Terms[0].Channel));
+        Assert.False(t.ScoresOnFallback);
+        // and again: no second block, no Tab
+        Assert.Equal(["F9"], SavedAndLoaded(t).Of(BindingTable.Scores).Select(b => b.Terms[0].Channel));
+        // a mouse button too
+        edit.Assign(BindingTable.Scores, "Mouse", "MiddleBtn");
+        Assert.Equal(["MiddleBtn"], SavedAndLoaded(edit).Of(BindingTable.Scores).Select(b => b.Terms[0].Channel));
+        // the screen's Quote is somebody's choice (it carries the shell's exclusions), not input.def's stock block
+        edit.Assign(BindingTable.Scores, "keyboard", "Quote");
+        Assert.Equal("Quote", ScoresKey(SavedAndLoaded(edit)));
+    }
+
+    [Fact]
+    public void AKeyTakenFromTheStandingsLeavesThemUnboundAndTabFallsBackOnlyWhileFree()
+    {
+        // reverse takes Tab: the standings have no key, and none comes back on load (Tab is reverse's, so no fallback either)
+        var edit = KeyDefaults();
+        edit.Assign("reverse_direction", "keyboard", "Tab");
+        Assert.Equal(BindingTable.None, ScoresKey(edit));
+        Assert.False(edit.ScoresOnFallback);
+        var t = SavedAndLoaded(edit);
+        Assert.Equal(BindingTable.None, ScoresKey(t));
+        Assert.Equal("Tab", t.KeyText("reverse_direction"));
+        Assert.False(t.ScoresOnFallback);
+        Assert.Equal(BindingTable.None, ScoresKey(SavedAndLoaded(t)));
+
+        // the standings on F9, the horn takes F9: unbound in the edit; Tab is free, so the game holds them on Tab and Done's reload says so
+        edit = KeyDefaults();
+        edit.Assign(BindingTable.Scores, "keyboard", "F9");
+        edit.Assign("honk_horn", "keyboard", "F9");
+        Assert.Equal(BindingTable.None, ScoresKey(edit));
+        Assert.Equal("F9", edit.KeyText("honk_horn"));
+        Assert.True(edit.ScoresOnFallback);
+        Assert.Equal("Tab", ScoresKey(SavedAndLoaded(edit)));
+
+        // the standings on a key: Tab is nothing of theirs (another command may have it)
+        edit = KeyDefaults();
+        edit.Assign(BindingTable.Scores, "keyboard", "F9");
+        Assert.False(edit.ScoresOnFallback);
+        edit.Assign("honk_horn", "keyboard", "Tab");
+        Assert.Equal("F9", ScoresKey(SavedAndLoaded(edit)));
+        Assert.Equal("Tab", SavedAndLoaded(edit).KeyText("honk_horn"));
+    }
+
+    [Fact]
+    public void RestoreGivesTheStandingsTabBack()
+    {
+        var edit = KeyDefaults();
+        edit.Assign("reverse_direction", "keyboard", "Tab");
+        Assert.Equal(BindingTable.None, ScoresKey(edit));
+        edit.ResetSide(KeyDefaults(), false);
+        Assert.Equal("Tab", ScoresKey(edit));
+        Assert.Equal("X", edit.KeyText("reverse_direction"));
+        Assert.Equal("Tab", ScoresKey(SavedAndLoaded(edit)));
+        // a pad block on the standings stays through Restore of the keys (none is made by the screen; one in a file is kept)
+        var withPad = BindingTable.Parse("show_player_scores {\n   + joystick1   Button7\n}\n").WithScoreboardOnTab();
+        withPad.ResetSide(KeyDefaults(), false);
+        Assert.Equal(2, withPad.Of(BindingTable.Scores).Count);
+    }
+
+    [Fact]
+    public void AMapSavedBeforeTheStandingsRowHoldsThemOnTab()
+    {
+        // the old Done wrote no block of its own for them: input.def's Quote alone, which reads as Tab
+        var old = BindingTable.Parse("reverse_direction {\n   + keyboard   X\n}\n" + InputDef).WithScoreboardOnTab();
+        Assert.Equal("Tab", ScoresKey(old));
+        Assert.Single(old.Of(BindingTable.Scores));
+        Assert.Empty(old.Of("show_team_scores"));
     }
 
     [Fact]

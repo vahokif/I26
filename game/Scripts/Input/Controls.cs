@@ -206,7 +206,8 @@ public static class Controls
             t = MoveReverseOffTab(t, user);
         }
         else if (Pads.Count > 0) t = Defaults();    // the shell copies JOYSTICK.MAP over a missing input.map when a stick is present
-        else if (Install("input.map") is { } inst) t = BindingTable.Parse(inst).WithWasd();
+        // the install's map has reverse on Tab, the standings' key (as KEYBOARD.MAP has it): on X, in memory, as the port's keymap
+        else if (Install("input.map") is { } inst) t = BindingTable.Parse(inst).WithWasd().WithReverseOffTab(out _);
         else t = Defaults().Migrate(Install("input.def"));
         // a map with no pad blocks at all (saved by the original screen, an older version, or the install's) still lets a pad play:
         // the preset's pad side, in memory only (the keys stay as saved, nothing is written)
@@ -259,7 +260,8 @@ public static class Controls
     {
         if (_keyBase is null || _keyBaseDir != InstallDir)
         {
-            _keyBase = (Install("KEYBOARD.MAP") is { } kb ? BindingTable.Parse(kb) : new BindingTable()).WithWasd().WithReverseOffTab(out _);
+            // the standings' Tab too (they are input.def's, which KEYBOARD.MAP has not), so that Restore gives them their key
+            _keyBase = (Install("KEYBOARD.MAP") is { } kb ? BindingTable.Parse(kb) : new BindingTable()).WithWasd().WithReverseOffTab(out _).WithScoreboardOnTab();
             _keyBaseDir = InstallDir;
         }
         return _keyBase.Clone();
@@ -280,6 +282,9 @@ public static class Controls
 
     /// <summary>A copy of the bindings, for the screen to edit.</summary>
     public static BindingTable Edit() => Table.Clone();
+
+    /// <summary>Whether the standings fall back to Tab: they have no key of their own and Tab is no other command's (<see cref="BindingTable.ScoresOnFallback"/>).</summary>
+    public static bool ScoresOnFallback => Table.ScoresOnFallback;
 
     /// <summary>The binding a command shows: its key's name, or "-----".</summary>
     public static string Binding(string command) => Table.Text(command);

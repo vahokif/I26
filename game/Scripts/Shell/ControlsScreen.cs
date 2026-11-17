@@ -15,6 +15,8 @@ namespace I76.Game.Shell;
 /// command it was on. Restore loads KEYBOARD.MAP, Done writes input.map,
 /// Cancel and Esc go back to the Options Menu. The screen edits the keyboard and the mouse only (a pad is the port's controller screen, opened by Calibrate, which
 /// ran Windows' joystick panel in the original): an input replaces only the command's keyboard and mouse blocks, Restore loads the keys' defaults alone.
+/// The port's rows fill the sheet's empty ruled rows (<see cref="ControlsLayout"/>): the multiplayer game keys, a hint, the network
+/// game's standings (input.map's show_player_scores, Tab by Restore) and Mouse Options.
 ///
 /// The command names are not text but part of the picture. An upscale of it
 /// (the modern look) has none, so they are set again in Lee, each fitted to
@@ -35,10 +37,7 @@ public class ControlsScreen : OverlayScreen
     private Dictionary<int, string> _keys;
     /// <summary>The game keys' edits that go to the controller screen and back with the table.</summary>
     private static Dictionary<int, string>? _carried;
-    /// <summary>A row's entry past the commands': the multiplayer game key <c>GameKeyMap.Rebindable[entry - GameEntry]</c>.</summary>
-    internal const int GameEntry = 100;
-    /// <summary>How many of the game keys sit in the right column's empty rows (Chat, Self Destruct, Respawn, Show All Names); the rest are on the left's.</summary>
-    internal const int RightGameKeys = 4;
+    private const int GameEntry = ControlsLayout.GameEntry, RightGameKeys = ControlsLayout.RightGameKeys;
 
     public ControlsScreen(BindingTable? pending = null)
     {
@@ -49,8 +48,10 @@ public class ControlsScreen : OverlayScreen
     protected int RowH => _f.Height + 5;
     private static int _listScroll;
 
-    internal static readonly int[] LeftRows = [1, 2, .. Enumerable.Range(4, 17)];
-    internal static readonly int[] RightRows = [.. Enumerable.Range(21, 19)];
+    internal static readonly int[] LeftRows = ControlsLayout.LeftRows;
+    internal static readonly int[] RightRows = ControlsLayout.RightRows;
+    /// <summary>The standings' row's name: the online rows' style (Chat (online)), in the left column's name cell.</summary>
+    internal const string ScoresName = "Scores (online)";
 
     /// <summary>Record 16's painted command names and their ink boxes (x, y, w, h).</summary>
     internal static readonly (string Text, int X, int Y, int W, int H)[] Names =
@@ -72,7 +73,7 @@ public class ControlsScreen : OverlayScreen
     protected override void Build()
     {
         _f = Shell.Db.Font(0x44);
-        int mouseY = 47 + (LeftRows.Length + 2 + GameKeyMap.Rebindable.Length - RightGameKeys) * RowH;
+        int mouseY = ControlsLayout.RowY(ControlsLayout.MouseRow, RowH);
         Add(35, mouseY, () => "", () => { _carried = _keys; Shell.Overlay(new MouseOptionsScreen(_map) { ReturnToControls = true }); }, w: 277, h: 16);
         // the buttons are in the art, y 450..469
         Add(9, 450, () => "", () => { _carried = _keys; Shell.Overlay(Controls.PrimaryIsGeneric ? new JoystickScreen(_map) : new ControllerScreen(_map)); }, w: 138, h: 19);       // Calibrate: the port's controller screen
@@ -85,11 +86,15 @@ public class ControlsScreen : OverlayScreen
 
     protected override void Escape() => Back();
 
-    private string Binding(int entry) => _map.KeyText(Controls.Commands[entry]);
+    /// <summary>The input.map command a row binds: one of the original's, or the standings'.</summary>
+    private static string CommandOf(int entry) => entry == ControlsLayout.ScoresEntry ? BindingTable.Scores : Controls.Commands[entry];
+
+    private string Binding(int entry) => _map.KeyText(CommandOf(entry));
 
     // the cells' room for text, inside the art's column rules (names x 35..177, bindings 177..312 and 475..612), a margin short of the rule
     internal const int NameW = 132, LeftBindW = 118, RightBindW = 122;
-    internal static readonly string[] HintName = ["Left-click:", "Right-click:"], HintDo = ["choose from list", "press a key"];
+    /// <summary>The hint, one row: the name cell says what a left click does, the binding cell a right click.</summary>
+    internal const string HintName = "Left-click: list", HintDo = "Right-click: key";
 
     /// <summary>The text cut to a cell: the spaces round a slash dropped first, then the end replaced by dots. (The original lets a long name run on over the rule.)</summary>
     internal string Fit(string s, int max)
@@ -103,13 +108,14 @@ public class ControlsScreen : OverlayScreen
 
     protected override void DrawExtra()
     {
-        // the port's hint on the first two empty ruled rows, one piece to a cell: the right click is the original's only way to bind by pressing the input
-        for (int k = 0; k < 2; k++)
-        {
-            int y = 47 + (LeftRows.Length + k) * RowH;
-            Frame.Text(_f, 40, y, Fit(HintName[k], NameW), ShellFrame.OverlayInk);
-            Frame.Text(_f, 190, y, Fit(HintDo[k], LeftBindW), ShellFrame.OverlayInk);
-        }
+        // the port's hint on the first empty ruled row, a click to a cell: the right click is the original's only way to bind by pressing the input
+        int hy = ControlsLayout.RowY(ControlsLayout.HintRow, RowH);
+        Frame.Text(_f, 40, hy, Fit(HintName, NameW), ShellFrame.OverlayInk);
+        Frame.Text(_f, 190, hy, Fit(HintDo, LeftBindW), ShellFrame.OverlayInk);
+        // the standings' key (input.map's, held in a network game) under it, bound as the commands are
+        int sy = ControlsLayout.RowY(ControlsLayout.ScoresRow, RowH);
+        Frame.Text(_f, 40, sy, Fit(ScoresName, NameW), ShellFrame.OverlayInk);
+        Frame.Text(_f, 190, sy, Fit(Binding(ControlsLayout.ScoresEntry), LeftBindW), ShellFrame.OverlayInk);
         // the multiplayer keys under the right column, named as the menu names the rest (the art has the rows, empty)
         for (int k = 0; k < RightGameKeys; k++)
         {
@@ -117,15 +123,15 @@ public class ControlsScreen : OverlayScreen
             Frame.Text(_f, 338, y, Fit(GameKeyMap.Rebindable[k].Label, NameW - 8), ShellFrame.OverlayInk);
             Frame.Text(_f, 486, y, Fit(_keys.GetValueOrDefault(GameKeyMap.Rebindable[k].Id, ""), RightBindW), ShellFrame.OverlayInk);
         }
-        // the rest (the port's Reset Car Upright) on the left's third spare row, where the pointer to the chat key was (it is on the right)
+        // the rest (the port's Reset Car Upright) on the left's spare rows under the standings
         string Key(int id) => _keys.GetValueOrDefault(id, "");
         for (int k = RightGameKeys; k < GameKeyMap.Rebindable.Length; k++)
         {
-            int y = 47 + (LeftRows.Length + 2 + k - RightGameKeys) * RowH;
+            int y = ControlsLayout.RowY(ControlsLayout.LeftGameRow + k - RightGameKeys, RowH);
             Frame.Text(_f, 40, y, Fit(GameKeyMap.Rebindable[k].Label, NameW), ShellFrame.OverlayInk);
             Frame.Text(_f, 190, y, Fit(Key(GameKeyMap.Rebindable[k].Id), LeftBindW), ShellFrame.OverlayInk);
         }
-        int mouseY = 47 + (LeftRows.Length + 2 + GameKeyMap.Rebindable.Length - RightGameKeys) * RowH;
+        int mouseY = ControlsLayout.RowY(ControlsLayout.MouseRow, RowH);
         Frame.Text(_f, 40, mouseY, Fit("Mouse Options", NameW), ShellFrame.OverlayInk);
         Frame.Text(_f, 190, mouseY, Fit("Configure", LeftBindW), ShellFrame.OverlayInk);
         if (Shell.Upscaled)
@@ -134,21 +140,11 @@ public class ControlsScreen : OverlayScreen
         for (int k = 0; k < RightRows.Length; k++) Frame.Text(_f, 486, 47 + k * RowH, Fit(Binding(RightRows[k]), RightBindW), ShellFrame.OverlayInk);
     }
 
-    /// <summary>The row under the point: the left column's hit boxes are x 177..312, the right's 475..612, each y..y+16.</summary>
-    private int RowAt(Vector2I m)
-    {
-        int k = (m.Y - 47) / RowH;
-        if (m.Y <= 47 || (m.Y - 47) % RowH >= 16) return -1;
-        // the original's hit boxes are the binding's column alone (x 177..312, 475..612); the port takes the command's name too, the whole ruled row
-        if (30 < m.X && m.X < 312 && k < LeftRows.Length) return LeftRows[k];
-        if (330 < m.X && m.X < 612 && k < RightRows.Length) return RightRows[k];
-        if (330 < m.X && m.X < 612 && k - RightRows.Length is >= 0 and var g && g < RightGameKeys) return GameEntry + g;
-        if (30 < m.X && m.X < 312 && k - LeftRows.Length - 2 is >= 0 and var lg && RightGameKeys + lg < GameKeyMap.Rebindable.Length) return GameEntry + RightGameKeys + lg;
-        return -1;
-    }
+    /// <summary>The row under the point (<see cref="ControlsLayout.RowAt"/>).</summary>
+    private int RowAt(Vector2I m) => ControlsLayout.RowAt(m.X, m.Y, RowH);
 
     /// <summary>The input goes to this command and off any other.</summary>
-    private void Assign(int entry, string device, string name) => _map.Assign(Controls.Commands[entry], device, name);
+    private void Assign(int entry, string device, string name) => _map.Assign(CommandOf(entry), device, name);
 
     protected override void ClickElsewhere(Vector2I m)
     {

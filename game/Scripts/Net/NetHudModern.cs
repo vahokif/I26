@@ -134,8 +134,11 @@ public partial class NetHudModern : Control
         foreach (var k in keys) x += Key(k, new Vector2(x, at.Y), h, alpha) + U(4);
         if (pad is { } p && _f?.Pad == true)
         {
-            Text(HudStyle.Regular, "/", new Vector2(x + U(2), at.Y + (h - HudStyle.Regular.GetHeight(Px(16))) / 2), Px(16), new Color(HudStyle.ParchmentDim, alpha));
-            x += U(14);
+            if (keys.Length > 0)
+            {
+                Text(HudStyle.Regular, "/", new Vector2(x + U(2), at.Y + (h - HudStyle.Regular.GetHeight(Px(16))) / 2), Px(16), new Color(HudStyle.ParchmentDim, alpha));
+                x += U(14);
+            }
             x += PadButton(p, new Vector2(x, at.Y), h, alpha) + U(4);
         }
         x += U(6);
@@ -152,7 +155,7 @@ public partial class NetHudModern : Control
         float x = 0;
         int ks = (int)(h * 0.52f);
         foreach (var k in keys) x += Math.Max(h, Measure(HudStyle.Bold, k, ks).X + h * 0.6f) + U(4);
-        if (pad is not null && _f?.Pad == true) x += U(14) + h + U(4);
+        if (pad is not null && _f?.Pad == true) x += (keys.Length > 0 ? U(14) : 0) + h + U(4);
         return x + U(6) + Measure(HudStyle.Bold, action, (int)(h * 0.6f)).X;
     }
 
@@ -285,11 +288,12 @@ public partial class NetHudModern : Control
             string s = cn.Length > 44 ? cn[..43] + "…" : cn;
             T(s, small, HudStyle.Danger);
         }
-        if (f.ScoresHint)
+        // no keycap when the standings have no key (only a pad's Back, if any, shows them)
+        string[] k = f.ScoresKey.Length > 0 ? [f.ScoresKey] : [];
+        if (f.ScoresHint && (k.Length > 0 || PadV is not null && _f?.Pad == true))
         {
             Gap();
             float hh = U(22);
-            string[] k = [f.ScoresKey];
             if (draw) Hint(new Vector2(x, at.Y + (sh - hh) / 2), hh, k, PadV, "STANDINGS", HudStyle.ParchmentDim);
             x += HintWidth(hh, k, PadV, "STANDINGS");
         }

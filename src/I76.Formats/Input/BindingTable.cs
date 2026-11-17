@@ -162,16 +162,40 @@ public sealed class BindingTable
         return t;
     }
 
+    /// <summary>The network game's standings, held to show (input.def's command; the Control Configuration's Scores row).</summary>
+    public const string Scores = "show_player_scores";
+    /// <summary>The standings' key when the player has given it none: Tab.</summary>
+    public const string ScoresKey = "Tab";
+
+    /// <summary>The install's input.def block for the standings: the one term "+ keyboard Quote" (a Quote the screen binds carries the shell's exclusions).</summary>
+    private static bool StockScores(InputBlock b) => b.Terms is [{ Plus: true } t] && t.Device.Equals("keyboard", StringComparison.OrdinalIgnoreCase) && t.Channel.Equals("Quote", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a keyboard key is the first term of a key block of any command but <paramref name="except"/>.</summary>
+    public bool KeyTaken(string channel, string? except = null)
+    {
+        var want = new InputTerm(true, "keyboard", channel);
+        return Blocks.Any(b => !b.Command.Equals(except, StringComparison.OrdinalIgnoreCase) && !IsPad(b) && b.Terms.Length > 0 && Same(b.Terms[0], want));
+    }
+
     /// <summary>
-    /// The scoreboard is held on Tab in a network game (the original's ' and ; sit in different places on different keyboards): the
-    /// install's input.def blocks for show_player_scores (Quote) and show_team_scores (SemiColon) become Tab and nothing, in memory
-    /// (input.def is never edited; a block that is not the stock one is somebody's own and stays).
+    /// The standings fall back to <see cref="ScoresKey"/>: they have no key or mouse button of their own and no other command has
+    /// Tab. (<see cref="WithScoreboardOnTab"/> gives them Tab then; a pending edit may be in that state until Done.)
+    /// </summary>
+    public bool ScoresOnFallback => !Of(Scores).Any(b => !IsPad(b)) && !KeyTaken(ScoresKey, Scores);
+
+    /// <summary>
+    /// The standings are held on Tab in a network game (the original's ' and ; sit in different places on different keyboards): the
+    /// install's input.def blocks for show_player_scores (Quote) and show_team_scores (SemiColon) are dropped, in memory (input.def is
+    /// never edited, and input.map carries it verbatim; a block that is not the stock one is somebody's own and stays). Standings with
+    /// no key of their own then take Tab, unless another command has it: a player who gave Tab to something else has them unbound
+    /// (the Control Configuration's Scores row rebinds them, and Done writes them before input.def's copy, <see cref="ToText"/>).
     /// </summary>
     public BindingTable WithScoreboardOnTab()
     {
         var t = Clone();
         bool Stock(string cmd, string key) => t.Of(cmd).All(b => b.Terms.Length == 1 && !IsPad(b) && b.Terms[0].Channel.Equals(key, StringComparison.OrdinalIgnoreCase));
-        if (Stock("show_player_scores", "Quote")) t.Set("show_player_scores", NewBlock("show_player_scores", "keyboard", "Tab"));
+        if (t.Of(Scores).Any(StockScores)) t.Set(Scores, [.. t.Of(Scores).Where(b => !StockScores(b))]);
+        if (t.ScoresOnFallback) t.Set(Scores, [.. t.Of(Scores), NewBlock(Scores, "keyboard", ScoresKey)]);
         if (Stock("show_team_scores", "SemiColon")) t.Clear("show_team_scores");
         return t;
     }
@@ -280,7 +304,8 @@ public sealed class BindingTable
     }
 
     /// <summary>
-    /// The file: every block with its terms as they are, then input.def verbatim, the blocks it holds not written twice.
+    /// The file: every block with its terms as they are, then input.def verbatim, the blocks it holds not written twice (but for the
+    /// standings' own key, which input.def's stock Quote would not say: it is written above it, and the Quote is dropped on load).
     /// </summary>
     public string ToText(string? inputDef = null)
     {
@@ -288,7 +313,8 @@ public sealed class BindingTable
         var sb = new StringBuilder(InputMapFile.Header).Append("\n\n");
         foreach (var b in Blocks)
         {
-            if (inDef.Contains(b.Command)) continue;
+            // input.def's commands come with it, below; but the standings' own key goes here (input.def's stock Quote below is dropped on load)
+            if (inDef.Contains(b.Command) && !(b.Command.Equals(Scores, StringComparison.OrdinalIgnoreCase) && !StockScores(b))) continue;
             sb.Append(b.Command).Append(" {\n");
             for (int i = 0; i < b.Terms.Length; i++)
             {

@@ -150,7 +150,7 @@ shifts to drive. A pad's triggers work the same. Off, reverse is the original's 
 | Screenshot (to the user folder) | Ctrl+P |
 | Self-destruct | Ctrl+Del or Ctrl+Alt+X |
 | Put the car back on its wheels | U (can be turned off by a network host) |
-| Standings (network games) | hold Tab |
+| Standings (network games) | hold Tab (Control Configuration's Scores (online) row rebinds it) |
 | CB radio (network games) | hold C |
 | Game menu | Esc |
 | 1997 look on or off | F12 |

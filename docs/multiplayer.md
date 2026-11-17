@@ -218,7 +218,8 @@ by itself in 43 s; Space 3 s after a death was refused, 6.5 s after it brought a
   lets it crank an engine that is off. The join accept carries it (`JoinAccept.IgnitionStaysOn`) so the client's prediction
   drops the key the same way, and the game's listing shows "Ignition stays on" (`SessionInfo.IgnitionStaysOn`, with the host's rules after the makes and models).
   The Control Configuration lists four of them in the right column's empty rows, named as the menu names the rest (Chat (online),
-  Self Destruct, Respawn (online), Show All Names) with a hint on the left's two (chat, and Ctrl+Del then Space for a new car).
+  Self Destruct, Respawn, Show All Names); the left column's spare rows hold the hint, the standings' key (Scores (online), an input.map
+  command, Tab by default; see docs/deviations.md, Standings key), Reset Car Upright and Mouse Options.
   Left or right click presses a key, with Ctrl, Shift or Alt held. The install's gamekey.map is never written: the choices
   go to `user://gamekeys.cfg` (game key id → key text) and `GameKeyMap.Load(text, mine)` lays them over it (a game key's own keys
   go, the key leaves any other game key); Restore goes back to gamekey.map's. The other game keys (views, Pause, Ctrl+Q ...)

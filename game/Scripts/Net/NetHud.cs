@@ -8,8 +8,8 @@ namespace I76.Game.Net;
 
 /// <summary>
 /// The network melee's own readouts, over the game's HUD: the ping, the goal line, a feed of the console's lines (kills,
-/// players coming and going, chat, in the original's words), the score window while its key is held (show_player_scores
-/// ', show_team_scores ;), the host's prompts (an invite-only join, a boot), the dead
+/// players coming and going, chat, in the original's words), the score window while its key is held (show_player_scores:
+/// Tab, or the Control Configuration's Scores row; the original's ' and ; do nothing), the host's prompts (an invite-only join, a boot), the dead
 /// player's way back (RAISE_DEAD, Reconfigure), each machine's own end line and the final standings. This class keeps
 /// the keys and the state; each frame it gathers a <see cref="NetHudFrame"/> for the look in use to draw: the 1997
 /// look's <see cref="NetHudClassic"/> (the original's windows at their places, on the whole wide frame) or the modern
@@ -368,8 +368,13 @@ public partial class NetHud : CanvasLayer
         return name switch { "Quote" => "'", "SemiColon" => ";", "BackQuote" => "`", "Grave" => "`", "Comma" => ",", "Period" => ".", _ => name };
     }
 
-    private static bool Held(string command, Key fallback) =>
-        Controls.Down(command) || (Controls.Binding(command) is "" or Controls.None && !Controls.Suspended && Godot.Input.IsPhysicalKeyPressed(fallback));
+    /// <summary>The standings' key held: their binding (Control Configuration's Scores row), or Tab while they have none and Tab is no other command's.</summary>
+    private static bool ScoresHeld() =>
+        Controls.Down(BindingTable.Scores) || (Controls.ScoresOnFallback && !Controls.Suspended && Godot.Input.IsPhysicalKeyPressed(Key.Tab));
+
+    /// <summary>The standings' keycap: their key's, Tab on the fallback, or none (unbound, Tab another command's: only a pad's Back shows them).</summary>
+    private static string ScoresKeyLabel() =>
+        Controls.Binding(BindingTable.Scores) is var b && b != Controls.None ? KeyLabel(b) : Controls.ScoresOnFallback ? BindingTable.ScoresKey : "";
 
     public override void _Process(double delta)
     {
@@ -431,9 +436,9 @@ public partial class NetHud : CanvasLayer
                     sc?.Players.Where(p => p.Team == fl.Team).Select(p => p.Kills).DefaultIfEmpty(0).Max() ?? 0));
         // the window only while its key is held: Tab, or a pad's Back; one view, the teams' totals heading
         // their players in team play (docs/deviations.md, Standings)
-        bool players = Held("show_player_scores", Key.Tab) || PadBackHeld();
+        bool players = ScoresHeld() || PadBackHeld();
         if (players) { f.Board = PlayersPage(); _boardSeen = true; }
-        f.ScoresKey = KeyLabel(Controls.Binding("show_player_scores"));
+        f.ScoresKey = ScoresKeyLabel();
         f.ScoresHint = !_boardSeen && _t < 90;
         // the other keys are listed in the standings, not over the game (players found the HUD too busy)
         f.ChatKey = GameKeys.KeyOf((int)GameKey.ChatToAll) ?? "Backspace";

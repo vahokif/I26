@@ -246,7 +246,7 @@ public sealed partial class MissionSetup
         // LDEF links (guardrails, tyre walls) have no ODEF type of their own; taken as type 2 (per-node box class), an assumption
         foreach (var (p, type) in w.Placements.Select(p => (p, p.Object.ObjectType)).Concat(w.LinePlacements.Select(p => (p, 2u))))
         {
-            if (p.Definition is null || !StaticWorld.Collides(type)) continue;
+            if (p.Definition is null || p.Refused || !StaticWorld.Collides(type)) continue;
             // outside a CTF game the flags are not there at all (the object loader drops a1flag*)
             if (melee is not null && IsFlagPlacement(p) && meleeRules?.Kind != MeleeKind.Ctf) continue;
             var sd = structures.TryGetValue(p.Definition, out var known) ? known : structures[p.Definition] = StructureInfo(vfs, p.Definition);
@@ -348,6 +348,7 @@ public sealed partial class MissionSetup
         foreach (var p in w.Placements)
         {
             var o = p.Object;
+            if (p.Refused) continue;   // never made: the script's handle for it is null
             var e = new Entity(o.Name, o.Raw.Length >= 8 ? o.Raw[..8] : [], o.ObjectType, o.ObjectFlags)
             {
                 Vehicle = byPlacement.GetValueOrDefault(p),

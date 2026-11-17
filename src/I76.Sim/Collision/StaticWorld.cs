@@ -449,7 +449,7 @@ public sealed class StaticWorld
         foreach (var o in Gated) o.TickGates(dt);
     }
 
-    public static bool Collides(uint type) => type is 2 or 3 or 4 or 7 or 8 or 10 or 0xb or 0xc or 0xd;
+    public static bool Collides(uint type) => type is 2 or 3 or 4 or 7 or 8 or 10 or 0xb or 0xc;
 
     /// <summary>Node class default by object type: 0x2000 box, 0x3000 mesh, 0x5000 sphere.</summary>
     public static uint DefaultClass(uint type) => type switch { 2 or 7 or 8 or 10 => 0x2000, 4 => 0x5000, _ => 0x3000 };

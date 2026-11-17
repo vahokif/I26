@@ -309,7 +309,7 @@ public partial class ScenerySpawner : Node3D
         AddChild(Clutter);
         Clutter.Visible = !_modern;
         Clutter.Load(world, asm, builder);
-        var placements = world.Placements.Concat(world.LinePlacements);
+        var placements = world.Placements.Concat(world.LinePlacements).Where(p => !p.Refused);
         if (skipVehicles) placements = placements.Where(p => p.Definition?.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase) != true);
         // a definition's grounded placements share a mesh without its ground faces (painted into the terrain, GroundDecals);
         // its road pieces go apart from its other placements, by each placement's own type (SceneryGroup)

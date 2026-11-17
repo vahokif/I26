@@ -363,3 +363,46 @@ public class SignObjectClassTests
         Assert.Contains(setup.Damage.Events, e => e is I76.Sim.Damage.SignKnocked k && k.Object == o);
     }
 }
+
+/// <summary>
+/// Class ids the original's placement loader has no case for (anything but 1-4, 7-10, 0xb, 0xc, 0x50, 0x52, 0x53): nothing
+/// is made, so a custom map's object given one is neither drawn nor solid, and its script handle is null. Stock maps use
+/// none of them.
+/// </summary>
+public class RefusedClassIdTests
+{
+    private static string? InstallDir =>
+        Environment.GetEnvironmentVariable("I76_INSTALL") is { Length: > 0 } d && Directory.Exists(d) ? d : null;
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(5u)]
+    [InlineData(0xdu)]
+    [InlineData(0x51u)]
+    [InlineData(0x5au)]
+    public void AnObjectGivenAClassIdTheOriginalRefusesIsNotMade(uint type)
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t01.msn", ("bcbank1", type, 4100, 36700, 0), ("bcbank1", 2u, 4200, 36700, 0));
+        bool Near(StaticObject o, float x) => o.Name == "bcbank1" && new Vector2(o.Centre.X - x, o.Centre.Z - 36700).Length() < 30;
+        Assert.DoesNotContain(setup.Statics.Objects, o => Near(o, 4100));
+        Assert.Single(setup.Statics.Objects, o => Near(o, 4200));
+        Assert.DoesNotContain(setup.Entities, e => e.Name == "bcbank1" && e.Type == type);
+    }
+
+    [Fact]
+    public void EveryStockPlacementIsAccepted()
+    {
+        foreach (var dir in new[] { InstallDir, Environment.GetEnvironmentVariable("I76_NITRO_INSTALL") })
+        {
+            if (dir is null || !Directory.Exists(dir)) continue;
+            var install = new GameInstall(dir);
+            foreach (var msn in Directory.EnumerateFiles(Path.Combine(dir, "miss16")).Where(f => Path.GetExtension(f).ToLowerInvariant() is ".msn" or ".cbt" or ".cf2" or ".cf3" or ".cf4"))
+            {
+                var m = new MissionFile(msn);
+                foreach (var o in m.PlacedObjects().Where(o => !o.IsKeyword && o.Name.Length > 0))
+                    Assert.True(Placement.Accepted(o.ObjectType), $"{Path.GetFileName(msn)}: {o.Name} has class id {o.ObjectType:x}");
+            }
+        }
+    }
+}

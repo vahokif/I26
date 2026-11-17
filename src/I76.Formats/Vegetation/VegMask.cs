@@ -157,6 +157,7 @@ public sealed class VegMask
         var models = new Dictionary<string, AssembledModel?>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in world.Placements.Concat(world.LinePlacements))
         {
+            if (p.Refused) continue;
             var pos = world.GroundedPosition(p);
             if (p.Object.ObjectType == 1 || p.Object.IsKeyword || p.Definition is null)
             {

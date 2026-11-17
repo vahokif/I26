@@ -108,6 +108,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in world.Placements.Concat(world.LinePlacements))
         {
+            if (p.Refused) continue;
             // a drive-on structure paints its lots alone (GroundDecals.LotsOnly)
             bool lots = GroundDecals.LotsOnly(p);
             bool decals = GroundDecals.Applies(p) || lots;

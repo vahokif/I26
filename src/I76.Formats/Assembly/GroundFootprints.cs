@@ -70,7 +70,7 @@ public static class GroundFootprints
         var models = new Dictionary<string, AssembledModel?>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in world.Placements.Concat(world.LinePlacements))
         {
-            if (p.Object.ObjectType == 1 || p.Definition is null) continue;
+            if (p.Object.ObjectType == 1 || p.Definition is null || p.Refused) continue;
             var pos = world.GroundedPosition(p);
             if (!models.TryGetValue(p.Definition, out var model)) models[p.Definition] = model = assembler.Assemble(p.Definition);
             if (model is null) { boxes.Add(new GroundBox(new Vector2(pos.X, pos.Z), Vector2.UnitX, 4, 4)); continue; }

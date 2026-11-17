@@ -47,7 +47,7 @@ public static class GroundDecals
     /// <summary>
     /// Of a destroyed placement: whether a part's ground faces, painted into the terrain at load, go. The original drew them
     /// with their node, so they go with it when it dies into nothing or into a twin that lays nothing on the ground: a
-    /// tunnel's road strips, a roof's or a marker's footprint. A dead part whose twin lies on the ground (a lot) keeps them,
+    /// tunnel's road strips, a roof's footprint. A dead part whose twin lies on the ground (a lot) keeps them,
     /// as <see cref="Painted"/> leaves that twin's out of the wreck. <paramref name="wreck"/> is what is drawn now (each dead
     /// node's twin, the live ones whole), null for nothing.
     /// </summary>

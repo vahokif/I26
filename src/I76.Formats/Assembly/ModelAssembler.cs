@@ -22,6 +22,13 @@ public sealed class AssembledModel
     public HashSet<string> Lots { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Scenery: the SGEO nodes flagged 1, the markers, none of whose own geometry the original draws.</summary>
     public HashSet<string> Markers { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a part is drawn: not a marker's. The original's scene walks skip a node flagged 1, intact or destroyed, so
+    /// a marker's triangle (the grain hopper's CR1_ZZZ1, inside its bin) never shows, not even where the part round it has
+    /// gone. The part stays in the model: the simulation takes its explosion point and bounds from it.
+    /// </summary>
+    public bool Drawn(ModelPart part) => !Markers.Contains(part.NodeName);
     /// <summary>For vehicles: the texture set's .TMT names, which faces' slots resolve against.</summary>
     public List<string> TmtNames { get; } = [];
     /// <summary>For vehicles: the .map names the texture set lists directly (the body texture among them).</summary>

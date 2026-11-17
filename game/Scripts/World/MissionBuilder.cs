@@ -118,7 +118,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
             float lowest = 0;
             if (decals && !lowestOf.TryGetValue(p.Definition, out lowest)) lowestOf[p.Definition] = lowest = GroundDecals.LowestY(model);
             var place = I76.Formats.Assembly.Affine.FromEngine(p.Object.Rotation, world.GroundedPosition(p));
-            foreach (var part in model.Parts)
+            foreach (var part in model.Parts.Where(model.Drawn))   // no marker's footprint: it is never drawn
                 foreach (var f in part.Mesh.Faces)
                 {
                     if (f.Vertices.Length < 3 || f.Vertices.Any(v => (uint)v.Index >= part.Mesh.Vertices.Length)) continue;

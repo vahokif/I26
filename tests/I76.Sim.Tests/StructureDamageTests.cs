@@ -196,6 +196,49 @@ public class StructureDamageTests
         Assert.All(debris, x => Assert.True(Vector3.Distance(x.At, new Vector3(1547.7f, 34.3f, 49743.3f)) < 0.05f, $"{x.At}"));
     }
 
+    /// <summary>What is drawn of a structure (DamageView's destroyed look): each dead node's destroyed record, the live ones' own, no marker.</summary>
+    private static List<string> Drawn(StaticObject o) =>
+        new ModelAssembler(new AssetVfs(new GameInstall(InstallDir!)))
+        {
+            DestroyedNode = name => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed,
+        }.Assemble(o.Name + ".sdf") is { } m ? [.. m.Parts.Where(m.Drawn).Select(p => p.NodeName.ToUpperInvariant()).Order()] : [];
+
+    /// <summary>
+    /// The A01 grain hopper as the original draws it, stage by stage (measured: each node's geometry after each death, and
+    /// frames from the same view). Its bin shot down alone takes its destroyed record CR1ABIN1 (the bin lying on the ground
+    /// with its legs folded under it), and the legs, alive, stand beside it; the legs' destroyed record is NULL, so when they
+    /// go only the fallen bin is left. Destroyed whole (the legs first, a script, or a splash), the same fallen bin alone.
+    /// The marker CR1_ZZZ1 (node flag 1) is never drawn, intact or not: its geometry pointer stays 0 in the original, and
+    /// with the bin gone it would float over the legs.
+    /// </summary>
+    [Fact]
+    public void TheHopperIsDrawnStageByStageAsTheOriginalDrawsIt()
+    {
+        if (InstallDir is null) return;
+        var s = A01();
+        var hopper = Hopper(s);
+        // the marker is in the model (the root's explosion point, its bounds) but never drawn, intact or not
+        var intact = new ModelAssembler(new AssetVfs(new GameInstall(InstallDir!))).Assemble("bcrhopr1.sdf")!;
+        var marker = Assert.Single(intact.Parts, p => p.NodeName == "CR1_ZZZ1");
+        Assert.False(intact.Drawn(marker));
+        Assert.All(intact.Parts.Where(p => p != marker), p => Assert.True(intact.Drawn(p)));
+        Assert.Equal(["CR1_BIN1", "CR1_LEG1"], Drawn(hopper));
+        s.Damage.Apply(hopper, Explosive(100000), Vector3.Zero, Node(hopper, "CR1_BIN1"));
+        Assert.Equal(["CR1ABIN1", "CR1_LEG1"], Drawn(hopper));
+        s.Damage.Apply(hopper, Explosive(100000), Vector3.Zero, Node(hopper, "CR1_LEG1"));
+        Assert.True(hopper.Destroyed);
+        Assert.Equal(["CR1ABIN1"], Drawn(hopper));
+
+        var t = A01();
+        var whole = Hopper(t);
+        t.Damage.Apply(whole, Explosive(100000), Vector3.Zero, Node(whole, "CR1_LEG1"));
+        Assert.Equal(["CR1ABIN1"], Drawn(whole));
+        var u = A01();
+        var scripted = Hopper(u);
+        u.Damage.DestroyStructure(scripted);
+        Assert.Equal(["CR1ABIN1"], Drawn(scripted));
+    }
+
     /// <summary>
     /// Splash alone, 15 a time: the hopper's root goes on the 27th (400 →
     /// 10, then 10 &lt; 15) and takes every node, 16 chunks, no X1_BLDX1;

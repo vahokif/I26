@@ -152,6 +152,8 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
     {
         selfLit &= model.Kind == "sdf";
         retro &= model.Kind == "sdf";
+        // a marker's triangle is never drawn (AssembledModel.Drawn)
+        if (model.Markers.Count > 0) { var asked = include; include = part => model.Drawn(part) && (asked?.Invoke(part) ?? true); }
         var surfaces = new Dictionary<Material, Surface>();
         var cabin = new CabinFit();
         var seams = model.Kind == "vcf" ? new List<(Surface S, int I, Vector3 At, Vector3 FaceN, float W)>() : null;

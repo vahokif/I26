@@ -1260,7 +1260,7 @@ its - and +), the pad's regions and the text entry do what the original's contro
   of 1000, 20000 to start; the score counts only when its box is ticked);
 - the car: MAKE / MODEL, VARIANT and CONFIGURE CHASSIS, as on the instant
   melee form;
-- BROADCAST GAME: CHOOSE A TEAM first with team play, then the launch: a
+- BROADCAST GAME: CHOOSE A TEAM first with team play or CTF, then the launch: a
   listen server in the game's process with these rules (no AI fill, no time
   limit; the form's bots), joined at once.
 
@@ -1281,7 +1281,11 @@ its - and +), the pad's regions and the text entry do what the original's contro
 
 **CHOOSE A TEAM** is the original's popup (bank 36 sprite 19).
 A team is 1–8, every row a pick (the eighth, MEN IN BLACK, is `Entity.Team8`). The popup lists teams, not players, so it is the same
-for 64; CTF puts a joiner on the team with the fewest players, whatever the count.
+for 64. A CTF game opens the Nitro Pack's own popup instead, host and joiner alike and whether or not TEAM PLAY is set (as the
+original does): its bank 30's sprite 46, 45 or 44 for an arena of 2, 3 or 4 teams (231x208, centred at (205,136)), the CTF teams by
+name (Red Dawn, Gang Green, Purple Reign, Black Plague; the art greys out those the arena has not) and only the arena's rows
+picking (`TeamPopup.ChoiceFor`/`LayoutOf`). The server still puts a CTF joiner who asks for a team the arena has not (an older
+client, the command line) on the team with the fewest players.
 
 **The launch.** `ShellLaunch` (kind 5, Multiplayer) carries a `NetLaunch`:
 the port, game name, seats, team play, invite only and score limit to host,

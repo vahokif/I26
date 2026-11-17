@@ -27,8 +27,95 @@ public sealed partial class MissionSetup
     public required Weapons.Combat Combat { get; init; }
     public required I76.Sim.Damage.DamageModel Damage { get; init; }
     public ObjectiveText? ObjectiveText { get; init; }
-    /// <summary>The placement each scenery collider came from.</summary>
+    /// <summary>The placement each scenery collider came from (a line object's root: its first link).</summary>
     public required Dictionary<StaticObject, Placement> PlacementOf { get; init; }
+    /// <summary>A line object's root (<see cref="LineRoots"/>): its links' placements, node k the k-th.</summary>
+    public IReadOnlyDictionary<StaticObject, IReadOnlyList<Placement>> LinksOf { get; init; } = new Dictionary<StaticObject, IReadOnlyList<Placement>>();
+
+    /// <summary>The longest a line object's root reaches: the loader cuts a guard rail or a tyre wall into roots no larger.</summary>
+    public const float LineRootRadius = 20f;
+
+    /// <summary>
+    /// An LDEF line (guard rails, strung fences, tyre walls) as the original's loader makes it: a root of the record's class id
+    /// with a node per link. The first link is the .sdf's node (its record's type, flags and hit points: AF1_RAL3 type 2, 75);
+    /// every further link is a new node with a copy of its geometry record (the same 'A' wreck), type 3 and the constructor's
+    /// 400, flags 0 (the root type's default collider). So a guard rail's links but the first never damage a ramming car,
+    /// are not quartered, never explode and are driven through once dead. The chain is then cut into roots of collider radius
+    /// at most <see cref="LineRootRadius"/>: the longest run of links from the start of what is left whose radius is within it
+    /// stays, the rest goes to a new root (each its own collider, 400 HP, the record's class id); a single link wider than
+    /// that keeps all that is left. Measured: each of T05's nine guard rails is one root of type 2, its first link 75 HP,
+    /// the others type 3 with 400.
+    /// </summary>
+    private static List<(StaticObject Root, List<Placement> Links)> LineRoots(List<Placement> links, uint type, StructureDef sd, ModelAssembler asm,
+        ModelAssembler destroyedAsm, Func<string, uint> nodeClass)
+    {
+        var o = new List<(StaticObject, List<Placement>)>();
+        var def = links[0].Definition!;
+        if (asm.Assemble(def)?.Parts.FirstOrDefault() is not { Mesh.Vertices.Length: > 2 } part) return o;
+        var wreck = destroyedAsm.Assemble(def)?.Parts.FirstOrDefault();
+        var record = sd.Nodes.FirstOrDefault(n => n.Name.Equals(part.NodeName, StringComparison.OrdinalIgnoreCase));
+        Affine At(Placement p, ModelPart mp) => Affine.FromEngine(p.Object.Rotation, p.Object.Position).Compose(mp.ToModel);
+        var world = links.Select(p => { var a = At(p, part); return part.Mesh.Vertices.Select(a.Apply).ToArray(); }).ToList();
+        float Radius(int from, int to)
+        {
+            var pts = world.Skip(from).Take(to - from + 1).SelectMany(v => v).ToList();
+            var c = (pts.Aggregate(System.Numerics.Vector3.Min) + pts.Aggregate(System.Numerics.Vector3.Max)) * 0.5f;
+            return pts.Max(q => System.Numerics.Vector3.Distance(q, c));
+        }
+        int start = 0;
+        while (start < links.Count)
+        {
+            int end = links.Count - 1;
+            if (Radius(start, end) > LineRootRadius)
+            {
+                int e = end;
+                bool all = false;
+                do
+                {
+                    if (e == start) { all = true; break; }
+                    e--;
+                } while (Radius(start, e) > LineRootRadius);
+                if (!all) end = e;
+            }
+            var group = links.GetRange(start, end - start + 1);
+            var intact = new AssembledModel { Definition = def, Kind = "sdf" };
+            var dead = new AssembledModel { Definition = def, Kind = "sdf" };
+            var nodes = new List<StructureNode>();
+            for (int k = 0; k < group.Count; k++)
+            {
+                bool own = start + k == 0;
+                string name = $"{part.NodeName}#{k}";
+                intact.Parts.Add(new ModelPart(name, part.Mesh, At(group[k], part)));
+                if (wreck is not null) dead.Parts.Add(new ModelPart(name, wreck.Mesh, At(group[k], wreck)));
+                nodes.Add(new StructureNode
+                {
+                    Name = part.NodeName, Type = own && record is not null ? record.Type : 3, Flags = own && record is not null ? record.Flags : 0,
+                    Hp = own && record is not null ? record.Hp : StaticObject.RootHp, MaxHp = own && record is not null ? record.MaxHp : StaticObject.RootHp,
+                    Wreck = wreck is not null,
+                });
+            }
+            var walk = StructureNode.Order([.. nodes.Select(_ => -1)]);
+            nodes = [.. nodes.Select((n, i) => new StructureNode { Name = n.Name, Type = n.Type, Flags = n.Flags, Hp = n.Hp, MaxHp = n.MaxHp, Wreck = n.Wreck, Walk = walk[i] })];
+            int Index(string n) => n.LastIndexOf('#') is var h and >= 0 && int.TryParse(n[(h + 1)..], out int k) ? k : -1;
+            uint Class(string n) => Index(n) is var k and >= 0 && nodes[k].Flags != 0 ? nodeClass(part.NodeName) : 0;
+            uint Type(string n) => Index(n) is var k and >= 0 ? nodes[k].Type : 0;
+            var identity = new float[] { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+            if (StaticWorld.Build(links[0].Object.Name, type, identity, System.Numerics.Vector3.Zero, intact, Class, Type, Index, (i, b) => nodes[i].Base ??= b,
+                    signPart: n => Index(n) is var k and >= 0 && nodes[k].Sign) is { } so)
+            {
+                so.Origin = group[0].Object.Position;
+                so.Nodes.AddRange(nodes);
+                so.OrderSurfaces();
+                so.Explosion = sd.Explosion;
+                so.Sound = sd.Sound;
+                if (dead.Parts.Count > 0)
+                    so.Remains = StaticWorld.Build(links[0].Object.Name, type, identity, System.Numerics.Vector3.Zero, dead, Class, Type, Index, signPart: n => Index(n) is var k and >= 0 && nodes[k].Sign);
+                o.Add((so, group));
+            }
+            start = end + 1;
+        }
+        return o;
+    }
 
     /// <summary>
     /// The player's car is the placement flagged as the player (ODEF flags bit 4),
@@ -249,9 +336,8 @@ public sealed partial class MissionSetup
         var structures = new Dictionary<string, StructureDef>(StringComparer.OrdinalIgnoreCase);
         var destroyedAsm = new ModelAssembler(vfs) { Destroyed = true };
         // every placement stands on the terrain (the original's scene loader with its ground flag, from the ODEF loader),
-        // the vehicle types 1, 8 and 9 included: a gun emplacement's collider stands where its model does;
-        // LDEF links (guardrails, tyre walls) have no ODEF type of their own; taken as type 2 (per-node box class), an assumption
-        foreach (var (p, type) in w.Placements.Select(p => (p, p.Object.ObjectType)).Concat(w.LinePlacements.Select(p => (p, 2u))))
+        // the vehicle types 1, 8 and 9 included: a gun emplacement's collider stands where its model does
+        foreach (var (p, type) in w.Placements.Select(p => (p, p.Object.ObjectType)))
         {
             if (p.Definition is null || p.Refused || !StaticWorld.Collides(type)) continue;
             // outside a CTF game the flags are not there at all (the object loader drops a1flag*)
@@ -280,6 +366,21 @@ public sealed partial class MissionSetup
                 if ((type != 4 || nodes.Exists(n => !n.Sign)) && destroyedAsm.Assemble(p.Definition) is { } dm
                     && !dm.Parts.Select(x => x.NodeName).SequenceEqual(m.Parts.Select(x => x.NodeName)))
                     so.Remains = StaticWorld.Build(p.Object.Name, type, p.Object.Rotation, w.GroundedPosition(p), dm, classes[p.Definition], types[p.Definition], nodeIndex, nodeSphere: NodeSpheres(vfs, p.Definition), signPart: SignPart(nodes, nodeIndex));
+            }
+        }
+        var linksOf = new Dictionary<StaticObject, IReadOnlyList<Placement>>();
+        foreach (var line in w.LinePlacements.GroupBy(p => p.Line))
+        {
+            var links = line.OrderBy(p => p.Link).ToList();
+            var first = links[0];
+            uint type = first.Object.ObjectType;
+            if (first.Definition is not { } ldef || first.Refused || !StaticWorld.Collides(type)) continue;
+            var sd = structures.TryGetValue(ldef, out var lknown) ? lknown : structures[ldef] = StructureInfo(vfs, ldef);
+            foreach (var (o, group) in LineRoots(links, type, sd, asm, destroyedAsm, classes.TryGetValue(ldef, out var lc) ? lc : classes[ldef] = NodeClasses(vfs, ldef)))
+            {
+                statics.Objects.Add(o);
+                staticOf[group[0]] = o;
+                linksOf[o] = group;
             }
         }
         var ground = new WorldGround(terrain, statics);
@@ -523,7 +624,7 @@ public sealed partial class MissionSetup
                 });
             };
         }
-        return new MissionSetup { Humans = seatCars.Count > 0 ? seatCars.Select(x => x.Car).ToList() : world.Player is { } hp ? [hp] : [], Melee = game, PlacementOf = staticOf.ToDictionary(kv => kv.Value, kv => kv.Key), Damage = damage, Combat = combat, World = world, Statics = statics, Ground = ground, Cars = cars, Entities = entities, Script = ms, ObjectiveText = text };
+        return new MissionSetup { Humans = seatCars.Count > 0 ? seatCars.Select(x => x.Car).ToList() : world.Player is { } hp ? [hp] : [], Melee = game, PlacementOf = staticOf.ToDictionary(kv => kv.Value, kv => kv.Key), LinksOf = linksOf, Damage = damage, Combat = combat, World = world, Statics = statics, Ground = ground, Cars = cars, Entities = entities, Script = ms, ObjectiveText = text };
     }
 
     /// <summary>

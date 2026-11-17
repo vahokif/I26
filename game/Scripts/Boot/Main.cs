@@ -1069,7 +1069,7 @@ public partial class Main : Node3D
         }
         MissionBuilder.Trace("spawn: cars made");
         if (_car is null) { _status += "\nno drivable car"; yield break; }
-        var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = carNodes, PlacementOf = setup.PlacementOf, Audio = audio, Ground = setup.Ground, Name = "Damage", Wrecks = _ahead?.Wrecks };
+        var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = carNodes, PlacementOf = setup.PlacementOf, LinksOf = setup.LinksOf, Audio = audio, Ground = setup.Ground, Name = "Damage", Wrecks = _ahead?.Wrecks };
         AddChild(damageView);
         _damageView = damageView;
         MissionBuilder.Trace("spawn: damage view");

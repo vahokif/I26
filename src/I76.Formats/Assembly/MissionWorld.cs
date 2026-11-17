@@ -4,8 +4,11 @@ using I76.Formats.Vfs;
 
 namespace I76.Formats.Assembly;
 
-/// <summary>A placed object; <paramref name="OnLine"/>: an LDEF link's piece, whose position the line already set on the ground.</summary>
-public sealed record Placement(PlacedObject Object, string? Definition, bool OnLine = false)
+/// <summary>
+/// A placed object; <paramref name="OnLine"/>: an LDEF link's piece, whose position the line already set on the ground, the
+/// <paramref name="Link"/>-th of line <paramref name="Line"/> (its record's header is the object's, so its class id is the line's).
+/// </summary>
+public sealed record Placement(PlacedObject Object, string? Definition, bool OnLine = false, int Line = -1, int Link = -1)
 {
     /// <summary>
     /// The class ids the original's placement loader creates an object for: the vehicles (1, 8, 9), the structures (2, 3, 4,
@@ -39,7 +42,7 @@ public sealed class MissionWorld
     public string? PaletteName { get; private set; }
     public List<Placement> Placements { get; }
     public List<string> WdefRefs { get; private set; }
-    /// <summary>LDEF polylines, one placement per link (Definition resolved like ODEF names).</summary>
+    /// <summary>LDEF polylines, one placement per link, in line and link order (Definition resolved like ODEF names).</summary>
     public List<Placement> LinePlacements { get; } = [];
 
     private readonly AssetVfs _vfs;
@@ -73,6 +76,7 @@ public sealed class MissionWorld
         Placements = Mission.PlacedObjects()
             .Select(o => new Placement(o, o.IsKeyword || o.Name.Length == 0 ? null : asm.ResolveDefinition(o.Name)))
             .ToList();
+        int lineNo = 0;
         foreach (var line in LineObjects.Read(Mission))
         {
             var def = asm.ResolveDefinition(line.Name);
@@ -80,8 +84,10 @@ public sealed class MissionWorld
             // at the link's midpoint, lifted by the half height of its box (the stock fences' and tyre walls' boxes are centred)
             var (offset, lift) = def is not null && asm.Assemble(def)?.Parts.FirstOrDefault() is { Mesh.Vertices.Length: > 0 } part
                 ? (part.ToModel.T, -part.Mesh.Vertices.Min(v => v.Y)) : (Vector3.Zero, 0f);
+            int link = 0;
             foreach (var (rot, pos) in LineObjects.Placements(line, PlacedHeight, offset, lift))
-                LinePlacements.Add(new Placement(new PlacedObject(line.Name, 0, rot, pos, []), def, OnLine: true));
+                LinePlacements.Add(new Placement(new PlacedObject(line.Name, 0, rot, pos, line.Header), def, OnLine: true, Line: lineNo, Link: link++));
+            lineNo++;
         }
     }
 

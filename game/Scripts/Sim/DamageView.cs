@@ -20,6 +20,8 @@ public partial class DamageView : Node3D
     public required World.MissionBuilder Builder { get; init; }
     public required Dictionary<I76.Sim.Vehicles.Vehicle, CarNode> Cars { get; init; }
     public required Dictionary<I76.Sim.Collision.StaticObject, Placement> PlacementOf { get; init; }
+    /// <summary>A line object's root: its links' placements, node k the k-th (MissionSetup.LinksOf).</summary>
+    public IReadOnlyDictionary<I76.Sim.Collision.StaticObject, IReadOnlyList<Placement>> LinksOf { get; init; } = new Dictionary<I76.Sim.Collision.StaticObject, IReadOnlyList<Placement>>();
     public Assets.AudioBank? Audio { get; init; }
     public I76.Sim.Terrain.IGround? Ground { get; init; }
     private readonly List<(RigidBody3D Body, double Until)> _debris = [];
@@ -468,6 +470,7 @@ public partial class DamageView : Node3D
 
     public void Destroy(I76.Sim.Collision.StaticObject o, bool quiet, IReadOnlyList<int>? booms = null)
     {
+        if (LinksOf.TryGetValue(o, out var links)) { DestroyLinks(o, links); return; }
         if (!PlacementOf.TryGetValue(o, out var p)) return;
         // thrown (a restore, a join): gone from where it stood
         if (o.Thrown) { Builder.Scenery!.Destroy(p, null); return; }
@@ -506,6 +509,26 @@ public partial class DamageView : Node3D
             var at = b == -1 ? o.Marker ?? o.Centre : b >= 0 ? o.Nodes[b].Base ?? o.Centre : o.Origin;
             var sound = o.BoomSound(b);
             Sound(sound, at, sound.Equals("vexplode.wav", StringComparison.OrdinalIgnoreCase) ? Ds3d.LoudMinDistance : Ds3d.MinDistance);
+        }
+    }
+
+    /// <summary>A line object's wreck mesh by definition: every link of a line swaps to the same 'A' geometry.</summary>
+    private readonly Dictionary<string, (Mesh? Mesh, AssembledModel? Model, Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? Skip)> _linkWrecks = [];
+
+    /// <summary>A line object (a guard rail, a tyre wall): each dead link's own wreck in its place, the live ones as they are.</summary>
+    private void DestroyLinks(I76.Sim.Collision.StaticObject o, IReadOnlyList<Placement> links)
+    {
+        for (int k = 0; k < links.Count && k < o.Nodes.Count; k++)
+        {
+            var p = links[k];
+            if (!o.Nodes[k].Destroyed || p.Definition is not { } def) continue;
+            if (!_linkWrecks.TryGetValue(def, out var w))
+            {
+                var m = new ModelAssembler(Builder.Vfs) { Destroyed = true }.Assemble(def);
+                var skip = m is null ? null : GroundFaces(p, m);
+                _linkWrecks[def] = w = (m is null ? null : Builder.Meshes!.Build(m, skipFace: skip), m, skip);
+            }
+            Builder.Scenery!.Destroy(p, w.Mesh, w.Model, w.Skip);
         }
     }
 

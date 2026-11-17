@@ -711,7 +711,7 @@ public partial class Main
         ApplyGraphics(playSettings);
         _audio = audio;
         AddCombatView(setup.Combat, () => view.TickAlpha);
-        var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = _carNodes, PlacementOf = setup.PlacementOf, Audio = audio, Ground = setup.Ground, Name = "Damage" };
+        var damageView = new DamageView { Damage = setup.Damage, Origin = () => _origin, Builder = _builder, Cars = _carNodes, PlacementOf = setup.PlacementOf, LinksOf = setup.LinksOf, Audio = audio, Ground = setup.Ground, Name = "Damage" };
         // one car this game cannot draw must not take the others with it (they were all left undrawn after it); it is drawn
         // as the stand-in car (the mirror's own fallback for a car it cannot build), so the player is still seen
         void AddCar(MirrorCar m)

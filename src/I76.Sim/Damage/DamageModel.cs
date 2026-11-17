@@ -19,7 +19,8 @@ public sealed record Debris(Vector3 At, Vector3 Velocity) : DamageEvent;
 /// <summary>
 /// A structure lost nodes, or its root (<see cref="StaticObject.Nodes"/>, <see cref="StaticObject.Destroyed"/>):
 /// its look follows them. <paramref name="Booms"/> are the explosions that went off with it, each with its
-/// sound: −1 the root's at its marker, n node n's at its base.
+/// sound (<see cref="StaticObject.BoomSound"/>): −1 the root's at its marker, n node n's at its base, −2 a Gate-class
+/// root's own at the placement.
 /// </summary>
 public sealed record StructureDestroyed(StaticObject Object, IReadOnlyList<int> Booms) : DamageEvent
 {
@@ -711,7 +712,7 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
         {
             // a collider made without its nodes: the whole placement as one
             o.Collapse();
-            if (o.Type != 3 && o.Explosion is { } fx) { Combat.Explode(fx, o.Centre, null); booms.Add(-1); }
+            if (o.RootExplodes && o.Explosion is { } fx) { Combat.Explode(fx, o.Centre, null); booms.Add(-1); }
             for (int i = 0; i < 8; i++) { Rand.Next(); Events.Add(new Debris(o.Centre, new Vector3(0, 15, 0))); }
         }
         o.Refresh();
@@ -747,10 +748,13 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
         RootExplosion(o, booms);
     }
 
-    /// <summary>The root's explosion block: the first 0x1000000 node's, unless the root is type 3.</summary>
+    /// <summary>
+    /// The root's explosion block: the first 0x1000000 node's, for a structure root (class 2, 0xb, 0xc: type 3 never
+    /// explodes, and a Sign- or Gate-class root has no explosion of its own).
+    /// </summary>
     private void RootExplosion(StaticObject o, List<int> booms)
     {
-        if (o.Marker is not { } at || o.Explosion is not { } fx || o.Type == 3) return;
+        if (o.Marker is not { } at || o.Explosion is not { } fx || !o.RootExplodes) return;
         Combat.Explode(fx, at, null);
         booms.Add(-1);
     }

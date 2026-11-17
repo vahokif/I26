@@ -129,6 +129,8 @@ public sealed partial class StaticObject
 {
     public required string Name { get; init; }
     public required uint Type { get; init; }
+    /// <summary>Where it was placed (the root's translation in the world).</summary>
+    public Vector3 Origin { get; set; }
     public Vector3 Centre;
     public float Radius;
     /// <summary>Class 0x3000 nodes: the render mesh's polygons, world space.</summary>
@@ -163,8 +165,21 @@ public sealed partial class StaticObject
     public float BoundRadius;
     /// <summary>The explosion it dies in: the node flags' x1_bldx1 / x1_cars1, or the SDFC explosion name; none for plain nodes.</summary>
     public string? Explosion { get; set; }
-    /// <summary>The sound its explosion goes with (the SDFC sound, else vexplode.wav); none without an explosion.</summary>
+    /// <summary>The sound its marker's explosion goes with (the SDFC sound, else vexplode.wav); none without an explosion.</summary>
     public string Sound { get; set; } = "vexplode.wav";
+
+    /// <summary>
+    /// Whether the root has the structure block's explosion (class 2, 0xb and 0xc; 3 never explodes): only those read the
+    /// SDFC explosion and sound. A Sign- or Gate-class root's are never set, so its marker never goes off.
+    /// </summary>
+    public bool RootExplodes => Type is 2 or 0xb or 0xc;
+
+    /// <summary>
+    /// The sound of an explosion that went with a death (<see cref="Damage.StructureDestroyed.Booms"/>): the marker's (−1)
+    /// is the SDFC sound, a node's own explosion (n ≥ 0) vexplode.wav whatever the SDFC says (the per-node sound is the
+    /// table's "null" for every stock node), as is a gate's (−2).
+    /// </summary>
+    public string BoomSound(int boom) => boom == -1 ? Sound : "vexplode.wav";
     /// <summary>
     /// What a destroyed structure leaves to collide with: its 'A' geometry
     /// (the grain hopper's fallen bin, a ramp, a barn's wreck). Null when it leaves nothing.
@@ -474,7 +489,7 @@ public sealed class StaticWorld
     {
         if (!Collides(type)) return null;
         var place = Affine.FromEngine(engineRotation, position);
-        var o = new StaticObject { Name = name, Type = type };
+        var o = new StaticObject { Name = name, Type = type, Origin = position };
         var all = new List<Vector3>();
         var surfaces = new List<List<Poly>>();
         foreach (var part in model.Parts)
@@ -596,7 +611,7 @@ public sealed class StaticWorld
     /// <summary>An axis-aligned box collider (tests, and objects without a model).</summary>
     public StaticObject AddBox(string name, uint type, Vector3 min, Vector3 max)
     {
-        var o = new StaticObject { Name = name, Type = type, Centre = (min + max) / 2, Radius = new Vector2(max.X - min.X, max.Z - min.Z).Length() / 2, BoundRadius = (max - min).Length() / 2 };
+        var o = new StaticObject { Name = name, Type = type, Origin = (min + max) / 2, Centre = (min + max) / 2, Radius = new Vector2(max.X - min.X, max.Z - min.Z).Length() / 2, BoundRadius = (max - min).Length() / 2 };
         Vector3 P(int i) => new((i & 1) != 0 ? max.X : min.X, (i & 2) != 0 ? max.Y : min.Y, (i & 4) != 0 ? max.Z : min.Z);
         void Face(Vector3 n, params int[] idx)
         {

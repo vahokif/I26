@@ -489,12 +489,13 @@ public partial class DamageView : Node3D
         if (World.GroundDecals.Applies(p) && p.Definition is { } pd && Builder.Assembler!.Assemble(pd) is { } whole
             && Builder.Unpaint(p, World.GroundDecals.PaintedOut(whole, altModel, Dead)) is { } area)
             (_roads ??= new Editor.RoadTools.RoadPainter(Builder)).Request(area);
-        // A "null" SDFC sound is event 7's vexplode.wav (min distance 100), a named one (10)
+        // event 7's vexplode.wav (min distance 100) for a node's own explosion and a "null" SDFC sound, a named one (10)
         if (quiet || booms is null) return;
         foreach (int b in booms)
         {
-            var at = b < 0 ? o.Marker ?? o.Centre : o.Nodes[b].Base ?? o.Centre;
-            Sound(o.Sound, at, o.Sound.Equals("vexplode.wav", StringComparison.OrdinalIgnoreCase) ? Ds3d.LoudMinDistance : Ds3d.MinDistance);
+            var at = b == -1 ? o.Marker ?? o.Centre : b >= 0 ? o.Nodes[b].Base ?? o.Centre : o.Origin;
+            var sound = o.BoomSound(b);
+            Sound(sound, at, sound.Equals("vexplode.wav", StringComparison.OrdinalIgnoreCase) ? Ds3d.LoudMinDistance : Ds3d.MinDistance);
         }
     }
 

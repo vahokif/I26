@@ -212,4 +212,18 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
         Assert.False(board("AO1_SGN2"));
         Assert.False(ScenerySpawner.SignParts(null)("anything"));
     }
+
+    /// <summary>
+    /// A dead gate's wreck slides with the gate's own mesh (the original leaves the node's transform where the gate slid to and
+    /// swaps its geometry): the wreck's 'A' part belongs to its gate node, the fence sections to none.
+    /// </summary>
+    [InstallFact]
+    public void AGatesWreckBelongsToItsGate()
+    {
+        var fence = ScenerySpawner.GateOwners(TestInstall.Vfs.Read("afence5.sdf"));
+        Assert.Equal("AF1_GAT5", fence("AF1_GAT5"));
+        Assert.Equal("AF1_GAT5", fence("AF1AGAT5"));
+        Assert.Null(fence("AF1_FN15"));
+        Assert.Equal("CA1_GAT1", ScenerySpawner.GateOwners(TestInstall.Vfs.Read("bcaikgat.sdf"))("CA1AGAT1"));
+    }
 }

@@ -477,19 +477,20 @@ public partial class DamageView : Node3D
         Mesh? alt = null;
         I76.Formats.Assembly.AssembledModel? altModel = null;
         bool Dead(string name) => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed;
-        // a destroyed part's 'A' twin is its node's
-        bool TwinDead(string name) => Dead(name.Length > 4 && name[3] is 'A' or 'a' ? name[..3] + "_" + name[4..] : name);
         if (p.Definition is { } def && o.Nodes.Count > 0)
         {
-            // a live gate is drawn on its own, sliding (ScenerySpawner), whatever else of the structure is down; a dead one goes
-            // from there, its wreck (if any) drawn here
-            foreach (var n in o.Nodes) if (n.Destroyed && n.Type == 7) Builder.Scenery!.GateDied(p, n.Name);
             if (new ModelAssembler(Builder.Vfs) { DestroyedNode = Dead }.Assemble(def) is { Parts.Count: > 0 } m)
             {
+                // a gate is drawn on its own, sliding (ScenerySpawner), whatever else of the structure is down; a dead one keeps
+                // sliding as its wreck, or goes if it has none
+                foreach (var n in o.Nodes)
+                    if (n.Destroyed && n.Type == 7)
+                        Builder.Scenery!.GateDied(p, n.Name, Builder.Meshes!.Build(m, include: part => n.Name.Equals(Builder.Scenery.GateOf(p, part.NodeName), StringComparison.OrdinalIgnoreCase), skipFace: GroundFaces(p, m)));
                 // the camera-facing cards (the pine's stump) are the spawner's to draw
-                alt = Builder.Meshes!.Build(m, include: part => (!Builder.Scenery!.IsGatePart(p, part.NodeName) || TwinDead(part.NodeName)) && !Builder.Scenery.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
+                alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsGatePart(p, part.NodeName) && !Builder.Scenery.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
                 altModel = m;
             }
+            else foreach (var n in o.Nodes) if (n.Destroyed && n.Type == 7) Builder.Scenery!.GateDied(p, n.Name, null);
         }
         else if (p.Definition is { } d0 && new ModelAssembler(Builder.Vfs) { Destroyed = true }.Assemble(d0) is { } m
             && Builder.Assembler!.Assemble(d0) is { } intact && m.Parts.Select(x => x.NodeName).SequenceEqual(intact.Parts.Select(x => x.NodeName)) == false)

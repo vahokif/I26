@@ -111,6 +111,31 @@ public class GateSlotTests
         Assert.False(o.Destroyed, "the sign is no direct child of the root");
     }
 
+    /// <summary>
+    /// T07's roadblock (afence5), its gate slid open at the start and then shot: the original swaps the gate node's geometry to
+    /// its wreck AF1AGAT5 and leaves the node where it slid, beside the road (measured: the node's translation unchanged by the
+    /// death, the wreck drawn there, and a car pushed along the road through where the gate first stood met nothing). Its
+    /// collider is the wreck's, where the gate had slid to.
+    /// </summary>
+    [Fact]
+    public void ASlidGateShotDownLeavesItsWreckWhereItSlidTo()
+    {
+        if (InstallDir is null) return;
+        var (setup, _) = ClassIdTests.Build("t07.msn");
+        var o = setup.Statics.Objects.Single(x => x.Name == "afence5" && x.Centre.X > 1000);
+        int gate = Node(o, "AF1_GAT5");
+        var g = o.Nodes[gate].Gate!;
+        var rest = o.Boxes.Single(b => b.Node == gate).Centre;
+        Assert.True(o.TriggerGate());
+        for (int i = 0; i < 1000 && (g.Moving || g.X < 1); i++) o.TickGates(0.05f);
+        Assert.Equal(1f, g.X);
+        setup.Damage.Apply(o, Packet(2, 100_000), Vector3.Zero, gate);
+        Assert.True(o.Nodes[gate].Destroyed);
+        var wreck = Assert.Single(o.Boxes, b => b.Node == gate);
+        Assert.True(Vector3.Distance(wreck.Centre, rest + g.World) < 0.5f, $"the wreck's box at {wreck.Centre}, the gate slid to {rest + g.World}");
+        Assert.DoesNotContain(o.Boxes, b => Vector3.Distance(b.Centre, rest) < 1f);
+    }
+
     /// <summary>afence5's gate AF1_GAT5 has its record's 5000 hit points, not the constructor's 400.</summary>
     [Fact]
     public void ARoadblocksGateHasItsRecordsHitPoints()

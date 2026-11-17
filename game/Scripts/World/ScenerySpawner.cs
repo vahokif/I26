@@ -596,7 +596,11 @@ public partial class ScenerySpawner : Node3D
     /// A definition's gates: its type-7 nodes, which slide when the script
     /// says, and the nodes under them. <see cref="Names"/> are the type-7 nodes themselves.
     /// </summary>
-    private sealed record Gates(string[] Names, Func<string, bool> Owns);
+    private sealed record Gates(string[] Names, Func<string, bool> Owns)
+    {
+        /// <summary>The gate node a node hangs under (or is), a twin's as its '_' node's; null for none.</summary>
+        public Func<string, string?> Owner { get; init; } = _ => null;
+    }
 
     /// <summary>One placed gate: its mesh, its rest transform, its placement and its node's name.</summary>
     private readonly record struct GateInstance(MeshInstance3D Node, Transform3D Rest, Placement Placement, string Name);
@@ -610,17 +614,26 @@ public partial class ScenerySpawner : Node3D
     public Func<Placement, string, System.Numerics.Vector3>? GateShift { get; set; }
 
     /// <summary>
-    /// A placement's gate node died (its own slot, or with its structure): its sliding mesh goes; its destroyed look, if it
-    /// has one, is the structure's destroyed mesh's (DamageView).
+    /// A placement's gate node died (its own slot, or with its structure): its sliding mesh becomes its destroyed look, or goes
+    /// when it has none (every stock door and turning sign). The original swaps the node's geometry and leaves its transform,
+    /// so the wreck stands where the gate had slid to, and goes on sliding with it (measured: T07's roadblock gate, slid
+    /// open and shot, lies beside the road with its fence, not across it).
     /// </summary>
-    public void GateDied(Placement p, string name)
+    public void GateDied(Placement p, string name, Mesh? wreck)
     {
         foreach (var g in _gates)
-            if (g.Placement == p && g.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) g.Node.Visible = false;
+            if (g.Placement == p && g.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                if (wreck is null) g.Node.Visible = false;
+                else g.Node.Mesh = wreck;
+            }
     }
 
     /// <summary>Whether a part of the placement's definition is drawn as a gate (left out of its other meshes).</summary>
     public bool IsGatePart(Placement p, string node) => _gateDefs.TryGetValue(p.Definition ?? "", out var g) && g.Owns(node);
+
+    /// <summary>The gate node a part of the placement's definition slides with (an 'A' twin's: its node's), or null.</summary>
+    public string? GateOf(Placement p, string node) => _gateDefs.TryGetValue(p.Definition ?? "", out var g) ? g.Owner(node) : null;
 
     private readonly Dictionary<string, Gates> _gateDefs = new(StringComparer.OrdinalIgnoreCase);
 
@@ -644,8 +657,29 @@ public partial class ScenerySpawner : Node3D
             }
             return false;
         }
-        return _gateDefs[def] = new Gates([.. names], Owns);
+        return _gateDefs[def] = new Gates([.. names], Owns) { Owner = GateOwner(names, parent) };
     }
+
+    /// <summary>A definition's gate owners (<see cref="GateOf"/>): the gate node a node hangs under or is, an 'A' twin's as its node's.</summary>
+    public static Func<string, string?> GateOwners(byte[] sdf)
+    {
+        var f = new I76.Formats.Bwd2.Bwd2File(sdf);
+        var parent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var n in f.SceneNodes().Where(t => t.Tag == "SGEO").SelectMany(t => t.Nodes)) parent.TryAdd(n.Name, n.Parent);
+        return GateOwner(f.NodesOfType(7), parent);
+    }
+
+    private static Func<string, string?> GateOwner(HashSet<string> names, Dictionary<string, string> parent) => node =>
+    {
+        for (int k = 0; k < 64; k++)
+        {
+            if (names.Contains(node))
+                return node.Length > 4 && node[3] is 'A' or 'a' && names.Contains(node[..3] + "_" + node[4..]) ? node[..3] + "_" + node[4..] : node;
+            if (!parent.TryGetValue(node, out var up) || up.Equals(node, StringComparison.OrdinalIgnoreCase)) return null;
+            node = up;
+        }
+        return null;
+    };
 
     /// <summary>Each placement's gates as their own nodes, for <see cref="_Process"/> to slide.</summary>
     private void AddGates(Gates gates, AssembledModel model, MeshBuilder builder, Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip,

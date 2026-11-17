@@ -67,7 +67,7 @@ namespace I76.Sim.Collision
             a.For<StructureNode>()
                 .Saved(nameof(StructureNode.Hp), nameof(StructureNode.MaxHp), nameof(StructureNode.Destroyed), nameof(StructureNode.Gate))
                 .Structural("the structure's .sdf", nameof(StructureNode.Name), nameof(StructureNode.Parent), nameof(StructureNode.Type), nameof(StructureNode.Flags),
-                    nameof(StructureNode.Base), nameof(StructureNode.Walk), nameof(StructureNode.Stripped));
+                    nameof(StructureNode.Base), nameof(StructureNode.Walk), nameof(StructureNode.Stripped), nameof(StructureNode.Wreck));
             a.For<GateMotion>()
                 .Saved(nameof(GateMotion.X), nameof(GateMotion.Target), nameof(GateMotion.Moving))
                 .Structural("the gate's record and placement", nameof(GateMotion.Offset), nameof(GateMotion.Delta), nameof(GateMotion.World), nameof(GateMotion.Rate));

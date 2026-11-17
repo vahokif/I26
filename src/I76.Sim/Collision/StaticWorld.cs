@@ -49,6 +49,8 @@ public sealed class StructureNode
     /// passes through it (the original skips it) and its hit goes to the sign slot, which throws the whole placement.
     /// </summary>
     public bool Sign => Type == 4;
+    /// <summary>Its destroyed slot has geometry (an 'A' twin): a dead node keeps a collider, else its class drops to none.</summary>
+    public bool Wreck { get; init; }
     /// <summary>A type-7 node's slide (<see cref="GateMotion"/>), null for every other node.</summary>
     public GateMotion? Gate { get; set; }
     /// <summary>
@@ -352,6 +354,26 @@ public sealed partial class StaticObject
         Hp = MaxHp = Nodes[g].MaxHp;
         Nodes[g].Stripped = true;
         GateRoot = g;
+    }
+
+    /// <summary>
+    /// What a script's hpLesser reads of a structure (the original's object health percentage): for a structure root
+    /// (class 2, 3, 0xb, 0xc) the least HP / max, in percent, of the root's direct children that are structures (types
+    /// 2, 3, 4, 0xb, 0xc, 0x5c) with a collider (class above 0x1000): a dead one counts 0 while its wreck stands and no
+    /// longer counts once its collider is gone (no wreck); with no such child, a huge value that nothing is less than.
+    /// The root's own HP (splash) is not part of it. Any other class id: 100. One made without nodes: its root's share.
+    /// </summary>
+    public float HealthPercent()
+    {
+        if (Nodes.Count == 0) return Destroyed ? 0 : 100f * Hp / System.Math.Max(1, MaxHp);
+        if (Type is not (2 or 3 or 0xb or 0xc)) return 100f;
+        float min = float.MaxValue;
+        foreach (var n in Nodes)
+        {
+            if (n.Parent != -1 || n.Type is not (2 or 3 or 4 or 0xb or 0xc or 0x5c) || (n.Flags & 0xf000) == 0x1000 || n.Destroyed && !n.Wreck) continue;
+            min = System.Math.Min(min, n.Destroyed ? 0f : 100f * n.Hp / System.Math.Max(1, n.MaxHp));
+        }
+        return min;
     }
 
     /// <summary>The node a Gate-class root took its block from (<see cref="InitGateRoot"/>), −1 for none.</summary>

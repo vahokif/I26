@@ -62,7 +62,7 @@ public sealed partial class MissionSetup
             var walk = StructureNode.Order([.. Nodes.Select(n => n.Parent)]);
             var nodes = Nodes.Select((n, i) => new StructureNode
             {
-                Name = n.Name, Parent = n.Parent, Type = n.Type, Flags = n.Flags, Hp = n.Hp, MaxHp = n.MaxHp, Walk = walk[i],
+                Name = n.Name, Parent = n.Parent, Type = n.Type, Flags = n.Flags, Hp = n.Hp, MaxHp = n.MaxHp, Walk = walk[i], Wreck = n.Wreck,
                 Gate = n.Gate is { } g ? new GateMotion { Offset = g.Offset, Delta = g.Delta, Rate = g.Rate } : null,
             }).ToList();
             var at = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -108,10 +108,16 @@ public sealed partial class MissionSetup
             }
             var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < recs.Count; i++) index.TryAdd(recs[i].Name, i);
+            // the nodes whose destroyed slot has geometry: the 'A' twins the model shows with every node dead
+            var wrecks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (new ModelAssembler(vfs) { DestroyedNode = _ => true }.Assemble(sdf) is { } dead)
+                foreach (var part in dead.Parts)
+                    if (part.Mesh.Vertices.Length > 2)
+                        wrecks.Add(part.NodeName.Length > 4 && part.NodeName[3] is 'A' or 'a' ? part.NodeName[..3] + "_" + part.NodeName[4..] : part.NodeName);
             foreach (var r in recs)
                 nodes.Add(new StructureNode
                 {
-                    Name = r.Name, Type = r.Type, Flags = r.Flags, Hp = r.Hp, MaxHp = r.Hp, Gate = r.Gate,
+                    Name = r.Name, Type = r.Type, Flags = r.Flags, Hp = r.Hp, MaxHp = r.Hp, Gate = r.Gate, Wreck = wrecks.Contains(r.Name),
                     Parent = parentOf.TryGetValue(r.Name, out var pn) && index.TryGetValue(pn, out int pi) ? pi : -1,
                 });
             // The first marker node, its world origin by

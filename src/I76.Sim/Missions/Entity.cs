@@ -55,7 +55,7 @@ public sealed partial class Entity(string name, byte[] id, uint type, uint objec
     /// <summary>Gone from the world; scripts lose the handle for good.</summary>
     public bool Removed { get; set; }
     /// <summary>The health percentage.</summary>
-    public float Health => Vehicle?.Heli is { } heli ? heli.HealthPercent : Vehicle?.Emplacement is { } gun ? gun.HealthPercent : Vehicle?.Health is { } h ? h.HealthPercent() : Static is { } s ? (s.Destroyed ? 0 : 100f * s.Hp / System.Math.Max(1, s.MaxHp)) : _dead ? 0 : 100;
+    public float Health => Vehicle?.Heli is { } heli ? heli.HealthPercent : Vehicle?.Emplacement is { } gun ? gun.HealthPercent : Vehicle?.Health is { } h ? h.HealthPercent() : Static is { } s ? s.HealthPercent() : _dead ? 0 : 100;
 
     // The damage-event recorder: FSM ticks of the last hit of each kind.
     public int ShotTick = -10;

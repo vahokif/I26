@@ -194,4 +194,22 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
         Assert.Equal(Assets.MaterialLibrary.FaceMode.Opaque, Assets.MaterialLibrary.ModeOf(cut.Unk_0x20, cut.Unk_0x21, unkeyed: true));
         Assert.Equal(Assets.MaterialLibrary.FaceMode.Cutout, Assets.MaterialLibrary.ModeOf(cut.Unk_0x20, cut.Unk_0x21, unkeyed: false));
     }
+
+    /// <summary>
+    /// The modern look's retroreflective sign faces go by the part's own node type, as the original's damage and collisions do,
+    /// not by the placement's class id: a road sign's post and board (type 4) are sign parts whether it is placed as a Sign or
+    /// as Struct1 (a community mission maker's sheets placed them so); a building's parts, even placed as a Sign, are not.
+    /// </summary>
+    [InstallFact]
+    public void ASignsPartsAreReflectiveByTheirOwnType()
+    {
+        var sign = ScenerySpawner.SignParts(TestInstall.Vfs.Read("sdxin_1.sdf"));
+        Assert.True(sign("SD1XINP1"));
+        Assert.True(sign("SD1XINS1"));
+        var bank = ScenerySpawner.SignParts(TestInstall.Vfs.Read("bcbank1.sdf"));
+        Assert.False(bank("CB1_BLD1"));
+        var board = ScenerySpawner.SignParts(TestInstall.Vfs.Read("aobilbd2.sdf"));
+        Assert.False(board("AO1_SGN2"));
+        Assert.False(ScenerySpawner.SignParts(null)("anything"));
+    }
 }

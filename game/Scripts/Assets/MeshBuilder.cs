@@ -135,10 +135,11 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
     /// <param name="selfLit">a structure whose self-lit faces shine at night in the modern look (<see cref="SelfLit"/>)</param>
     /// <param name="retro">a road sign, whose face (the faces the art marks self-lit) the modern look's night shows retroreflective (RetroLamps)</param>
     /// <param name="unkeyed">the cut-out faces drawn opaque, their key colour shown (the Software renderer's ground list)</param>
+    /// <param name="signPart">with <paramref name="retro"/>: which parts are a sign's (by node name); null takes every part as one</param>
     public ArrayMesh? Build(AssembledModel model, bool wheels = true, Func<ModelPart, bool>? include = null, System.Numerics.Vector3 origin = default,
         Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace = null, bool bothSides = false, bool oneSided1997 = false, Func<string, int>? frameOf = null,
-        bool selfLit = false, bool retro = false, bool unkeyed = false) =>
-        Build(model, wheels, include, origin, skipFace, PaintOf(model), bothSides, oneSided1997, frameOf, selfLit, retro, unkeyed);
+        bool selfLit = false, bool retro = false, bool unkeyed = false, Func<string, bool>? signPart = null) =>
+        Build(model, wheels, include, origin, skipFace, PaintOf(model), bothSides, oneSided1997, frameOf, selfLit, retro, unkeyed, signPart);
 
     /// <summary>
     /// Whether a structure's face shines of its own at night in the modern look: one the art marks self-lit (FaceLight.SelfLit)
@@ -149,7 +150,7 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
 
     private ArrayMesh? Build(AssembledModel model, bool wheels, Func<ModelPart, bool>? include, System.Numerics.Vector3 origin,
         Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace, I76.Formats.Imaging.CarMaterial.Paint? paint, bool bothSides = false, bool oneSided1997 = false,
-        Func<string, int>? frameOf = null, bool selfLit = false, bool retro = false, bool unkeyed = false)
+        Func<string, int>? frameOf = null, bool selfLit = false, bool retro = false, bool unkeyed = false, Func<string, bool>? signPart = null)
     {
         selfLit &= model.Kind == "sdf";
         retro &= model.Kind == "sdf";
@@ -185,9 +186,10 @@ public sealed class MeshBuilder(TextureResolver resolver, MaterialLibrary materi
                 string? faceMember = null;
                 // a zero vertex normal (some GEOs have them) would light as NaN, which glow then spreads
                 var faceN = Coords.ToGodot(-part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z))).Normalized();
-                bool shines = selfLit && SelfLit(f, faceN.Y);
                 // a sign's face: the faces the original draws full-bright to be read at night (the shield, the plate), not its post or back
-                bool sheeting = retro && I76.Formats.Geo.FaceLight.SelfLit(f);
+                bool sign = retro && (signPart?.Invoke(part.NodeName) ?? true);
+                bool shines = selfLit && !sign && SelfLit(f, faceN.Y);
+                bool sheeting = sign && I76.Formats.Geo.FaceLight.SelfLit(f);
                 // a face with texture coordinates beyond ±32 is drawn in its own colour, untextured, as the original does
                 bool untextured = f.UvsUnset;
                 var mode = MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21, unkeyed);

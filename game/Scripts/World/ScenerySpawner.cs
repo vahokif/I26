@@ -300,10 +300,19 @@ public partial class ScenerySpawner : Node3D
     private static readonly string? SelfLitHook = System.Environment.GetEnvironmentVariable("I76_SELF_LIT");
 
     /// <summary>
-    /// ODEF class 4, the road signs: their self-lit faces (the original draws them at full brightness to be read at night) do not
-    /// glow in the modern look; they are retroreflective, bright in the beam of the lamps beside the eye (RetroLamps).
+    /// Type 4, the road signs' parts: their self-lit faces (the original draws them at full brightness to be read at night) do
+    /// not glow in the modern look; they are retroreflective, bright in the beam of the lamps beside the eye (RetroLamps). By the
+    /// part's own node type, as the original's damage and collisions go, whatever class id the placement has (a road sign
+    /// placed as Struct1 is as reflective as one placed as a Sign).
     /// </summary>
     public const uint SignType = 4;
+
+    /// <summary>A definition's sign parts: the nodes of type 4 (every road sign's post and board), by name; nothing for a model without.</summary>
+    public static Func<string, bool> SignParts(byte[]? sdf)
+    {
+        var names = sdf is null ? null : Bwd2Def(sdf)?.NodesOfType(SignType);
+        return names is { Count: > 0 } ? names.Contains : _ => false;
+    }
 
     /// <summary>I76_RETRO_SIGNS (tuning): <c>0</c> leaves the modern look's retroreflective sign faces out (before and after captures).</summary>
     private static readonly bool RetroSigns = System.Environment.GetEnvironmentVariable("I76_RETRO_SIGNS") != "0";
@@ -351,11 +360,12 @@ public partial class ScenerySpawner : Node3D
             var cardNames = model is null ? null : CardNamesOf(def);
             Func<ModelPart, bool>? include = spinners is null && gates is null && cardNames is null ? null
                 : part => !(spinners?.Any(s => s.Owns(part.NodeName)) ?? false) && !(gates?.Owns(part.NodeName) ?? false) && !(cardNames?.Contains(part.NodeName) ?? false);
-            // a structure's self-lit faces shine at night in the modern look (MeshBuilder.SelfLit), its lamps light what is under them
-            bool selfLit = SelfLitHook != "0" && !roadPiece && g.Any(p => p.Object.ObjectType != SignType);
-            // a road sign's face is retroreflective (RetroLamps)
-            bool retro = RetroSigns && !roadPiece && !g.Any(p => p.Object.ObjectType != SignType);
-            var mesh = model is null ? null : builder.Build(model, include: include, skipFace: skip, selfLit: selfLit, retro: retro);
+            // a structure's self-lit faces shine at night in the modern look (MeshBuilder.SelfLit), its lamps light what is under them;
+            // a road sign's parts (type-4 nodes) are retroreflective instead (RetroLamps), whatever the placements' class ids
+            bool selfLit = SelfLitHook != "0" && !roadPiece;
+            bool retro = RetroSigns && !roadPiece;
+            var signPart = SignParts(def.EndsWith(".sdf", StringComparison.OrdinalIgnoreCase) ? asm.Vfs.TryRead(def) : null);
+            var mesh = model is null ? null : builder.Build(model, include: include, skipFace: skip, selfLit: selfLit, retro: retro, signPart: signPart);
             if (mesh is null && gates is not null && cardNames is null)
             {
                 // a model that is nothing but its gate (T12's bcaikgat): no static mesh, only the sliding one
@@ -382,7 +392,7 @@ public partial class ScenerySpawner : Node3D
             if (model is not null && SmokeBase(model) is { } smokeAt)
             {
                 modernDrops = WreckSmoke.IsSpriteFace;
-                modernMesh = builder.Build(model, include: include, skipFace: (part, f) => WreckSmoke.IsSpriteFace(f) || (skip?.Invoke(part, f) ?? false), selfLit: selfLit, retro: retro);
+                modernMesh = builder.Build(model, include: include, skipFace: (part, f) => WreckSmoke.IsSpriteFace(f) || (skip?.Invoke(part, f) ?? false), selfLit: selfLit, retro: retro, signPart: signPart);
                 foreach (var pl in list)
                 {
                     Smokers.Add(Coords.ToGame(Coords.ToGodot(pl.Object.Rotation, world.GroundedPosition(pl)) * Coords.ToGodot(smokeAt)));
@@ -441,7 +451,7 @@ public partial class ScenerySpawner : Node3D
             }
             if (tree)
                 foreach (var t in Trees.Add(def, model!, cardNames!, list, xf)) Twin(list[t.Placement], t.Node, t.Index, modern: true);
-            if (Night && selfLit && model is { Kind: "sdf" } && node is not null && StructureLamps.Build(model, builder, include, shadows: SelfLitHook != "noshadow") is { } lamps)
+            if (Night && selfLit && model is { Kind: "sdf" } && node is not null && StructureLamps.Build(model, builder, part => (include?.Invoke(part) ?? true) && !signPart(part.NodeName), shadows: SelfLitHook != "noshadow") is { } lamps)
             {
                 for (int i = 0; i < xf.Count; i++)
                 {

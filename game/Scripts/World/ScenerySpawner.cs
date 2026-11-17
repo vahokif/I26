@@ -23,6 +23,9 @@ public partial class ScenerySpawner : Node3D
     /// <summary>A placement's other instances, placed and hidden with it: the modern look's twin, its cards' anchor, its tree's tiers.</summary>
     private readonly Dictionary<Placement, List<(Node3D Node, int Index)>> _twin = [];
     private readonly HashSet<Node3D> _classic = [], _modernNodes = [];
+    /// <summary>The Intersection pieces' meshes as the 3D card draws them (keyed) and as the Software renderer does (unkeyed): one of each shows.</summary>
+    private readonly HashSet<Node3D> _keyed = [], _unkeyed = [];
+    private bool _unkeyedShown;
     private bool _modern = true;
     private MissionWorld? _world;
 
@@ -409,6 +412,16 @@ public partial class ScenerySpawner : Node3D
                 return mmi;
             }
             var node = mesh is null ? null : Place(mesh);
+            // the Software renderer draws the ground list (an Intersection piece's node) with the key off: its keyed texels
+            // show as their colour (the water tower's legs as dark, solid frames); the 3D card's path keys them
+            if (roadPiece && !painted && node is not null && HasCutouts(model!)
+                && builder.Build(model, include: include, skipFace: skip, unkeyed: true) is { } bare)
+            {
+                var soft = Place(bare);
+                _keyed.Add(node); _unkeyed.Add(soft);
+                soft.Visible = false;
+                for (int i = 0; i < xf.Count; i++) Twin(list[i], soft, i);
+            }
             for (int i = 0; i < xf.Count; i++)
             {
                 var cardAnchor = cards is null ? null : AddCards(xf[i], cards);
@@ -718,6 +731,13 @@ public partial class ScenerySpawner : Node3D
     public override void _Process(double delta)
     {
         TurnCards();
+        bool soft = SoftwareLook.Active && !_modern;
+        if (soft != _unkeyedShown && _keyed.Count > 0)
+        {
+            _unkeyedShown = soft;
+            foreach (var n in _keyed) n.Visible = !soft;
+            foreach (var n in _unkeyed) n.Visible = soft;
+        }
         if (GateShift is { } shift)
             foreach (var g in _gates)
                 g.Node.Transform = new Transform3D(g.Rest.Basis, g.Rest.Origin + Coords.ToGodot(shift(g.Placement, g.Name)));
@@ -730,6 +750,10 @@ public partial class ScenerySpawner : Node3D
             s.Node.Transform = new Transform3D(s.Rest.Basis * new Basis(s.Axis, a), s.Rest.Origin);
         }
     }
+
+    /// <summary>Whether a model has keyed (cut-out) textured faces, which a draw with the key off shows otherwise.</summary>
+    public static bool HasCutouts(AssembledModel m) =>
+        m.Parts.Any(pt => pt.Mesh.Faces.Any(f => f.Texture.Length > 0 && MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21) == MaterialLibrary.FaceMode.Cutout));
 
     /// <summary>Road pieces: intersections, junctions, runway ends (ODEF types 0x50-0x5f, <see cref="RoadPieceObjects"/>).</summary>
     public static bool IsRoadPiece(uint type) => RoadPieceObjects.IsRoadPiece(type);

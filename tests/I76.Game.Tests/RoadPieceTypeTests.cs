@@ -178,4 +178,20 @@ public class RoadPieceTypeTests(ITestOutputHelper log)
             Assert.Equal(total, pieces);
         }
     }
+
+    /// <summary>
+    /// The ground list (an Intersection piece's drawn node, the lots) is drawn with the colour key off by the original's
+    /// Software renderer (render state 0xf4, Nitro 0xf6) and keyed through the 3D card: the water tower given the Intersection
+    /// class id shows its legs' frames as dark, solid boards in the 8-bit original (a community mission maker's shot). Its
+    /// legs are cut-out faces, which the unkeyed draw makes opaque.
+    /// </summary>
+    [InstallFact]
+    public void TheSoftwareRenderersGroundListDrawsTheKeyedLegsOpaque()
+    {
+        var m = RoadPieceObjects.Drawn(new ModelAssembler(TestInstall.Vfs).Assemble("awatert1.sdf")!);
+        Assert.True(ScenerySpawner.HasCutouts(m));
+        var cut = m.Parts.SelectMany(p => p.Mesh.Faces).First(f => f.Texture.Length > 0 && Assets.MaterialLibrary.ModeOf(f.Unk_0x20, f.Unk_0x21) == Assets.MaterialLibrary.FaceMode.Cutout);
+        Assert.Equal(Assets.MaterialLibrary.FaceMode.Opaque, Assets.MaterialLibrary.ModeOf(cut.Unk_0x20, cut.Unk_0x21, unkeyed: true));
+        Assert.Equal(Assets.MaterialLibrary.FaceMode.Cutout, Assets.MaterialLibrary.ModeOf(cut.Unk_0x20, cut.Unk_0x21, unkeyed: false));
+    }
 }

@@ -145,6 +145,12 @@ public sealed class MaterialLibrary(TextureFactory textures)
     public enum FaceMode { Opaque, Cutout, Translucent }
 
     /// <summary>The face's mode from its +0x20 / +0x21 bytes: +0x21 ≠ 0 translucent, +0x20 bit 2 cut-out, else opaque.</summary>
+    /// <summary>
+    /// A face's mode as a draw with the colour key off takes it (<paramref name="unkeyed"/>: the Software renderer's ground
+    /// list, render state 0xf4, no key bit): a cut-out face is drawn opaque, its key colour shown.
+    /// </summary>
+    public static FaceMode ModeOf(byte b20, byte b21, bool unkeyed) => ModeOf(b20, b21) is var m && unkeyed && m == FaceMode.Cutout ? FaceMode.Opaque : m;
+
     public static FaceMode ModeOf(byte b20, byte b21) => b21 != 0 ? FaceMode.Translucent : (b20 & 4) != 0 ? FaceMode.Cutout : FaceMode.Opaque;
 
     /// <summary>

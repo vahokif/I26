@@ -134,4 +134,35 @@ public class LineObjectRootTests
         Assert.False(o.Nodes[1].Destroyed);
         Assert.Equal(400, o.Hp);
     }
+
+    /// <summary>
+    /// A car on its wheels pushed square at T05's first guard rail (measured in the original with the car resting on the
+    /// road, then held at the speed along its nose until the first contact): the rail is met. Link 2, a type-3 link, takes
+    /// the full impact (8, 29 and 81 at 8, 15 and 25 u/s: 400 to 392, 371, 319) and does the car no damage; link 0, the
+    /// record's type-2 AF1_RAL3, takes a quarter (29 to 7: 75 to 68) and damages the car. The car comes back off the rail
+    /// at about 4 u/s (6 from 25). An earlier probe that held the car at its teleported height, a metre over the road, met
+    /// nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(2, 8f, 392, false)]
+    [InlineData(2, 15f, 371, false)]
+    [InlineData(2, 25f, 319, false)]
+    [InlineData(0, 15f, 68, true)]
+    public void ACarRammingAGuardRailMeetsItAsMeasured(int link, float speed, int hpAfter, bool carDamaged)
+    {
+        if (InstallDir is null) return;
+        var install = new GameInstall(InstallDir);
+        var vfs = new AssetVfs(install);
+        var asm = new ModelAssembler(vfs);
+        var setup = MissionSetup.Build(vfs, new MissionWorld(vfs, asm, install.Resolve("miss16", "t05.msn")!), asm, script: false, rand: new I76.Sim.Rng.CrtRand(1));
+        var session = new I76.Sim.Session.SimSession(setup);
+        session.AddDriver(setup.World.Player!);
+        var rail = setup.LinksOf.Keys.First(o => o.Name == "afence3");
+        var at = rail.Nodes[link].Base!.Value;
+        var dir = new Vector2(0.6f, -0.8f);
+        var (hit, _, lost) = ClassIdTests.Ram(setup, session, new Vector2(at.X, at.Z) - dir * 12, dir, speed, ticks: 80);
+        Assert.Equal("afence3", hit);
+        Assert.Equal(hpAfter, rail.Nodes[link].Hp);
+        Assert.Equal(carDamaged, lost > 0);
+    }
 }

@@ -480,7 +480,7 @@ public sealed partial class SimSession
                         {
                             var pk = new Weapons.DamagePacket { Mask = 1 };
                             pk.Ch[0] = near.Nodes[i].Hp + 1;
-                            ndm.StructureSlot(near, i, pk);
+                            ndm.StaticSlot(near, i, pk);
                             Console.WriteLine($"[boom] destroyed node {near.Nodes[i].Name} of {near.Name}: type {near.Nodes[i].Type} hp {near.Nodes[i].Hp} dead {near.Nodes[i].Destroyed} root {near.Destroyed}");
                         }
                 continue;

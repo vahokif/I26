@@ -34,6 +34,17 @@ public sealed class StructureNode
     /// <summary>The slot it goes to: the structure slot takes 2, 3, 0xb, 0xc and 0x5c, 4 is the sign's.</summary>
     public bool Damageable => Type is 2 or 3 or 0xb or 0xc or 0x5c;
     /// <summary>
+    /// A gate (7) or a spinner (10): its own slot, with its record's HP, any packet. Its death swaps it and its subtree
+    /// to their destroyed look (every stock door and spinner: nothing), flags the root if it is a direct child (no marker
+    /// explosion), and throws no chunks.
+    /// </summary>
+    public bool GateSlot => Type is 7 or 10 && !Stripped;
+    /// <summary>
+    /// The type-7 node whose block a Gate-class root took (<see cref="StaticObject.InitGateRoot"/>): it has no slot of its
+    /// own any more, so rounds and rams do it nothing. It still slides with triggerGate.
+    /// </summary>
+    public bool Stripped { get; set; }
+    /// <summary>
     /// A type-4 node, whatever its placement's type (Nitro p12's and S01's swend_1 barriers, N28's sdtrn_1): a car
     /// passes through it (the original skips it) and its hit goes to the sign slot, which throws the whole placement.
     /// </summary>
@@ -299,6 +310,8 @@ public sealed partial class StaticObject
     /// </summary>
     public bool TriggerGate()
     {
+        // a Gate-class root slides itself: its block is its first type-7 node's
+        if (GateRoot >= 0 && Nodes[GateRoot].Gate is { } rg) { rg.Trigger(); return true; }
         foreach (var n in Nodes)
             if (n.Type == 7 && n.Gate is { } g) { g.Trigger(); return true; }
         return false;
@@ -315,6 +328,29 @@ public sealed partial class StaticObject
 
     /// <summary>Its gates were set from outside (a network mirror): the colliders follow.</summary>
     public void GatesMoved() { _gates = true; Refresh(); }
+
+    /// <summary>
+    /// A Gate-class root (class id 7) takes its first type-7 descendant's block, in the walk's order: its hit points (T12's
+    /// Autowerks gate: 40000, not the root's 400) and its slide; that node is stripped of its slot. Without one the root
+    /// keeps 400.
+    /// </summary>
+    public void InitGateRoot()
+    {
+        if (Type != 7) return;
+        int g = -1;
+        for (int i = 0; i < Nodes.Count; i++)
+            if (Nodes[i].Type == 7 && (g < 0 || Nodes[i].Walk < Nodes[g].Walk)) g = i;
+        if (g < 0) return;
+        Hp = MaxHp = Nodes[g].MaxHp;
+        Nodes[g].Stripped = true;
+        GateRoot = g;
+    }
+
+    /// <summary>The node a Gate-class root took its block from (<see cref="InitGateRoot"/>), −1 for none.</summary>
+    public int GateRoot { get; private set; } = -1;
+
+    /// <summary>Where a Gate-class root stands now: where it was placed, moved by its slide.</summary>
+    public Vector3 GateRootAt => Origin + ShiftOf(GateRoot);
 
     /// <summary>Whether the node is a <see cref="StructureNode.Sign"/> (−1, the root, is not).</summary>
     public bool SignNode(int node) => node >= 0 && node < Nodes.Count && Nodes[node].Sign;

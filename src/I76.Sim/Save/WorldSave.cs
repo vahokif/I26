@@ -63,11 +63,11 @@ namespace I76.Sim.Collision
                 .Saved(nameof(Centre), nameof(Radius), nameof(BoundRadius))
                 .Derived(geometry, nameof(_intact), nameof(_uncollapsed), nameof(Polys), nameof(Surfaces), nameof(Boxes), nameof(Spheres), nameof(MeshBounds))
                 .Structural("the placement's, from the install", nameof(Name), nameof(Type), nameof(Origin), nameof(Owner), nameof(Vehicle), nameof(Marker), nameof(SphereRadius),
-                    nameof(Explosion), nameof(Sound), nameof(Remains), nameof(Deck));
+                    nameof(Explosion), nameof(Sound), nameof(Remains), nameof(Deck), nameof(GateRoot));
             a.For<StructureNode>()
                 .Saved(nameof(StructureNode.Hp), nameof(StructureNode.MaxHp), nameof(StructureNode.Destroyed), nameof(StructureNode.Gate))
                 .Structural("the structure's .sdf", nameof(StructureNode.Name), nameof(StructureNode.Parent), nameof(StructureNode.Type), nameof(StructureNode.Flags),
-                    nameof(StructureNode.Base), nameof(StructureNode.Walk));
+                    nameof(StructureNode.Base), nameof(StructureNode.Walk), nameof(StructureNode.Stripped));
             a.For<GateMotion>()
                 .Saved(nameof(GateMotion.X), nameof(GateMotion.Target), nameof(GateMotion.Moving))
                 .Structural("the gate's record and placement", nameof(GateMotion.Offset), nameof(GateMotion.Delta), nameof(GateMotion.World), nameof(GateMotion.Rate));

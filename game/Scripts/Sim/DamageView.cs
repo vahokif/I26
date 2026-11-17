@@ -468,13 +468,17 @@ public partial class DamageView : Node3D
         Mesh? alt = null;
         I76.Formats.Assembly.AssembledModel? altModel = null;
         bool Dead(string name) => o.Nodes.FindIndex(n => n.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? o.Nodes[i].Destroyed : o.Destroyed;
+        // a destroyed part's 'A' twin is its node's
+        bool TwinDead(string name) => Dead(name.Length > 4 && name[3] is 'A' or 'a' ? name[..3] + "_" + name[4..] : name);
         if (p.Definition is { } def && o.Nodes.Count > 0)
         {
-            // a gate is drawn on its own, sliding (ScenerySpawner), whatever else of the structure is down
+            // a live gate is drawn on its own, sliding (ScenerySpawner), whatever else of the structure is down; a dead one goes
+            // from there, its wreck (if any) drawn here
+            foreach (var n in o.Nodes) if (n.Destroyed && n.Type == 7) Builder.Scenery!.GateDied(p, n.Name);
             if (new ModelAssembler(Builder.Vfs) { DestroyedNode = Dead }.Assemble(def) is { Parts.Count: > 0 } m)
             {
                 // the camera-facing cards (the pine's stump) are the spawner's to draw
-                alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsGatePart(p, part.NodeName) && !Builder.Scenery.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
+                alt = Builder.Meshes!.Build(m, include: part => (!Builder.Scenery!.IsGatePart(p, part.NodeName) || TwinDead(part.NodeName)) && !Builder.Scenery.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
                 altModel = m;
             }
         }
@@ -484,7 +488,7 @@ public partial class DamageView : Node3D
             alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
             altModel = m;
         }
-        Builder.Scenery!.Destroy(p, alt, altModel, altModel is null ? null : GroundFaces(p, altModel));
+        Builder.Scenery!.Destroy(p, alt, altModel, altModel is null ? null : GroundFaces(p, altModel), o.Nodes.Count > 0 ? Dead : null);
         // the ground faces painted into the terrain at load of what is now gone (a tunnel's road strips) are painted out
         if (World.GroundDecals.Applies(p) && p.Definition is { } pd && Builder.Assembler!.Assemble(pd) is { } whole
             && Builder.Unpaint(p, World.GroundDecals.PaintedOut(whole, altModel, Dead)) is { } area)

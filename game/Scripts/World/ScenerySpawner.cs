@@ -98,11 +98,14 @@ public partial class ScenerySpawner : Node3D
     /// A destroyed structure: its instance goes, replaced by the destroyed model if there is one: <paramref name="destroyed"/>, the mesh
     /// of its parts but the cards, and the cards of <paramref name="model"/> (the pine's stump), drawn the same in both looks.
     /// </summary>
-    public void Destroy(Placement p, Mesh? destroyed, AssembledModel? model = null, Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace = null)
+    /// <param name="deadNode">Whether a node is dead: a spinner goes when its node does (null: every one goes).</param>
+    public void Destroy(Placement p, Mesh? destroyed, AssembledModel? model = null, Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skipFace = null,
+        Func<string, bool>? deadNode = null)
     {
-        // its spinners go with it: their damaged slots are NULL, so the original draws nothing there
+        // a dead spinner goes: its damaged slot is NULL, so the original draws nothing there
         if (_spinOf.TryGetValue(p, out var sr))
-            for (int i = sr.Start; i < sr.Start + sr.Count; i++) _spins[i].Node.Visible = false;
+            for (int i = sr.Start; i < sr.Start + sr.Count; i++)
+                if (deadNode?.Invoke(_spins[i].Name) ?? true) _spins[i].Node.Visible = false;
         if (!_where.TryGetValue(p, out var w)) return;
         var full = Full(p);
         Put(w.Node, w.Index, full, on: false);
@@ -583,6 +586,16 @@ public partial class ScenerySpawner : Node3D
     /// </summary>
     public Func<Placement, string, System.Numerics.Vector3>? GateShift { get; set; }
 
+    /// <summary>
+    /// A placement's gate node died (its own slot, or with its structure): its sliding mesh goes; its destroyed look, if it
+    /// has one, is the structure's destroyed mesh's (DamageView).
+    /// </summary>
+    public void GateDied(Placement p, string name)
+    {
+        foreach (var g in _gates)
+            if (g.Placement == p && g.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) g.Node.Visible = false;
+    }
+
     /// <summary>Whether a part of the placement's definition is drawn as a gate (left out of its other meshes).</summary>
     public bool IsGatePart(Placement p, string node) => _gateDefs.TryGetValue(p.Definition ?? "", out var g) && g.Owns(node);
 
@@ -634,10 +647,10 @@ public partial class ScenerySpawner : Node3D
     /// original turns every frame about the node's own axes. <see cref="Pivot"/> is the
     /// node's frame in the model, <see cref="Revs"/> its rate in revolutions per second about its x, y, z.
     /// </summary>
-    private sealed record Spinner(Affine Pivot, System.Numerics.Vector3 Revs, Func<string, bool> Owns);
+    private sealed record Spinner(Affine Pivot, System.Numerics.Vector3 Revs, Func<string, bool> Owns, string Name);
 
     /// <summary>One placed spinner: its node, its rest transform, the axis it turns about there (Godot, unit) and its rate (rad/s).</summary>
-    private readonly record struct SpinInstance(MeshInstance3D Node, Transform3D Rest, Vector3 Axis, float Rate);
+    private readonly record struct SpinInstance(MeshInstance3D Node, Transform3D Rest, Vector3 Axis, float Rate, string Name);
 
     private readonly List<SpinInstance> _spins = [];
     private readonly Dictionary<Placement, (int Start, int Count)> _spinOf = [];
@@ -666,7 +679,7 @@ public partial class ScenerySpawner : Node3D
                 }
                 return false;
             }
-            o.Add(new Spinner(top.ToModel, revs, Owns));
+            o.Add(new Spinner(top.ToModel, revs, Owns, name));
         }
         return o.Count == 0 ? null : o;
     }
@@ -675,24 +688,24 @@ public partial class ScenerySpawner : Node3D
     private void AddSpinners(List<Spinner> spinners, AssembledModel model, MeshBuilder builder, Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip,
         List<Placement> list, List<Transform3D> xf, Node parent)
     {
-        var built = new List<(Mesh Mesh, Vector3 Pivot, Vector3 Axis, float Rate)>();
+        var built = new List<(Mesh Mesh, Vector3 Pivot, Vector3 Axis, float Rate, string Name)>();
         foreach (var s in spinners)
         {
             if (builder.Build(model, include: part => s.Owns(part.NodeName), origin: s.Pivot.T, skipFace: skip) is not { } m) continue;
             // the node's own axes in the model; the engine turns it by -(ω·dt) in its left-handed frame, which is +ω·dt about the mirrored axis here
             var w = s.Pivot.Rotate(s.Revs);
-            built.Add((m, Coords.ToGodot(s.Pivot.T), Coords.ToGodot(w).Normalized(), w.Length() * Mathf.Tau));
+            built.Add((m, Coords.ToGodot(s.Pivot.T), Coords.ToGodot(w).Normalized(), w.Length() * Mathf.Tau, s.Name));
         }
         if (built.Count == 0) return;
         for (int i = 0; i < list.Count; i++)
         {
             int start = _spins.Count;
-            foreach (var (mesh, pivot, axis, rate) in built)
+            foreach (var (mesh, pivot, axis, rate, name) in built)
             {
                 var rest = new Transform3D(xf[i].Basis, xf[i] * pivot);
                 var mi = new MeshInstance3D { Mesh = mesh, Transform = rest, Name = list[i].Object.Name + "_spin" };
                 parent.AddChild(mi);
-                _spins.Add(new SpinInstance(mi, rest, axis, rate));
+                _spins.Add(new SpinInstance(mi, rest, axis, rate, name));
             }
             _spinOf[list[i]] = (start, _spins.Count - start);
         }

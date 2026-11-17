@@ -40,7 +40,7 @@ public sealed partial class MissionSetup
     /// <summary>
     /// A structure's nodes and the root's explosion, from its .sdf.
     /// The nodes are the SGEO records (not roots): each its
-    /// own HP (from the record for types 2, 3, 4, 0xb and 0xc, else the ctor's 400;
+    /// own HP (from the record for types 2, 3, 4, 7, 10, 0xb and 0xc, else the ctor's 400;
     /// signs and cacti 5, poles 50, pines 100, the grain hopper's leg and bin
     /// 100), type, flags and parent. The root keeps the
     /// ctor's 400 (<see cref="StaticObject.RootHp"/>). The root's explosion:
@@ -94,7 +94,8 @@ public sealed partial class MissionSetup
                 var name = Formats.Bin.CStr(f.Data, q, 8);
                 if (!parentOf.ContainsKey(name)) continue;   // an empty or NULL slot
                 uint type = Formats.Bin.U32(f.Data, q + 0x5c), flags = Formats.Bin.U32(f.Data, q + 0x60);
-                int hp = type is 2 or 3 or 4 or 0xb or 0xc ? Formats.Bin.I32(f.Data, q + 0x64) : StaticObject.RootHp;
+                // a gate's (7) and a spinner's (10) init take theirs from the record too
+                int hp = type is 2 or 3 or 4 or 7 or 10 or 0xb or 0xc ? Formats.Bin.I32(f.Data, q + 0x64) : StaticObject.RootHp;
                 // a gate (the original's scene loader): the record's offset and its time; the init
                 // takes B through the node's own transform and stores 1 / time
                 GateMotion? gate = null;
@@ -259,6 +260,7 @@ public sealed partial class MissionSetup
                 staticOf[p] = so;
                 so.Nodes.AddRange(nodes);
                 so.OrderSurfaces();
+                so.InitGateRoot();
                 // a gate's slide in the world: the record's offset through its node's transform to the model and the placement
                 var place = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p));
                 foreach (var part in m.Parts)

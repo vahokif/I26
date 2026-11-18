@@ -313,6 +313,17 @@ public sealed partial class EscapeMenu : Control
                 else if (m == 9) { Settings.ChaseCrosshair = _snap.ChaseCrosshair; it.Value = Settings.ChaseCrosshair ? 1 : 0; }
             },
         });
+        // Skip Intro Movies: from the next start
+        _play.Items.Add(new Item
+        {
+            Flags = Check, Label = PlayOptionsScreen.SkipIntroRow, Pair = 34, N = 2,
+            Cb = (it, m) =>
+            {
+                if (m == 6) it.Value = Settings.SkipIntro ? 1 : 0;
+                else if (m == 8) { Settings.SkipIntro = it.Value != 0; _snap.SkipIntro = Settings.SkipIntro; }
+                else if (m == 9) { Settings.SkipIntro = _snap.SkipIntro; it.Value = Settings.SkipIntro ? 1 : 0; }
+            },
+        });
         // every row in one list that scrolls over the pad's rows, in the order added; Done and Cancel stay put
         int at = 1;
         foreach (var it in _play.Items) it.At = at++;

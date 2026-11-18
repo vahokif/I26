@@ -1240,6 +1240,15 @@ public sealed class ShellSettings
     public bool Turrets1997 { get; set; }
     /// <summary>The port's own: a mission's briefing plays while the mission builds, in either look (Play Options' Load During Briefing; [port] briefing_while_loading, on, written only when off). Off: the build behind the loading card, then the briefing, as the original's.</summary>
     public bool BriefingWhileLoading { get; set; } = true;
+    /// <summary>
+    /// The port's own: Play Options' Skip Intro Movies leaves out the start-up's movies (introf01, credf01), and only those (shell.cfg
+    /// [port] skip_intro, written only when on; settings version 13). Off: they play at every start, as the original's.
+    /// </summary>
+    public bool SkipIntro { get; set; }
+    /// <summary>Skip Intro Movies from a file of settings version <paramref name="version"/> and its [port] skip_intro (null when absent): a file from before version 13 has none, so off.</summary>
+    public static bool SkipIntroFrom(int version, bool? stored) => version >= 13 && stored == true;
+    /// <summary>The settings version <see cref="Save"/> writes.</summary>
+    public const int Version = 13;
     /// <summary>The port's own: the mouse wheel cycles weapons instead of zooming the external views (shell.cfg [port] wheel_cycle_weapon; off).</summary>
     public bool WheelCycleWeapon { get; set; }
     /// <summary>The port's own: Graphic Detail's Resolution (shell.cfg [port] resolution, "WxH", written only for a window size). Empty: the desktop, as the game starts.</summary>
@@ -1399,6 +1408,8 @@ public sealed class ShellSettings
         s.ChaseCrosshair = (bool)c.GetValue("port", "chase_crosshair", false);
         s.BriefingWhileLoading = (bool)c.GetValue("port", "briefing_while_loading", true);
         s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
+        // version 13 added Skip Intro Movies: older files have none, so it is off and the intro plays, as before
+        s.SkipIntro = SkipIntroFrom(version, c.HasSectionKey("port", "skip_intro") ? (bool)c.GetValue("port", "skip_intro") : null);
         // no version step: absent (a new player, or a file from before the key), on; the branch-era keyboard_steering key's "original" is off
         s.AssistedSteering = c.HasSectionKey("port", "assisted_steering")
             ? (bool)c.GetValue("port", "assisted_steering", true)
@@ -1468,7 +1479,7 @@ public sealed class ShellSettings
     public void Save()
     {
         var c = new ConfigFile();
-        c.SetValue("shell", "version", 12);
+        c.SetValue("shell", "version", Version);
         c.SetValue("port", "vegetation", Vegetation);
         c.SetValue("port", "draw_distance", DrawDistance);
         c.SetValue("port", "checkpoints", Checkpoints);
@@ -1490,6 +1501,7 @@ public sealed class ShellSettings
         if (ChaseCrosshair) c.SetValue("port", "chase_crosshair", true);
         if (!BriefingWhileLoading) c.SetValue("port", "briefing_while_loading", false);
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
+        if (SkipIntro) c.SetValue("port", "skip_intro", true);
         if (!AssistedSteering) c.SetValue("port", "assisted_steering", false);
         if (Resolution.Length > 0) c.SetValue("port", "resolution", Resolution);
         if (RenderScale != 0) c.SetValue("port", "render_scale", I76.Game.Boot.RenderScale.Percents[Math.Clamp(RenderScale, 0, I76.Game.Boot.RenderScale.Percents.Length - 1)]);

@@ -341,8 +341,9 @@ public partial class Main : Node3D
         else if (!_opt.MissionGiven && _opt.Install is not null)
         {
             var install = new GameInstall(_opt.Install);
-            // The original's start-up plays introf01 then credf01 before the shell, at every start (--movie names one instead)
-            var startup = _opt.Movie is { } only ? [only] : _menuShown || _opt.SkipMovies ? System.Array.Empty<string>() : ["introf01.smk", "credf01.smk"];
+            // The original's start-up plays introf01 then credf01 before the shell, at every start (--movie names one instead; Play Options'
+            // Skip Intro Movies leaves them out)
+            var startup = IntroMovies.Startup(_opt.Movie, _menuShown, _opt.SkipMovies, !_menuShown && I76.Game.Shell.ShellSettings.Load().SkipIntro);
             _menuShown = true; _backToMenu = false;
             _inMenu = true;
             var lastNet = _lastNet;

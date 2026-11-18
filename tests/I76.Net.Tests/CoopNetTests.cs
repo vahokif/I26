@@ -178,11 +178,12 @@ public partial class CoopNetTests(ITestOutputHelper output)
         }
     }
 
-    private Game Start(string install, string mission, int max = 4, bool migration = false)
+    private Game Start(string install, string mission, int max = 4, bool migration = false, int coopScale = 0)
     {
         var server = new NetMeleeServer(new ServerOptions
         {
             Install = install, Arena = mission, Coop = mission, MaxPlayers = max, Port = 0, Seed = 7, Name = "co-op", ListenHost = true, HostMigration = migration,
+            CoopScale = coopScale,
         });
         server.Log += m => output.WriteLine($"[server] {m}");
         server.Start();
@@ -297,6 +298,36 @@ public partial class CoopNetTests(ITestOutputHelper output)
         }
         Assert.True(g.Wait(() => g.Players.All(p => p.News.OfType<GameOverEvent>().Any()), 10000));
         Assert.True(g.Server.Invoke(h => h.Over));
+    }
+
+    /// <summary>
+    /// A car the server spawns mid-mission (a Co-op Scaling copy: no client built it with the mission) is damaged on the
+    /// client as on the server: its health bar goes down with each hit, not white until it dies (#194).
+    /// </summary>
+    [Fact]
+    public void ACarSpawnedMidMissionShowsItsDamageOnTheClient()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        using var g = Start(install, "t01", coopScale: 1);
+        var hal = g.Join("Hal");
+        var ann = g.Join("Ann");
+        List<int> Copies() => g.Server.Invoke(h => h.Setup.Script!.Host.Entities.Where(e => e.ExtraOf is not null && e.Vehicle is not null)
+            .Select(e => e.Vehicle!.NetId & 0xffffff).ToList());
+        Assert.True(g.Wait(() => Copies().Count > 0), "the server spawned no copy");
+        int serial = Copies()[0];
+        Assert.True(g.Wait(() => g.Players.All(p => p.Mirror!.Car(serial) is not null)), "the copy did not reach the clients");
+        Assert.All(g.Players, p => Assert.NotNull(p.Mirror!.Car(serial)!.Health));
+        // a beating on the server: half of every side's armour gone
+        float onHost = g.Server.Invoke(h =>
+        {
+            var v = h.Setup.World.Vehicles.Single(c => (c.NetId & 0xffffff) == serial);
+            for (int z = 0; z < 4; z++) v.Health!.Armour[z] /= 2;
+            return I76.Sim.Damage.HealthGauge.Fraction(v);
+        });
+        Assert.True(onHost < 0.9f, $"the host's copy reads {onHost:0.00}");
+        float Seen(Player p) => I76.Sim.Damage.HealthGauge.Fraction(p.Mirror!.Car(serial)!);
+        Assert.True(g.Wait(() => g.Players.All(p => System.Math.Abs(Seen(p) - onHost) < 0.02f), 5000),
+            $"host {onHost:0.00}; {string.Join(", ", g.Players.Select(p => $"{p.Name} {Seen(p):0.00}"))}");
     }
 
     /// <summary>

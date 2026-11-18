@@ -182,8 +182,15 @@ public sealed class CoopMirrorCars(I76.Formats.Vfs.AssetVfs vfs) : IMirrorCars
     public Vehicle Build(int serial, string def, bool human)
     {
         if (_built.TryGetValue(serial, out var v) && string.Equals(v.Definition, def, StringComparison.OrdinalIgnoreCase)) return v;
-        return VehicleFactory.Create(vfs, def, bodySound: human);
+        // one the mission did not build here (a Co-op Scaling copy the server spawned, a stand-in): its damage state as the
+        // server's (a player's car, or an AI car's), so the snapshots' damage lands on it and its health bar reads true (#194)
+        var fresh = VehicleFactory.Create(vfs, def, bodySound: human);
+        if (fresh.ObjectClass == 9) HeliStep.Setup(fresh, human);
+        else if (fresh.Build is { } b) fresh.Health = I76.Sim.Damage.VehicleDamage.Create(fresh, b, human, _rand);
+        return fresh;
     }
+
+    private readonly I76.Sim.Rng.CrtRand _rand = new(1);
 
     public void Rebuild(Vehicle v, Vehicle fresh, bool human) => MeleeGame.Rebuild(v, fresh, new I76.Sim.Rng.CrtRand(1), human);
 }

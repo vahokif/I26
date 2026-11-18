@@ -420,7 +420,7 @@ public sealed partial class MeleeScreen : ShellScreen
         }
         if (Hosting && !Nitro) _setup.CoopHost = _coopBase;
         if (Coop) _setup.CoopArena = Arenas.Count > 0 ? Arenas[Math.Clamp(Area, 0, Arenas.Count - 1)].Msn : _setup.CoopArena;
-        if (Hosting) { if (!Coop) _setup.Game = _gameName; _setup.Bots = _bots; _setup.BotSkill = (int)_botSkill; _setup.BotCars = [.. _botCars]; _setup.HostRate = _rate; _setup.HostTurrets = _turrets; }
+        if (Hosting) { if (!Coop) _setup.Game = _gameName; _setup.Bots = _bots; _setup.BotSkill = (int)_botSkill; _setup.BotCars = [.. _botCars]; _setup.HostRate = _rate; _setup.HostTurrets = _turrets; _setup.HostDrivers = _drivers; }
         if (Nitro && Hosting)
         {
             _setup.NitroKind = _kind;

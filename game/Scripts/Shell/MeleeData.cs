@@ -256,6 +256,14 @@ public sealed class MeleeSetup
     public int HostRate { get; set; }
     /// <summary>The host forms' UNLIM. TURRETS (the port's): the game lets a car carry several roof turrets. Off by default.</summary>
     public bool HostTurrets { get; set; }
+    /// <summary>
+    /// The host forms' NO. DRIVERS (the seats of the game hosted), apart from <see cref="Drivers"/>, the instant melee's count:
+    /// 4 until the form has set it, as the original's form always opened.
+    /// </summary>
+    public int HostDrivers { get; set; } = DefaultHostDrivers;
+    public const int DefaultHostDrivers = 4;
+    /// <summary>NO. DRIVERS as melee.cfg has it: a file from before it was kept (no key) opens on the default; out of range, the nearest the form offers.</summary>
+    public static int HostDriversFrom(int? stored) => stored is { } n ? Math.Clamp(n, 1, MeleeScreen.MaxDrivers) : DefaultHostDrivers;
     /// <summary>The Nitro instant melee's driver count in full, beside nituser.mel's clamped one (<see cref="SaveNitroDrivers"/>).</summary>
     public int NitroDrivers { get; set; }
 
@@ -290,6 +298,7 @@ public sealed class MeleeSetup
         s.NitroDrivers = Math.Max(0, (int)c.GetValue("melee", "nitro_drivers", 0));
         s.HostRate = I76.Sim.Session.SimRate.IsOffered((int)c.GetValue("melee", "host_rate", 0)) ? (int)c.GetValue("melee", "host_rate", 0) : 0;
         s.HostTurrets = (bool)c.GetValue("melee", "host_turrets", false);
+        s.HostDrivers = HostDriversFrom(c.HasSectionKey("melee", "host_drivers") ? (int)c.GetValue("melee", "host_drivers") : null);
         return s;
     }
 
@@ -311,6 +320,7 @@ public sealed class MeleeSetup
         if (BotSkill != 1) c.SetValue("melee", "bot_skill", BotSkill);
         if (HostRate > 0) c.SetValue("melee", "host_rate", HostRate);
         if (HostTurrets) c.SetValue("melee", "host_turrets", true);
+        c.SetValue("melee", "host_drivers", HostDrivers);
         if (NitroDrivers > 0) c.SetValue("melee", "nitro_drivers", NitroDrivers);
         c.Save(Path);
     }

@@ -29,6 +29,24 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
     private static void Steps(MeleeHost h, int n) { for (int i = 0; i < n; i++) h.Step(); }
 
     /// <summary>
+    /// Drives a seat's car through a point at 8 m/s along its heading: set down 15 m short of it (near enough that the
+    /// arena's slopes do not carry it far off its line, slow enough that it does not leap the crest before N40's flags),
+    /// left to settle, sent off and stepped until it is 10 m past (a stand is touched by a car that drives onto it, not
+    /// one put there).
+    /// </summary>
+    private static void DriveThrough(MeleeHost h, Seat s, Double3 at)
+    {
+        var car = s.Player.Car;
+        var fwd = System.Numerics.Vector3.Normalize(car.Rot.Forward with { Y = 0 });
+        double sx = at.X - fwd.X * 15, sz = at.Z - fwd.Z * 15;
+        car.Pos = new Double3(sx, h.Setup.Ground.Query(sx, at.Y + 2, sz).Height + 0.5, sz);
+        car.Vel = default;
+        Steps(h, 30);
+        car.Vel = fwd * 8; car.Speed = 8;
+        for (int i = 0; i < 160 && (car.Pos.X - at.X) * fwd.X + (car.Pos.Z - at.Z) * fwd.Z < 10; i++) h.Step();
+    }
+
+    /// <summary>
     /// The join accept carries the arena's fingerprint (mission file and terrain, size and CRC); a client whose copy
     /// matches plays, one whose copy differs or who has no such map is told why before it builds anything.
     /// </summary>
@@ -130,7 +148,7 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(CtfFlag.Home, f1.State);
         Assert.Equal(CtfFlag.Home, f2.State);
         // red takes green's flag, and dies with it: the flag stays on the wreck
-        Put(red, f2.HomePos); Steps(host, 2);
+        DriveThrough(host, red, f2.HomePos);
         Assert.Equal(CtfFlag.Carried, f2.State);
         Assert.Same(red.Player, f2.Carrier);
         var snap = ReadSnapshot(host, red);
@@ -145,12 +163,12 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(CtfFlag.Home, f2.State);
         Assert.False(game.Ended);
         // green touching its own flag's stand does nothing; red takes green's flag again and captures it
-        Put(green, f2.HomePos); Steps(host, 2);
+        DriveThrough(host, green, f2.HomePos);
         Assert.Equal(CtfFlag.Home, f2.State);
-        Put(red, new Double3(f2.HomePos.X + 1, f2.HomePos.Y, f2.HomePos.Z)); Put(green, f1.HomePos.X > 0 ? new Double3(0, 0, 0) : new Double3(99999, 0, 99999));
-        Steps(host, 2);
+        Put(green, f1.HomePos.X > 0 ? new Double3(0, 0, 0) : new Double3(99999, 0, 99999));
+        DriveThrough(host, red, f2.HomePos);
         Assert.Same(red.Player, f2.Carrier);
-        Put(red, f1.HomePos); Steps(host, 2);
+        DriveThrough(host, red, f1.HomePos);
         Assert.Equal(CtfFlag.Home, f2.State);
         Assert.Equal(1, red.Player.Captures);
         Assert.Equal(1, game.Ctf.TeamCaptures[1]);
@@ -174,7 +192,7 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <summary>
     /// The arena's own flag (a1flagN: a base disc and a pole with its pennant) is no obstacle: the car's collide slot ignores
     /// both parts, so a car driven through it at 15 m/s meets nothing (no bounce, no ram damage) and still takes the flag
-    /// through the CTF game's stub sphere.
+    /// through the CTF game's base contact.
     /// </summary>
     [Fact]
     public void ACarDrivesThroughAnEnemyFlagAndTakesIt()
@@ -187,6 +205,13 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         Steps(host, 3);
         var f2 = game.Ctf!.Flags.First(f => f.Team == 2);
         var flag = host.Setup.Statics.Objects.Single(o => o.Name.TrimStart('#').StartsWith("a1flag2", StringComparison.OrdinalIgnoreCase));
+        // the stand's base as the arena's model gives it: a 4 m sphere (class 0x4000) about the disc's middle, 0.15 m above
+        // the flag's grounded placement, and the model's bounds (the 8 m disc and the pole)
+        Assert.Equal(4f, f2.Base.Radius, 3);
+        Assert.Equal(f2.Base.Radius, f2.Base.Grow);
+        Assert.Equal(0.15f + (float)(flag.Origin.Y - f2.HomePos.Y), f2.Base.Origin.Y, 3);
+        Assert.Equal(f2.Base.Origin, f2.Base.Centre);
+        Assert.InRange(f2.Base.BoundsRadius, 4.3f, 4.45f);
         var car = red.Player.Car;
         var fwd = car.Rot.Forward;
         fwd = System.Numerics.Vector3.Normalize(fwd with { Y = 0 });

@@ -111,8 +111,8 @@ public sealed class CtfFlag
     /// <summary>The team (1–4) whose flag this is.</summary>
     public required int Team { get; init; }
     public required Double3 HomePos { get; init; }
-    /// <summary>The stub's collision radius: 1.2 x the flag's bounding radius.</summary>
-    public float StubRadius { get; init; } = CtfGame.DefaultStubRadius;
+    /// <summary>The flag's base, which takes and captures the flag: from the arena's model, or a stock flag's.</summary>
+    public CtfBase Base { get; init; } = CtfBase.Stock;
     public int State { get; internal set; }
     public Double3 Pos { get; internal set; }
     public MeleePlayer? Carrier { get; internal set; }
@@ -128,16 +128,37 @@ public sealed class CtfFlag
 }
 
 /// <summary>
+/// A flag's base (the disc of a1flagN, the node of type 0x5b), the part a car touches to take or capture the flag. Its
+/// collider is a sphere: in the original a car meets it when the sphere's centre, carried by the car's motion over the
+/// frame, enters the car's collision box grown by the sphere's radius on every side (x 1.0, or x 0.75 for a sphere
+/// of class 0x5000) — from outside: a centre already inside is no new contact — and only if, that frame, the car's
+/// body sphere comes within the base's radius of the base's origin and within the flag model's bounding sphere. The
+/// stock flags' base: a 4 m sphere about the disc's middle, 0.15 m above the placement (the model's 0.05 m and the
+/// 0.1 m the flag is raised by when it loads). Offsets are from the flag's <see cref="CtfFlag.HomePos"/>.
+/// </summary>
+/// <param name="Origin">The base node's origin: the centre of its pre-test sphere.</param>
+/// <param name="Centre">The base sphere's centre.</param>
+/// <param name="Radius">The base sphere's radius, as the model gives it.</param>
+/// <param name="Grow">How far the car's box grows for it: the radius x 1.0 (class 0x4000) or x 0.75 (class 0x5000).</param>
+/// <param name="Bounds">The whole flag model's bounding sphere (the collider record's): its centre.</param>
+/// <param name="BoundsRadius">Its radius.</param>
+public readonly record struct CtfBase(System.Numerics.Vector3 Origin, System.Numerics.Vector3 Centre, float Radius, float Grow,
+    System.Numerics.Vector3 Bounds, float BoundsRadius)
+{
+    /// <summary>A stock a1flagN's base (a 4 m sphere, class 0x4000) and bounds (the 8 m disc and the 3.5 m pole).</summary>
+    public static readonly CtfBase Stock = new(new(0, 0.15f, 0), new(0, 0.15f, 0), 4f, 4f, new(0, 1.874f, 0), 4.376f);
+}
+
+/// <summary>
 /// Capture the flag, the server side (the flag's collision handling).
 /// Pickup only at the home stand and by an enemy carrying nothing; capture by
 /// touching any stand of one's own colour while carrying an enemy flag; one's
 /// own flag is never returned by touch; a carried flag stays on the wreck and
-/// goes home when the car is removed or respawned.
+/// goes home when the car is removed or respawned. A stand is touched as its
+/// base is met (<see cref="CtfBase"/>).
 /// </summary>
 public sealed class CtfGame
 {
-    /// <summary>The stub radius where the flag's own bounding radius is not known (the flag pole's, about 3.5 m, x 1.2).</summary>
-    public const float DefaultStubRadius = 4.2f;
     /// <summary>The CTF team names (teams 1–4).</summary>
     public static readonly string[] TeamNames = ["Red Dawn", "Gang Green", "Purple Reign", "Black Plague"];
 
@@ -160,14 +181,15 @@ public sealed class CtfGame
     /// </summary>
     public static int FlagTeam(int number) => System.Math.Clamp(number, 1, 4);
 
-    public void AddFlag(int number, Double3 home) =>
-        Flags.Add(new CtfFlag { Number = number, Team = FlagTeam(number), HomePos = home, Pos = home });
+    /// <summary>Adds a flag at its home, with its base (null: a stock flag's).</summary>
+    public void AddFlag(int number, Double3 home, CtfBase? stand = null) =>
+        Flags.Add(new CtfFlag { Number = number, Team = FlagTeam(number), HomePos = home, Pos = home, Base = stand ?? CtfBase.Stock });
 
     /// <summary>The flag a player carries.</summary>
     public CtfFlag? Carried(MeleePlayer p) => Flags.FirstOrDefault(f => f.Carrier == p);
 
-    /// <summary>One frame: a team without players has its flag inactive, one with them has it at home again; the carried flag follows its car; then the contacts.</summary>
-    public void Update(IReadOnlyList<MeleePlayer> players, Func<MeleePlayer, bool> alive, Func<MeleePlayer, float> carRadius)
+    /// <summary>One frame of <paramref name="dt"/> seconds: a team without players has its flag inactive, one with them has it at home again; the carried flag follows its car; then the contacts.</summary>
+    public void Update(IReadOnlyList<MeleePlayer> players, Func<MeleePlayer, bool> alive, float dt)
     {
         foreach (var f in Flags)
         {
@@ -183,15 +205,57 @@ public sealed class CtfGame
         foreach (var p in players)
         {
             if (!alive(p)) continue;
-            var at = p.Car.Pos;
             foreach (var stub in Flags)
-            {
-                var s = stub.StubPos;
-                double dx = at.X - s.X, dy = at.Y - s.Y, dz = at.Z - s.Z, r = stub.StubRadius + carRadius(p);
-                if (dx * dx + dy * dy + dz * dz > r * r) continue;
-                Touch(p, stub, players);
-            }
+                if (MeetsBase(p.Car, stub.StubPos, stub.Base, dt)) Touch(p, stub, players);
         }
+    }
+
+    /// <summary>
+    /// Whether a car meets a flag's base this frame (<see cref="CtfBase"/>): its body sphere within the flag's bounds and
+    /// the base's pre-test sphere at their closest this frame, and the base sphere's centre entering the car's grown box.
+    /// A car at rest meets nothing.
+    /// </summary>
+    public static bool MeetsBase(Vehicles.Vehicle car, Double3 stand, CtfBase b, float dt)
+    {
+        var at = new System.Numerics.Vector3((float)(stand.X - car.Pos.X), (float)(stand.Y - car.Pos.Y), (float)(stand.Z - car.Pos.Z));
+        // the car's collider record: an aircraft's model sphere, any other car's COLP box's
+        var (mid, r) = car.ModelSphere ?? car.BodySphere();
+        var c = car.Rot.ToWorld(mid);
+        if (!Closest(car.Vel, at + b.Bounds - c, r + b.BoundsRadius, dt)) return false;
+        if (!Closest(car.Vel, at + b.Origin - c, r + b.Radius, dt)) return false;
+        var min = new System.Numerics.Vector3(car.BoxX[0], car.BoxY[1], car.BoxZ[0]) - new System.Numerics.Vector3(b.Grow);
+        var max = new System.Numerics.Vector3(car.BoxX[3], car.BoxY[3], car.BoxZ[3]) + new System.Numerics.Vector3(b.Grow);
+        return Enters(car.Rot.ToLocal(at + b.Centre), car.Rot.ToLocal(-car.Vel), min, max, dt);
+    }
+
+    /// <summary>A sphere moving at <paramref name="v"/> and a static point <paramref name="d0"/> away: within <paramref name="reach"/> at their closest over the frame. Nothing moving, no contact.</summary>
+    private static bool Closest(System.Numerics.Vector3 v, System.Numerics.Vector3 d0, float reach, float dt)
+    {
+        if (v.X * v.X < 1e-8f && v.Y * v.Y < 1e-8f && v.Z * v.Z < 1e-8f) return false;
+        float vv = v.LengthSquared();
+        float t = vv < 1e-4f ? dt : System.MathF.Min(System.Numerics.Vector3.Dot(v, d0) / vv, dt);
+        var d = t > 0 ? d0 - v * t : d0;
+        return d.LengthSquared() <= reach * reach;
+    }
+
+    /// <summary>A point moving at <paramref name="v"/> enters the box within the frame: from outside (a point already inside does not).</summary>
+    private static bool Enters(System.Numerics.Vector3 p, System.Numerics.Vector3 v, System.Numerics.Vector3 min, System.Numerics.Vector3 max, float dt)
+    {
+        float enter = float.MinValue, exit = float.MaxValue;
+        for (int axis = 0; axis < 3; axis++)
+        {
+            float pa = p[axis], va = v[axis];
+            if (System.MathF.Abs(va) < 1e-4f)
+            {
+                if (pa < min[axis] || pa > max[axis]) return false;
+                continue;
+            }
+            float t0 = (min[axis] - pa) / va, t1 = (max[axis] - pa) / va;
+            if (t0 > t1) (t0, t1) = (t1, t0);
+            enter = System.MathF.Max(enter, t0);
+            exit = System.MathF.Min(exit, t1);
+        }
+        return enter <= exit && exit >= 0 && enter >= 0 && enter <= dt;
     }
 
     private void Touch(MeleePlayer p, CtfFlag stub, IReadOnlyList<MeleePlayer> players)

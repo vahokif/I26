@@ -338,6 +338,7 @@ public sealed partial class MissionSetup
         var types = new Dictionary<string, Func<string, uint>>(StringComparer.OrdinalIgnoreCase);
         var structures = new Dictionary<string, StructureDef>(StringComparer.OrdinalIgnoreCase);
         var destroyedAsm = new ModelAssembler(vfs) { Destroyed = true };
+        var flagBases = new Dictionary<Placement, CtfBase>();
         // every placement stands on the terrain (the original's scene loader with its ground flag, from the ODEF loader),
         // the vehicle types 1, 8 and 9 included: a gun emplacement's collider stands where its model does
         foreach (var (p, type) in w.Placements.Select(p => (p, p.Object.ObjectType)))
@@ -363,6 +364,8 @@ public sealed partial class MissionSetup
                         gate.World = place.Rotate(part.ToModel.Rotate(gate.Offset));
                 so.Explosion = sd.Explosion;
                 so.Sound = sd.Sound;
+                if (melee is not null && IsFlagPlacement(p) && FlagBase(p, m, types[p.Definition], classes[p.Definition], NodeSpheres(vfs, p.Definition), place, so) is { } fb)
+                    flagBases[p] = fb;
                 if (sd.Marker is { } mk) so.Marker = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p)).Apply(mk.Apply(System.Numerics.Vector3.Zero));
                 // what it leaves when destroyed: the 'A' geometry, if any, whatever the placement's type (a dead
                 // type-3 node gives the car no response: StaticObject.Unfelt, by the node's own type)
@@ -509,7 +512,7 @@ public sealed partial class MissionSetup
                     return v;
                 },
             };
-            LoadMeleePoints(game, w.Placements);
+            LoadMeleePoints(game, w.Placements, p => flagBases.TryGetValue(p, out var b) ? b : null);
             ms = new MissionScript(null, host, rand, seed, nitroDriver, i76Lines) { Melee = game };
         }
         else if (script && w.Mission.ReadFsmProgram() is { Code.Length: > 0 } program)
@@ -648,6 +651,22 @@ public sealed partial class MissionSetup
         return v;
     }
 
+    /// <summary>
+    /// A CTF flag's base from its model (<see cref="CtfBase"/>): the part of node type 0x5b (the disc, its finest detail),
+    /// its sphere (centre and radius) and collider class, raised 0.1 m as the flag is when it loads, and the whole model's
+    /// bounding sphere; each from the placement's own position. Null for a model without such a part (a stock flag's base then).
+    /// </summary>
+    private static CtfBase? FlagBase(Placement p, AssembledModel m, Func<string, uint> types, Func<string, uint> classes,
+        Func<string, (System.Numerics.Vector3 Centre, float Radius)?> spheres, Affine place, StaticObject so)
+    {
+        if (m.Parts.FirstOrDefault(x => types(x.NodeName) == 0x5b) is not { } part || spheres(part.NodeName) is not var (centre, radius)) return null;
+        var home = new System.Numerics.Vector3(p.Object.Position.X, p.Object.Position.Y, p.Object.Position.Z);
+        var lift = new System.Numerics.Vector3(0, 0.1f, 0);
+        System.Numerics.Vector3 At(System.Numerics.Vector3 local) => place.Apply(part.ToModel.Apply(local) + lift) - home;
+        return new CtfBase(At(System.Numerics.Vector3.Zero), At(centre), radius, radius * (classes(part.NodeName) == 0x5000 ? 0.75f : 1f),
+            so.Centre - home, so.BoundRadius);
+    }
+
     /// <summary>An a1flagN placement (the CTF flag), class 2 or 3.</summary>
     private static bool IsFlagPlacement(Placement p) =>
         p.Object.ObjectType is 2 or 3 && p.Object.Name.TrimStart('#').StartsWith("a1flag", StringComparison.OrdinalIgnoreCase);
@@ -658,7 +677,7 @@ public sealed partial class MissionSetup
     /// into the table of team N−1 (0–4, else 0); "regen" a regen pad; "check" (a
     /// prefix) checkpoint N, check99 the finish; a1flagN a CTF flag. None of them is an object.
     /// </summary>
-    internal static void LoadMeleePoints(MeleeGame game, IEnumerable<Placement> placements)
+    internal static void LoadMeleePoints(MeleeGame game, IEnumerable<Placement> placements, Func<Placement, CtfBase?>? flagBases = null)
     {
         bool ctf = game.Rules.Kind == MeleeKind.Ctf;
         if (ctf) game.Ctf = new CtfGame();
@@ -688,7 +707,7 @@ public sealed partial class MissionSetup
         // a CTF game's flags, by number: only the teams that play (2–4) keep theirs in the table, the rest never have a member
         if (ctf)
             foreach (var (p, n) in CtfFlagPlacements(placements))
-                game.Ctf!.AddFlag(n, new Double3(p.Object.Position.X, p.Object.Position.Y, p.Object.Position.Z));
+                game.Ctf!.AddFlag(n, new Double3(p.Object.Position.X, p.Object.Position.Y, p.Object.Position.Z), flagBases?.Invoke(p));
     }
 
     /// <summary>

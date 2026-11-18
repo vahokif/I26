@@ -30,7 +30,7 @@ public sealed partial class MeleeGame
             .Transient("the host's hooks", nameof(CtfGame.Message), nameof(CtfGame.Captured));
         a.For<CtfFlag>()
             .Saved(nameof(CtfFlag.State), nameof(CtfFlag.Pos), nameof(CtfFlag.Carrier))
-            .Structural("the flag's placement", nameof(CtfFlag.Number), nameof(CtfFlag.Team), nameof(CtfFlag.HomePos), nameof(CtfFlag.StubRadius));
+            .Structural("the flag's placement", nameof(CtfFlag.Number), nameof(CtfFlag.Team), nameof(CtfFlag.HomePos), nameof(CtfFlag.Base));
         RaceTracker.AuditFields(a);
         BotBrain.AuditFields(a);
     }

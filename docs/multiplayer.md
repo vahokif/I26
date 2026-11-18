@@ -535,10 +535,24 @@ the original; single player stays the base melee. They are here server-side
   members of the flag's team. Flags are indestructible (they already were), and
   no obstacle: a car drives through the flag and its base, whose parts (node types
   0x5a, the pole and pennant, and 0x5b, the base) the car's collisions ignore
-  whatever their collider class; the pickup is the stand's sphere alone.
+  whatever their collider class. **A stand is touched** as the original's
+  collision pass meets the base, which only takes or captures the flag (no
+  response): the base is a sphere (the stock flags': 4 m about the disc's
+  middle, 0.15 m above the placement, read from the arena's model with its
+  collider class, x 0.75 for class 0x5000), and a car meets it on the frame
+  its centre, carried by the car's motion, enters the car's collision box
+  grown by that radius on every side, from outside, while the car's body
+  sphere comes within the radius of it (and within the flag model's bounding
+  sphere) at their closest that frame (`CtfGame.MeetsBase`). Driving straight
+  at a stock flag the flag is taken when the base's middle is 4 m ahead of the
+  front of the car's collision box (4 m beside it, side on). A car whose line
+  passes the base's middle more than about 2 m off its centre line (more at
+  speed: the frame's motion counts) meets the box's front out of the sphere's
+  reach and drives across the disc without the flag; a car at rest on a stand,
+  or one already over the base when its flag comes home, takes nothing until
+  it drives on again.
   **The flag's team** is the open question of the spec; it is taken from the
   number in the name (`a1flagN` is team N), isolated in `CtfGame.FlagTeam`.
-  The stand's radius is a constant 4.2 m (the flag's bounding radius is not read).
 - **End.** The first to reach the goal (a team's sum for laps, points and kills
   in team play, the team's captures in CTF) wins, the losers' cars are blown up
   (`DamageModel.Destroy`) and the game is over 10 s later. A time limit says "*** Time limit has elapsed!", every

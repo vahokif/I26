@@ -319,6 +319,21 @@ public sealed class Vehicle
     /// </summary>
     public (Vector3 Centre, float Radius)? ModelSphere;
 
+    /// <summary>
+    /// The body sphere of the car's collider record, in its own frame: the middle of the COLP box's corners
+    /// {x0,x3}×{y1,y3}×{z0,z3}, and the farthest of them + 0.1.
+    /// </summary>
+    public (Vector3 Mid, float Radius) BodySphere()
+    {
+        var mid = new Vector3((BoxX[0] + BoxX[3]) / 2, (BoxY[1] + BoxY[3]) / 2, (BoxZ[0] + BoxZ[3]) / 2);
+        float r = 0;
+        foreach (var x in new[] { BoxX[0], BoxX[3] })
+            foreach (var y in new[] { BoxY[1], BoxY[3] })
+                foreach (var z in new[] { BoxZ[0], BoxZ[3] })
+                    r = MathF.Max(r, Vector3.Distance(mid, new Vector3(x, y, z)));
+        return (mid, r + 0.1f);
+    }
+
     /// <summary>The four horizontal box corners at mid-height (y1+y2)/2, for the terrain sweep.</summary>
     public Vector3[] Corners => [new(BoxX[0], Ym, BoxZ[0]), new(BoxX[3], Ym, BoxZ[0]), new(BoxX[3], Ym, BoxZ[3]), new(BoxX[0], Ym, BoxZ[3])];
     private float Ym => (BoxY[1] + BoxY[2]) * 0.5f;

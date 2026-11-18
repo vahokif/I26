@@ -585,7 +585,7 @@ public sealed class StaticWorld
             if (cls == 0) cls = DefaultClass(type);
             if (cls == 0x1000) continue;
             // a CTF flag's parts (the pole and pennant, type 0x5a, and the base, 0x5b): the car's collide slot ignores them
-            // whatever their collider class, so a car drives through the flag; the CTF game's stub sphere takes it
+            // whatever their collider class, so a car drives through the flag; the CTF game's base contact takes it (CtfGame.MeetsBase)
             if (type != 4 && nodeType?.Invoke(part.NodeName) is 0x5a or 0x5b) continue;
             if (cls is 0x4000 or 0x5000)
             {

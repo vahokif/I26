@@ -140,7 +140,21 @@ public class NitroModesTests
         return (g, log);
     }
 
-    private static void Tick(CtfGame g, params MeleePlayer[] ps) => g.Update(ps, _ => true, _ => 2f);
+    private const float Dt = 102f / 2048f;
+
+    private static void Tick(CtfGame g, params MeleePlayer[] ps) => g.Update(ps, _ => true, Dt);
+
+    /// <summary>Drives a car through a point along +z at 20 m/s, from 10 m short of it to 10 m past, a frame at a time; the others stand.</summary>
+    private static void DriveThrough(CtfGame g, MeleePlayer car, Double3 at, params MeleePlayer[] all)
+    {
+        car.Car.Vel = new System.Numerics.Vector3(0, 0, 20);
+        for (double z = at.Z - 10; z <= at.Z + 10; z += 20 * Dt)
+        {
+            car.Car.Pos = new Double3(at.X, at.Y, z);
+            Tick(g, all);
+        }
+        car.Car.Vel = default;
+    }
 
     [Fact]
     public void AFlagIsInactiveUntilItsTeamHasAPlayer()
@@ -151,9 +165,8 @@ public class NitroModesTests
         Tick(g, a);
         Assert.Equal(CtfFlag.Home, g.Flags[0].State);
         Assert.Equal(CtfFlag.Inactive, g.Flags[1].State);
-        // team 1 reaches the stand of team 2, which has nobody: nothing to take
-        a.Car.Pos = new Double3(1000, 0, 0);
-        Tick(g, a);
+        // team 1 drives through the stand of team 2, which has nobody: nothing to take
+        DriveThrough(g, a, new Double3(1000, 0, 0), a);
         Assert.Null(g.Carried(a));
         a.Car.Pos = new Double3(500, 0, 0);
         Tick(g, a, b);                                         // team 2 arrives: its flag is home
@@ -168,15 +181,13 @@ public class NitroModesTests
         var b = Player(2, new Double3(1000, 0, 0));
         Tick(g, a, b);                                         // both at their own stands: nothing
         Assert.All(g.Flags, f => Assert.Equal(CtfFlag.Home, f.State));
-        a.Car.Pos = new Double3(1000, 0, 0);                   // the enemy stand
         b.Car.Pos = new Double3(500, 0, 0);
-        Tick(g, a, b);
+        DriveThrough(g, a, new Double3(1000, 0, 0), a, b);     // through the enemy stand
         Assert.Equal(CtfFlag.Carried, g.Flags[1].State);
         Assert.Same(a, g.Flags[1].Carrier);
         Assert.Contains(log, l => l.Contains("flag has been taken"));
-        // the enemy touches the carried flag's stand again: it is no longer there to take
-        b.Car.Pos = new Double3(1000, 0, 0);
-        Tick(g, a, b);
+        // the enemy drives through the carried flag's stand: it is no longer there to take
+        DriveThrough(g, b, new Double3(1000, 0, 0), a, b);
         Assert.Same(a, g.Flags[1].Carrier);
         // the flag follows its carrier
         a.Car.Pos = new Double3(600, 0, 0);
@@ -191,10 +202,9 @@ public class NitroModesTests
         var a = Player(1, new Double3(1000, 0, 0));
         var a2 = Player(1, new Double3(500, 0, 500));
         var b = Player(2, new Double3(500, 0, -500));
-        Tick(g, a, a2, b);                                     // a takes team 2's flag
+        DriveThrough(g, a, new Double3(1000, 0, 0), a, a2, b); // a takes team 2's flag
         Assert.Same(a, g.Flags[1].Carrier);
-        a.Car.Pos = new Double3(0, 0, 0);                      // home with its own flag at home: capture
-        Tick(g, a, a2, b);
+        DriveThrough(g, a, new Double3(0, 0, 0), a, a2, b);    // home with its own flag at home: capture
         Assert.Equal(CtfFlag.Home, g.Flags[1].State);
         Assert.Null(g.Carried(a));
         Assert.Equal(1, a.Captures);
@@ -211,10 +221,10 @@ public class NitroModesTests
         var (g, _) = Ctf();
         var a = Player(1, new Double3(1000, 0, 0));
         var b = Player(2, new Double3(0, 0, 0));
-        Tick(g, a, b);                                         // a takes flag 2; b takes flag 1 at the same time
+        DriveThrough(g, a, new Double3(1000, 0, 0), a, b);     // a takes flag 2, b flag 1
+        DriveThrough(g, b, new Double3(0, 0, 0), a, b);
         Assert.Same(b, g.Flags[0].Carrier);
-        a.Car.Pos = new Double3(0, 0, 0);                      // a at its own stand while its flag is carried off
-        Tick(g, a, b);
+        DriveThrough(g, a, new Double3(0, 0, 0), a, b);        // a through its own stand while its flag is carried off
         Assert.Equal(1, a.Captures);
     }
 
@@ -224,15 +234,15 @@ public class NitroModesTests
         var (g, log) = Ctf();
         var a = Player(1, new Double3(1000, 0, 0));
         var b = Player(2, new Double3(2000, 0, 0));
-        Tick(g, a, b);
+        DriveThrough(g, a, new Double3(1000, 0, 0), a, b);
         Assert.Same(a, g.Flags[1].Carrier);
         // the carrier is destroyed: not alive, nobody can take it, it stays
         a.Car.Pos = new Double3(1200, 0, 0);
-        g.Update([a, b], p => p == b, _ => 2f);
+        g.Update([a, b], p => p == b, Dt);
         Assert.Equal(CtfFlag.Carried, g.Flags[1].State);
         Assert.Equal(1200, g.Flags[1].Pos.X);
         b.Car.Pos = new Double3(1200, 0, 0);
-        g.Update([a, b], p => p == b, _ => 2f);
+        g.Update([a, b], p => p == b, Dt);
         Assert.Same(a, g.Flags[1].Carrier);
         // the respawn (or removal) returns it
         g.CarrierGone(a);
@@ -251,6 +261,73 @@ public class NitroModesTests
         Tick(g, a);
         Assert.Equal(CtfFlag.Inactive, g.Flags[1].State);
         Assert.Contains(log, l => l.Contains("has left the game"));
+    }
+
+    /// <summary>
+    /// A stand is touched as in the original: its base's 4 m sphere about the disc's middle (0.15 m up) counts when its
+    /// centre, carried by the car's motion over the frame, enters the car's collision box grown by 4 m on every side, from
+    /// outside, while the car's body sphere comes within 4 m of it that frame. The test car's box: x ±0.9, y 0.3–1.4,
+    /// z −2.1–2, its body sphere r 2.405 about (0, 0.85, −0.05).
+    /// </summary>
+    private static (CtfGame Game, MeleePlayer Red, MeleePlayer Green) Stand()
+    {
+        var (g, _) = Ctf();
+        var red = Player(1, new Double3(0, 0, 0));
+        var green = Player(2, new Double3(5000, 0, 5000));
+        Tick(g, red, green);
+        return (g, red, green);
+    }
+
+    /// <summary>One frame of the car (team 1) at (x, 0, z) from team 2's flag at (1000, 0, 0), moving at <paramref name="v"/>; whether it has the flag.</summary>
+    private static bool Frame((CtfGame G, MeleePlayer Red, MeleePlayer Green) s, double x, double z, System.Numerics.Vector3 v)
+    {
+        s.Red.Car.Pos = new Double3(1000 + x, 0, z);
+        s.Red.Car.Vel = v;
+        Tick(s.G, s.Red, s.Green);
+        return s.G.Carried(s.Red) is not null;
+    }
+
+    [Fact]
+    public void AFlagIsTakenAsItsBaseEntersTheCarsBoxGrownBy4mAhead()
+    {
+        // head on at 20 m/s (1 m a frame): the base 7.1 m ahead of the car's origin does not reach the grown box's front
+        // (z 2 + 4) this frame; 6.5 m ahead it does
+        var s = Stand();
+        Assert.False(Frame(s, 0, -7.1, new(0, 0, 20)));
+        Assert.True(Frame(s, 0, -6.5, new(0, 0, 20)));
+    }
+
+    [Fact]
+    public void AFlagIsTakenAsItsBaseEntersTheCarsBoxGrownBy4mAtTheSide()
+    {
+        // sliding sideways at 5 m/s (0.25 m a frame): the box's side is x 0.9 + 4
+        var s = Stand();
+        Assert.False(Frame(s, -5.3, 0, new(5, 0, 0)));
+        Assert.True(Frame(s, -5.05, 0, new(5, 0, 0)));
+    }
+
+    [Fact]
+    public void ACarPassingTheBaseOffItsLineWhereTheBodyIsOutOfReachDoesNotTakeTheFlag()
+    {
+        // at 5 m/s the base 3 m off the car's line enters the grown box's front where the body sphere is beyond 4 m of it,
+        // and is inside from then on: the car drives across the disc without the flag. 1.5 m off its line it takes it.
+        var s = Stand();
+        for (double z = -12; z < 12; z += 5 * Dt) Assert.False(Frame(s, -3, z, new(0, 0, 5)));
+        bool took = false;
+        for (double z = -12; z < 12 && !took; z += 5 * Dt) took = Frame(s, -1.5, z, new(0, 0, 5));
+        Assert.True(took);
+    }
+
+    [Fact]
+    public void ACarAtRestOnTheBaseDoesNotTakeTheFlagUntilItDrivesInAgain()
+    {
+        var s = Stand();
+        for (int i = 0; i < 10; i++) Assert.False(Frame(s, 0, 0, default));
+        // moving about inside the grown box: the base never enters it
+        Assert.False(Frame(s, 0, 0.5, new(0, 0, 3)));
+        Assert.False(Frame(s, 0, -2, new(0, 0, -3)));
+        DriveThrough(s.Game, s.Red, new Double3(1000, 0, 0), s.Red, s.Green);
+        Assert.NotNull(s.Game.Carried(s.Red));
     }
 
     [Fact]
@@ -304,13 +381,11 @@ public class NitroModesTests
         var green = Player(2, new Double3(0, 0, 500));
         Tick(g, red, green);
         Assert.True(CtfFlag.StandsAtHome(g.Flags[1].State));
-        red.Car.Pos = g.Flags[1].HomePos;
-        Tick(g, red, green);
+        DriveThrough(g, red, g.Flags[1].HomePos, red, green);
         Assert.Equal(CtfFlag.Carried, g.Flags[1].State);
         Assert.False(CtfFlag.StandsAtHome(g.Flags[1].State));
         // captured at red's own stand: green's flag goes home
-        red.Car.Pos = g.Flags[0].HomePos;
-        Tick(g, red, green);
+        DriveThrough(g, red, g.Flags[0].HomePos, red, green);
         Assert.Equal(CtfFlag.Home, g.Flags[1].State);
         Assert.True(CtfFlag.StandsAtHome(g.Flags[1].State));
     }

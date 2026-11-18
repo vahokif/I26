@@ -561,13 +561,7 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         if (ground is not Collision.IHasStatics wg) return;
         var p0 = v.Pos.ToVector3();
         // body sphere: the 8 corners {x0,x3}×{y1,y3}×{z0,z3}, + 0.1
-        float r = 0;
-        var mid = new Vector3((v.BoxX[0] + v.BoxX[3]) / 2, (v.BoxY[1] + v.BoxY[3]) / 2, (v.BoxZ[0] + v.BoxZ[3]) / 2);
-        foreach (var x in new[] { v.BoxX[0], v.BoxX[3] })
-            foreach (var y in new[] { v.BoxY[1], v.BoxY[3] })
-                foreach (var z in new[] { v.BoxZ[0], v.BoxZ[3] })
-                    r = MathF.Max(r, Vector3.Distance(mid, new Vector3(x, y, z)));
-        r += 0.1f;
+        var (mid, r) = v.BodySphere();
         var c = p0 + v.Rot.ToWorld(mid);
         var c2 = c + v.Vel * dtFrame;
         float minX = MathF.Min(c.X, c2.X) - r, maxX = MathF.Max(c.X, c2.X) + r;

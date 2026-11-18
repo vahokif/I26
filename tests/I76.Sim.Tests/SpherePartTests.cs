@@ -125,7 +125,7 @@ public class SpherePartTests
     /// <summary>
     /// a1flagN's shape: the base disc (type 0x5b, a sphere, 4 m round) and the pole and pennant (type 0x5a, a box: a plate
     /// 1.8 m wide and 3.4 m high across the car's way). A car driven through it at 15 m/s neither bounces nor meets it (no
-    /// contact, so no ram damage), and the CTF game's stub sphere still gives it the flag.
+    /// contact, so no ram damage), and the CTF game's base contact still gives it the flag.
     /// </summary>
     [Fact]
     public void ACarDrivesThroughAFlagAndTakesIt()
@@ -152,7 +152,7 @@ public class SpherePartTests
         {
             sim.Step.ObjectHits.Clear();
             sim.Frame(102f / 2048f);
-            ctf.Update([red, green], _ => true, _ => 2f);
+            ctf.Update([red, green], _ => true, 102f / 2048f);
             Assert.DoesNotContain(sim.Step.ObjectHits, h => h.Name == "a1flag2");
             if (System.Math.Abs(v.Pos.Z - 40) < 6) slowest = MathF.Min(slowest, v.Vel.Z);
         }

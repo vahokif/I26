@@ -393,15 +393,19 @@ public sealed partial class SimSession
     /// After the triggers: the cycle and link keys and the auto-cycle off a selected weapon shot to nothing
     /// (<see cref="Armory.Select"/>), for each driver's car. A changed selection turns the radar camera off;
     /// cammo.wav plays on the car when the original asks for it (a selection changed, a weapon linked or
-    /// unlinked), as a click event the network carries; a client's prediction leaves the sound to the server's.
+    /// unlinked), as a click event the network carries; a client's prediction plays it when it first runs the press
+    /// (<paramref name="fresh"/>; the server's click for it is then not played), not on a replay.
     /// </summary>
-    private void Select(Driver d, bool predict = false)
+    /// <summary>The weapon cycle's and link's click (<see cref="Select"/>).</summary>
+    public const string CycleSound = "cammo.wav";
+
+    private void Select(Driver d, bool predict = false, bool fresh = false)
     {
         if (d.Car.Armory is not { } arm) return;
         var c = d.Input.Commands;
         int sounds = arm.Select((c & CarCommands.WeaponCycle) != 0, (c & CarCommands.WeaponLink) != 0, out bool changed, (c & CarCommands.WeaponCyclePrev) != 0);
         if (changed) Combat?.RadarCamera.Remove(d.Car);
-        if (sounds > 0 && !predict) Combat?.Events.Add(new WeaponClick(d.Car, "cammo.wav"));
+        if (sounds > 0 && (!predict || fresh)) Combat?.Events.Add(new WeaponClick(d.Car, CycleSound));
     }
 
     /// <summary>The arms follow the glance in the cockpit (a tenth of a second a frame); out of it they rest down.</summary>
@@ -546,14 +550,14 @@ public sealed partial class SimSession
     {
         if (Combat is null) return;
         Triggers(d);
-        Select(d, predict: true);
+        Select(d, predict: true, fresh);
         Misfires.Clear();
         Combat.PredictFrame(d.Car, TickSeconds, fresh);
         Arms(d);
     }
 
-    /// <summary>The selection step alone (<see cref="Select"/>), for a prediction that does not run <see cref="PredictFire"/>.</summary>
-    public void PredictSelect(Driver d) => Select(d, predict: true);
+    /// <summary>The selection step alone (<see cref="Select"/>), for a prediction that does not run <see cref="PredictFire"/>; a <paramref name="fresh"/> run's click goes into the combat events.</summary>
+    public void PredictSelect(Driver d, bool fresh = false) => Select(d, predict: true, fresh);
 
     /// <summary>A driver's car and key state, to restore exactly (client prediction replays from it).</summary>
     public CarSnapshot Capture(Driver d) => CarSnapshot.Capture(d.Car, Combat, d);

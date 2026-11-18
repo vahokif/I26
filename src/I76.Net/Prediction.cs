@@ -125,7 +125,7 @@ public sealed class OwnCarPredictor
             shots.Tick = k;
             World.Session.PredictFire(_driver!, fresh);
         }
-        else World.Session.PredictSelect(_driver!);   // the weapon cycle and link, which PredictFire runs after the triggers
+        else World.Session.PredictSelect(_driver!, fresh);   // the weapon cycle and link, which PredictFire runs after the triggers
         var m = OwnMotion.Capture(Car!, _driver);
         _predicted[k % Ring] = m;
         if (_predictedTick[k % Ring] != k) _hashed[k % Ring].Clear();

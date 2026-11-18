@@ -242,6 +242,56 @@ public class PredictionTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The weapon cycle's and link's click (cammo.wav, #168) plays from the predicted car on the tick the press is sent,
+    /// not a round trip later with the server's event, and the server's copy of the own click is not played again; another
+    /// player's click still comes from the server's event, once.
+    /// </summary>
+    [Fact]
+    public void TheOwnWeaponClickIsHeardAtOnceAndOnce()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m01", Seed = 7 });
+        var seat = host.Join("a", "vppirna1.vcf", 0);
+        var other = host.Join("b", "vppirna1.vcf", 0);
+        var mirror = new ClientWorld(HostTests.Mirror("m01"), host.AcceptFor(seat));
+        var client = new MeleeClient();
+        var predictor = new OwnCarPredictor(mirror, client);
+        var late = new Queue<(Snapshot S, EventBatch? E)>();
+        const uint cycle = 80, link = 130, othersCycle = 100;
+        var serverClicks = new List<uint>();
+        var ownHeard = new List<uint>();
+        var otherHeard = new List<uint>();
+        for (uint t = 1; t <= 200; t++)
+        {
+            var input = new CarInput { Buttons = CarButtons.ThrottleUp, Commands = t switch { cycle => CarCommands.WeaponCycle, link => CarCommands.WeaponLink, _ => 0 } };
+            seat.Inputs.Add(new InputMessage(t, [input]));
+            other.Inputs.Add(new InputMessage(t, [new CarInput { Commands = t == othersCycle ? CarCommands.WeaponCycle : 0 }]));
+            host.Step();
+            var events = host.TakeEvents();
+            foreach (var c in events.OfType<ClickEvent>())
+                if (c.Sound == SimSession.CycleSound && c.Car == mirror.OwnSerial) serverClicks.Add(t);
+            predictor.Step(t, input);
+            late.Enqueue((Through(host, seat), events.Count > 0 ? new EventBatch(host.Tick, events) : null));
+            while (late.Count > 6)
+            {
+                var (s, e) = late.Dequeue();
+                if (e is not null) client.Events.Enqueue(e);
+                client.Inject(s);
+            }
+            mirror.Advance(host.Session.TickSeconds, client);
+            predictor.Reconcile();
+            foreach (var c in mirror.Setup.Combat.Events.OfType<I76.Sim.Weapons.WeaponClick>().Where(c => c.Sound == SimSession.CycleSound))
+                (c.Shooter == mirror.Own!.Vehicle ? ownHeard : otherHeard).Add(t);
+            mirror.Setup.Combat.Events.Clear();
+        }
+        output.WriteLine($"server clicks for the own car on ticks {string.Join(", ", serverClicks)}; heard on {string.Join(", ", ownHeard)}; the other car's on {string.Join(", ", otherHeard)}");
+        Assert.Equal([cycle, link], serverClicks);       // the server clicks for both presses
+        Assert.Equal([cycle, link], ownHeard);           // heard on the ticks they were sent, and not again when the server's came back
+        Assert.Single(otherHeard);                       // the other player's, from the server's event
+        Assert.True(otherHeard[0] > othersCycle);
+    }
+
+    /// <summary>
     /// Once a network game is won every machine's own car brakes with the wheel straight (throttle −1, steer 0) for the
     /// 10 s to the end, whatever the keys say; the prediction brakes from the server's tick of the win as soon as the
     /// end event comes with the snapshots, so the predicted car agrees with the server's throughout.

@@ -616,7 +616,9 @@ public sealed class ClientWorld
     /// <summary>0.36 s in ticks: older cosmetic events are dropped, and a view this far off its target jumps.</summary>
     public uint StaleTicks => (uint)Session.Rate.TicksFor(0.36f);
 
-    private static bool SpecialSound(string s) => s.Equals("bnitro.wav", StringComparison.OrdinalIgnoreCase) || s.Equals("cjamm.wav", StringComparison.OrdinalIgnoreCase);
+    /// <summary>The own car's clicks the prediction plays itself (the specials', the weapon cycle's and link's), so the server's copies are not played.</summary>
+    private static bool PredictedSound(string s) => s.Equals("bnitro.wav", StringComparison.OrdinalIgnoreCase) || s.Equals("cjamm.wav", StringComparison.OrdinalIgnoreCase)
+        || s.Equals(SimSession.CycleSound, StringComparison.OrdinalIgnoreCase);
 
     private static bool Cosmetic(NetEvent e) => e is ShotEvent or ImpactEvent or ExplosionEvent or ClickEvent or DebrisEvent or FlungEvent or SoundEvent or MisfireEvent;
 
@@ -638,8 +640,8 @@ public sealed class ClientWorld
             case ExplosionEvent x when combat.Effects(x.Effect) is { } fx:
                 combat.Events.Add(new Explosion(fx, x.At));
                 break;
-            // the own specials' sounds were played when the prediction first ran the press
-            case ClickEvent c when Prediction is not null && c.Car == OwnSerial && SpecialSound(c.Sound):
+            // the own specials' sounds and the weapon cycle's and link's click were played when the prediction first ran the press
+            case ClickEvent c when Prediction is not null && c.Car == OwnSerial && PredictedSound(c.Sound):
                 break;
             case ClickEvent c when Car(c.Car) is { } v:
                 combat.Events.Add(new WeaponClick(v, c.Sound));

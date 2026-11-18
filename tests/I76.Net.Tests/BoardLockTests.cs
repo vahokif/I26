@@ -100,4 +100,28 @@ public class BoardLockTests
         var team = new ScoreLine(ScoreLineKind.Team, "t1", 1, 0, 0, 0);
         Assert.False(BoardCursor.CanBoot(true, team));
     }
+
+    [Fact] public void APickAsksAndAPickOfTheRowAskedAboutBoots()
+    {
+        var host = new ScoreContext(MeleeKind.Combat, false, 0, true, ScoreOrder.Slot, ScoreTable.ClassicRows);
+        var v = ScoreTable.Players(Rows(5), host, 0, t => "");
+        var own = v.Lines.Single(l => l.Slot == 0);
+        var three = v.Lines.Single(l => l.Slot == 3);
+        var four = v.Lines.Single(l => l.Slot == 4);
+        Assert.Equal(BootPick.Ask, BoardCursor.Boot(true, three, -1, false));
+        Assert.Equal(BootPick.Boot, BoardCursor.Boot(true, three, 3, false));
+        Assert.Equal(BootPick.Ask, BoardCursor.Boot(true, four, 3, false));     // another row: the prompt moves to it
+        Assert.Equal(BootPick.None, BoardCursor.Boot(true, own, -1, false));
+        Assert.Equal(BootPick.None, BoardCursor.Boot(false, three, 3, false));  // a client's pick never boots
+    }
+
+    [Fact] public void ADoubleClickOnlyAsks()
+    {
+        var host = new ScoreContext(MeleeKind.Combat, false, 0, true, ScoreOrder.Slot, ScoreTable.ClassicRows);
+        var three = ScoreTable.Players(Rows(5), host, 0, t => "").Lines.Single(l => l.Slot == 3);
+        // the first click asks; its double click's second half leaves the prompt up rather than booting unread
+        Assert.Equal(BootPick.Ask, BoardCursor.Boot(true, three, -1, false));
+        Assert.Equal(BootPick.None, BoardCursor.Boot(true, three, 3, true));
+        Assert.Equal(BootPick.Boot, BoardCursor.Boot(true, three, 3, false));
+    }
 }

@@ -58,8 +58,11 @@ public partial class NetHud : CanvasLayer
     private bool _boardUp;
     /// <summary>The locked window's cursor: the slot of the player row it is on, or -1.</summary>
     private int _cursor = -1;
-    /// <summary>The score window is locked up: the pointer is shown and picks its rows.</summary>
-    public bool Pointer => _boardUp && _lock.Locked;
+    /// <summary>
+    /// The score window is locked up over the game, with nothing over it (a menu, a picture, Reconfigure, a co-op cut-scene): the
+    /// pointer is shown and picks its rows. With something over it the lock stays, and the pointer and its clicks are that screen's.
+    /// </summary>
+    public bool Pointer => _boardUp && _lock.Locked && CanChat?.Invoke() != false && Cutscene?.Invoke() != true;
     private double? _deadAt;
     private (string? Name, int Team, bool Self)? _killer;
     private IReadOnlyList<(byte Slot, int Score)>? _final;
@@ -145,7 +148,7 @@ public partial class NetHud : CanvasLayer
         if (!_chat.Active) Controls.Suspended = false;
     }
 
-    public override void _ExitTree() => Controls.Suspended = false;
+    public override void _ExitTree() => Controls.Suspended = Controls.PointerClicks = false;
 
     /// <summary>
     /// The listen host's /ban NAME (boots the player and refuses their rejoins for the rest of the game, by name and address),
@@ -189,10 +192,10 @@ public partial class NetHud : CanvasLayer
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown } w:
                 _boardPage = Math.Max(0, _boardPage + (w.ButtonIndex == MouseButton.WheelDown ? 1 : -1));
                 return true;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }:
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } c:
             {
                 var m = GetViewport().GetMousePosition();
-                Pick(BoardCursor.RowAt(BoardRows, m.X, m.Y));
+                Pick(BoardCursor.RowAt(BoardRows, m.X, m.Y), c.DoubleClick);
                 return true;
             }
             case InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape }:
@@ -222,19 +225,20 @@ public partial class NetHud : CanvasLayer
         if (PlayersPage() is { } next && next.Page != was) _cursor = BoardCursor.End(next.Lines, last: page < 0);
     }
 
-    /// <summary>A row picked: the cursor goes to it; on the listen host's machine another player's row asks to boot them, and the same row again boots.</summary>
-    private void Pick(int slot)
+    /// <summary>A row picked: the cursor goes to it; on the listen host's machine another player's row asks to boot them, and the same row again boots (<see cref="BoardCursor.Boot"/>).</summary>
+    private void Pick(int slot, bool doubleClick = false)
     {
         if (slot < 0) return;
         _cursor = slot;
-        if (Server is null || PlayersPage()?.Lines.FirstOrDefault(l => l.Kind == ScoreLineKind.Player && l.Slot == slot) is not { } l
-            || !BoardCursor.CanBoot(true, l)) return;
-        if (_boot?.Slot == slot)
+        if (Server is null || PlayersPage()?.Lines.FirstOrDefault(l => l.Kind == ScoreLineKind.Player && l.Slot == slot) is not { } l) return;
+        switch (BoardCursor.Boot(true, l, _boot?.Slot ?? -1, doubleClick))
         {
-            _boot = null;
-            if (Server.Kick(slot) is { } why) Say(why);
+            case BootPick.Ask: _boot = ((byte)slot, l.Name); break;
+            case BootPick.Boot:
+                _boot = null;
+                if (Server.Kick(slot) is { } why) Say(why);
+                break;
         }
-        else _boot = ((byte)slot, l.Name);
     }
 
     /// <summary>The CTF teams' colours (Red Dawn, Gang Green, Purple Reign, Black Plague; the last drawn light so it shows).</summary>
@@ -316,6 +320,7 @@ public partial class NetHud : CanvasLayer
                 if (_gone.Add(l.Slot))
                     Line(new FeedEntry(FeedKind.Leave, NetLines.Leave(Nitro, SlotName(l.Slot)), _t) { Who = SlotName(l.Slot), WhoTeam = teams ? SlotTeam(l.Slot) : 0 });
                 if (_boot?.Slot == l.Slot) _boot = null;
+                if (_cursor == l.Slot) _cursor = -1;     // the locked window's cursor does not pass to a newcomer in that seat
                 break;
             case KillEvent k:
             {
@@ -351,6 +356,7 @@ public partial class NetHud : CanvasLayer
             case EndEvent end:
             {
                 Decided = true;
+                _lock.Close();     // the verdict and the results are not under a locked window
                 int myTeam = Client.Scores?.Players.FirstOrDefault(p => p.Slot == mySlot)?.Team ?? 0;
                 string winner = end.Winner >= 0 ? SlotName(end.Winner) : "?";
                 var line = NetLines.End(end, Nitro, Goal, teams, mySlot, myTeam, winner, TeamName(end.Team), out bool won);
@@ -361,13 +367,13 @@ public partial class NetHud : CanvasLayer
                 break;
             }
             // a co-op mission's end is the game's own (the outro, the end menu): no standings over it
-            case GameOverEvent when Coop: Decided = true; break;
+            case GameOverEvent when Coop: Decided = true; _lock.Close(); break;
             case MissionEndEvent me: Decided = true; GD.Print($"[co-op] the mission is {(me.Won ? "won" : "failed")}{(me.Text.Length > 0 ? ": " + me.Text : "")}"); break;
             // the script's presentation is the game's HUD's (the radio, the notepad); the log says what came
             case RadioEvent r: GD.Print($"[co-op] radio: {r.Sound}"); break;
             case ObjectiveEvent o: GD.Print($"[co-op] objective {o.Number}: {Objectives.Describe(o.Flags)}"); break;
             case MovieEvent mv: GD.Print($"[co-op] movie: {mv.Name}"); break;
-            case GameOverEvent g: _final = g.Standings; if (g.NextRoundSeconds > 0) _nextRound = _t + g.NextRoundSeconds; break;
+            case GameOverEvent g: _lock.Close(); _final = g.Standings; if (g.NextRoundSeconds > 0) _nextRound = _t + g.NextRoundSeconds; break;
         }
     }
 
@@ -461,6 +467,8 @@ public partial class NetHud : CanvasLayer
         if (_demo is not null) _demo.Classic = !modern;
         var f = _demo?.Frame(_t, Server is not null || Host) ?? Gather();
         bool cut = Cutscene?.Invoke() == true && !_chat.Active;
+        // the left button is the locked standings' pointer's: it holds no command (fire on it does not fire at the rows)
+        Controls.PointerClicks = Pointer;
         _classic.Visible = !modern && !cut;
         _modern.Visible = modern && !cut;
         if (modern) _modern.Show(f); else _classic.Show(f);

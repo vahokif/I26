@@ -261,10 +261,11 @@ public partial class NetHudModern : Control
             Chat(f, sr, v);
             CbPanel(f, sr, v);
         }
-        if (f.Prompt is { } p) Prompt(p, new Vector2(v.X / 2, top));
         if (f.Final is { } fin) Results(f, fin, v);
         else if (f.End is { } e && f.Death is null) EndBanner(f, e, v);
         if (f.Board is { } b) Board(f, b, v, sr);
+        // the host's prompt over the standings: a boot asked by a click on the locked standings (or Ctrl+n while they are held) is read there
+        if (f.Prompt is { } p) Prompt(p, new Vector2(v.X / 2, top));
     }
 
     /// <summary>
@@ -724,7 +725,7 @@ public partial class NetHudModern : Control
         if (f.BoardLocked)
         {
             // locked: the key (or Esc) shuts it, a click on a driver asks to boot them (a second click boots), the wheel pages
-            var locked = new List<(string[] Keys, string Action)> { ([f.ScoresKey], "CLOSE") };
+            var locked = new List<(string[] Keys, string Action)> { ([f.ScoresKey.Length > 0 ? f.ScoresKey : "Esc"], "CLOSE") };
             if (f.Host && b.Numbered.Count > 0) locked.Add((["Click"], "BOOT"));
             if (b.Pages > 1) locked.Add((["Wheel"], "PAGE"));
             foreach (var (k, action) in locked)

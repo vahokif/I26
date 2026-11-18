@@ -244,7 +244,7 @@ public partial class NetHudClassic : Control
             rows.Add(p.Kind == ScoreLineKind.Team ? ["", Fit($"{p.Name} ({p.Members})", 20), .. Cols(p.Score, p.Kills, p.Deaths), "", ""]
                 : [p.Mark, Fit(p.Name, 20), .. Cols(p.Score, p.Kills, p.Deaths), $"{p.Ping}", p.Alive ? "" : "dead"]);
         if (b.Pages > 1) rows.Add(["", $"{b.First}-{b.Last} of {b.Total}  ({(f.BoardLocked ? "wheel" : "Ctrl+PgUp/PgDn")})", "", "", "", "", ""]);
-        if (f.BoardLocked) rows.Add(["", $"({f.ScoresKey}: close{(f.Host && b.Numbered.Count > 0 ? "; click a player to boot" : "")})", "", "", "", "", ""]);
+        if (f.BoardLocked) rows.Add(["", $"({(f.ScoresKey.Length > 0 ? f.ScoresKey : "Esc")}: close{(f.Host && b.Numbered.Count > 0 ? "; click a player to boot" : "")})", "", "", "", "", ""]);
         return rows;
     }
 

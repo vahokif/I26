@@ -342,8 +342,13 @@ public static class Controls
     /// fires while the letters go into the line; a pad or joystick still drives (its buttons and sticks type nothing).</summary>
     public static bool Suspended { get; set; }
 
-    // a term counts while a chat line is typed only if it is a pad's
-    private static bool TermLive(InputTerm t) => (!Suspended || JoystickBank.DeviceOf(t.Device) >= 0) && TermDown(t);
+    /// <summary>Set while the network game's standings are locked up with the pointer on them: the left mouse button picks their rows
+    /// and holds no command (the other buttons, the keys and the pad still drive).</summary>
+    public static bool PointerClicks { get; set; }
+
+    // a term counts while a chat line is typed only if it is a pad's; the left button not while it is the pointer's
+    private static bool TermLive(InputTerm t) => (!Suspended || JoystickBank.DeviceOf(t.Device) >= 0)
+        && !(PointerClicks && JoystickBank.DeviceOf(t.Device) < 0 && KeyOf(t.Channel) is null && ButtonOf(t.Channel) == MouseButton.Left) && TermDown(t);
 
     /// <summary>A network game's menu, picture or movie is up over the running game: the sim does not wait, so the player's own
     /// keys are held back (no glance, no steering) while it is, but the menus still read the keyboard.</summary>

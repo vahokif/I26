@@ -35,9 +35,10 @@ void vertex() {
 	vec3 l0 = normalize(i76_light_dir);
 	v_facing = dot(n, l0);
 	// an upward face lying on the ground (a lot's asphalt, in a mesh with the building on it) would project onto
-	// itself, coplanar, and fight the ground it is part of: it casts nothing
+	// itself, coplanar, and fight the ground it is part of: it casts nothing. Scenery only: a car's low upward faces
+	// (the Hacienda's pickup bed, half a metre up, #123) stand above the ground and shade it
 	v_skip = 0.0;
-	if (dot(n, plane.xyz) > 0.7 && abs(dot(plane.xyz, w) - plane.w) < 0.6) v_skip = 1.0;
+	if (all_faces < 0.5 && dot(n, plane.xyz) > 0.7 && abs(dot(plane.xyz, w) - plane.w) < 0.6) v_skip = 1.0;
 	vec3 t1 = normalize(cross(l0, abs(l0.y) > 0.9 ? vec3(1, 0, 0) : vec3(0, 1, 0)));
 	vec3 t2 = cross(l0, t1);
 	vec3 l = normalize(l0 + (t1 * jitter.x + t2 * jitter.y) * spread);

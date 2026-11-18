@@ -34,6 +34,46 @@ public class ViewZoomResetTests
         MouseCamera.WheelView = null;
     }
 
+    [Fact] public void OpeningAndClosingTheMenuIsNoViewSwitch()
+    {
+        // F2 in a mission, then the Esc menu over it, then back: the remembered view stands and nothing resets (#190)
+        var (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Chase, null, overlaid: true, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
+        Assert.False(reset);
+        (v, reset) = MouseCamera.TrackView(v, ViewZoom.Kind.Chase, overlaid: false, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
+        Assert.False(reset);
+    }
+
+    [Fact] public void AViewSwitchStillResetsTheZoom()
+    {
+        var (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Chase, ViewZoom.Kind.Overhead, overlaid: false, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Overhead, v);
+        Assert.True(reset);
+        // View Zoom Reset off: the switch is remembered but nothing resets
+        (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Overhead, ViewZoom.Kind.Chase, overlaid: false, keepZoom: true);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
+        Assert.False(reset);
+        // a switch made under a pause counts once the pause ends
+        (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Chase, ViewZoom.Kind.Side, overlaid: true, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
+        Assert.False(reset);
+        (v, reset) = MouseCamera.TrackView(v, ViewZoom.Kind.Side, overlaid: false, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Side, v);
+        Assert.True(reset);
+    }
+
+    [Fact] public void TheHandBackFromACutSceneStillResets()
+    {
+        // the cut-scene holds the camera: no view; the hand-back is a switch into the chase view
+        var (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Chase, null, overlaid: false, keepZoom: false);
+        Assert.Null(v);
+        Assert.False(reset);
+        (v, reset) = MouseCamera.TrackView(v, ViewZoom.Kind.Chase, overlaid: false, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
+        Assert.True(reset);
+    }
+
     [Fact] public void SideMouseButtonsResolveToMouseDeviceAndNotJoystick()
     {
         Assert.Contains("Mouse4Btn", Controls.MouseNames);

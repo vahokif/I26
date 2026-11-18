@@ -2588,7 +2588,7 @@ public partial class Main : Node3D
         MouseCamera.Active = mode == CursorMode.Captured && !_gamePaused && (cockpit || _chase!.Orbit?.Invoke() != true);
         // the wheel zooms the external view on screen, whether or not the mouse orbits it
         MouseCamera.WheelView = inMission && !CameraHeld && !_gamePaused && _chase!.Orbit?.Invoke() != true ? WheelViewNow() : null;
-        TrackViewForZoom(inMission);
+        TrackViewForZoom(inMission, _sim is not null && (_inMenu || _menu is not null || _picture is not null || _reconfig is not null || _dev is not null || _gamePaused));
         ApplyCursor(mode);
     }
 
@@ -2602,13 +2602,12 @@ public partial class Main : Node3D
     }
 
     private I76.Sim.Views.ViewZoom.Kind? _zoomView;
-    /// <summary>The wheel's zoom lasts as long as the view it was made in: a switch into a view (or the hand-back from a cut-scene) starts it at the original's framing.</summary>
-    private void TrackViewForZoom(bool inMission)
+    /// <summary>The wheel's zoom lasts as long as the view it was made in: a switch into a view (or the hand-back from a cut-scene) starts it at the original's framing; a menu or pause over the view is no switch.</summary>
+    private void TrackViewForZoom(bool inMission, bool overlaid)
     {
         var now = inMission && !CameraHeld ? WheelViewNow() : null;
-        if (now == _zoomView) return;
-        _zoomView = now;
-        if (now is not null && !MouseCamera.KeepZoom) MouseCamera.ResetAllZooms();
+        (_zoomView, bool reset) = MouseCamera.TrackView(_zoomView, now, overlaid, MouseCamera.KeepZoom);
+        if (reset) MouseCamera.ResetAllZooms();
     }
 
     /// <summary>

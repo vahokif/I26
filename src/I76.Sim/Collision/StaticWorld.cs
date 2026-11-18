@@ -584,10 +584,11 @@ public sealed class StaticWorld
             bool sign = type == 4 && (signPart?.Invoke(part.NodeName) ?? true);
             if (cls == 0) cls = DefaultClass(type);
             if (cls == 0x1000) continue;
+            // a CTF flag's parts (the pole and pennant, type 0x5a, and the base, 0x5b): the car's collide slot ignores them
+            // whatever their collider class, so a car drives through the flag; the CTF game's stub sphere takes it
+            if (type != 4 && nodeType?.Invoke(part.NodeName) is 0x5a or 0x5b) continue;
             if (cls is 0x4000 or 0x5000)
             {
-                // a flag base (part type 0x5a / 0x5b): the car's collide slot ignores it, the CTF game takes the flag
-                if (type != 4 && nodeType?.Invoke(part.NodeName) is 0x5a or 0x5b) continue;
                 // a sphere: the part's SGEO centre and radius, x 1.0 (0x4000) or 0.75 (0x5000); a breakable (type 4) has
                 // one per part
                 var (sc, sr) = nodeSphere?.Invoke(part.NodeName) ?? BoundSphere(g.Vertices);

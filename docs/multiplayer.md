@@ -532,7 +532,10 @@ the original; single player stays the base melee. They are here server-side
   own flag need not be home); touching one's own flag never returns it. The
   flag stays on the wreck and goes home when the car respawns, regens or leaves.
   A capture is +1 to every member of the capturing team and +1 death to the
-  members of the flag's team. Flags are indestructible (they already were).
+  members of the flag's team. Flags are indestructible (they already were), and
+  no obstacle: a car drives through the flag and its base, whose parts (node types
+  0x5a, the pole and pennant, and 0x5b, the base) the car's collisions ignore
+  whatever their collider class; the pickup is the stand's sphere alone.
   **The flag's team** is the open question of the spec; it is taken from the
   number in the name (`a1flagN` is team N), isolated in `CtfGame.FlagTeam`.
   The stand's radius is a constant 4.2 m (the flag's bounding radius is not read).

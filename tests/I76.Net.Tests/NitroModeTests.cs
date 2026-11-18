@@ -171,6 +171,52 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Contains(events, e => e is GameOverEvent);
     }
 
+    /// <summary>
+    /// The arena's own flag (a1flagN: a base disc and a pole with its pennant) is no obstacle: the car's collide slot ignores
+    /// both parts, so a car driven through it at 15 m/s meets nothing (no bounce, no ram damage) and still takes the flag
+    /// through the CTF game's stub sphere.
+    /// </summary>
+    [Fact]
+    public void ACarDrivesThroughAnEnemyFlagAndTakesIt()
+    {
+        if (Nitro is null) return;
+        var host = new MeleeHost(new ServerOptions { Install = Nitro, Arena = "N40.CF2", Kind = MeleeKind.Ctf, CtfTeams = 2, GoalValue = 3 });
+        var game = host.Game;
+        var red = host.Join("red", "vppirna1.vcf", 1);
+        host.Join("green", "vppirna1.vcf", 2);
+        Steps(host, 3);
+        var f2 = game.Ctf!.Flags.First(f => f.Team == 2);
+        var flag = host.Setup.Statics.Objects.Single(o => o.Name.TrimStart('#').StartsWith("a1flag2", StringComparison.OrdinalIgnoreCase));
+        var car = red.Player.Car;
+        var fwd = car.Rot.Forward;
+        fwd = System.Numerics.Vector3.Normalize(fwd with { Y = 0 });
+        double sx = f2.HomePos.X - fwd.X * 25, sz = f2.HomePos.Z - fwd.Z * 25;
+        car.Pos = new Double3(sx, host.Setup.Ground.Query(sx, f2.HomePos.Y + 2, sz).Height + 0.5, sz);
+        car.Vel = default;
+        Steps(host, 30);
+        car.Vel = fwd * 15; car.Speed = 15;
+        var start = car.Pos;
+        double Along() => (car.Pos.X - f2.HomePos.X) * fwd.X + (car.Pos.Z - f2.HomePos.Z) * fwd.Z;
+        // the arena's ground slows the car (it climbs to the flag); the flag itself takes nothing off it
+        float slowest = float.MaxValue, worstDrop = 0, last = 15;
+        for (int i = 0; i < 160 && Along() < 12; i++)
+        {
+            host.Step();
+            // no contact with the flag, so no ram damage either (the ground's bumps cost the car a little on its own)
+            Assert.DoesNotContain(host.Session.World.Step.ObjectHits, h => ReferenceEquals(h.Self, car) && h.Name == flag.Name);
+            float now = System.Numerics.Vector3.Dot(car.Vel, fwd);
+            slowest = MathF.Min(slowest, now);
+            if (System.Math.Abs(Along()) < 3) worstDrop = MathF.Max(worstDrop, last - now);
+            last = now;
+        }
+        output.WriteLine($"flag {flag.Name} at {f2.HomePos.X:0.0},{f2.HomePos.Z:0.0}: colliders {flag.Boxes.Count}/{flag.Spheres.Count}/{flag.Polys.Count}; car from {start.X:0.0},{start.Z:0.0} to {car.Pos.X:0.0},{car.Pos.Z:0.0}, slowest {slowest:0.0} m/s, at most {worstDrop:0.00} m/s lost in a tick at the flag");
+        Assert.True(Along() > 6, $"the car stopped at the flag: {Along():0.0} m past it");
+        Assert.True(slowest > 3, $"the car bounced or was stopped: {slowest:0.0} m/s");
+        Assert.True(worstDrop < 0.5f, $"the car was slowed at the flag: {worstDrop:0.00} m/s in a tick");
+        Assert.Equal(CtfFlag.Carried, f2.State);
+        Assert.Same(red.Player, f2.Carrier);
+    }
+
     private static Snapshot ReadSnapshot(MeleeHost host, Seat seat)
     {
         var w = new NetWriter();

@@ -278,7 +278,7 @@ public sealed partial class MissionSetup
 
     /// <summary>
     /// Each SGEO record's node type, by name; 0 for the root, whose type holds the placement's type instead (the original
-    /// reads a bridge's root as 0xc). A destroyed twin's or another detail's is its node's (Bwd2File.SgeoRecords): the
+    /// reads a bridge's root as 0xc), but a CTF flag's. A destroyed twin's or another detail's is its node's (Bwd2File.SgeoRecords): the
     /// Wagon Wheel's fallen lot is a lot like the standing one, though its own record says 2.
     /// </summary>
     private static Func<string, uint> NodeTypes(AssetVfs vfs, string? sdf)
@@ -294,7 +294,10 @@ public sealed partial class MissionSetup
             foreach (var (name, record, node) in f.SgeoRecords())
             {
                 if (root < 0) root = roots.Contains(name) && record == node ? node : 0;
-                map.TryAdd(name, node == root ? 0 : Formats.Bin.U32(f.Data, node + 0x5c));
+                // a CTF flag's root (a1flagN's base, 0x5b) keeps its own type: the flag is an object of the flag's class,
+                // whose parts the car's collide slot ignores
+                uint own = Formats.Bin.U32(f.Data, node + 0x5c);
+                map.TryAdd(name, node == root && own is not (0x5a or 0x5b) ? 0 : own);
             }
         }
         return n => map.GetValueOrDefault(n);

@@ -151,7 +151,8 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         {
             // the warm-up's thread owns the assets until it is done, and its engine calls need this thread's frames: wait for it a frame at a time
             _awaitingWarmup = GarageWarmup.Busy;
-            if (_awaitingWarmup) { GD.Print("garage3d: waiting for the main menu's warm-up"); return; }
+            if (_awaitingWarmup) { GD.Print("garage3d: waiting for the main menu's warm-up"); Background(waiting: true); return; }
+            Shell.Impact?.Clear(); // the stand-by line, if it waited
             try { Build(); }
             catch (Exception ex)
             {
@@ -170,6 +171,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
 
     public override void Leave()
     {
+        if (_awaitingWarmup) { _awaitingWarmup = false; Shell.Impact?.Clear(); }
         if (_toCatalog) { if (_stage is not null) _stage.Visible = false; if (_ui is not null) _ui.Visible = false; if (_swatches is not null) _swatches.Visible = false; return; }
         _stage?.QueueFree();
         _stage = null;
@@ -300,7 +302,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
     /// of notepad are, the form's own buttons cut from its picture, and nothing elsewhere, so the garage shows through the rest.
     /// The notepad's bar, rules and columns are painted in the colours the form's pop-ups use (read from the art).
     /// </summary>
-    private void Background()
+    private void Background(bool waiting = false)
     {
         var src = Shell.Db.Background(2);
         var pal = src.Palette;
@@ -354,6 +356,36 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         {
             for (int y = r.Position.Y; y < r.End.Y; y++)
                 for (int x = r.Position.X; x < r.End.X; x++) { px[y * ShellFrame.W + x] = src.Pixels[y * src.Width + x]; _keep[y * ShellFrame.W + x] = true; }
+        }
+        if (waiting)
+        {
+            // waiting for the main menu's warm-up (#158): the boot screen's PLEASE STAND BY (I76's or Nitro's), not an empty screen,
+            // until the garage is built: on black with its line in Impact where the boot screen has it, else the boot picture itself
+            Array.Clear(_keep);
+            var (box, spec) = I76.Game.Boot.BootSplash.StandBy(Shell.Install.IsNitro);
+            if (Shell.Impact is { Available: true } imp)
+            {
+                Frame.LoadBackground(Pcx.Create(ShellFrame.W, ShellFrame.H, px, pal), 0, 0, black: false);
+                imp.Put(box.Position.X, box.Position.Y, box.Size.X, box.Size.Y, spec, Colors.White);
+                return;
+            }
+            // no Impact (the 1997 look, or none on this system): the boot screen's own picture, its PLEASE STAND BY in its pixels, opaque
+            if (I76.Game.Boot.BootSplash.StandByPicture(Shell.Install.Root) is { Width: ShellFrame.W, Height: ShellFrame.H } boot)
+            {
+                Array.Fill(_keep, true);
+                Frame.LoadBackground(boot, 0, 0, black: false);
+                return;
+            }
+            // and without the picture: the words in white in the shell's own font, where the line would be, on a kept black strip
+            // (the frame is see-through elsewhere, and its text with it)
+            Rect(box, Near(pal, 0, 0, 0));
+            Frame.LoadBackground(Pcx.Create(ShellFrame.W, ShellFrame.H, px, pal), 0, 0, black: false);
+            F47 = Shell.Db.Font(0x47);
+            var white = new byte[256];
+            Array.Fill(white, Near(pal, 255, 255, 255));
+            white[F47.Key & 0xff] = 0xff;
+            Frame.Text(F47, box.Position.X + (box.Size.X - F47.Measure(spec.Text)) / 2, box.Position.Y + (box.Size.Y - F47.Height) / 2, spec.Text, white);
+            return;
         }
         if (!Faithful)
         {

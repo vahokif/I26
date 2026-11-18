@@ -121,6 +121,13 @@ public static class BootSplash
         return (path, HdAssets.Find($"{ShellBackdrop.NitroSub}/load/loadgame"));
     }
 
+    /// <summary>The install's boot picture (loadgame.pcx; Nitro's addon\LOADGAME.PCX), its PLEASE STAND BY in its own pixels; null when it has none or it cannot be read.</summary>
+    internal static Pcx? StandByPicture(string installDir)
+    {
+        try { return Plan(installDir).Path is { } path ? Pcx.Parse(System.IO.File.ReadAllBytes(path)) : null; }
+        catch (System.Exception ex) { GD.PushWarning($"boot splash: stand-by picture not read ({ex.Message})"); return null; }
+    }
+
     /// <summary>The system's Impact, as ImpactLayer finds it (another family in its place won't do).</summary>
     private static bool ImpactInstalled()
     {

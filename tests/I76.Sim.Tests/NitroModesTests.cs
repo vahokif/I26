@@ -1,3 +1,5 @@
+using I76.Formats.Assembly;
+using I76.Formats.Mission;
 using I76.Sim.Math;
 using I76.Sim.Missions;
 using I76.Sim.Vehicles;
@@ -280,5 +282,64 @@ public class NitroModesTests
         // unlimited laps: a points limit does not leak into a race
         Assert.Equal(0, new MeleeRules { Kind = MeleeKind.Race, MaxScore = 5000, GoalValue = 0 }.ResolvedValue);
         Assert.Equal(0, new MeleeRules { Kind = MeleeKind.Ctf, MaxScore = 5000 }.ResolvedValue);
+    }
+
+    /// <summary>
+    /// The arena's flag model stands on its base while the flag is at home or inactive (it never left), and the base is empty
+    /// while the flag is carried or dropped: the flag is drawn once, the placeholder exactly when the base is empty.
+    /// </summary>
+    [Theory]
+    [InlineData(CtfFlag.Inactive, true)]
+    [InlineData(CtfFlag.Home, true)]
+    [InlineData(CtfFlag.Dropped, false)]
+    [InlineData(CtfFlag.Captured, true)]
+    [InlineData(CtfFlag.Carried, false)]
+    public void AFlagStandsOnItsBaseUnlessItIsAway(int state, bool home) => Assert.Equal(home, CtfFlag.StandsAtHome(state));
+
+    [Fact]
+    public void ATakenFlagLeavesItsBaseAndStandsOnItAgainWhenItGoesHome()
+    {
+        var (g, _) = Ctf();
+        var red = Player(1, new Double3(500, 0, 500));
+        var green = Player(2, new Double3(0, 0, 500));
+        Tick(g, red, green);
+        Assert.True(CtfFlag.StandsAtHome(g.Flags[1].State));
+        red.Car.Pos = g.Flags[1].HomePos;
+        Tick(g, red, green);
+        Assert.Equal(CtfFlag.Carried, g.Flags[1].State);
+        Assert.False(CtfFlag.StandsAtHome(g.Flags[1].State));
+        // captured at red's own stand: green's flag goes home
+        red.Car.Pos = g.Flags[0].HomePos;
+        Tick(g, red, green);
+        Assert.Equal(CtfFlag.Home, g.Flags[1].State);
+        Assert.True(CtfFlag.StandsAtHome(g.Flags[1].State));
+    }
+
+    private static Placement Placed(string name, uint type, float x)
+    {
+        var raw = new byte[0x78];
+        BitConverter.GetBytes(type).CopyTo(raw, 0x5c);
+        return new Placement(new PlacedObject(name, 0, [1, 0, 0, 0, 1, 0, 0, 0, 1], new System.Numerics.Vector3(x, 0, 0), raw), name.TrimStart('#') + ".sdf");
+    }
+
+    /// <summary>
+    /// The drawn flags are told apart by the CTF game's order of them, which the snapshots carry: the arena's a1flagN
+    /// placements (class 2 or 3, '#' stripped) by number, those of one number as placed.
+    /// </summary>
+    [Fact]
+    public void TheFlagPlacementsComeInTheCtfGamesOrder()
+    {
+        Placement[] ps = [Placed("a1flag3", 2, 1), Placed("spawn1", 1, 2), Placed("#a1flag1", 3, 3), Placed("a1flag2", 1, 4),
+            Placed("a1flagx", 2, 5), Placed("a1flag2", 2, 6), Placed("A1FLAG3", 3, 7)];
+        var order = MissionSetup.CtfFlagPlacements(ps);
+        Assert.Equal([3f, 6f, 1f, 7f], order.Select(f => f.Placement.Object.Position.X));
+        Assert.Equal([1, 2, 3, 3], order.Select(f => f.Number));
+        var game = new MeleeGame
+        {
+            World = null!, Host = null!, Rand = null!, Roster = [], PlayerCar = "x.vcf", Build = (_, _) => new Vehicle(),
+            Rules = new MeleeRules { Network = true, Kind = MeleeKind.Ctf },
+        };
+        MissionSetup.LoadMeleePoints(game, ps);
+        Assert.Equal(order.Select(f => (double)f.Placement.Object.Position.X), game.Ctf!.Flags.Select(f => f.HomePos.X));
     }
 }

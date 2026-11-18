@@ -684,10 +684,19 @@ public sealed partial class MissionSetup
                 else if (name.StartsWith("check", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[5..], out int cn) && cn is >= 1 and <= 99)
                     game.Checkpoints[cn] = pos;
             }
-            else if (ctf && IsFlagPlacement(p) && int.TryParse(name[6..], out int fn))
-                game.Ctf!.AddFlag(fn, pos);
         }
-        // a CTF game's flags: only the teams that play (2–4) keep theirs in the table, the rest never have a member
-        game.Ctf?.Flags.Sort((a, b) => a.Number.CompareTo(b.Number));
+        // a CTF game's flags, by number: only the teams that play (2–4) keep theirs in the table, the rest never have a member
+        if (ctf)
+            foreach (var (p, n) in CtfFlagPlacements(placements))
+                game.Ctf!.AddFlag(n, new Double3(p.Object.Position.X, p.Object.Position.Y, p.Object.Position.Z));
     }
+
+    /// <summary>
+    /// A CTF arena's flags (a1flagN placements, '#' stripped) with their numbers, in the order of the CTF game's flags
+    /// (<see cref="CtfGame.Flags"/>, and so of the snapshots' flags): by number, those of one number as placed.
+    /// </summary>
+    public static List<(Placement Placement, int Number)> CtfFlagPlacements(IEnumerable<Placement> placements) =>
+        [.. placements.Where(IsFlagPlacement)
+            .Select(p => (p, ok: int.TryParse(p.Object.Name.TrimStart('#')[6..], out int n), n))
+            .Where(x => x.ok).Select(x => (x.p, x.n)).OrderBy(x => x.n)];
 }

@@ -356,10 +356,13 @@ public partial class ScenerySpawner : Node3D
                 : lots && model is not null ? (part, f) => GroundDecals.IsLotFace(model, part, f, lowest) : null;
             var spinners = model is null || roadPiece ? null : SpinnersOf(asm.Vfs, def, model);
             var gates = model is null || roadPiece ? null : GatesOf(asm.Vfs, def);
+            // a CTF flag's pole and pennant leave its base while the flag is away (ShowFlag)
+            var flagParts = model is null || roadPiece ? null : FlagPartsOf(asm.Vfs, def);
             // the camera-facing cards are drawn on their own
             var cardNames = model is null ? null : CardNamesOf(def);
-            Func<ModelPart, bool>? include = spinners is null && gates is null && cardNames is null ? null
-                : part => !(spinners?.Any(s => s.Owns(part.NodeName)) ?? false) && !(gates?.Owns(part.NodeName) ?? false) && !(cardNames?.Contains(part.NodeName) ?? false);
+            Func<ModelPart, bool>? include = spinners is null && gates is null && cardNames is null && flagParts is null ? null
+                : part => !(spinners?.Any(s => s.Owns(part.NodeName)) ?? false) && !(gates?.Owns(part.NodeName) ?? false) && !(cardNames?.Contains(part.NodeName) ?? false)
+                    && !(flagParts?.Invoke(part.NodeName) ?? false);
             // a structure's self-lit faces shine at night in the modern look (MeshBuilder.SelfLit), its lamps light what is under them;
             // a road sign's parts (type-4 nodes) are retroreflective instead (RetroLamps), whatever the placements' class ids
             bool selfLit = SelfLitHook != "0" && !roadPiece;
@@ -374,6 +377,16 @@ public partial class ScenerySpawner : Node3D
                 AddGates(gates, model!, builder, skip, only, xfo, this);
                 Loaded += only.Count;
                 continue;
+            }
+            if (mesh is null && cardNames is null && flagParts is not null)
+            {
+                // a CTF flag whose base is all painted into the ground: its pole and pennant are all there is to draw
+                var only = g.ToList();
+                if (AddFlags(flagParts, model!, builder, (skip, selfLit, retro, signPart), only, only.Select(p => Coords.ToGodot(p.Object.Rotation, world.GroundedPosition(p))).ToList(), this, alone: true))
+                {
+                    Loaded += only.Count;
+                    continue;
+                }
             }
             if (mesh is null && cardNames is null && roadPiece && model is not null)
             {
@@ -463,6 +476,7 @@ public partial class ScenerySpawner : Node3D
             }
             if (spinners is not null) AddSpinners(spinners, model!, builder, skip, list, xf, parent);
             if (gates is not null) AddGates(gates, model!, builder, skip, list, xf, parent);
+            if (flagParts is not null) AddFlags(flagParts, model!, builder, (skip, selfLit, retro, signPart), list, xf, parent, alone: false);
             Loaded += xf.Count;
         }
         SetProcess(true);
@@ -600,6 +614,66 @@ public partial class ScenerySpawner : Node3D
     {
         /// <summary>The gate node a node hangs under (or is), a twin's as its '_' node's; null for none.</summary>
         public Func<string, string?> Owner { get; init; } = _ => null;
+    }
+
+    // ---- CTF flags ----
+
+    /// <summary>A CTF flag's node type: the pole and pennant (a1flagN's A1x_FLGn), which stand on the base (type 0x5b) while the flag is at home.</summary>
+    public const uint FlagType = 0x5a;
+
+    /// <summary>Each placement's flag (its type-0x5a nodes and what hangs under them), drawn apart from its base.</summary>
+    private readonly Dictionary<Placement, MeshInstance3D> _flags = [];
+
+    /// <summary>
+    /// Shows or hides a CTF flag's pole and pennant on its base: the original's flag leaves its base with the car that takes it
+    /// (FlagView draws it there), and stands on it again when it goes home. A placement with no flag is left as it is.
+    /// </summary>
+    public void ShowFlag(Placement p, bool shown)
+    {
+        if (_flags.TryGetValue(p, out var n) && !_editHidden.Contains(p)) n.Visible = shown;
+    }
+
+    /// <summary>
+    /// Each placement's flag as its own node (built as its other meshes are: <paramref name="look"/>), placed, hidden and moved
+    /// with the placement in the editor: the placement's instance when it is <paramref name="alone"/> (the base all painted into
+    /// the ground, as the stock a1flagN's is), else another instance of it. False if the flag has nothing to draw.
+    /// </summary>
+    private bool AddFlags(Func<string, bool> parts, AssembledModel model, MeshBuilder builder,
+        (Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? Skip, bool SelfLit, bool Retro, Func<string, bool> SignPart) look,
+        List<Placement> list, List<Transform3D> xf, Node parent, bool alone)
+    {
+        if (builder.Build(model, include: part => parts(part.NodeName), skipFace: look.Skip, selfLit: look.SelfLit, retro: look.Retro, signPart: look.SignPart) is not { } pole)
+            return false;
+        for (int i = 0; i < xf.Count; i++)
+        {
+            var mi = new MeshInstance3D { Mesh = pole, Transform = xf[i], Name = list[i].Object.Name + "_flag" };
+            parent.AddChild(mi);
+            if (alone) _where[list[i]] = (mi, 0, xf[i]);
+            else Twin(list[i], mi, 0);
+            _flags[list[i]] = mi;
+        }
+        return true;
+    }
+
+    /// <summary>A definition's flag parts (the nodes of <see cref="FlagType"/> and the nodes under them), or null for none.</summary>
+    private static Func<string, bool>? FlagPartsOf(I76.Formats.Vfs.AssetVfs vfs, string def)
+    {
+        if (!def.EndsWith(".sdf", StringComparison.OrdinalIgnoreCase) || vfs.TryRead(def) is not { } d) return null;
+        var f = new I76.Formats.Bwd2.Bwd2File(d);
+        var names = f.NodesOfType(FlagType);
+        if (names.Count == 0) return null;
+        var parent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var n in f.SceneNodes().Where(t => t.Tag == "SGEO").SelectMany(t => t.Nodes)) parent.TryAdd(n.Name, n.Parent);
+        return node =>
+        {
+            for (int k = 0; k < 64; k++)
+            {
+                if (names.Contains(node)) return true;
+                if (!parent.TryGetValue(node, out var up) || up.Equals(node, StringComparison.OrdinalIgnoreCase)) return false;
+                node = up;
+            }
+            return false;
+        };
     }
 
     /// <summary>One placed gate: its mesh, its rest transform, its placement and its node's name.</summary>

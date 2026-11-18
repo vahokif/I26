@@ -789,7 +789,17 @@ public partial class Main
         // CTF's flags on the radar in their team's colours (class 0x5b blips)
         if (_pit is { } radarPit && accept.Kind == I76.Sim.Missions.MeleeKind.Ctf)
             radarPit.Blips = () => mirror.Flags.Where(f => f.State != 0).Select(f => (f.Pos, NetHud.TeamColour(f.Team)));
-        if (accept.Kind == I76.Sim.Missions.MeleeKind.Ctf) AddChild(new FlagView { World = mirror, Origin = () => _origin, CarNode = serial => mirror.Car(serial) is { } v ? _carNodes.GetValueOrDefault(v) : null, Name = "Flags" });
+        if (accept.Kind == I76.Sim.Missions.MeleeKind.Ctf)
+        {
+            // the snapshots' flags are the CTF game's, in the order of the arena's flag placements
+            var flagAt = I76.Sim.Missions.MissionSetup.CtfFlagPlacements(_builder.World!.Placements);
+            var flagScenery = _builder.Scenery;
+            AddChild(new FlagView
+            {
+                World = mirror, Origin = () => _origin, CarNode = serial => mirror.Car(serial) is { } v ? _carNodes.GetValueOrDefault(v) : null, Name = "Flags",
+                ShowHome = (i, shown) => { if (i < flagAt.Count) flagScenery?.ShowFlag(flagAt[i].Placement, shown); },
+            });
+        }
         AddChild(new NetNames { World = mirror, Nodes = _carNodes, Name = "NetNames", Kind = accept.Kind, Modern = () => !_mode1997, CanAct = () => !_inMenu && _menu is null && _picture is null && !_loading });
         AddChild(_netHud = new NetHud
         {

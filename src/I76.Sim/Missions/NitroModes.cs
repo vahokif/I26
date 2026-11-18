@@ -118,6 +118,13 @@ public sealed class CtfFlag
     public MeleePlayer? Carrier { get; internal set; }
     /// <summary>Where the stub stands: home, or where it was dropped.</summary>
     public Double3 StubPos => State == Dropped ? Pos : HomePos;
+
+    /// <summary>
+    /// Whether a flag in this state stands on its base, where the arena's model has it: at home, and inactive (a team
+    /// without players: the flag never left). Carried (it rides on the carrier's car) or dropped (it lies where it fell),
+    /// its base stands empty.
+    /// </summary>
+    public static bool StandsAtHome(int state) => state is not (Carried or Dropped);
 }
 
 /// <summary>

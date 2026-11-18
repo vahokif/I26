@@ -4,9 +4,11 @@ using I76.Net;
 namespace I76.Game.Net;
 
 /// <summary>
-/// CTF's flags in the world, from the server's snapshots: a pole and a pennant in the
-/// team's colour at the flag's place, or riding on the carrier's car. A placeholder
-/// shape (the arena's own a1flag model stays at the home stand); inactive flags are hidden.
+/// CTF's flags in the world, from the server's snapshots. A flag that stands on its base
+/// (CtfFlag.StandsAtHome: at home or inactive) is the arena's own a1flag model; one that
+/// left it (carried, or dropped) is a pole and a pennant in the team's colour riding on
+/// the carrier's car or where it lies, a placeholder shape, and its base stands empty
+/// (<see cref="ShowHome"/> hides the model's pole and pennant). So the flag is drawn once.
 /// </summary>
 public partial class FlagView : Node3D
 {
@@ -14,7 +16,10 @@ public partial class FlagView : Node3D
     public required Func<System.Numerics.Vector3> Origin { get; init; }
     /// <summary>The drawn car node of a car serial (the predicted one for the own car), null if there is none.</summary>
     public required Func<int, Node3D?> CarNode { get; init; }
+    /// <summary>Shows or hides the arena model's pole and pennant on flag i's base (the snapshot's flag order).</summary>
+    public Action<int, bool>? ShowHome { get; init; }
     private readonly List<Node3D> _nodes = [];
+    private readonly List<bool?> _home = [];
 
     public FlagView() { ProcessPriority = 1001; }   // after SimDriver and CabClip have placed the cars for the frame
 
@@ -28,9 +33,11 @@ public partial class FlagView : Node3D
         var origin = Origin();
         for (int i = 0; i < _nodes.Count; i++)
         {
-            bool show = i < flags.Count && flags[i].State != 0 && flags[i].State != 1;   // at home the arena's own flag stands
-            if (i < flags.Count && flags[i].State == 1) show = false;
-            _nodes[i].Visible = show;
+            // on its base the arena's own flag stands; away, the placeholder is the flag and the base is empty
+            bool home = i >= flags.Count || I76.Sim.Missions.CtfFlag.StandsAtHome(flags[i].State);
+            while (_home.Count <= i) _home.Add(null);
+            if (_home[i] != home) { _home[i] = home; ShowHome?.Invoke(i, home); }
+            _nodes[i].Visible = !home;
             if (i >= flags.Count) continue;
             var f = flags[i];
             if (f.State == 4 && CarNode(f.Carrier) is { Visible: true } car)

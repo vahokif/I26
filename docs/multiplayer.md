@@ -567,7 +567,11 @@ the original; single player stays the base melee. They are here server-side
   the time left ("00H:00M:00S Minutes Remaining") when there is a time limit.
   The scoreboard has the Laps or Captures column. CTF flags show on the radar
   in team colours (`Cockpit.Blips`) and as a pole and pennant (`FlagView`, drawn on the carrier's drawn car node while carried, so it moves with the interpolated or predicted car instead of stepping with the snapshots, and between `ClientWorld.PreviousFlags` and `Flags` when loose; a
-  placeholder for the arena's own flag model, shown while the flag is away).
+  placeholder for the arena's own flag model, shown while the flag is away). While it is away (carried or
+  dropped: `CtfFlag.StandsAtHome`) the arena model's pole and pennant (its type-0x5a nodes, drawn apart from the
+  base by `ScenerySpawner.ShowFlag`) are hidden, so the base stands empty, as in the original, where the flag
+  itself rides on the carrier's car; they stand again when it goes home. The snapshots' flags are matched to the
+  arena's placements by the CTF game's order (`MissionSetup.CtfFlagPlacements`: by number).
 - **Tests.** `NitroModesTests` (lap logic, flag state machine, goal counts)
   and `NitroModeTests` (a race on `N35.RAC` and a CTF on `N40.CF2` through the
   host, skipped without the Nitro install).

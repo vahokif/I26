@@ -227,6 +227,9 @@ public partial class Main : Node3D
             GD.Print(RenderBackend.Describe());
             if (RenderBackend.Compatibility)
                 GD.Print("renderer: Compatibility (OpenGL): SSAO and some finer effects are off (docs/compatibility-renderer.md)");
+            // Renderer Auto's own pick for this machine (D3D12 on Windows with an AMD card), from the next start
+            var boot = I76.Game.Shell.ShellSettings.Load();
+            StartupSettings.PickAtStart(boot.LogFile, boot.Renderer, I76.Game.Shell.MicNames.OpensInput(boot.CbMic));
             I76.Game.Assets.HiFiAudio.Probe();
         }
         // release.sh, before the export: the terrain's compressed material pack, for builds that cannot compress (World/TerrainMaterials.WritePrebaked)

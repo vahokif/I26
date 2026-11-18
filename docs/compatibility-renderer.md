@@ -7,7 +7,12 @@ differently. The log's second line says which renderer is in use (`renderer: for
 and in Compatibility the shell shows a notice once a run.
 
 Graphic Detail's Renderer (restart) row (Auto, Vulkan, D3D12 on Windows, OpenGL) picks the renderer from the next start: it writes the settings-override file
-(`user://log_settings.cfg`, shared with the Log row), and a `--rendering-driver` on the command line still wins. Auto removes the file.
+(`user://log_settings.cfg`, shared with the Log row), and a `--rendering-driver` on the command line still wins. Auto is Godot's own
+choice (Vulkan, falling back to OpenGL) and removes the file, but for Windows with an AMD card: there Auto is Direct3D 12, because
+AMD's Windows Vulkan driver draws the 1997 look's ground black near the camera (#133; D3D12 and OpenGL draw it right, as does the
+same card's Vulkan on Linux). The card is known only once a renderer runs, so the game writes the D3D12 file at start
+(`StartupSettings.AutoPick`, `PickAtStart`): the first start on such a machine runs on Vulkan, every later one on D3D12. The row
+shows what Auto runs on now, e.g. "Auto (Vulkan)".
 Force it for a test with `--rendering-method gl_compatibility --rendering-driver opengl3` (before the `--`), or
 `I76_SHOT_GL=1 tools/shot.sh ...` for a capture (`I76_SHOT_SETTINGS=1` leaves the renderer off the command line, so the Renderer row's file in `I76_SHOT_DATA` decides); `I76_SHADER_SMOKE=1` draws every shader once and quits, so the log shows
 any the renderer refuses.

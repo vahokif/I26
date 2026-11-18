@@ -12,6 +12,7 @@ how a car flies off a ramp and lands (T05's canyon worked through).
   OpenGL (Godot's Compatibility renderer): the game runs, with no SSAO and some small differences; it says so once in the
   shell and in the log (see [docs/compatibility-renderer.md](compatibility-renderer.md)). If the picture is wrong on your
   machine, Graphic Detail's **Renderer** row switches between Vulkan, Direct3D 12 (Windows) and OpenGL at the next start.
+  Auto says which one it runs on ("Auto (Vulkan)"); on Windows with an AMD card it is Direct3D 12 from the second start.
 
 ## Installing and starting
 

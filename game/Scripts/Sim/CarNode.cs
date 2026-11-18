@@ -541,10 +541,10 @@ public partial class CarNode : Node3D
     public readonly record struct RotorSpec(System.Numerics.Vector3 Centre, int Axis, float Radius);
 
     /// <summary>The rotor discs of a model: each blade part's centre, its thinnest axis and its half width.</summary>
-    public static List<RotorSpec> Rotors(I76.Formats.Assembly.AssembledModel m)
+    public static List<RotorSpec> Rotors(I76.Formats.Assembly.AssembledModel m, Func<I76.Formats.Assembly.ModelPart, bool>? include = null)
     {
         var list = new List<RotorSpec>();
-        foreach (var p in m.Parts.Where(IsRotor))
+        foreach (var p in m.Parts.Where(p => IsRotor(p) && include?.Invoke(p) != false))
         {
             var v = p.Mesh.Vertices;
             var lo = v.Aggregate(System.Numerics.Vector3.Min); var hi = v.Aggregate(System.Numerics.Vector3.Max);
@@ -557,18 +557,26 @@ public partial class CarNode : Node3D
     }
 
     private readonly List<(MeshInstance3D Disc, float Dir, float Speed)> _rotors = [];
-    private MeshInstance3D? _rotorOriginal;
+    private readonly List<MeshInstance3D> _rotorOriginal = [];
     private float _rotorSpin = -1, _rotorPhase;
     private static ShaderMaterial? _rotorMat;
 
     /// <summary>
     /// A helicopter's rotors: the original's animated blade parts (the 1997 look, <paramref name="original"/>) and, in the
-    /// modern look, a translucent motion-blurred disc for each (rotor_disc.gdshader). Visuals only.
+    /// modern look, a translucent motion-blurred disc for each (rotor_disc.gdshader). Visuals only. <paramref name="inCar"/>: the
+    /// interior's own (its blade parts and their discs), drawn with the in-car view, where the body and its rotors are hidden.
     /// </summary>
-    public void AddRotors(Mesh? original, IReadOnlyList<RotorSpec> specs, float sceneLight)
+    public void AddRotors(Mesh? original, IReadOnlyList<RotorSpec> specs, float sceneLight, bool inCar = false)
     {
-        if (_body is null) return;
-        if (original is not null) { _rotorOriginal = new MeshInstance3D { Mesh = original, Name = "RotorBlades" }; _body.AddChild(_rotorOriginal); }
+        var parent = inCar ? _cockpit : _body;
+        if (parent is null) return;
+        uint layers = inCar ? CockpitLayer : 1u;
+        if (original is not null)
+        {
+            var blades = new MeshInstance3D { Mesh = original, Name = inCar ? "CabRotorBlades" : "RotorBlades", Layers = layers };
+            parent.AddChild(blades);
+            _rotorOriginal.Add(blades);
+        }
         _rotorMat ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/rotor_disc.gdshader") };
         _rotorMat.SetShaderParameter("scene_light", sceneLight);
         foreach (var sp in specs)
@@ -579,12 +587,12 @@ public partial class CarNode : Node3D
             mat.SetShaderParameter("blade_width", main ? 0.03f : 0.05f);
             var disc = new MeshInstance3D
             {
-                Mesh = new PlaneMesh { Size = new Vector2(sp.Radius * 2, sp.Radius * 2) }, MaterialOverride = mat, Name = main ? "RotorDisc" : "TailRotorDisc",
+                Mesh = new PlaneMesh { Size = new Vector2(sp.Radius * 2, sp.Radius * 2) }, MaterialOverride = mat, Name = (inCar ? "Cab" : "") + (main ? "RotorDisc" : "TailRotorDisc"), Layers = layers,
                 Position = Coords.ToGodot(sp.Centre), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false,
                 // the plane faces +Y; a rotor turning about X lies on its side
                 Basis = sp.Axis == 0 ? new Basis(Vector3.Back, -Mathf.Pi / 2) : sp.Axis == 2 ? new Basis(Vector3.Right, Mathf.Pi / 2) : Basis.Identity,
             };
-            _body.AddChild(disc);
+            parent.AddChild(disc);
             _rotors.Add((disc, main ? 1f : -1f, main ? 5.5f : 16f));
         }
     }
@@ -592,9 +600,9 @@ public partial class CarNode : Node3D
     /// <summary>Per frame: the rotors' turn (they spin up in the air and down when landed or shot down) and which look shows.</summary>
     private void UpdateRotors(float dt)
     {
-        if (_rotors.Count == 0 && _rotorOriginal is null) return;
+        if (_rotors.Count == 0 && _rotorOriginal.Count == 0) return;
         bool modern = Modern;
-        if (_rotorOriginal is not null) _rotorOriginal.Visible = !modern;
+        foreach (var blades in _rotorOriginal) blades.Visible = !modern;
         float target = (((uint)Sim.Flags & 0x80) != 0 || (Sim.Flags & VehicleFlags.Dead) != 0) ? 0f : 1f;
         if (_rotorSpin < 0) _rotorSpin = target;
         _rotorSpin = Mathf.MoveToward(_rotorSpin, target, dt / (target > _rotorSpin ? 3f : 5f));

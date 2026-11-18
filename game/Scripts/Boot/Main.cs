@@ -1416,11 +1416,17 @@ public partial class Main : Node3D
     /// assembling and meshes only, made on the build thread under a briefing (<see cref="MakeAhead"/>) or in <see cref="SetupPlayerCar"/>.
     /// </summary>
     private sealed record PlayerCarParts(string CarDef, I76.Formats.Assembly.AssembledModel Model, I76.Formats.Assembly.AssembledModel? Interior, System.Numerics.Vector3 Eye,
-        Mesh? Cockpit, Mesh? Ring1, Mesh? Ring6, Mesh? Needle, I76.Formats.Cockpit.EltLayout? Layout);
+        Mesh? Cockpit, Mesh? Ring1, Mesh? Ring6, Mesh? Needle, I76.Formats.Cockpit.EltLayout? Layout, Mesh? CabRotors, List<CarNode.RotorSpec>? CabRotorSpecs);
 
     private static bool CabRing(I76.Formats.Assembly.ModelPart p, char n) => p.NodeName.Length == 8 && p.NodeName[4..7].Equals("RTC", System.StringComparison.OrdinalIgnoreCase) && p.NodeName[7] == n;
     // the hood (V5 FT TP, the front zone's damage texture) apart, to be rebuilt as the front is hit
     private static bool CabHood(I76.Formats.Assembly.ModelPart p) => p.Mesh.Faces.Any(f => I76.Formats.Assembly.DamageTextures.Zone(f.Texture) >= 0);
+
+    /// <summary>The in-car view's interior mesh: the detail-5 model but its low-resolution twins, the handgun's flash, RTC6, the hood and a helicopter's blades, each drawn apart.</summary>
+    internal static bool CabPart(I76.Formats.Assembly.AssembledModel interior, I76.Formats.Assembly.ModelPart p) =>
+        !LowResTwin(interior, p.NodeName) && !HandgunMuzzle(p.NodeName) && !CabRing(p, '6') && !CabHood(p) && !CarNode.IsRotor(p);
+    /// <summary>A helicopter's blade parts in the interior: the 1997 look's in-car rotors.</summary>
+    internal static bool CabRotorPart(I76.Formats.Assembly.AssembledModel interior, I76.Formats.Assembly.ModelPart p) => !LowResTwin(interior, p.NodeName) && CarNode.IsRotor(p);
 
     private static PlayerCarParts MakePlayerCarParts(MissionBuilder builder, string carDef)
     {
@@ -1433,10 +1439,17 @@ public partial class Main : Node3D
             for (int i = 0; i < interior.Parts.Count; i++)
                 if (I76.Formats.Assembly.PanelPriority.PullForward(interior.Parts[i], eye))
                     interior.Parts[i] = interior.Parts[i] with { ToModel = interior.Parts[i].ToModel.ScaledAbout(eye, I76.Formats.Assembly.PanelPriority.Scale) };
-        Mesh? cab = null, ring1 = null, ring6 = null, needle = null;
+        Mesh? cab = null, ring1 = null, ring6 = null, needle = null, cabRotors = null;
+        List<CarNode.RotorSpec>? cabRotorSpecs = null;
         if (interior is not null)
         {
-            cab = builder.Meshes!.Build(interior, wheels: false, include: p => !LowResTwin(interior, p.NodeName) && !HandgunMuzzle(p.NodeName) && !CabRing(p, '6') && !CabHood(p));
+            // a helicopter's blade parts apart: the 1997 look's in-car view draws them, the modern look its rotor discs (CarNode.AddRotors)
+            cab = builder.Meshes!.Build(interior, wheels: false, include: p => CabPart(interior, p));
+            if (interior.Parts.Any(CarNode.IsRotor))
+            {
+                cabRotors = builder.Meshes!.Build(interior, wheels: false, include: p => CabRotorPart(interior, p));
+                cabRotorSpecs = CarNode.Rotors(interior, p => CabRotorPart(interior, p));
+            }
             ring1 = builder.Meshes!.Build(interior, wheels: false, include: p => CabRing(p, '1'));
             ring6 = builder.Meshes!.Build(interior, wheels: false, include: p => CabRing(p, '6'));
             // the gauge needles: needle.geo at the VLOCs of kind 35 (speedo) and 36 (tacho), turned every frame
@@ -1469,7 +1482,7 @@ public partial class Main : Node3D
             && new I76.Formats.Bwd2.Bwd2File(vdfData).First("VDFC") is { } vd && I76.Formats.Bin.CStr(vdfData, vd.PayloadOffset + 0x40, 13) is { Length: > 0 } named)
             eltName = named;
         var layout = builder.Vfs.TryRead(eltName.Length > 0 ? eltName : "vpit_1.elt") is { } eltData ? I76.Formats.Cockpit.EltLayout.Parse(System.Text.Encoding.Latin1.GetString(eltData)) : null;
-        return new PlayerCarParts(carDef, model, interior, eye, cab, ring1, ring6, needle, layout);
+        return new PlayerCarParts(carDef, model, interior, eye, cab, ring1, ring6, needle, layout, cabRotors, cabRotorSpecs);
     }
 
     /// <summary>
@@ -1490,6 +1503,8 @@ public partial class Main : Node3D
         var interior = parts.Interior;
         node.AddCockpit(parts.Cockpit, parts.Eye, parts.Ring1, parts.Ring6,
             interior is null ? null : frameOf => builder.Meshes!.Build(interior, wheels: false, include: p => !LowResTwin(interior, p.NodeName) && CabHood(p), frameOf: frameOf));
+        if (vehicle.IsHeli && parts.CabRotorSpecs is { Count: > 0 } cabSpecs)
+            node.AddRotors(parts.CabRotors, cabSpecs, Mathf.Clamp(builder.Light.Intensity * 1.5f, 0.25f, 1f), inCar: true);
         if (interior is not null && parts.Needle is { } needleMesh)
             foreach (var l in model.Locations.Where(l => l.Tag == "VLOC" && l.Index is 35 or 36))
                 node.AddNeedle(l.Index - 35, needleMesh, Coords.ToGodot(I76.Formats.Assembly.Affine.From(l.Transform)));

@@ -130,4 +130,76 @@ public class RaceCheckpointTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(1, bot.Deaths);
         Assert.True(lowest > 90, "stayed up on the lane");
     }
+
+    /// <summary>
+    /// A course in two parts joined by a regen pad, as some maps make a long course (a pad sends a car to a spawn point, with the race's
+    /// count kept): check1 to check4 out and back round the west of a flat map, a pad by check4, check5 by the spawn points, then
+    /// check6; a road from check4 round the south to check5. A bot driven onto the pad after taking check4 comes back at a spawn point
+    /// and drives straight on to check5. (It kept the route the AI had planned along the road from check4 and drove from the spawn
+    /// point back to it, into a wall on the map it was reported on, until bumped; and a bot back at a spawn point drove the course
+    /// from check1, round the first part and onto its pad again.)
+    /// </summary>
+    [Fact]
+    public void ARaceBotSentToTheStartByARegenPadDrivesOnToTheNextCheckpoint()
+    {
+        if (Nitro is null) return;
+        var inst = _install ??= new ScratchMapInstall(Nitro!, "race");
+        var proj = MapProject.CreateBlank("regenrun", "Regen run", ".rac", 2, 2, 100);
+        var b = proj.WorldBounds();
+        var mid = new Vector3((b.X + b.Z) / 2, 10f, (b.Y + b.W) / 2);
+        // a road from check4's end round the south of the map to check5: the AI's route from there to check5 goes along it, away from the
+        // spawn points
+        Vector2[] bends = [new(-400, 140), new(-400, -200), new(80, -200), new(80, 100)];
+        var road = new List<RoadEditPoint>();
+        for (int k = 0; k + 1 < bends.Length; k++)
+        {
+            var dir = Vector2.Normalize(bends[k + 1] - bends[k]);
+            var side = new Vector2(-dir.Y, dir.X) * 5;
+            float len = Vector2.Distance(bends[k], bends[k + 1]);
+            for (float d = 0; d < len || k + 2 == bends.Length && d <= len; d += 5)
+            {
+                var c = new Vector2(mid.X, mid.Z) + bends[k] + dir * d;
+                road.Add(new RoadEditPoint(c - side, c + side));
+            }
+        }
+        proj.Mission.Roads.Add(new RoadEdit(1, road));
+        Vector2[] checks = [new(0, 100), new(0, 550), new(-400, 550), new(-400, 100), new(80, 100), new(80, 450)];
+        for (int i = 0; i < checks.Length; i++) proj.Mission.Objects.Add(MapObject.Checkpoint(i + 1, mid + new Vector3(checks[i].X, 0, checks[i].Y)));
+        var pad = mid + new Vector3(-400, 0, 80);
+        proj.Mission.Objects.Add(MapObject.Regen(pad));
+        proj.Mission.Objects.Add(MapObject.Spawn(mid + new Vector3(-8, 0, 40), 0));
+        proj.Mission.Objects.Add(MapObject.Spawn(mid + new Vector3(8, 0, 40), 0));
+        foreach (var (name, data) in proj.ToFiles()) inst.Put(name, data);
+
+        var host = new MeleeHost(new ServerOptions { Install = inst.Root, Arena = proj.MissionFileName, Kind = MeleeKind.Race, GoalValue = 0, Bots = 1, MaxPlayers = 2, BotSkill = BotSkill.Hard, Seed = 3, BotCars = ["vppirna1.vcf"] });
+        var game = host.Game;
+        var bot = host.Bots[0].Player;
+        RaceTracker Tracker() => game.RaceOf(bot)!;
+        double dt = host.Session.TickSeconds, t = 0;
+        // on its way to check5 with its route planned, 30 s after the start (a pad renews a car once every 30 s)
+        var c5 = mid + new Vector3(checks[4].X, 0, checks[4].Y);
+        bool ToCheck5() => bot.Entity is { PlanState: 0, Waypoints: [.., var last] } && new Vector2(last.X - c5.X, last.Z - c5.Z).Length() < 15;
+        while (t < 150 && !(game.RaceOf(bot) is { Current: 3 } && ToCheck5())) { host.Step(); t += dt; }
+        for (double s = t; t < s + 1; t += dt) host.Step();
+        output.WriteLine($"took check4 and on its way to check5 at {t:0.0} s, at {bot.Car.Pos.X - mid.X:0},{bot.Car.Pos.Z - mid.Z:0}");
+        Assert.True(t is > 31 and < 150, "the bot took check4 at least 30 s after the start");
+        Assert.Equal(0, bot.Deaths);
+        var at = bot.Car.Pos;
+        output.WriteLine($"the AI's route to check5: waypoint {bot.Entity.WaypointIndex} of {bot.Entity.Waypoints.Count}");
+        bot.Car.Pos = new(pad.X, at.Y, pad.Z);
+        host.Step(); t += dt;
+        Assert.Equal(400, bot.Score);
+        Assert.True(System.Math.Abs(bot.Car.Pos.Z - (mid.Z + 40)) < 20, "back at a spawn point");
+        double back = t, took = 0, west = 0;
+        while (t - back < 30 && took == 0)
+        {
+            host.Step(); t += dt;
+            west = System.Math.Min(west, bot.Car.Pos.X - mid.X);
+            if (Tracker().Current != 3) took = t - back;
+        }
+        output.WriteLine($"took check{Tracker().Current + 1} {took:0.0} s after the pad; furthest west {west:0}");
+        Assert.Equal(4, Tracker().Current);
+        Assert.True(took is > 0 and < 12, "took check5 within 12 s of the pad");
+        Assert.True(west > -100, "went nowhere near the pad's end of the old route");
+    }
 }

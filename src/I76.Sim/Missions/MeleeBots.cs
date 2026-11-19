@@ -173,12 +173,7 @@ public sealed partial class MeleeGame
                 p.Entity.Search = null;
                 continue;
             }
-            if (b.RaiseAt is not null)
-            {
-                // a fresh car: it thinks from the start (and a racer's time without a checkpoint starts again: the dead seconds are not its own)
-                b.RaiseAt = null; b.Plan = PlanNone; b.MovedAt = Host.Now; b.ProgressAt = Host.Now;
-                p.Entity.Depth = -1; p.Entity.Search = null;
-            }
+            if (b.RaiseAt is not null) { b.RaiseAt = null; BotPlaced(p); }
             if (Ended) { Order(p, PlanSit, null, null, 0); continue; }
             if (System.MathF.Abs(p.Car.Speed) > 2f) b.MovedAt = Host.Now;
             StuckCheck(p, b);
@@ -189,6 +184,19 @@ public sealed partial class MeleeGame
                 default: BotCombat(p, b); break;
             }
         }
+    }
+
+    /// <summary>
+    /// A fresh car at a spawn point, after a death or a regen pad's: the bot thinks from the start, the AI plans from where the car
+    /// is now (a regen moves the car across the arena: the route the AI had planned from the pad led it into whatever lay that way
+    /// from the spawn point), and a racer's time without a checkpoint starts again (the dead seconds are not its own).
+    /// </summary>
+    private void BotPlaced(MeleePlayer p)
+    {
+        if (p.Brain is not { } b) return;
+        b.Plan = PlanNone; b.Path = null; b.Target = null; b.AheadSince = -1;
+        b.MovedAt = Host.Now; b.ProgressAt = Host.Now;
+        p.Entity.Depth = -1; p.Entity.Search = null;
     }
 
     /// <summary>
@@ -434,7 +442,11 @@ public sealed partial class MeleeGame
             var from = p.Car.Pos.ToVector3();
             // back at a spawn point: the course from the start, as a person drives it, the checkpoints on the way passed but not counted
             if (fresh && tr.Current >= 0)
-                foreach (var w in LeadIn(tr.FromStart(out bool closing), closing, from)) { path.Add(w); owner.Add(-1); from = w; }
+            {
+                var course = tr.FromStart(out bool closing);
+                int first = CourseStart(course, Regens.Select(r => r.Pos.ToVector3()), SpawnTable(p.Team).Select(sp => sp.Pos.ToVector3()));
+                foreach (var w in LeadIn(course, closing, from, first)) { path.Add(w); owner.Add(-1); from = w; }
+            }
             for (int k = 0; k < route.Length; k++)
             {
                 var to = route[k].ToVector3();
@@ -463,10 +475,12 @@ public sealed partial class MeleeGame
     /// across the ground, the planner would take it off the edges and into the walls and drops the course goes round (on a map whose
     /// course comes back past the start, the nearest leg is often across one), again after each death, where a person drives the
     /// course from the start. So does the car: check1, check2 ... in order (passed, not counted) up to the one wanted, the way the
-    /// race's start takes it. One exception: wanting the last checkpoint of a lap that closes on check1 (<paramref name="closing"/>),
-    /// a car that is nearer that closing leg than any other leg of the lap goes straight back along it.
+    /// race's start takes it; or from a later checkpoint, <paramref name="first"/> (its index in <paramref name="fromStart"/>), when the
+    /// course comes back to the start through a regen pad (<see cref="CourseStart"/>). One exception: wanting the last checkpoint of a
+    /// lap that closes on check1 (<paramref name="closing"/>), a car that is nearer that closing leg than any other leg of the lap goes
+    /// straight back along it.
     /// </summary>
-    internal static List<Vector3> LeadIn(Double3[] fromStart, bool closing, Vector3 at)
+    internal static List<Vector3> LeadIn(Double3[] fromStart, bool closing, Vector3 at, int first = 0)
     {
         var lead = new List<Vector3>();
         int n = fromStart.Length;
@@ -478,8 +492,33 @@ public sealed partial class MeleeGame
             for (int i = 0; i < n - 1; i++) best = System.Math.Min(best, LegDist2(fromStart[i], fromStart[i + 1], at));
             if (LegDist2(fromStart[n - 1], fromStart[0], at) <= best) return lead;
         }
-        for (int i = 0; i < n - 1; i++) lead.Add(fromStart[i].ToVector3());
+        for (int i = System.Math.Max(0, first); i < n - 1; i++) lead.Add(fromStart[i].ToVector3());
         return lead;
+    }
+
+    /// <summary>
+    /// Where the course from the start begins for a car back at a spawn point (an index in <paramref name="fromStart"/>,
+    /// <see cref="RaceTracker.FromStart"/>): the latest checkpoint up to the one wanted that the course reaches through a regen pad,
+    /// else check1. A pad sends a car to a spawn point (<see cref="Regen"/>), so a map may run its course in parts that each start at
+    /// the spawn points: check1 ... check19, a pad, check20 by the spawn points ... and a car on the pad is in the next part at once.
+    /// A checkpoint begins such a part when a pad is within reach of a car taking the one before it (the checkpoint's sphere and the
+    /// pad's) and it is nearer a spawn point than to that one (the way across is no part of the course).
+    /// </summary>
+    internal static int CourseStart(Double3[] fromStart, IEnumerable<Vector3> pads, IEnumerable<Vector3> spawns)
+    {
+        var padList = pads.ToList();
+        var spawnList = spawns.ToList();
+        if (padList.Count == 0 || spawnList.Count == 0) return 0;
+        const float reach = RaceTracker.Radius + RegenReach;
+        for (int j = fromStart.Length - 1; j >= 1; j--)
+        {
+            var before = fromStart[j - 1].ToVector3();
+            var here = fromStart[j].ToVector3();
+            if (!padList.Any(r => Vector3.DistanceSquared(r, before) < reach * reach)) continue;
+            float leg = Dist2(before, here);
+            if (spawnList.Any(sp => Dist2(sp, here) < leg)) return j;
+        }
+        return 0;
     }
 
     /// <summary>The squared distance across the ground from <paramref name="at"/> to the leg from <paramref name="a"/> to <paramref name="c"/>.</summary>

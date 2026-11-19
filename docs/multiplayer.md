@@ -400,6 +400,11 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
   across the arena into the walls and drops the course goes round, and it died and came back to try the same again; on from the leg of the
   course nearest across the ground, it went off the edge on a map whose course comes back past the start on a lane of its own across a drop.
   Its 90 s without a checkpoint start again when it comes back, and a point of the course passed on the way counts.
+  A regen pad brings the car back at a spawn point too, and the bot thinks again from there as after a death (`MeleeGame.BotPlaced`: kept, the
+  AI's route planned from the pad led it from the spawn point into a wall until something bumped it). Some maps run the course in parts joined
+  by pads (check1 ... check19, a pad, check20 by the spawn points ...): the course from the start begins at the start of the part the wanted
+  checkpoint is in (`MeleeGame.CourseStart`: the latest checkpoint with a pad within 40 m of the one before it and nearer a spawn point than
+  to that one), not at check1.
 - **Capture the flag.** Roles by seat order in the team's bots: raider, defender, raider, escort, defender, and again. A carrier goes for the stand
   of its colour. A raider goes to the nearest enemy flag at its stand (`CtfGame` has no dropped flag: a carried flag goes home when its carrier is
   removed or comes back, so there is none to return) and takes it by touch. A defender meets whoever comes within 110 m of its stand, else circles it. An

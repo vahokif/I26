@@ -124,6 +124,41 @@ public class NitroModesTests
         Assert.Equal([g[1].ToVector3(), g[2].ToVector3()], Lead(new(0, 0, 0)));
     }
 
+    /// <summary>
+    /// A course in parts that each start at the spawn points, joined by regen pads (a pad sends a car to a spawn point): check1 to
+    /// check3 out and back, a pad by check3, check4 by the spawn points, check5 and check6 out and back, a pad by check6, check7 by the
+    /// spawn points. A bot back at a spawn point drives the course from the start of the part the checkpoint it wants is in, not from
+    /// check1 (which would take it round the first part and onto its pad again). A pad by a checkpoint whose next one is nearer that
+    /// one than any spawn point (the course goes on from it) begins nothing.
+    /// </summary>
+    [Fact]
+    public void ARaceBotBackAtTheStartDrivesTheCourseFromThePartTheCheckpointItWantsIsIn()
+    {
+        var c = new Dictionary<int, Double3>
+        {
+            [1] = new(0, 0, 100), [2] = new(0, 0, 500), [3] = new(-300, 0, 500), [4] = new(20, 0, 110),
+            [5] = new(300, 0, 300), [6] = new(300, 0, 600), [7] = new(-20, 0, 120), [8] = new(-300, 0, 200), [9] = new(-500, 0, 200),
+        };
+        System.Numerics.Vector3[] spawns = [new(0, 0, 40), new(10, 0, 40)];
+        System.Numerics.Vector3[] pads = [new(-300, 0, 520), new(310, 0, 615), new(300, 0, 300)];
+        var r = new RaceTracker(c);
+        System.Numerics.Vector3 V(int n) => c[n].ToVector3();
+        System.Numerics.Vector3[] Lead()
+        {
+            var course = r.FromStart(out bool closing);
+            return [.. MeleeGame.LeadIn(course, closing, spawns[0], MeleeGame.CourseStart(course, pads, spawns))];
+        }
+        r.Update(c[1]); r.Update(c[2]);                        // wants check3: the first part from check1
+        Assert.Equal([V(1), V(2)], Lead());
+        r.Update(c[3]);                                        // wants check4, the start of the second part (a pad by check3): straight to it
+        Assert.Empty(Lead());
+        r.Update(c[4]); r.Update(c[5]);                        // wants check6: from check4 (the pad by check5 begins nothing: check6 is on from it)
+        Assert.Equal([V(4), V(5)], Lead());
+        r.Update(c[6]); r.Update(c[7]);                        // wants check8: from check7
+        Assert.Equal([V(7)], Lead());
+        Assert.Equal([V(1), V(2)], MeleeGame.LeadIn([c[1], c[2], c[3]], false, spawns[0], MeleeGame.CourseStart([c[1], c[2], c[3]], [], spawns)));
+    }
+
     private static MeleePlayer Player(int team, Double3 pos)
     {
         var car = new Vehicle { Pos = pos };

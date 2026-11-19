@@ -654,7 +654,7 @@ public sealed partial class MeleeGame
     {
         var p = pl.Car;
         var at = p.Pos.ToVector3();
-        if (!Regens.Any(r => System.Numerics.Vector3.DistanceSquared(r.Pos.ToVector3(), at) < 100f)) { pl.OffPad = true; return; }
+        if (!Regens.Any(r => System.Numerics.Vector3.DistanceSquared(r.Pos.ToVector3(), at) < RegenReach * RegenReach)) { pl.OffPad = true; return; }
         if (Host.Now - pl.RegenAt < 30f)
         {
             if (!pl.OffPad) pl.RegenAt = Host.Now;
@@ -666,8 +666,12 @@ public sealed partial class MeleeGame
         Ctf?.CarrierGone(pl);
         Renew(pl, full: Rules.Network);
         Place(p, PickSpawn(pl.Team, p), pl.Team, fresh: Rules.Network);
+        BotPlaced(pl);
         PlayerRenewed?.Invoke(p);
     }
+
+    /// <summary>How near a regen point a car comes for it to count (3-D).</summary>
+    internal const float RegenReach = 10f;
 
     /// <summary>
     /// A fresh car, as the same vehicle (its node and hooks stay): the wheels'

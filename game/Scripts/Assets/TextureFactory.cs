@@ -8,6 +8,8 @@ namespace I76.Game.Assets;
 /// Texture members to Godot textures, with the mission palette for 8-bit
 /// data. Index 255 always becomes alpha 0; whether a material honours the
 /// key is the material's decision (the key is per draw type).
+/// A stock texture with a slip in its 16-bit data (TextureRepairs) has a repaired copy too, which the modern look draws
+/// (GetRepaired, GetRepairedRgba); the 1997 look draws the file as it is.
 /// </summary>
 public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
 {
@@ -41,6 +43,26 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     }
 
     private readonly Dictionary<string, Entry?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Entry?> _repaired = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, I76.Formats.Assembly.RoadRaster.Tex?> _repairedRgba = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A stock texture's repaired copy (TextureRepairs), as <see cref="Get"/> makes the file's; null for any other member.</summary>
+    public Entry? GetRepaired(string member)
+    {
+        if (!TextureRepairs.Has(member)) return null;
+        if (_repaired.TryGetValue(member, out var e)) return e;
+        return _repaired[member] = Repaired(member) is { } r ? Make(r) : null;
+    }
+
+    /// <summary>A stock texture's repaired copy (TextureRepairs) as <see cref="GetRgba"/> gives the file's; null for any other member.</summary>
+    public I76.Formats.Assembly.RoadRaster.Tex? GetRepairedRgba(string member)
+    {
+        if (!TextureRepairs.Has(member)) return null;
+        if (_repairedRgba.TryGetValue(member, out var r)) return r;
+        return _repairedRgba[member] = Repaired(member) is { } t ? new I76.Formats.Assembly.RoadRaster.Tex(t.Width, t.Height, TextureReader.ToRgba(t, palette)) : null;
+    }
+
+    private IndexedTexture? Repaired(string member) => resolver.Load(member) is { } t ? TextureRepairs.Repaired(member, t) : null;
 
     public Entry? Get(string member)
     {
@@ -50,20 +72,17 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
         return e;
     }
 
-    private Entry? Make(string member)
+    private Entry? Make(string member) => resolver.Load(member) is { } t ? Make(t) : null;
+
+    private Entry Make(IndexedTexture t)
     {
-        Entry? e = null;
-        if (resolver.Load(member) is { } t)
-        {
-            var plain = TextureReader.ToRgba(t, palette);
-            bool key = TextureReader.HasKey(plain);
-            var rgba = plain;
-            if (key) { rgba = (byte[])plain.Clone(); TextureReader.BleedUnderKey(rgba, t.Width, t.Height); }
-            // the opaque faces' copy is made when one first asks for it (most keyed textures are only drawn keyed)
-            Lazy<ImageTexture>? unkeyed = key ? new(() => Upload(plain, t.Width, t.Height)) : null;
-            e = new Entry(Upload(rgba, t.Width, t.Height), key, t.Width, t.Height, rgba) { Unkeyed = unkeyed };
-        }
-        return e;
+        var plain = TextureReader.ToRgba(t, palette);
+        bool key = TextureReader.HasKey(plain);
+        var rgba = plain;
+        if (key) { rgba = (byte[])plain.Clone(); TextureReader.BleedUnderKey(rgba, t.Width, t.Height); }
+        // the opaque faces' copy is made when one first asks for it (most keyed textures are only drawn keyed)
+        Lazy<ImageTexture>? unkeyed = key ? new(() => Upload(plain, t.Width, t.Height)) : null;
+        return new Entry(Upload(rgba, t.Width, t.Height), key, t.Width, t.Height, rgba) { Unkeyed = unkeyed };
     }
 
     private static ImageTexture Upload(byte[] rgba, int w, int h)

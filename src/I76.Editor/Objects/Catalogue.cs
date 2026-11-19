@@ -8,8 +8,11 @@ using I76.Formats.Vfs;
 
 namespace I76.Editor.Objects;
 
-/// <summary>The palette's groups. <see cref="Scripted"/> holds what only a mission script drives (vehicles, gun emplacements, helicopters, gates).</summary>
-public enum ObjectCategory { Buildings, Structures, Roadside, Props, Vegetation, Fences, Markers, Scripted }
+/// <summary>
+/// The palette's groups. <see cref="Scripted"/> holds what only a mission script drives (vehicles, gun emplacements, helicopters, gates);
+/// <see cref="RoadPieces"/> the flat road pieces placed by hand (runway, start and finish lines: <see cref="ObjectCatalogue.HandPieces"/>).
+/// </summary>
+public enum ObjectCategory { Buildings, Structures, Roadside, Props, Vegetation, Fences, RoadPieces, Markers, Scripted }
 
 /// <summary>What a marker item places (the keyword objects the loaders recognise by name).</summary>
 public enum MarkerKind { None, Spawn, Regen, Checkpoint, Flag }
@@ -118,7 +121,7 @@ public sealed class CatalogueItem
 /// <summary>The catalogue of placeable things, built from the install's own maps and cached.</summary>
 public static class ObjectCatalogue
 {
-    public const int CacheVersion = 5;
+    public const int CacheVersion = 6;
 
     /// <summary>Fixed marker items, placed with the marker tools.</summary>
     public static IEnumerable<CatalogueItem> MarkerItems()
@@ -134,7 +137,8 @@ public static class ObjectCatalogue
     public static ObjectCategory? Classify(string name, uint type, bool vehicle, float width, float depth)
     {
         string n = name.ToLowerInvariant();
-        if ((type & 0xf0) == 0x50 || Intersections.PieceCatalogue.Lookup(name) is not null) return null;   // intersections, runway ends: painted into the roads, made by the road tool
+        if (HandPieces.ContainsKey(n)) return ObjectCategory.RoadPieces;
+        if ((type & 0xf0) == 0x50 || Intersections.PieceCatalogue.Lookup(name) is not null) return null;   // intersections and road ends: painted into the roads, made by the road tool
         if (vehicle || type is 1 or 7 or 8 or 9) return ObjectCategory.Scripted;
         if (n.StartsWith("afence") || n.StartsWith("bcaikwl") || n.StartsWith("bhyceme") && n[^1] <= '3') return ObjectCategory.Fences;   // the cemetery's gate and walls; its graves are props
         if (n.StartsWith("aaramp") || n.StartsWith("be") || type == 0xc) return ObjectCategory.Structures;
@@ -211,6 +215,20 @@ public static class ObjectCatalogue
                     });
                 }
             }
+        // the road pieces placed by hand that this install's maps do not place (the forks without a yellow line, the last finish line; on the base game the Nitro Pack's)
+        foreach (var (n, type) in HandPieces)
+            if (!rows.ContainsKey(n) && asm.Vfs.Exists(n + ".sdf") && asm.Assemble(n + ".sdf") is { Parts.Count: > 0 } hm)
+            {
+                var hmn = new Vector3(float.MaxValue); var hmx = new Vector3(float.MinValue);
+                foreach (var p in hm.Parts)
+                    foreach (var v in p.Mesh.Vertices) { var t = p.ToModel.Apply(v); hmn = Vector3.Min(hmn, t); hmx = Vector3.Max(hmx, t); }
+                bool nitro = NitroPlacedPieces.Contains(n);
+                unplaced.Add(new CatalogueItem
+                {
+                    Name = n, Category = ObjectCategory.RoadPieces, Type = type, TypesSeen = [type], Definition = n + ".sdf", NotInStockMaps = !nitro, NitroMapsOnly = nitro, InMelee = nitro,
+                    MinX = hmn.X, MinY = hmn.Y, MinZ = hmn.Z, MaxX = hmx.X, MaxY = hmx.Y, MaxZ = hmx.Z,
+                });
+            }
         foreach (var (n, r) in rows.OrderBy(k => k.Key, StringComparer.Ordinal))
         {
             var types = r.Types.Where(t => t.Key is >= 1 and <= 0x5f).OrderByDescending(t => t.Value).ToList();   // the stray records with float-looking types are not objects
@@ -286,6 +304,27 @@ public static class ObjectCatalogue
         ["aaramp2"] = (0xb, true), ["aaramp7"] = (0xb, true), ["aarampa"] = (0xb, true), ["aarampb"] = (0xb, true), ["betunnl1"] = (2, false),
     };
 
+    /// <summary>
+    /// The flat road pieces placed by hand from the palette's ROAD PIECES tab (the road tool makes the junctions and road ends), with the ODEF
+    /// type the stock maps give them: the runway's middle (20 x 200) and its four ends (20 x 25), the Nitro Pack's start (ima2n_1) and finish
+    /// (ima2n_2) lines in the three asphalt looks, the forks without a yellow line (iga2n_2, ila2n_2, placed by no stock map) and the dirt
+    /// split iyd27_1 (a road splitting into two 20 m apart). The library's second names for these meshes (iyisect8) are not offered again.
+    /// Every one is a single flat face or a few, painted into the ground at load like the junction pieces; the stock maps turn them by quarter turns.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, uint> HandPieces = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["rmrwmid1"] = 0x50, ["rerwend1"] = 0x50, ["rerwend2"] = 0x50, ["rerwend3"] = 0x50, ["rerwend4"] = 0x50,
+        ["ima21_1"] = 0x50, ["ima21_2"] = 0x50, ["ima22_1"] = 0x50, ["ima22_2"] = 0x50, ["ima23_1"] = 0x50, ["ima23_2"] = 0x50,
+        ["iga21_2"] = 0x50, ["iga22_2"] = 0x50, ["iga23_2"] = 0x50, ["ila21_2"] = 0x50, ["ila22_2"] = 0x50, ["ila23_2"] = 0x50,
+        ["iyd27_1"] = 0x52,
+    };
+
+    /// <summary>The hand-placed road pieces that only the Nitro Pack's maps place (a base-game palette marks them so; the data has them).</summary>
+    public static readonly IReadOnlySet<string> NitroPlacedPieces = new HashSet<string>(["ima21_1", "ima21_2", "ima22_1", "ima22_2", "ima23_1", "rerwend1", "rerwend2"], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether a name is one of the road pieces placed by hand (<see cref="HandPieces"/>).</summary>
+    public static bool IsHandPiece(string name) => HandPieces.ContainsKey(name.Trim().TrimStart('#'));
+
     /// <summary>A tunnel model's tube: the box of its TUN part (the mountain MTN, the portals AD and the kerbs CR are its other parts), or null for a model without one.</summary>
     public static (float X, float Z0, float Z1, float Width)? TunnelOf(AssembledModel m)
     {
@@ -300,7 +339,7 @@ public static class ObjectCatalogue
     {
         var have = new HashSet<string>(placed, StringComparer.OrdinalIgnoreCase);
         return vfs.Names.Where(n => n.EndsWith(".sdf", StringComparison.OrdinalIgnoreCase)).Select(n => n[..^4].ToLowerInvariant())
-            .Where(n => !have.Contains(n) && n[0] != 'i' && !n.StartsWith("a1flag")).Distinct().Order(StringComparer.Ordinal);
+            .Where(n => !have.Contains(n) && n[0] != 'i' && !n.StartsWith("a1flag") && !HandPieces.ContainsKey(n)).Distinct().Order(StringComparer.Ordinal);
     }
 
     /// <summary>Cached or scanned: <paramref name="cachePath"/> holds the JSON for this install (its key says which); scanned again when missing or stale.</summary>

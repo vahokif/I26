@@ -11,7 +11,7 @@ public sealed partial class RoadTool
     /// <summary>
     /// I76_EDITOR_SCRIPT commands "road:..." (docs/dev-hooks.md), for captures and tests without a mouse: mode,name | build,ground|bridge|tunnel | piece,name|auto | stretch | click,x,z[,shift] |
     /// finish | cursor,x,z (or off) | select,x,z | drag,x,z,toX,toZ[,single] | insert,x,z | delete | split,x,z | bulldoze,x,z |
-    /// upgrade,x,z,kind[,width] | kind,n | width,m | grade,percent | conform,0/1 | snap,angle|grid|roads|structures,0/1 | shoulder,m | log.
+    /// upgrade,x,z,kind[,width] | end,x,z,start|end,open|cap|turnaround|todirt | kind,n | width,m | grade,percent | conform,0/1 | snap,angle|grid|roads|structures,0/1 | shoulder,m | log.
     /// </summary>
     public void Script(string line)
     {
@@ -77,6 +77,11 @@ public sealed partial class RoadTool
                     if (r >= 0) Edit(() => RoadEditing.Retype(Ed.Doc, Roads, r, uint.Parse(args[2]), args.Length > 3 ? F(args, 3) : null), "Change road type");
                     break;
                 }
+            case "end":      // end,x,z,start|end,open|cap|turnaround|todirt: selects the road there and finishes that end so
+                _sel = PickRoad(new V2(F(args, 0), F(args, 1))); _selPt = -1;
+                if (_sel >= 0) SetRoadEnd(args[2] == "start", Enum.Parse<I76.Editor.Intersections.RoadEnd>(args[3], true));
+                else GD.Print("editor roads: no road there");
+                break;
             case "kind": SetKind(uint.Parse(args[0]), false); break;
             case "width": SetWidth(F(args, 0), false); SyncPanel(); break;
             case "grade": MaxGrade = F(args, 0) / 100f; SyncPanel(); break;

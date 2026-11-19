@@ -125,7 +125,7 @@ switches back. The code is `src/I76.Editor/Objects` (no Godot: catalogue, layer,
 .rac, .cf2-4, .lvl), counts what each places by name and ODEF type, resolves the names to their .sdf/.vcf, measures the model's box, and
 caches the result as JSON in `user://cache/` (about half a second to build; it is keyed by the archive and the stock mission files, so
 saving a map of your own does not rebuild it). The ODEF type a name gets is the one the stock maps give it most often (a telegraph
-pole is type 3, breakable, in the campaign and type 2, solid, in a few maps: the inspector offers every type seen). On the Nitro Pack it is 338 items (Buildings 61, Bridges and ramps 20, Roadside 109, Props 26, Plants 7, Fences 9, Markers 7, Scripted 99), on the base game 423 (70, 22, 115, 23, 8, 14, 7, 164); `i76 catalogue` prints them. Groups (`ObjectCatalogue.Classify`, from type, the stock naming and size):
+pole is type 3, breakable, in the campaign and type 2, solid, in a few maps: the inspector offers every type seen). On the Nitro Pack it is 356 items (Buildings 61, Bridges and ramps 20, Roadside 109, Props 26, Plants 7, Fences 9, Road pieces 18, Markers 7, Scripted 99), on the base game 441 (70, 22, 115, 23, 8, 14, 18, 7, 164); `i76 catalogue` prints them. Groups (`ObjectCatalogue.Classify`, from type, the stock naming and size):
 
 | Group | What | Rule |
 |---|---|---|
@@ -135,11 +135,12 @@ pole is type 3, breakable, in the campaign and type 2, solid, in a few maps: the
 | Props | wrecks, huts, water towers, pumps, planes | the rest of `a*` |
 | Plants | cactus, pine | `n*` |
 | Fences | fence and wall pieces | `afence*`, `bcaikwl*` |
+| Road pieces | runway, start and finish lines, forks without a yellow line, the dirt split | `ObjectCatalogue.HandPieces` (below) |
 | Markers | spawn, regen, checkpoint, the four flags | the loaders' keywords |
 | Scripted | vehicles, gun emplacements, helicopters, gates | types 1, 7, 8, 9, `.vcf`: they need a mission script, so placed in a melee they are inert |
 
-Placed scenery is written with the object flags the stock maps give it, 0 (the flag bits that do occur belong to vehicles: the player's car 0x10, the team and colour bits 0x10000-0x40000); the record's other bytes are zero, as in every stock file. Road pieces (the intersections, type 0x50-0x5f) are painted into the roads at load and are not placed by hand; the player's car is left
-out. A name placed only by campaign missions is shown dimmer ("campaign only"): scenery needs no script, so it is harmless in a melee,
+Placed scenery is written with the object flags the stock maps give it, 0 (the flag bits that do occur belong to vehicles: the player's car 0x10, the team and colour bits 0x10000-0x40000); the record's other bytes are zero, as in every stock file. Road pieces (type 0x50-0x5f) are painted into the roads at load: the junctions and road ends are the road tool's (they follow the roads,
+the object tools cannot select them), the rest are the Road pieces tab's; the player's car is left out. A name placed only by campaign missions is shown dimmer ("campaign only"): scenery needs no script, so it is harmless in a melee,
 but only the "Scripted" group is marked as not working there. The palette is a bottom panel with a tab for each group, a search box
 (names, across all groups), and a picture for each item, drawn once in an off-screen viewport and cached as PNGs in
 `user://cache/editor-thumbs/` (the tab on show first; the modern look's materials). Hovering shows the description, the code name, size, ODEF type and how
@@ -154,7 +155,7 @@ bible. The cache key is versioned (`ObjectCatalogue.CacheVersion`).
 
 **Objects no stock map places.** The scan only sees what the maps place, so `ObjectCatalogue.Unplaced` adds the models in the data that no
 stock map of either install places (found by `ObjectCatalogue.UnplacedNames` over both installs' stock maps, `MapFileSet.IsStockMission`;
-the intersections, `i*`, are the intersection tool's), with the ODEF type of the bible's class (Struct1 solid 2, Struct2 breakable 3, SIGN
+the intersections, `i*`, are the road tool's or the Road pieces tab's), with the ODEF type of the bible's class (Struct1 solid 2, Struct2 breakable 3, SIGN
 4, Ramp 0xb): the Industrial Park buildings `bcaik1/3/5/7`, `bcaik_s2/5/6/7`, the pillar `bcaikwl6`, `bfdepot1`, the cemetery
 `bhyceme1-6`, `afence1-3`, shrubs and trees `ntree1-4`, `npinetr2`, `nadillo1`, props `abarrel1`, `actrash1`, `aitire1`, `a3pline1`,
 the lit street light `bczlite2`, the overpass `aaramp6`, the tunnels `betunnl2/3` and 18 signs. They are marked "not in any stock map"
@@ -162,9 +163,25 @@ the lit street light `bczlite2`, the overpass `aaramp6`, the tunnels `betunnl2/3
 assembles, the sim builds its collider, the world steps) and placed and drawn in the editor. Left out, with why
 (`ObjectCatalogue.Excluded`): `aaramp8` and `agstlgt1` (the definitions assemble to no geometry; the bible says the ramp never appears and
 the street light is part of a combined object), `swarn_1` (no geometry either), `axlot1/2` (parking lots that belong to the ground
-texture) and `ngscrng1/2` (scrounge: named in the World Defs, not an object). The runway pieces `rerwend1-4`, `rmrwmid1` are placed by the
-stock maps and are the intersection tool's; the bible's `ijd28t1` (crashes the game) and `akwreck1` are not scenery the scan reaches.
+texture) and `ngscrng1/2` (scrounge: named in the World Defs, not an object). The runway pieces and the other flat pieces are in the Road
+pieces tab (below); the bible's `akwreck1` is not scenery the scan reaches, and its `ijd28t1` (a dirt cap that crashes the game) is left
+out everywhere: its texture `R2DNR_18` is in neither install.
 The base-game install's palette lacks what only the Nitro Pack's maps place (the bridges `bebridga`, `bewdbrg1`...: the data has them).
+
+**Road pieces** (the ROAD PIECES tab, `ObjectCatalogue.HandPieces`). The flat pieces no road rule makes, placed by hand: the runway's middle
+`rmrwmid1` (20 x 200) and its four ends `rerwend1-4` (20 x 25, a different runway number on each), the start lines `ima21_1`/`ima22_1`/`ima23_1`
+and finish lines `ima21_2`/`ima22_2`/`ima23_2` (10 x 10 of road with the word across it, in the three asphalt looks), the forks without a yellow
+line `iga2n_2`, `ila2n_2` (the road tool lays the `_1` ones) and the dirt split `iyd27_1` (a road splitting into two 20 m apart, 30 x 45). The
+library's second names for the same meshes (`idisect1/2`, `ieisect1`, `iyisect8`) are not offered again. Each is written with the type the stock
+files give it (0x50, the split 0x52), so the loader paints it into the ground like any piece: nothing collides with it and the AI does not
+see it. They turn by quarter turns only (the wheel, `,` `.`, Shift too; every stock one stands at 0, 90, 180 or -90), and near a road that runs
+along one of their axes (within 12 degrees) they centre on its centre line, elsewhere their corner goes on the grid so that a runway's ends and middles laid one after another meet edge to edge (the road is not cut: the piece is painted over it, and the road
+stays one road for the AI; the stock race maps cut the road at a start line instead). They are red on ground that falls more than 2 m over them
+(the original draws them as a plane at their corner's height); `L` levels it. Unlike the road tool's pieces, they leave the ground's surface
+nibble alone. The editor paints them into the road layer as they are placed, moved or bulldozed. The palette lists what the install's data has: both GOG installs have every one (the
+start lines and two runway ends are marked "Nitro Pack maps only" on the base game, the `_2` forks and `ima23_2` "not in any stock map").
+`EditorRoadPieceTests` (Sim): every one, and every road-end piece, saved into a map and loaded in the world and sim of both installs is painted
+(a flat model, its textures found), makes no world object, and a car drives over a runway, a start line, a turn-around, a J strip, a cap and the split at speed.
 
 **Placing.** Pick an item (or press `J` `R` `Y` `Z` for a marker): a tinted copy follows the cursor, green where it may stand and red where it may not
 (the status bar says why: it overlaps another object, the ground is too steep, it is on a road, it is off the map; Ctrl places anyway).
@@ -340,7 +357,9 @@ survey are in docs/map-format-writing.md, "Intersections"). The game's junctions
 - **When.** A new or edited road that ends on the middle of another road (within 1.5 m of its centre line), or crosses one, gets a piece:
   within 15 degrees of square, a **T** (end on a road) or an **X** (crossing); within 10 degrees of 41, leaning forward along the through road,
   a **fork** to the right or left; any other angle, no piece. The piece is of the road's kind (asphalt in the map's most common look, dirt
-  or planks; planks have forks only), at the through road's ground height, rotated to it: its arms land on the roads.
+  or planks; planks have forks only), at the through road's ground height, rotated to it: its arms land on the roads. A **dirt** road
+  meeting an **asphalt** T or X gets a **J strip** (`ija2n71`, 10 x 20, asphalt turning to dirt) on its arm, and the dirt road ends on the
+  strip's far edge, as the stock maps lay 96 of their 101 such arms (a stem too short for it gets the T alone).
 - **The roads are cut** at the arms as the stock maps' are: the through road becomes two roads, each ending on the middle of an arm's edge
   and running straight along it for its last 5 m (the road is bent into the arm over the last 7 m), the stem ends on its arm (a T's, 5 m
   from the through road's centre line; a fork's branch 23 m from the junction point). A road with too little left to stand on (under 7 m
@@ -359,6 +378,24 @@ survey are in docs/map-format-writing.md, "Intersections"). The game's junctions
 - **Saving.** The pieces are the map's road-piece objects (type 0x50, 0x52, 0x53): `PieceStore` is what Save puts back over the object
   layer's copies, in the same places in the file for the map's own pieces (new ones last: object order is the file's, scripts may count on it).
   An edit script has `road:pieces` to list them.
+
+**Road ends** (`Junctions.SetEnd`, `RoadToolEnds.cs`). With a road selected (SELECT, `0`) the panel has ROAD ENDS: for its START and its END
+a choice of OPEN (it just stops), CAP, TURN and TO DIRT, the ones its type has:
+
+| Road | CAP | TURN | TO DIRT |
+|---|---|---|---|
+| asphalt | a J strip and the dirt cap `ijd27t1` beyond it (the stock maps' way to end asphalt in the dirt: M03, M08, S04) | the turn-around `ica2n_1` (20 x 20 octagon) in the map's asphalt look | the J strip alone: draw a dirt road on from its far edge (it is a free arm to snap to) |
+| dirt | `ijd27t1` | | |
+| planks | `ijw29t1` | | |
+
+The road is not touched: it ends on the middle of the piece's near edge, the piece running on straight beyond it, as every stock one does
+(`StockRoadEndTests`: for each stock cap, turn-around and J strip with a road on it, the choice for that road puts the same piece within 1 m and
+3 degrees, 282 of 288 caps, 114 of 118 turn-arounds, 104 of 104 strips; the misses are stock pieces kept on a quarter turn while their road
+comes in 6 to 10 degrees off it; and the J strip the junction rule lays on a T, 88 of 90). The ground under the pieces is levelled to the road's
+end (with `O` on) and takes their surface (0xc asphalt, 0xe dirt and planks), all in one undo step. Only an open end has the choice (not one on a
+junction's arm, a bridge or ramp, another road's end; not a wide road: the pieces are 10 m wide). The ends follow the road: bulldozed, it takes
+them; dragged off its end, the end's pieces go; retyped, it gets the same end in its new type (a turn-around on a road that becomes dirt is a
+cap, a J strip alone goes). The pieces are the road tool's, saved with the junctions (`PieceStore`), and a script has `road:end,x,z,start|end,open|cap|turnaround|todirt`.
 
 **Surface.** The ground's surface nibble under a road is set as the stock maps' is (0x4 asphalt, 0x6 dirt, 0x8 planks, within 10 m of the centre line (15 m for a wide road) and 2.5 m past the ends; `RoadSurface`, `i76 roadsurf` for the survey, docs/map-format-writing.md "The ground under a road"), so tyre grip, rolling, bump and the tyre sounds are the road's: a car reads it through the sim's `SurfaceId`. The nibble goes in the road's own undo step (the `HeightRecorder` of the road's `RoadCommand`) for drawing, extending, dragging points, retyping and bulldozing; the ground a road leaves (moved, retyped, bulldozed) takes the commonest nibble beside it, a crossing road keeps its own band, and the ground under an intersection piece (0xc, 0xe) is never overwritten. `O` (conform) governs the heights only. Tests: `RoadSurfaceTests` (Editor; the band against 1500 stock roads), `EditorRoadSurfaceTests` (Sim).
 

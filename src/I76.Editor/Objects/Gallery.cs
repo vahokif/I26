@@ -29,7 +29,7 @@ public static class Gallery
     /// </summary>
     public static List<(string Name, uint Type)> Items(IEnumerable<CatalogueItem> catalogue) =>
         catalogue
-            .Where(i => i.Marker == MarkerKind.None && i.Category is not (ObjectCategory.Scripted or ObjectCategory.Markers) && !i.IsTunnel)
+            .Where(i => i.Marker == MarkerKind.None && i.Category is not (ObjectCategory.Scripted or ObjectCategory.Markers or ObjectCategory.RoadPieces) && !i.IsTunnel)
             .Select(i => (i.Name, Type: Wanted(i.Type) ? i.Type : i.TypesSeen.FirstOrDefault(Wanted)))
             .Where(x => x.Type != 0)
             .DistinctBy(x => x.Name, StringComparer.OrdinalIgnoreCase)

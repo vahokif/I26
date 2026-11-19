@@ -180,6 +180,7 @@ public sealed partial class RoadTool
         }
         bx.AddChild(widths);
         bx.AddChild(new HSeparator());
+        BuildEndSection(bx, s);
 
         Button Toggle(string text, string tip, Func<bool> get, Action<bool> set)
         {
@@ -234,6 +235,7 @@ public sealed partial class RoadTool
         if (_gradeS is not null) { _gradeS.SetValueNoSignal(MaxGrade * 100); _gradeL!.Text = $"MAX GRADE   {MaxGrade * 100:0}%"; }
         if (_shoulderS is not null) { _shoulderS.SetValueNoSignal(Shoulder); _shoulderL!.Text = $"SHOULDER   {Shoulder:0} m"; }
         _syncing = false;
+        SyncEnds(true);
     }
 
     private int _uiFrame;
@@ -241,7 +243,8 @@ public sealed partial class RoadTool
     /// <summary>The panel's text, a few times a second.</summary>
     public void UpdateUi()
     {
-        if (!Active || _readout is null || !IsInstanceValid(_readout) || ++_uiFrame % 4 != 0) return;
+        if (!Active || _readout is null || !IsInstanceValid(_readout) || ++_uiFrame % 4 != 0) { if (!Active && _endBox is not null && IsInstanceValid(_endBox)) _endBox.Visible = false; return; }
+        SyncEnds();
         _readout.Text = Readout();
         _hintL!.Text = Hint;
         _hintL.AddThemeColorOverride("font_color", HintIsProblem ? HudStyle.Danger : HudStyle.Amber);

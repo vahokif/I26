@@ -181,6 +181,8 @@ public partial class ScenerySpawner : Node3D
                 float lowest = GroundDecals.LowestY(model);
                 bool ground = !def.EndsWith(".vcf", StringComparison.OrdinalIgnoreCase);
                 mesh = _meshes.Build(model, skipFace: ground ? (part, f) => GroundDecals.IsGroundFace(part, f, lowest) : null);
+                // a model that is nothing but ground faces (a flat road piece: a runway, a start line) is that: the palette's picture and the ghost show it
+                if (mesh is null && ground) mesh = _meshes.Build(model);
             }
             _editMesh[def] = e = (mesh, model);
         }

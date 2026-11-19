@@ -71,7 +71,15 @@ public class IntersectionRuleTests
         Assert.Equal("ilw29_1", PieceCatalogue.Pick(PieceShape.ForkLeft, 2)!.Name);
         Assert.Equal(PieceShape.T, PieceCatalogue.Lookup("ITISECT1")!.Shape);          // the library names are the same pieces
         Assert.Equal(PieceShape.ForkLeft, PieceCatalogue.Lookup("#iyisect5")!.Shape);
-        Assert.Null(PieceCatalogue.Lookup("ija2171"));
+        Assert.Equal(PieceShape.Strip, PieceCatalogue.Lookup("ija2171")!.Shape);    // the road ends are the road tool's too
+        Assert.Equal(PieceShape.Cap, PieceCatalogue.Lookup("IDISECT2")!.Shape);
+        Assert.Equal(PieceShape.TurnAround, PieceCatalogue.Lookup("ieisect1")!.Shape);
+        Assert.Equal("ica22_1", PieceCatalogue.Pick(PieceShape.TurnAround, 0, 2)!.Name);
+        Assert.Equal("ijw29t1", PieceCatalogue.Pick(PieceShape.Cap, 2)!.Name);
+        Assert.Null(PieceCatalogue.Pick(PieceShape.Cap, 0));                           // no asphalt cap: a J strip and a dirt cap
+        Assert.Null(PieceCatalogue.Pick(PieceShape.TurnAround, 1));
+        foreach (var hand in new[] { "rmrwmid1", "rerwend1", "ima21_1", "iga21_2", "ila23_2", "iyd27_1", "iyisect8" })
+            Assert.Null(PieceCatalogue.Lookup(hand));                                    // placed by hand from the palette (iyisect8: iyd27_1's other name)
         Assert.Equal(0x52u, PieceCatalogue.Pick(PieceShape.T, 1)!.ObjectType);
     }
 
@@ -522,7 +530,7 @@ public class StockIntersectionTests(ITestOutputHelper output)
             var ends = Ends(doc.Roads);
             foreach (var p in store.Items)
             {
-                if (p.Def.Shape == PieceShape.Split) continue;
+                if (p.Def.IsEnd) continue;           // the road ends: RoadEndTests
                 pieces++;
                 int m = 0, n = 0;
                 foreach (var a in p.Arms)
@@ -560,7 +568,7 @@ public class StockIntersectionTests(ITestOutputHelper output)
             var ends = Ends(doc.Roads);
             foreach (var p in store.Items)
             {
-                if (p.Def.Shape is PieceShape.Split) continue;
+                if (p.Def.IsEnd) continue;
                 var arms = p.Arms.ToArray();
                 (RoadEdit Road, bool AtStart)? At(int i)
                 {

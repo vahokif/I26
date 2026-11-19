@@ -84,6 +84,13 @@ public sealed partial class RoadTool : Node
         pieces.Changed += OnPiecesChanged;
     }
 
+    /// <summary>A road piece of the object layer (placed by hand) changed: the painted pieces are read again and the road layer painted over <paramref name="bounds"/>, once a frame.</summary>
+    public void RepaintPieces(System.Numerics.Vector4 bounds)
+    {
+        _piecesDirty = true;
+        _pieceBounds = _pieceBounds is { } b ? RoadStore.Merge(b, bounds) : bounds;
+    }
+
     private void OnPiecesChanged(PieceChange c)
     {
         // the placements the loader paints are the store's: made again, the tops repainted, once a frame

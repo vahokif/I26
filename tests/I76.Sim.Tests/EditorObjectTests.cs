@@ -44,7 +44,9 @@ public class EditorObjectTests : IDisposable
         Assert.Contains(items, i => i.Marker == MarkerKind.Checkpoint);
         // vehicles, gun emplacements and gates need a script; road pieces are not placed by hand
         Assert.All(items.Where(i => i.Definition.EndsWith(".vcf")), i => Assert.Equal(ObjectCategory.Scripted, i.Category));
-        Assert.DoesNotContain(items, i => (i.Type & 0xf0) == 0x50);
+        // the only road pieces are the hand-placed ones (the road tool makes the junctions and road ends), every one of them, with the stock files' type
+        Assert.All(items.Where(i => (i.Type & 0xf0) == 0x50), i => { Assert.Equal(ObjectCategory.RoadPieces, i.Category); Assert.Equal(ObjectCatalogue.HandPieces[i.Name], i.Type); });
+        Assert.Equal(ObjectCatalogue.HandPieces.Keys.Order(), items.Where(i => i.Category == ObjectCategory.RoadPieces).Select(i => i.Name).Order());
         // a type a name was seen with is the type it gets, and the others are offered
         var pole = Item("atpole1");
         Assert.Contains(pole.Type, pole.TypesSeen);
@@ -97,7 +99,7 @@ public class EditorObjectTests : IDisposable
             Assert.DoesNotContain(items, i => i.Name == n);
         foreach (var n in ObjectCatalogue.Excluded.Keys) Assert.DoesNotContain(items, i => i.Name == n);
         // what is added is flagged, has its model's size and a category
-        var added = items.Where(i => i.NotInStockMaps).ToList();
+        var added = items.Where(i => i.NotInStockMaps && i.Category != ObjectCategory.RoadPieces).ToList();
         Assert.InRange(added.Count, 45, 60);
         Assert.All(added, i => { Assert.True(i.Width * i.Depth * i.Height > 0 || i.Category == ObjectCategory.Roadside, i.Name); Assert.Equal(ObjectCatalogue.Unplaced[i.Name], i.Type); Assert.Contains("not in any stock map", i.Tooltip()); });
         CatalogueItem Item(string n) => Assert.Single(items, i => i.Name == n);

@@ -131,15 +131,25 @@ files: type 0x50 asphalt (262 + 393), 0x52 dirt (128 + 242), 0x53 planks (2 + 7)
 | fork right `iga2n_1` `igd27_1` `igw29_1` | 10 x 25 strip + a stub to 23.8 | (5,0) 180, (5,25) 0, branch (20,20) 41 | the through road with a branch leaving forward at 41 degrees on the +x side |
 | fork left `ila2n_1` `ild27_1` `ilw29_1` | the mirror, strip at x 15-25 | (20,0) 180, (20,25) 0, branch (5,20) -41 | the same on the left |
 | split `iyd27_1` (dirt only) | 30 x 45 | stem (15,0) 180; (5,45) 0 and (25,45) 0 | a road splitting into two parallel ones 20 m apart |
-| J `ija2n71` (asphalt) | 10 x 20 | (5,0), (5,20) | a straight 20 m strip: in the samples read it lies on the stem side of a T, with the stem's road (often a dirt one) ending at its far edge (5,20) |
-| end caps `ijd27t1`, `ijw29t1` | 10 x 10, one edge slanted | (5,0) | the end of a dirt or planks road |
-| round ends `ica2n_1`, `ieisect1` | 20 x 20, an octagon | (10,0) | a turn-around at an asphalt road's end |
-| `ima2n_x` | 10 x 10 | | a filler of the Nitro race tracks, two roads side by side |
-| `rmrwmid1`, `rerwend1-4` | 20 x 200, 20 x 25 | | runways |
+| J `ija2n71` `idisect1` (asphalt) | 10 x 20 | (5,0) 180, (5,20) 0 | asphalt turning to dirt: the asphalt (a road's end, or a T's or an X's arm) meets (5,0), the dirt road or a dirt cap (5,20) |
+| end caps `ijd27t1` `idisect2` (dirt), `ijw29t1` (planks) | 10 x 10, the far edge slanted | (5,0) 180 | the end of a dirt or planks road |
+| turn-around `ica2n_1` `ieisect1` | 20 x 20, an octagon | (10,0) 180 (or the opposite edge, (10,20)) | the end of an asphalt road |
+| start / finish `ima2n_1` / `ima2n_2` | 10 x 10 | (5,0) 180, (5,10) 0 | a 10 m stretch of asphalt road (no yellow line) with the word START, or FINISH, painted across it: the road is cut and the piece fills the gap. The Nitro Pack's race maps (N21, N23, N26-N31) and B01 |
+| runway `rmrwmid1`, ends `rerwend1-4` | 20 x 200, 20 x 25 | | an airstrip: the middle (four 50 m faces, a centre line) and its four ends (threshold bars and a runway number, a different one on each) |
 
 The fork's stub is a parallelogram whose edges lie at 41 degrees (the stock roads leave at about 45); its centre line meets the strip's
 axis 2.73 along the strip, which is the point the editor puts on the through road. There is no T or X piece for planks (the only planks
-pieces are the two forks and the end cap).
+pieces are the two forks and the end cap). The `_2` forks (`iga2n_2`, `ila2n_2`: no yellow line) and `ima23_2` are in the data of both
+installs but no stock map places them.
+
+**The road ends** (`i76 isect survey`, both installs; `StockRoadEndTests`): a road ends on the middle of a cap's or turn-around's near edge
+(within 0.1 m: 264 dirt caps, 24 planks caps and 118 turn-arounds with a road on them), heading straight out of it. The J strip is the asphalt
+turning to dirt, and the stock maps lay it three ways: on an asphalt T's or X's arm whose road is dirt (96 of the 101 such arms have one; the
+dirt road starts at the strip's far edge, 25 m from the junction's centre line), between an asphalt road and a dirt one on a straight road (57),
+and before a dirt cap at an asphalt road's end (11: M03, M08, S04; the stock asphalt road ends otherwise with a turn-around). The ground under
+them is 0xc (asphalt: J, turn-around, start line, runway) and 0xe (dirt and planks: caps, the split), as under the junctions. The Asset Bible
+says `ijd28t1` crashes the game: its texture `R2DNR_18` is in neither install. Its `ita23_1` "not displayed in I'76" is in both installs' data
+with its texture, and the base game's own T01 places it.
 
 **The roads at the arms** (784 stock T, X and fork pieces with a road at every arm, both installs): a road ends **on the middle of the
 piece's edge**, within a tenth of a metre, heading straight along the arm's axis for its last 5 to 10 m (the last points are 5 apart and

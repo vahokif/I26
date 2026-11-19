@@ -78,6 +78,7 @@ public static class PlaceRules
         ObjectCategory.Structures => 4.0f,
         ObjectCategory.Props => 3.0f,
         ObjectCategory.Fences => 3.0f,
+        ObjectCategory.RoadPieces => 2.0f,      // a plane at its corner's height in the original: stock ones lie on flat ground
         ObjectCategory.Markers => 6.0f,
         _ => float.MaxValue,
     };

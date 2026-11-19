@@ -22,8 +22,10 @@ public sealed class EditObject
     public Vector3 Position => Data.Position;
     public float Yaw => Data.Yaw;
     public bool IsPlayer => Data.IsPlayer;
-    /// <summary>Road pieces (intersections) are painted into the roads at load and cannot be moved here.</summary>
-    public bool Locked => (Data.ObjectType & 0xf0) == 0x50;
+    /// <summary>The road tool's pieces (junctions, road ends) follow the roads and cannot be moved here; the road pieces placed by hand (a runway, a start line) can.</summary>
+    public bool Locked => Intersections.PieceStore.Recognise(Data) is not null;
+    /// <summary>A flat road piece (ODEF type 0x50-0x5f): painted into the ground at load, not drawn as a model.</summary>
+    public bool IsRoadPiece => (Data.ObjectType & 0xf0) == 0x50;
 }
 
 public enum ChangeKind { Added, Removed, Changed }

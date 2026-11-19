@@ -141,7 +141,7 @@ public sealed class PieceStore
     /// <summary>
     /// Puts the pieces into a project's mission: every piece object of the file the store knows is replaced, in its place, by the
     /// store's piece with the same number (dropped when it was taken away); the pieces made here follow at the end. Objects of other
-    /// names (a J connector, a runway end) are left alone.
+    /// names (a runway, a start line: the object layer's) are left alone.
     /// </summary>
     public void WriteTo(MapDocument doc)
     {

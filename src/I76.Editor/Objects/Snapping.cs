@@ -61,11 +61,34 @@ public static class Snapping
     /// </summary>
     public static PlacementSnap Place(CatalogueItem item, Vector2 cursor, float yaw, SnapMode mode, float grid, IReadOnlyList<RoadPolyline>? roads)
     {
+        if (item.Category == ObjectCategory.RoadPieces) return PlacePiece(item, cursor, yaw, mode, grid, roads);
         if (mode == SnapMode.Roads && roads is { Count: > 0 } && item.Marker == MarkerKind.None && item.Area > 0 && ToRoad(item, cursor, yaw, roads) is { } hit) return hit;
         if (mode != SnapMode.Off) cursor = SnapGrid(cursor, grid);
         if (item.Marker is MarkerKind.Spawn or MarkerKind.Regen or MarkerKind.Checkpoint || item.Area <= 0) return new(cursor, yaw, false, null, null);
         return new(OriginFor(item, cursor, yaw), yaw, false, null, null);
     }
+
+    /// <summary>
+    /// A road piece placed by hand (a runway, a start line): turned by quarter turns only (every stock one is), its middle on the centre line of
+    /// a road it lies along (within 12 degrees of either of its axes, near enough to cover the road), else its corner on the grid. The road is not cut.
+    /// </summary>
+    private static PlacementSnap PlacePiece(CatalogueItem item, Vector2 cursor, float yaw, SnapMode mode, float grid, IReadOnlyList<RoadPolyline>? roads)
+    {
+        yaw = SnapAngle(yaw, MathF.PI / 2);
+        if (mode == SnapMode.Roads && roads is { Count: > 0 } && RoadGeometry.Nearest(roads, cursor, 9f) is { } hit)
+        {
+            var z = new Vector2(MathF.Sin(yaw), MathF.Cos(yaw));
+            float along = MathF.Abs(Vector2.Dot(hit.Tangent, z));
+            if (along >= MathF.Cos(12 * MathF.PI / 180) || along <= MathF.Sin(12 * MathF.PI / 180))
+                return new PlacementSnap(OriginFor(item, hit.Point, yaw), yaw, true, hit, null);
+        }
+        // the corner on the grid (the sizes are whole 5 m steps: a runway's ends and middles laid on the grid meet edge to edge, as the stock ones do)
+        var origin = OriginFor(item, cursor, yaw);
+        return new(mode != SnapMode.Off ? SnapGrid(origin, grid) : origin, yaw, false, null, null);
+    }
+
+    /// <summary>The heading step an item turns by: a quarter turn for the road pieces, else <see cref="AngleStep"/>.</summary>
+    public static float StepFor(CatalogueItem? item) => item?.Category == ObjectCategory.RoadPieces ? MathF.PI / 2 : AngleStep;
 
     private static PlacementSnap? ToRoad(CatalogueItem item, Vector2 cursor, float yaw, IReadOnlyList<RoadPolyline> roads)
     {

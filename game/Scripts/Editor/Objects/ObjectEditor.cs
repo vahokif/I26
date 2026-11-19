@@ -92,7 +92,23 @@ public partial class ObjectEditor : Node
                 else { Scenery.EditHide(c.Old); Scenery.EditShow(c.Item.Placement); }
                 break;
         }
+        if (c.Item.IsRoadPiece) RoadPieceChanged(c);
         _markersDirty = true; _selDirty = true; _checksDirty = true;
+    }
+
+    /// <summary>
+    /// A road piece placed by hand (a runway, a start line) was placed, moved or bulldozed: it is painted into the ground, not drawn as a
+    /// model, so the world's placements the painter reads follow the layer and the road layer is painted again where it was and is.
+    /// </summary>
+    private void RoadPieceChanged(LayerChange c)
+    {
+        var list = World.Placements;
+        if (c.Old is { } old) { int i = list.FindIndex(p => ReferenceEquals(p, old)); if (i >= 0) list.RemoveAt(i); }
+        if (c.Kind != ChangeKind.Removed && !list.Any(p => ReferenceEquals(p, c.Item.Placement))) list.Add(c.Item.Placement);
+        var (mn, mx) = BoxOf(c.Item);
+        float r = MathF.Max(new NVec2(mn.X, mn.Z).Length(), new NVec2(mx.X, mx.Z).Length()) + MathF.Max(MathF.Abs(mn.X - mx.X), MathF.Abs(mn.Z - mx.Z));
+        foreach (var p in new[] { c.Old?.Object.Position, (NVec3?)c.Item.Placement.Object.Position })
+            if (p is { } at) Ed.RoadsTool.RepaintPieces(new System.Numerics.Vector4(at.X - r, at.Z - r, at.X + r, at.Z + r));
     }
 
     // ---- the catalogue ----------------------------------------------------------------------------------------------------
@@ -625,7 +641,7 @@ public partial class ObjectEditor : Node
     {
         var parts = new List<IEditCommand>();
         var fp = res.Footprint(item);
-        bool solid = item.Marker == MarkerKind.None && item.Area >= 25 && item.Category is ObjectCategory.Buildings or ObjectCategory.Structures or ObjectCategory.Props;
+        bool solid = item.Marker == MarkerKind.None && item.Area >= 25 && item.Category is ObjectCategory.Buildings or ObjectCategory.Structures or ObjectCategory.Props or ObjectCategory.RoadPieces;
         // a tunnel's mountain stands on ground levelled under all of it, as the stock maps have it (B01, P18)
         if ((Flatten || item.IsTunnel) && solid && Leveling.Flatten(Doc, fp, Ground) is { } stroke) parts.Add(stroke);
         if (CutRoads && res.Deck is { } deck && item.CutsRoad)

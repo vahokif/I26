@@ -25,7 +25,7 @@ public static class IntersectionSession
         Sync(world);
     }
 
-    /// <summary>The world's road-piece placements of the catalogue's names are the store's pieces (the others, a J connector or a runway end, stay).</summary>
+    /// <summary>The world's road-piece placements of the catalogue's names are the store's pieces (the others, a runway or a start line placed by hand, stay the object layer's).</summary>
     public static void Sync(MissionWorld world)
     {
         if (Pieces is null) return;

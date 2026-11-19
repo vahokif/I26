@@ -13,8 +13,16 @@ public enum PieceShape
     ForkRight,
     /// <summary>The mirror image: the branch on the left. ila2x_1, ild27_1, ilw29_1, iyisect4-6.</summary>
     ForkLeft,
-    /// <summary>A stem that splits into two parallel arms 20 apart (30 x 45): iyd27_1, iyisect8. Recognised, never placed by the tool.</summary>
-    Split,
+    /// <summary>
+    /// The asphalt J strip (10 x 20, ija2n71, idisect1): where an asphalt road turns to dirt. Arm 0 (the near edge) meets the asphalt (a road's
+    /// end or a T's or an X's arm), arm 1 (the far edge) the dirt road or a dirt cap. The stock maps lay one on 96 of the 101 asphalt T and X
+    /// arms whose road is dirt, between an asphalt road and a dirt one on a straight road, and before a dirt cap at an asphalt road's end.
+    /// </summary>
+    Strip,
+    /// <summary>An end cap (10 x 10, the far edge slanted): ijd27t1, idisect2 (dirt), ijw29t1 (planks). One arm, the near edge; the road ends on it.</summary>
+    Cap,
+    /// <summary>A turn-around at an asphalt road's end (a 20 x 20 octagon): ica2n_1, ieisect1. One arm, the middle of the near edge.</summary>
+    TurnAround,
 }
 
 /// <summary>An arm: where a road meets the piece (the middle of an edge), and the heading leaving the piece, radians from +z toward +x, in the piece's own frame.</summary>
@@ -32,7 +40,24 @@ public sealed record PieceDef(string Name, PieceShape Shape, uint Kind, int Vari
     /// <summary>Arms 0 and 1 face each other along local z (heading 180 and 0): the through road of a T, a fork or an X; the others are stems (for an X, the crossing road).</summary>
     public const int Back = 0, Forward = 1;
     /// <summary>Where a road from the middle of a through road meets it, in the piece's frame (the centre of a T or an X; a fork's branch line meets the strip's axis here).</summary>
-    public Vector2 Origin => Shape is PieceShape.ForkRight ? new(5f, PieceCatalogue.ForkOriginZ) : Shape is PieceShape.ForkLeft ? new(20f, PieceCatalogue.ForkOriginZ) : new(5f, 5f);
+    public Vector2 Origin => Shape switch
+    {
+        PieceShape.ForkRight => new(5f, PieceCatalogue.ForkOriginZ),
+        PieceShape.ForkLeft => new(20f, PieceCatalogue.ForkOriginZ),
+        PieceShape.Strip => new(5f, 10f),
+        PieceShape.TurnAround => new(10f, 10f),
+        _ => new(5f, 5f),
+    };
+    /// <summary>A piece at a road's end (a cap, a turn-around, a J strip), placed with the road tool's road-end choice, not by the junction rules.</summary>
+    public bool IsEnd => Shape is PieceShape.Strip or PieceShape.Cap or PieceShape.TurnAround;
+    /// <summary>How far from its <see cref="Origin"/> another piece's must keep (the junction rules do not put two pieces on top of each other).</summary>
+    public float Reach => Shape switch
+    {
+        PieceShape.ForkLeft or PieceShape.ForkRight => 14f,
+        PieceShape.TurnAround => 13f,
+        PieceShape.Strip => 10.5f,
+        _ => 7.2f,
+    };
 }
 
 /// <summary>The stock intersection pieces: geometry surveyed from the .sdf files, arms from the stock maps' roads (docs/map-format-writing.md).</summary>
@@ -60,7 +85,17 @@ public static class PieceCatalogue
 
     private static readonly Vector2[][] LPolys = GPolys.Select(p => p.Select(v => new Vector2(25 - v.X, v.Y)).Reverse().ToArray()).ToArray();
 
-    private static readonly Arm[] SplitArms = [new(new(15, 0), MathF.PI), new(new(5, 45), 0), new(new(25, 45), 0)];
+    private static Arm[] StripArms() => [new(new(5, 0), MathF.PI), new(new(5, 20), 0)];
+    private static Arm[] CapArms() => [new(new(5, 0), MathF.PI)];
+    private static Arm[] TurnArms() => [new(new(10, 0), MathF.PI)];
+    private static readonly Vector2[] StripPoly = [new(0, 0), new(10, 0), new(10, 20), new(0, 20)];
+    /// <summary>The cap's two top faces: the square with its far edge slanted (z 9.1 at x 10 to 8 at x 0, bulging to 10 at x 5.9).</summary>
+    private static readonly Vector2[][] CapPolys =
+    [
+        [new(0, 0), new(8, 8.6f), new(5.9f, 10), new(2.5f, 9.3f), new(0, 8)],
+        [new(0, 0), new(10, 0), new(10, 9.1f), new(8, 8.6f)],
+    ];
+    private static readonly Vector2[] Octagon = [new(5, 0), new(15, 0), new(20, 6), new(20, 14), new(15, 20), new(5, 20), new(0, 14), new(0, 6)];
 
     public static readonly IReadOnlyList<PieceDef> All = Build();
 
@@ -81,7 +116,14 @@ public static class PieceCatalogue
         l.Add(new("ild27_1", PieceShape.ForkLeft, 1, 1, LArms(), LPolys));
         l.Add(new("igw29_1", PieceShape.ForkRight, 2, 1, GArms(), GPolys));
         l.Add(new("ilw29_1", PieceShape.ForkLeft, 2, 1, LArms(), LPolys));
-        l.Add(new("iyd27_1", PieceShape.Split, 1, 1, SplitArms, []));
+        // the road ends: the asphalt J strip (asphalt to dirt) and turn-around in the three looks, the dirt and planks caps
+        for (int v = 1; v <= 3; v++)
+        {
+            l.Add(new($"ija2{v}71", PieceShape.Strip, 0, v, StripArms(), [StripPoly]));
+            l.Add(new($"ica2{v}_1", PieceShape.TurnAround, 0, v, TurnArms(), [Octagon]));
+        }
+        l.Add(new("ijd27t1", PieceShape.Cap, 1, 1, CapArms(), CapPolys));
+        l.Add(new("ijw29t1", PieceShape.Cap, 2, 1, CapArms(), CapPolys));
         // the library's own names for the same meshes (the maps use both): same geometry, same texture
         l.Add(new("itisect1", PieceShape.T, 0, 1, TArms(), [Square]));
         l.Add(new("itisect2", PieceShape.T, 1, 1, TArms(), [Square]));
@@ -93,16 +135,21 @@ public static class PieceCatalogue
         l.Add(new("iyisect4", PieceShape.ForkLeft, 0, 1, LArms(), LPolys));
         l.Add(new("iyisect5", PieceShape.ForkLeft, 1, 1, LArms(), LPolys));
         l.Add(new("iyisect6", PieceShape.ForkLeft, 2, 1, LArms(), LPolys));
-        l.Add(new("iyisect8", PieceShape.Split, 1, 1, SplitArms, []));
+        l.Add(new("idisect1", PieceShape.Strip, 0, 1, StripArms(), [StripPoly]));
+        l.Add(new("idisect2", PieceShape.Cap, 1, 1, CapArms(), CapPolys));
+        l.Add(new("ieisect1", PieceShape.TurnAround, 0, 1, TurnArms(), [Octagon]));
         return l;
     }
 
     private static readonly Dictionary<string, PieceDef> ByName = All.ToDictionary(d => d.Name, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The definition of an object name, or null when it is not a piece the editor knows (the J connectors, caps and runway pieces are not).</summary>
+    /// <summary>
+    /// The definition of an object name, or null when it is not one of the road tool's pieces. The pieces placed by hand are not (the
+    /// object palette's Road pieces: the runway, the start and finish lines, the forks without a yellow line, the dirt split iyd27_1).
+    /// </summary>
     public static PieceDef? Lookup(string name) => ByName.GetValueOrDefault(name.Trim().TrimStart('#'));
 
-    /// <summary>The piece of a shape for a road kind (RSEG kind % 3) in the asphalt look <paramref name="variant"/> (1-3), or null when the game has none (no planks T or X).</summary>
+    /// <summary>The piece of a shape for a road kind (RSEG kind % 3) in the asphalt look <paramref name="variant"/> (1-3), or null when the game has none (no planks T or X, no asphalt cap, no dirt or planks turn-around or J strip).</summary>
     public static PieceDef? Pick(PieceShape shape, uint kind, int variant = 1)
     {
         kind %= 3;

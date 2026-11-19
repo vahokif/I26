@@ -32,7 +32,7 @@ public partial class ObjectEditor
     private static readonly (ObjectCategory Cat, string Name)[] Tabs =
     [
         (ObjectCategory.Buildings, "BUILDINGS"), (ObjectCategory.Structures, "BRIDGES, RAMPS, TUNNELS"), (ObjectCategory.Roadside, "ROADSIDE"), (ObjectCategory.Props, "PROPS"),
-        (ObjectCategory.Vegetation, "PLANTS"), (ObjectCategory.Fences, "FENCES"), (ObjectCategory.Markers, "MARKERS"), (ObjectCategory.Scripted, "SCRIPTED"),
+        (ObjectCategory.Vegetation, "PLANTS"), (ObjectCategory.Fences, "FENCES"), (ObjectCategory.RoadPieces, "ROAD PIECES"), (ObjectCategory.Markers, "MARKERS"), (ObjectCategory.Scripted, "SCRIPTED"),
     ];
 
     /// <summary>The BUILD group in the tool column, and the windows. Called whenever the editor's UI is built (it is built again on a resize).</summary>
@@ -180,7 +180,12 @@ public partial class ObjectEditor
     }
 
     /// <summary>What the line beside the buttons says when nothing is hovered.</summary>
-    private string TabNote() => _tab == ObjectCategory.Scripted && (_search?.Text.Length ?? 0) == 0 ? "These need a mission script: placed in a melee they just stand there" : "";
+    private string TabNote() => (_search?.Text.Length ?? 0) > 0 ? "" : _tab switch
+    {
+        ObjectCategory.Scripted => "These need a mission script: placed in a melee they just stand there",
+        ObjectCategory.RoadPieces => "Painted into the ground, turned by quarter turns, centred on a road they lie along. Junctions and road ends are the road tool's",
+        _ => "",
+    };
 
     private void ShowTab(ObjectCategory cat)
     {
@@ -544,9 +549,15 @@ public partial class ObjectEditor
 
     private void TurnGhost(float dir, bool free)
     {
-        float step = free ? MathF.PI / 180 : Snapping.AngleStep;
-        _yaw = free ? Snapping.Wrap(_yaw + dir * step) : Snapping.SnapAngle(_yaw + dir * step, Snapping.AngleStep);
+        // the road pieces turn by quarter turns only (Shift too): every stock one stands at 0, 90, 180 or -90
+        float snap = Snapping.StepFor(Armed);
+        if (snap > Snapping.AngleStep) free = false;
+        float step = free ? MathF.PI / 180 : snap;
+        _yaw = free ? Snapping.Wrap(_yaw + dir * step) : Snapping.SnapAngle(_yaw + dir * step, snap);
     }
+
+    /// <summary>The step the selection turns by: a quarter turn when it is all hand-placed road pieces.</summary>
+    private float SelectionStep(bool free) => Selection.Count > 0 && Selection.All(e => ObjectCatalogue.IsHandPiece(e.Name)) ? MathF.PI / 2 : free ? MathF.PI / 180 : Snapping.AngleStep;
 
     /// <summary>Keys for the object tools; true if taken. Not called while a text field has the focus.</summary>
     public bool HandleKey(InputEventKey key)
@@ -577,7 +588,7 @@ public partial class ObjectEditor
             case Key.Z when !key.Echo: ArmMarker(MarkerKind.Checkpoint); return true;
         }
         if (!Active) return false;
-        float step = key.ShiftPressed ? MathF.PI / 180 : Snapping.AngleStep;
+        float step = SelectionStep(key.ShiftPressed);
         switch (key.Keycode)
         {
             case Key.Comma or Key.Period:
@@ -643,7 +654,7 @@ public partial class ObjectEditor
                     return true;
                 }
             case "marker": ArmMarker(Enum.Parse<MarkerKind>(a[0], true)); if (a.Length > 1) { Team = int.Parse(a[1]); Arm(MarkerItem(Armed!.Marker, Team)); } return true;
-            case "turn": _yaw = Snapping.Wrap(F(0) * MathF.PI / 180); return true;
+            case "turn": _yaw = Snapping.Wrap(F(0) * MathF.PI / 180); if (Snapping.StepFor(Armed) > Snapping.AngleStep) _yaw = Snapping.SnapAngle(_yaw, Snapping.StepFor(Armed)); return true;
             case "place": PlaceHere(a.Length > 0); return true;
             case "snap": Snap = Enum.Parse<SnapMode>(a[0], true); UiToolChanged(); return true;
             case "flatten": Flatten = a[0] == "1"; UiToolChanged(); return true;

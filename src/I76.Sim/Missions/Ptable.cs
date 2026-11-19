@@ -543,11 +543,14 @@ public sealed partial class Ptable
     /// <summary>
     /// hide's enter: a running engine is switched off, and its loop falls silent
     /// (the engine sound's stop event), so Groove asleep at T12's start has no idle until the ignition.
+    /// A helicopter's flag goes too, but its rotor loop plays on (measured: P13's hidden Huey's loop runs from the load
+    /// through its wait and its attack); stopped here it would never start again, as startCar's ignition never ends
+    /// for a helicopter.
     /// </summary>
     private void HideEnter(Entity e, Entity? _)
     {
         var v = e.Vehicle!;
-        if ((v.Flags & VehicleFlags.EngineOn) != 0) host.Damage?.Events.Add(new I76.Sim.Damage.EngineStopped(v));
+        if ((v.Flags & VehicleFlags.EngineOn) != 0 && !v.IsHeli) host.Damage?.Events.Add(new I76.Sim.Damage.EngineStopped(v));
         v.Flags &= ~VehicleFlags.EngineOn;
         v.DriveState = 0;
     }

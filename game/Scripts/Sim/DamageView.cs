@@ -117,7 +117,7 @@ public partial class DamageView : Node3D
         if (slumped && dying && I76.Sim.Vehicles.VehicleFactory.HornSound(Builder.Vfs, v.EngineNumber) is { } horn) car.StartHorn(Audio?.Get(horn, loop: true));
         if (changed) Rebuild(car);
         // the loop as the restored state has it: a car brought back to life or woken since the node last ran has its loop again
-        if (EngineSoundPitch.LoopRuns(f, v.IsEmplacement)) car.RestartEngine();
+        if (EngineSoundPitch.LoopRuns(f, v.IsEmplacement, v.IsHeli)) car.RestartEngine();
         else car.StopEngine();
         if (v.Health is { } d)
             for (int slot = 0; slot < d.Slots.Length; slot++)

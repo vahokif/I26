@@ -15,6 +15,9 @@ public static class EngineSoundPitch
     /// <summary>
     /// Whether a car's engine loop sounds in this state: running (flag 1) and not dead (flag 0x20). A gun emplacement has
     /// none. The original starts the loop at the ignition's end and stops it on engine off or death (sound events 1 and 2).
+    /// A helicopter's rotor runs while it is not down, whatever flag 1 says: hide clears a helicopter's flag for good
+    /// and its loop plays on.
     /// </summary>
-    public static bool LoopRuns(uint flags, bool emplacement) => !emplacement && (flags & 1) != 0 && (flags & 0x20) == 0;
+    public static bool LoopRuns(uint flags, bool emplacement, bool heli = false) =>
+        !emplacement && (heli || (flags & 1) != 0) && (flags & 0x20) == 0;
 }

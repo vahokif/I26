@@ -27,4 +27,13 @@ public class EngineSoundPitchTests
     [InlineData(0x1001u, true, false)]      // a gun emplacement has no engine
     public void TheLoopRunsWhileTheEngineIsOnAndTheCarAlive(uint flags, bool emplacement, bool runs) =>
         Assert.Equal(runs, EngineSoundPitch.LoopRuns(flags, emplacement));
+
+    /// <summary>A helicopter's rotor: on while it flies, hidden (flag 1 cleared) or not; silent once it is down.</summary>
+    [Theory]
+    [InlineData(0x81u, true)]          // landed, engine flag on
+    [InlineData(0x80u, true)]          // hidden: the flag cleared, the loop plays on
+    [InlineData(0x80000008u, true)]    // started by the script: the ignition never ends for a helicopter
+    [InlineData(0x80000028u, false)]   // crashed
+    public void AHelicoptersRotorRunsUntilItIsDown(uint flags, bool runs) =>
+        Assert.Equal(runs, EngineSoundPitch.LoopRuns(flags, false, heli: true));
 }

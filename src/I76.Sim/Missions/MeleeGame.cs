@@ -491,6 +491,9 @@ public sealed partial class MeleeGame
                 p.Destroyed = true;
                 p.RespawnAt = Host.Now + Rules.RespawnDelay;
                 p.RespawnWanted = false;
+                // A carried flag goes home as the car blows up, not when its player respawns. A driver killed (the .45,
+                // the Chemical Mortar) blows nothing up: the flag stays on the car until the respawn or the leave
+                if (((uint)p.Car.Flags & 0x4000) == 0) Ctf?.CarrierGone(p);
                 // The score for a death: a death, and with no killer 500 points to a floor of 0 (network
                 // combat only); one's own weapon or a teammate's books nothing. The losers blown up at the end have no
                 // killer: they pay too (the original wrote NSCR.DAT after it)

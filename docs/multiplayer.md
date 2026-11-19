@@ -406,10 +406,10 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
   checkpoint is in (`MeleeGame.CourseStart`: the latest checkpoint with a pad within 40 m of the one before it and nearer a spawn point than
   to that one), not at check1.
 - **Capture the flag.** Roles by seat order in the team's bots: raider, defender, raider, escort, defender, and again. A carrier goes for the stand
-  of its colour. A raider goes to the nearest enemy flag at its stand (`CtfGame` has no dropped flag: a carried flag goes home when its carrier is
-  removed or comes back, so there is none to return) and takes it by touch. A defender meets whoever comes within 110 m of its stand, else circles it. An
+  of its colour. A raider goes to the nearest enemy flag at its stand (`CtfGame` has no dropped flag: a carried flag goes home when its carrier
+  blows up, is removed or comes back, so there is none to return) and takes it by touch. A defender meets whoever comes within 110 m of its stand, else circles it. An
   escort follows its team's carrier (`AiOrder.Follow`), else attacks. Whoever is not a raider on the way hunts the carrier of its team's flag (when it is alive:
-  a dead one's flag waits for its respawn).
+  a dead one, whose driver was killed, keeps the flag until its respawn).
 
 **What is the port's own** (each is in docs/deviations.md as one line):
 - *Road routes are not taken the long way round* (`Entity.DetourLimit`, a bot's 2.5 times the straight line plus 100 m; `RoadRoute.TryRoute` and
@@ -534,8 +534,11 @@ the original; single player stays the base melee. They are here server-side
   2 dropped (modelled, never entered, as in the original), 4 carried. An enemy
   picks the flag up from its home stand only; touching any stand of one's own
   colour with an enemy flag captures it (the flag goes home at once, and the
-  own flag need not be home); touching one's own flag never returns it. The
-  flag stays on the wreck and goes home when the car respawns, regens or leaves.
+  own flag need not be home); touching one's own flag never returns it. A
+  carried flag goes home as the carrier blows up ("has been returned to its
+  base"), not when its player respawns; a carrier whose driver is killed (the
+  .45, the Chemical Mortar) does not blow up, and its flag stays on the car
+  until it respawns or leaves. A regen also sends it home.
   A capture is +1 to every member of the capturing team and +1 death to the
   members of the flag's team. Flags are indestructible (they already were), and
   no obstacle: a car drives through the flag and its base, whose parts (node types

@@ -1105,28 +1105,14 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
 
     private static Color? SwatchOf(PaintColour? c) => c is { } k ? Color.Color8(k.R, k.G, k.B) : null;
 
-    private static string ColourName(PaintColour? c) =>
-        c is not { } k ? "Factory" : Classic.FirstOrDefault(x => x.Colour == k).Name ?? "Custom";
+    private static string ColourName(PaintColour? c) => CarPaints.NameOf(c);
 
-    /// <summary>Classic American car paints of the 1970s, for the picker.</summary>
-    private static readonly (string Name, PaintColour Colour)[] Classic =
-    [
-        ("Hugger Orange", new(0xF0, 0x54, 0x1E)), ("Grabber Blue", new(0x1E, 0x9B, 0xE0)), ("Plum Crazy", new(0x5B, 0x1E, 0x8C)),
-        ("Sublime", new(0x8D, 0xD0, 0x2A)), ("Hemi Orange", new(0xFF, 0x8C, 0x1A)), ("Rallye Red", new(0xC4, 0x1E, 0x1E)),
-        ("Forest Green", new(0x1E, 0x4D, 0x2B)), ("Black", new(0x0E, 0x0E, 0x0F)), ("White", new(0xF2, 0xF2, 0xEE)),
-        ("Silver", new(0xB9, 0xBC, 0xC0)), ("Gold", new(0xC9, 0xA2, 0x27)), ("Brown", new(0x5A, 0x3A, 0x1E)),
-        ("Lemon Twist", new(0xF5, 0xD6, 0x0A)), ("Candy Apple", new(0x9B, 0x11, 0x1E)), ("Midnight Blue", new(0x1C, 0x2E, 0x6B)),
-        ("Burnt Copper", new(0xA8, 0x44, 0x1C)), ("Avocado", new(0x6B, 0x7A, 0x2A)), ("Champagne", new(0xD9, 0xC7, 0xA0)),
-        ("Burgundy", new(0x6B, 0x1B, 0x2A)), ("Panther Pink", new(0xE8, 0x62, 0x8F)), ("Turquoise", new(0x2A, 0xA6, 0xA0)),
-        ("Powder Blue", new(0x7F, 0xB2, 0xD9)), ("Gunmetal", new(0x4A, 0x4F, 0x55)), ("Olive Drab", new(0x5B, 0x60, 0x30)),
-    ];
+    /// <summary>Classic American car paints of the 1970s, for the picker (the 2D form's COLOUR row offers the same).</summary>
+    private static (string Name, PaintColour Colour)[] Classic => CarPaints.Classic;
 
     /// <summary>The colours as they would be with <paramref name="c"/> as the primary (or secondary) paint.</summary>
-    private CarPaint With(bool secondary, PaintColour? c)
-    {
-        var b = _m.Colours ?? new CarPaint(null);
-        return secondary ? b with { Secondary = c } : b with { Primary = c };
-    }
+    private CarPaint With(bool secondary, PaintColour? c) =>
+        secondary ? (_m.Colours ?? new CarPaint(null)) with { Secondary = c } : ChassisRules.WithPrimary(_m.Colours, c);
 
     /// <summary>Picks the primary (or secondary) colour on the paint scheme's frame: factory, a colour of your own, or one of the classic paints; the cursor on one shows it on the car.</summary>
     private Page ColoursPage(bool secondary)
@@ -1218,7 +1204,7 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
         PaintFinish[] all = [PaintFinish.Gloss, PaintFinish.Metallic, PaintFinish.Matte];
         string[] notes = ["THE CAR'S OWN CLEAR COAT", "A STEEPER SHADE AND A FLAKE UNDER THE COAT", "NO COAT, A FLAT PAINT"];
         PaintFinish Now() => _m.Colours?.Finish ?? PaintFinish.Gloss;
-        CarPaint With(PaintFinish f) => (_m.Colours ?? new CarPaint(null)) with { Finish = f };
+        CarPaint With(PaintFinish f) => ChassisRules.WithFinish(_m.Colours, f);
         return new()
         {
             Title = "FINISH",

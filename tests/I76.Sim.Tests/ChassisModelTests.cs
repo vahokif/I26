@@ -1,4 +1,5 @@
 using I76.Formats.Bwd2;
+using I76.Formats.Imaging;
 using I76.Formats.Vfs;
 using I76.Sim.Trip;
 using I76.Sim.Vehicles;
@@ -200,6 +201,52 @@ public class ChassisModelTests
         Assert.False(m.Renamed);
         Assert.Equal(m.EntryName, m.Inv.Car.Variant);
         Assert.Equal(m.EntryVtf, m.Inv.Car.Vtf);
+    }
+
+    /// <summary>
+    /// I26's respray (#205): the 2D form's COLOUR and FINISH rows set the colours through the same rules as the 3D garage's RESPRAY
+    /// (<see cref="ChassisModel.SetColours"/>), so the same picks give the same sidecar (the bytes a network game sends for the car).
+    /// </summary>
+    [Fact]
+    public void TheResprayRulesKeepWhatTheyDoNotSet()
+    {
+        var red = new PaintColour(0xC4, 0x1E, 0x1E);
+        var entry = new CarPaint(new(1, 2, 3), new(4, 5, 6), PaintFinish.Matte);
+        // COLOUR keeps the secondary (the 3D garage's own) and the finish; FINISH keeps the colours
+        Assert.Equal(new CarPaint(red, new(4, 5, 6), PaintFinish.Matte), ChassisRules.WithPrimary(entry, red));
+        Assert.Equal(new CarPaint(new(1, 2, 3), new(4, 5, 6), PaintFinish.Metallic), ChassisRules.WithFinish(entry, PaintFinish.Metallic));
+        Assert.Equal(new CarPaint(red), ChassisRules.WithPrimary(null, red));
+        // a finish without a colour, or the factory paint picked back, saves no sidecar
+        Assert.Null(ChassisRules.ColoursToSave(ChassisRules.WithFinish(null, PaintFinish.Metallic)));
+        Assert.Null(ChassisRules.ColoursToSave(ChassisRules.WithPrimary(new CarPaint(red, null, PaintFinish.Matte), null)));
+        Assert.Equal(entry, ChassisRules.ColoursToSave(entry));
+    }
+
+    [Fact]
+    public void ARespraySavesTheSameFilesInBothForms()
+    {
+        if (Open() is not var (vfs, db)) return;
+        var blue = new PaintColour(0x1E, 0x9B, 0xE0);
+        foreach (var from in new[] { null, new CarPaint(new(1, 2, 3), new(4, 5, 6), PaintFinish.Matte) })
+        {
+            // the 3D garage: its model and the two picks
+            var m = new ChassisModel(Stock(vfs, "vppirna1.vcf"), db, vfs, false, false, from);
+            m.SetColours(ChassisRules.WithPrimary(m.Colours, blue));
+            m.SetColours(ChassisRules.WithFinish(m.Colours, PaintFinish.Metallic));
+            // the 2D form: the same picks from what the variant came with
+            var twoD = ChassisRules.WithFinish(ChassisRules.WithPrimary(from, blue), PaintFinish.Metallic);
+            Assert.Equal(CarSidecar.Write(m.ColoursToSave), CarSidecar.Write(ChassisRules.ColoursToSave(twoD)));
+            Assert.Equal(m.ColoursToSave!.ToBytes(), ChassisRules.ColoursToSave(twoD)!.ToBytes());
+            // a colour alone is an edit: a stock variant asks for a name, as for any other change on the form
+            string[] variants = ["Stock", "Mine"];
+            Assert.Equal(ChassisRules.DoneKind.NeedsName, m.PlanDone(1, variants, 1).Kind);
+            // the .vcf stays as the original writes it: the 2D form's file for the same name is the same
+            m.Rename("Blue");
+            Assert.Equal(TwoD(vfs, db, "vppirna1.vcf", "Blue", "", _ => { }, m.MakeModel), m.VariantFile());
+            // CANCEL puts the colours back as they came
+            m.RestoreEntry();
+            Assert.Equal(from, m.Colours);
+        }
     }
 
     [Fact]

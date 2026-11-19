@@ -152,7 +152,7 @@ It also folds every `.gdf`, the `.vdf`, `.vtf`, wheels and `compnent.cdf` it rea
 
 ## 5. What I26 does
 
-- **WEAPON RESTRICTIONS** on the Nitro host form: the original's popup and rows, read from the install's
+- **WEAPON RESTRICTIONS** on the host form (both games: the base game's host form is the Nitro one, drawn by the port). On the Nitro Pack: the original's popup and rows, read from the install's
   the Nitro front end at run time (`RestrictionTable`; no table is copied into the repository), with the original's click
   rules and list (`RestrictionChecklist`). The port adds boxes in the art's empty lines for the complete hidden weapons,
   named from their `.gdf` in the form's font (`HiddenContent.ChecklistRows`): Cherub and Pyro-Tomic (STD, TRT) under
@@ -166,6 +166,15 @@ It also folds every `.gdf`, the `.vdf`, `.vtf`, wheels and `compnent.cdf` it rea
   with the weapons named ("Restricted weapons: HADES Cannon"), shown as "Could not join: …" on the joiner's form; nothing
   is stripped. `i26-server --restrict all|slugs|mortars|missiles|flames|droppers|<gdf>|<class>:<tier>|specials|<special>,...` and
   `--host-listen --restrict` do the same without the form.
+- **The base game's checklist** (the port's; the original base game has no WEAPON RESTRICTIONS): the same pop-up, drawn by the
+  port after the Nitro art (as it is on the Nitro Pack outside its 1997 look), its rows made from the install's own weapons
+  (`RestrictionChecklist.FromInstall`): every `.gdf` of the five classes the pickers offer, the complete hidden ones too, one
+  line per weapon with its gun's box under STD and its turret's under TRT (a turret is its gun's file with `t` for `g`; the
+  Howitzer, which has no gun, a line of its own), named by the `.gdf`, grouped by class under the Nitro table's headers and set
+  out on its grid as the Nitro table is: missiles, flamethrowers and droppers down the left half, slug throwers and arc-fire
+  launchers down the right (the arc-fire header a few rows lower, as HADES and the Tank Cannon lengthen the slug throwers),
+  NO WEAPONS IN GAME on the right's last row. The list it makes, the server's check and the session popup's names are the
+  Nitro Pack's.
 - **Specials** (the port's; the original's list holds weapons only, docs/deviations.md): the checklist's second page,
   SPECIALS (a button left of DONE; WEAPONS turns back), is the same art with its checklist and "WEAPONS" taken off and
   "SPECIALS" lettered in, a box for each special the garage offers by the garage's name (Radar Jammer, NitrousOxide, Blower,

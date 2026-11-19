@@ -23,9 +23,10 @@ namespace I76.Game.Shell;
 /// every second, under a header row per entry. SERVERS (the port's) opens the
 /// address book to add, edit and delete entries.</item>
 /// </list>
-/// The host form (record 19; the base game's drawn by the port, HostForm.cs)
-/// adds GAME NAME, NO. DRIVERS, TEAM PLAY, INVITE ONLY and MAX SCORE to the
-/// area list; its BROADCAST GAME launches a listen
+/// The host form (record 19; both games' the Nitro Pack's, drawn by the port
+/// but in the Nitro Pack's 1997 look, HostForm.cs) adds GAME TYPE, GAME NAME,
+/// NO. DRIVERS and GAME OPTIONS (team play, the limit, invite only, the port's
+/// rules) to the area list; its BROADCAST GAME launches a listen
 /// server and joins it. The roster (record 18) lists the games found as
 /// "name (n/max)" with an arrow to the game's popup; JOIN GAME joins the
 /// highlighted one. With team play either first asks CHOOSE A TEAM.
@@ -474,10 +475,11 @@ public sealed partial class MeleeScreen
         }
     }
 
-    // ---- the Nitro Pack's host form (rectangles from the original front end's table): GAME TYPE picks
-    // combat, race or CTF with 2-4 teams and filters the arena list; GAME OPTIONS holds team play, the limit (laps, captures,
-    // points, kills or minutes) and its value, and invite only. WEAPON RESTRICTIONS (docs/hidden-content.md §4) opens the
-    // original's checklist, enforced by the server; PASSWORD asks for the game's password.
+    // ---- the host form (the Nitro Pack's; rectangles from the original front end's table): GAME TYPE picks
+    // combat, race or CTF with 2-4 teams (the base game: melee or co-op) and filters the arena list; GAME OPTIONS holds team play,
+    // the limit (laps, captures, points, kills or minutes; the base game's points) and its value, invite only and the port's rules.
+    // WEAPON RESTRICTIONS (docs/hidden-content.md §4) opens the original's checklist (the base game's made from its own weapons),
+    // enforced by the server; PASSWORD asks for the game's password.
     internal sealed record GameType(string Name, I76.Sim.Missions.MeleeKind Kind, int Teams, string Ext, bool Coop = false);
     internal static readonly GameType[] Types =
     [
@@ -497,7 +499,7 @@ public sealed partial class MeleeScreen
         _ => [new("Points", I76.Sim.Missions.MeleeGoal.Points, false, [20000, 5000, 10000, 50000, 100000]), new("Kills", I76.Sim.Missions.MeleeGoal.Kills, false, [20, 5, 10, 30, 50]),
               new("Minutes", I76.Sim.Missions.MeleeGoal.None, true, [10, 5, 15, 30]), new("No limit", I76.Sim.Missions.MeleeGoal.None, false, [0])],
     };
-    private static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> NitroHost = new()
+    internal static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> NitroHost = new()
     {
         // the original's table ([id, x0, x1, y0, y1], its ids 3 4 9 10 8 1 6 7 here as 12 13 9 8 22 23 25 27)
         [12] = (9, 27, 147, 164), [13] = (9, 27, 252, 272), [8] = (152, 165, 423, 436), [9] = (199, 212, 423, 436), [22] = (171, 214, 397, 411),
@@ -508,19 +510,32 @@ public sealed partial class MeleeScreen
 
     /// <summary>The host form's WEAPON RESTRICTIONS and its SPECIALS page, kept for the shell's run as the original keeps its table (not saved).</summary>
     private static WeaponRestrictions _restrictions = WeaponRestrictions.None;
-    private static (List<I76.Formats.Shell.RestrictionRow> Rows, int Original, int[] X, int[] Y)? _checklist;
+    private static readonly Dictionary<string, (List<I76.Formats.Shell.RestrictionRow> Rows, int Original, int[] X, int[] Y)?> _checklists = [];
 
-    /// <summary>The checklist's rows: the original's from the install's Nitro shell DLL, then the port's for the hidden weapons; null without the DLL's table.</summary>
-    private (List<I76.Formats.Shell.RestrictionRow> Rows, int Original, int[] X, int[] Y)? Checklist()
+    /// <summary>
+    /// The checklist's rows: on the Nitro Pack the original's from its shell DLL, then the port's for the hidden weapons; on the base game
+    /// (or a Nitro Pack without the DLL's table, for the drawn checklist) the install's own weapons (<see cref="RestrictionChecklist.FromInstall"/>).
+    /// Null only for the Nitro art's checklist without the table.
+    /// </summary>
+    private (List<I76.Formats.Shell.RestrictionRow> Rows, int Original, int[] X, int[] Y)? Checklist(bool forArt = false)
     {
-        if (_checklist is { } c) return c;
-        var dll = CarTable.NitShell(Shell.Install);
-        var rows = RestrictionTable.Read(dll);
-        var (x, y) = RestrictionTable.Grid(dll);
-        if (rows.Count == 0 || x.Length == 0 || y.Length == 0) return null;
-        int original = rows.Count;
-        rows.AddRange(HiddenContent.ChecklistRows(Shell.Vfs));
-        return _checklist = (rows, original, x, y);
+        string key = $"{Shell.Install.Root}|{forArt}";
+        if (_checklists.TryGetValue(key, out var c)) return c;
+        if (Nitro)
+        {
+            var dll = CarTable.NitShell(Shell.Install);
+            var rows = RestrictionTable.Read(dll);
+            var (x, y) = RestrictionTable.Grid(dll);
+            if (rows.Count > 0 && x.Length > 0 && y.Length > 0)
+            {
+                int original = rows.Count;
+                rows.AddRange(HiddenContent.ChecklistRows(Shell.Vfs));
+                return _checklists[key] = (rows, original, x, y);
+            }
+            if (forArt) return _checklists[key] = null;
+        }
+        var own = RestrictionChecklist.FromInstall(Shell.Vfs, Nitro);
+        return _checklists[key] = (own, own.Count, RestrictionChecklist.GridX, RestrictionChecklist.GridY);
     }
 
     /// <summary>A restriction list in words: All Weapons, or the checklist's names (a whole class by its header); then All Specials or the specials by the garage's names.</summary>
@@ -539,14 +554,15 @@ public sealed partial class MeleeScreen
 
     private void OpenRestrictions()
     {
-        if (Checklist() is not { } c) { Say("This install has no weapon restrictions table."); return; }
+        bool drawn = HostFormArt.Drawn(Nitro, Shell.Faithful);
+        if (Checklist(!drawn) is not { } c) { Say("This install has no weapon restrictions table."); return; }
         var list = new RestrictionChecklist(c.Rows);
         list.Load(_restrictions);
         var specials = new SpecialChecklist(Shell.Install.IsNitro);
         specials.Load(_restrictions);
         Shell.Modal(new RestrictionsPopup
         {
-            Font = _font, List = list, Specials = specials, Original = c.Original, ColumnX = c.X, RowY = c.Y,
+            Font = _font, List = list, Specials = specials, Original = c.Original, ColumnX = c.X, RowY = c.Y, Drawn = drawn,
             Closed = w => { if (w is not null) _restrictions = w; Draw(); },
         });
     }
@@ -603,34 +619,54 @@ public sealed partial class MeleeScreen
         _ => g.Coop ? (g.Lobby ? "co-op lobby" : "co-op") : "",
     };
 
+    /// <summary>The base game's GAME TYPE: a melee or a story mission in co-op.</summary>
+    private static readonly string[] BaseTypes = ["Melee", "Co-op"];
+
     /// <summary>GAME TYPE at the top, the form's text where Nitro's art puts it (the area's highlight, GAME NAME, NO. DRIVERS).</summary>
     private void DrawNitroHost()
     {
-        Frame.Text(_font, 112, 70, Types[_kind].Name);
+        Frame.Text(_font, 112, 70, Nitro ? Types[_kind].Name : BaseTypes[_coopBase ? 1 : 0]);
         Frame.Text(_font, 11, 399, AddressBookPopup.Fit(_font, _gameName + (_naming ? "_" : ""), 160));
         Frame.Text(_font, 172, 422, $"{_drivers:00}");
         // the art's PASSWORD button has no state of its own
         if (_password.Length > 0) Frame.Text(_font, 150, 354, "(set)");
     }
 
-    private void TypePopup() => Shell.Modal(new ListPopup
+    private void TypePopup()
     {
-        Sprite = 9, X = 235, Y = 122, TextX = 15, TextY = 50, Visible = 9, Items = [.. Types.Select(t => t.Name)], Font = _font,
-        Up = new(18, 36, 12, 25), Down = new(18, 36, 204, 217), List = new(16, 158, 47, 198), Cancel = new(89, 158, 209, 225),
-        NativeSprite = 8, NativeLayout = new PopupLayout(220, 97, 16, 82, 8, new(14, 38, 60, 78), new(14, 38, 220, 238), new(12, 188, 80, 216), new(118, 188, 259, 275)),
-        Picked = i =>
+        if (!Nitro)
         {
-            if (i >= 0 && i != _kind)
-            {
-                _kind = i; _limit = 0; _limitAt = 0;
-                Area = 0; _scroll = 0;
-                if (CtfKind) _teamPlay = true;
-                if (Coop) { _teamPlay = false; _drivers = Math.Min(_drivers, Protocol.MaxCoopSeats); Area = CoopIndex(); }
-                if (!_gameRenamed && Arenas.Count > 0) _gameName = Arenas[0].Name;
-            }
-            Draw();
-        },
-    });
+            // the base game's: melee or co-op, on the drawn list
+            Shell.Modal(ListPopup.DrawnList("GAME TYPE", [.. BaseTypes], _coopBase ? 1 : 0, _font, i => { if (i >= 0) SetCoopBase(i == 1); Draw(); }));
+            return;
+        }
+        if (HostFormArt.Drawn(Nitro, Shell.Faithful))
+        {
+            Shell.Modal(ListPopup.DrawnList("GAME TYPE", [.. Types.Select(t => t.Name)], _kind, _font, PickType));
+            return;
+        }
+        Shell.Modal(new ListPopup
+        {
+            Sprite = 9, X = 235, Y = 122, TextX = 15, TextY = 50, Visible = 9, Items = [.. Types.Select(t => t.Name)], Font = _font,
+            Up = new(18, 36, 12, 25), Down = new(18, 36, 204, 217), List = new(16, 158, 47, 198), Cancel = new(89, 158, 209, 225),
+            NativeSprite = 8, NativeLayout = new PopupLayout(220, 97, 16, 82, 8, new(14, 38, 60, 78), new(14, 38, 220, 238), new(12, 188, 80, 216), new(118, 188, 259, 275)),
+            Picked = PickType,
+        });
+    }
+
+    /// <summary>The Nitro form's GAME TYPE picked (−1: none): the list, the limit and the seats follow.</summary>
+    private void PickType(int i)
+    {
+        if (i >= 0 && i != _kind)
+        {
+            _kind = i; _limit = 0; _limitAt = 0;
+            Area = 0; _scroll = 0;
+            if (CtfKind) _teamPlay = true;
+            if (Coop) { _teamPlay = false; _drivers = Math.Min(_drivers, Protocol.MaxCoopSeats); Area = CoopIndex(); }
+            if (!_gameRenamed && Arenas.Count > 0) _gameName = Arenas[0].Name;
+        }
+        Draw();
+    }
 
     /// <summary>
     /// GAME OPTIONS: a popup of its own (<see cref="GameOptionsPopup"/>) with a row each for team play, the limit, its value, invite only,
@@ -644,6 +680,7 @@ public sealed partial class MeleeScreen
         _rollingWas = Shell.Settings.CoopRollingStart;
         _ignitionWas = Shell.Settings.IgnitionStaysOn;
         _turrets1997Was = Shell.Settings.HostTurrets1997;
+        _scoreWas = (_scoreOn, _maxScore);
         var was = (_teamPlay, _limit, _limitAt, _inviteOnly, _bots, _botSkill, Shell.Settings.ShareMaps, Shell.Settings.HiddenContent, Shell.Settings.CarReset, Shell.Settings.CbRadio, Shell.Settings.HostCrosshair);
         int wasRate = _rate;
         var wasCars = new List<string>(_botCars);
@@ -651,6 +688,7 @@ public sealed partial class MeleeScreen
     }
 
     private bool _turretsWas;
+    private (bool On, int Max) _scoreWas;
     private float _coopDamageWas;
     private int _coopScaleWas;
     private bool _rollingWas, _ignitionWas, _turrets1997Was;
@@ -659,7 +697,7 @@ public sealed partial class MeleeScreen
     {
         Shell.Modal(new GameOptionsPopup
         {
-            Font = _font, Rows = OptionRows,
+            Font = _font, Rows = OptionRows, Drawn = HostFormArt.Drawn(Nitro, Shell.Faithful),
             // A.I. CARS: the popup steps aside for the list and comes back as it was, CANCEL still undoing everything
             Link = () => BotCarsOpen(() => OptionsPopupWith(was, wasRate, wasCars)),
             Closed = done =>
@@ -667,6 +705,7 @@ public sealed partial class MeleeScreen
                 if (!done)
                 {
                     (_teamPlay, _limit, _limitAt, _inviteOnly, _bots, _botSkill) = (was.Item1, was.Item2, was.Item3, was.Item4, was.Item5, was.Item6);
+                    (_scoreOn, _maxScore) = _scoreWas;
                     _rate = wasRate;
                     SetTurrets(_turretsWas);
                     _botCars = wasCars;
@@ -711,7 +750,7 @@ public sealed partial class MeleeScreen
     private static readonly OptionRow PhysicsRow = new("ORIGINAL PHYSICS", false, true, "", _ => { }, Locked: true);
 
     /// <summary>GAME OPTIONS' TURRETS: the build whose turret slew the game plays (the popup's value line is short: 1998 or 1997 CD).</summary>
-    private OptionRow TurretsRow => new("TURRETS:", true, false, HostFormLayout.TurretsShort(Shell.Settings.HostTurrets1997), _ => ToggleTurrets1997());
+    private OptionRow TurretsRow => new("TURRETS:", true, false, HostFormArt.TurretsShort(Shell.Settings.HostTurrets1997), _ => ToggleTurrets1997());
 
     private IReadOnlyList<OptionRow> OptionRows()
     {
@@ -737,20 +776,28 @@ public sealed partial class MeleeScreen
                 new("SIM RATE:", true, false, $"{_rate} Hz", d => _rate = StepRate(_rate, d)),
                 PhysicsRow,
             ];
-        var limits = LimitsOf(Types[_kind].Kind);
-        var l = limits[_limit];
-        var rows = new List<OptionRow>
+        var rows = new List<OptionRow>();
+        if (Nitro)
         {
-            new("TEAM PLAY", false, _teamPlay || CtfKind, "", _ => { if (!CtfKind) _teamPlay = !_teamPlay; }, Locked: CtfKind),
-            new("LIMIT:", true, false, l.Name, d => { _limit = (_limit + d + limits.Count) % limits.Count; _limitAt = 0; }),
-        };
-        if (l.Values.Length > 1)
-            rows.Add(new((l.Name is "Points" or "Kills" ? "MAX. " : "") + l.Name.ToUpperInvariant() + ":", true, false, l.Values[_limitAt].ToString(), d =>
-            {
-                // in order of size, held at the ends (the list's first is the default, not the smallest)
-                var order = Enumerable.Range(0, l.Values.Length).OrderBy(i => l.Values[i]).ToList();
-                _limitAt = order[Math.Clamp(order.IndexOf(_limitAt) + d, 0, order.Count - 1)];
-            }));
+            var limits = LimitsOf(Types[_kind].Kind);
+            var l = limits[_limit];
+            rows.Add(new("TEAM PLAY", false, _teamPlay || CtfKind, "", _ => { if (!CtfKind) _teamPlay = !_teamPlay; }, Locked: CtfKind));
+            rows.Add(new("LIMIT:", true, false, l.Name, d => { _limit = (_limit + d + limits.Count) % limits.Count; _limitAt = 0; }));
+            if (l.Values.Length > 1)
+                rows.Add(new((l.Name is "Points" or "Kills" ? "MAX. " : "") + l.Name.ToUpperInvariant() + ":", true, false, l.Values[_limitAt].ToString(), d =>
+                {
+                    // in order of size, held at the ends (the list's first is the default, not the smallest)
+                    var order = Enumerable.Range(0, l.Values.Length).OrderBy(i => l.Values[i]).ToList();
+                    _limitAt = order[Math.Clamp(order.IndexOf(_limitAt) + d, 0, order.Count - 1)];
+                }));
+        }
+        else
+        {
+            // the base game's (its old form's TEAM PLAY and MAX SCORE): a melee ends at a score or never, the score in thousands
+            rows.Add(new("TEAM PLAY", false, _teamPlay, "", _ => _teamPlay = !_teamPlay));
+            rows.Add(new("LIMIT:", true, false, _scoreOn ? "Points" : "No limit", _ => _scoreOn = !_scoreOn));
+            if (_scoreOn) rows.Add(new("MAX. SCORE:", true, false, _maxScore.ToString(), d => _maxScore = Math.Clamp(_maxScore + 1000 * d, 1000, 100000)));
+        }
         rows.Add(new("INVITE ONLY", false, _inviteOnly, "", _ => _inviteOnly = !_inviteOnly));
         // the port's: a custom arena goes to players who lack it (docs/multiplayer.md "Custom maps")
         rows.Add(new("SHARE MAPS", false, Shell.Settings.ShareMaps, "", _ => { Shell.Settings.ShareMaps = !Shell.Settings.ShareMaps; Shell.Settings.Save(); }));
@@ -787,15 +834,9 @@ public sealed partial class MeleeScreen
             case 6: JoinGame(); return true;
             case 8 when Hosting: _drivers = Math.Max(1, _drivers - 1); _bots = Math.Min(_bots, MaxBots); return true;
             case 9 when Hosting: _drivers = Math.Min(MaxSeats, _drivers + 1); return true;
-            case 32 when Hosting: SetCoopBase(!_coopBase); return true;
-            case 29 when Hosting: _bots = Math.Max(0, Math.Min(_bots, MaxBots) - 1); return true;
-            case 30 when Hosting: _bots = Math.Min(MaxBots, _bots + 1); return true;
-            case 33 when Hosting: _rate = StepRate(_rate, 1); return true;
-            case 34 when Hosting: BotCarsOpen(null); return true;
-            case 31 when Hosting: _botSkill = (I76.Sim.Missions.BotSkill)(((int)_botSkill + 1) % 3); return true;
             case 11 when Hosting:
             {
-                int row = _scroll + (DrawnHost ? HostFormLayout.ListRowAt(p.Y) : (p.Y - 151) / Row);
+                int row = _scroll + ListRowAt(p.Y);
                 if (row < 0 || row >= Arenas.Count || row - _scroll >= Rows) return true;
                 Area = row;
                 if (!_gameRenamed) _gameName = Arenas[row].Name;
@@ -819,25 +860,9 @@ public sealed partial class MeleeScreen
             case 39 when Mode == 8: OpenServers(); return true;
             case 23: TypePopup(); return true;
             case 25: OptionsPopup(); return true;
-            case 16: _teamPlay = !_teamPlay; return true;
-            case 17: _inviteOnly = !_inviteOnly; return true;
-            case 18: _scoreOn = !_scoreOn; return true;
-            case 20: _maxScore = Math.Max(1000, _maxScore - 1000); return true;
-            case 21: _maxScore = Math.Min(100000, _maxScore + 1000); return true;
             case 22: _naming = true; return true;
-            case 26: Shell.Settings.ShareMaps = !Shell.Settings.ShareMaps; Shell.Settings.Save(); return true;
-            case 28 when Hosting: ToggleHidden(); return true;
-            case 36 when Hosting: ToggleCarReset(); return true;
-            case 37 when Hosting: ToggleCb(); return true;
-            case 38 when Hosting: ToggleCrosshair(); return true;
-            case 40 when Hosting: StepCoopDamage(1); return true;
-            case 41 when Hosting: StepCoopScale(1); return true;
-            case 42 when Hosting: ToggleRollingStart(); return true;
-            case 43 when Hosting: ToggleIgnition(); return true;
-            case 44 when Hosting: ToggleTurrets1997(); return true;
-            case 35 when Hosting: SetTurrets(!_turrets); return true;
             case 27 when Hosting: AskPassword(null, _password, pw => _password = pw ?? _password); return true;
-            case 24 when Hosting && Nitro: OpenRestrictions(); return true;
+            case 24 when Hosting: OpenRestrictions(); return true;
         }
         return false;
     }
@@ -878,7 +903,7 @@ public sealed partial class MeleeScreen
                     TeamPlay = !Coop && (_teamPlay || (Nitro && Types[_kind].Kind == I76.Sim.Missions.MeleeKind.Ctf)), InviteOnly = _inviteOnly,
                     MaxScore = _scoreOn && !Nitro && !Coop ? _maxScore : 0, Team = team, ShareMaps = Shell.Settings.ShareMaps, Password = _password,
                     Kind = Nitro && !Coop ? Types[_kind].Kind : null, Goal = NitroGoal.Goal, GoalValue = NitroGoal.Value, Minutes = NitroGoal.Minutes, CtfTeams = Types[_kind].Teams,
-                    Restrictions = Nitro ? _restrictions : WeaponRestrictions.None, Hidden = Shell.Settings.HiddenContent, Turrets = _turrets, CarReset = Shell.Settings.CarReset, Cb = Shell.Settings.CbRadio, Crosshair = Shell.Settings.HostCrosshair,
+                    Restrictions = _restrictions, Hidden = Shell.Settings.HiddenContent, Turrets = _turrets, CarReset = Shell.Settings.CarReset, Cb = Shell.Settings.CbRadio, Crosshair = Shell.Settings.HostCrosshair,
                     Bots = Math.Min(_bots, MaxBots), BotSkill = _botSkill, BotCars = [.. _botCars.Take(Math.Min(_bots, MaxBots))], Rate = _rate,
                     Coop = Coop, StoryCar = Coop && Shell.Settings.CoopOwnCar, CoopDamage = Coop ? Shell.Settings.CoopDamage : 1f, CoopScale = Coop ? Shell.Settings.CoopScale : 0, CoopRollingStart = Coop && Shell.Settings.CoopRollingStart, IgnitionStaysOn = Shell.Settings.IgnitionStaysOn, Turrets1997 = Shell.Settings.HostTurrets1997,
                 },
@@ -892,7 +917,7 @@ public sealed partial class MeleeScreen
     {
         var parts = new List<string>();
         if (g.RateHz > 0) parts.Add($"Sim rate {g.RateHz} Hz");
-        if (!g.Restricted.IsEmpty) parts.Add($"Restricted: {RestrictionText(g.Restricted, Nitro ? Checklist()?.Rows : null, Nitro)}");
+        if (!g.Restricted.IsEmpty) parts.Add($"Restricted: {RestrictionText(g.Restricted, Checklist()?.Rows, Nitro)}");
         if (g.Hidden) parts.Add("Hidden weapons & cars allowed");
         if (g.Turrets) parts.Add("Unlimited turrets");
         if (!g.CarReset) parts.Add("No car reset");
@@ -1662,10 +1687,17 @@ public sealed class PasswordPopup : ShellScreen
 /// boxes and names of its own for the complete hidden weapons in the art's empty lines (<see cref="HiddenContent.ChecklistRows"/>),
 /// and a second page for the specials (<see cref="SpecialChecklist"/>; the art has no room for them), reached by SPECIALS
 /// left of DONE and left by WEAPONS there: the same art with its words and boxes taken off, "SPECIALS" lettered where it says
-/// "WEAPONS", the boxes on its grid and the garage's names in its face. DONE and CANCEL keep or drop both pages' edits.
+/// "WEAPONS", the boxes on its grid and the garage's names in its face. DONE and CANCEL keep or drop both pages' edits. Where the
+/// host form is the port's drawing (<see cref="Drawn"/>) both pages are drawn after the art, shape for shape and word for word, the
+/// rows' names in its lettering: no Nitro art is needed (the base game's rows are its own weapons, <see cref="RestrictionChecklist.FromInstall"/>).
 /// </summary>
 public sealed class RestrictionsPopup : ShellScreen
 {
+    /// <summary>The pop-up is the port's drawing of the art.</summary>
+    public bool Drawn { get; init; }
+    private readonly PopupInk _ink = new();
+    public override void Leave() => _ink.Drop();
+
     public required ShellFont Font { get; init; }
     public required RestrictionChecklist List { get; init; }
     /// <summary>The SPECIALS page's boxes; null: no such page.</summary>
@@ -1699,6 +1731,7 @@ public sealed class RestrictionsPopup : ShellScreen
 
     private void Draw()
     {
+        if (Drawn) { DrawDrawn(); return; }
         var art = Shell.Db.BankNative(30)[43];
         Frame.Restore(X, Y, W + 6, H + 6);
         if (_specials && art is not null) DrawSpecials(art);
@@ -1866,6 +1899,87 @@ public sealed class RestrictionsPopup : ShellScreen
 
     private static bool In((int X0, int X1, int Y0, int Y1) r, Vector2I p) => r.X0 < p.X && p.X < r.X1 && r.Y0 < p.Y && p.Y < r.Y1;
 
+    // ---- the drawn pop-up (measured from bank 30 sprite 43)
+
+    /// <summary>The art's words for the groups' headers (1 slug throwers .. 5 droppers) and the box that stands for every weapon.</summary>
+    private static readonly string[] GroupWords = ["NO WEAPONS IN GAME", "SLUG THROWERS", "ARC-FIRE LAUNCHERS", "SELF-PROPELLED PROJECTILES", "FLAMETHROWERS", "DROPPERS"];
+
+    /// <summary>Words lettered as the art letters <paramref name="artText"/> in <paramref name="artBox"/>: as tall, as wide for their letters, centred on it. Their box.</summary>
+    private Rect2I Like(ShellFont fallback, string text, string artText, Rect2I artBox)
+    {
+        var box = artBox;
+        if (ShellGlyphs.LabelAspect(text) is { } a && ShellGlyphs.LabelAspect(artText) is { } b && b > 0)
+        {
+            int w = (int)MathF.Round(artBox.Size.X * a / b);
+            box = new Rect2I(artBox.Position.X + (artBox.Size.X - w) / 2, artBox.Position.Y, w, artBox.Size.Y);
+        }
+        FormLetters.Fit(Frame, fallback, new Rect2I(box.Position + new Vector2I(X, Y), box.Size), text);
+        return box;
+    }
+
+    private void DrawDrawn()
+    {
+        Frame.Restore(X, Y, W + 6, H + 6);
+        FormPaper.Panel(Frame, X, Y, W, H);
+        var pen = _ink.Begin(Shell);
+        pen.Box(X, Y, X + W - 1, Y + H - 1, 2);
+        pen.Box(X + 18, Y + 16, X + 551, Y + 391);
+        pen.Strip(X + 19, Y + 17, X + 550, Y + 31);
+        pen.Rect(X + 18, Y + 33, 534, 1, Paint.Ink);
+        var label = Shell.Db.Font(0x47);
+        string what = _specials ? "SPECIALS" : "WEAPONS";
+        Like(label, $"{what} RESTRICTIONS", "WEAPONS RESTRICTIONS", new Rect2I(193, 20, 179, 11));
+        // the subtitle, its NOT underlined
+        string sub = $"SELECT {what} NOT ALLOWED IN GAME";
+        var sb = Like(label, sub, "SELECT WEAPONS NOT ALLOWED IN GAME", new Rect2I(133, 43, 302, 11));
+        if (ShellGlyphs.LabelAspect(sub) is { } all && ShellGlyphs.LabelAspect($"SELECT {what} NOT") is { } upTo && ShellGlyphs.LabelAspect("NOT") is { } not)
+        {
+            float k = sb.Size.X / all;
+            pen.Rect(X + sb.Position.X + (int)MathF.Round((upTo - not) * k), Y + 56, (int)MathF.Round(not * k), 1, Paint.Ink);
+        }
+        var rows = Rows;
+        bool Right(RestrictionRow r) => r.Column >= 3;
+        // a group set out in STD and TRT columns: one of its lines in this half has both boxes
+        bool TwoColumns(RestrictionRow r) => rows.Any(a => !a.IsHeader && a.Group == r.Group && Right(a) == Right(r)
+            && rows.Any(b => !b.IsHeader && b.Group == r.Group && b.Row == a.Row && b.Column != a.Column && Right(b) == Right(r)));
+        var named = new HashSet<int>();
+        foreach (var r in rows)
+        {
+            var at = BoxAt(r) + new Vector2I(X, Y);
+            pen.Check(at.X, at.Y, Box);
+            if (r.IsHeader)
+            {
+                bool every = r.Class is -1 or SpecialChecklist.Class;
+                string word = every ? (_specials ? "NO SPECIALS IN GAME" : GroupWords[0]) : GroupWords[Math.Clamp(r.Group, 0, GroupWords.Length - 1)];
+                FormLetters.At(Frame, label, at.X + (every ? 26 : 20), at.Y + 1, 10, word);
+                // STD and TRT over the columns, where the grid leaves room under the header
+                if (!every && TwoColumns(r) && r.Row + 1 < RowY.Length && RowY[r.Row + 1] - RowY[r.Row] > 20)
+                    foreach (var (cap, col) in new[] { ("STD", r.Column + 1), ("TRT", r.Column + 2) })
+                    {
+                        int cx = X + ColumnX[Math.Clamp(col, 0, ColumnX.Length - 1)] + Box / 2;
+                        FormLetters.At(Frame, label, cx - FormLetters.Width(label, 7, cap) / 2, at.Y + 20, 7, cap);
+                    }
+                continue;
+            }
+            if (_specials) { FormLetters.At(Frame, label, at.X + 20, at.Y + 1, 9, r.Name); continue; }
+            // a line's name once, where the art's names start: after the TRT column in a group that has one, else after the box
+            if (!named.Add(r.Row * 2 + (Right(r) ? 1 : 0))) continue;
+            bool two = TwoColumns(r);
+            int pen0 = Right(r) ? (two || r.Column == 5 ? 398 : 368) : (two || r.Column == 2 ? 116 : 86);
+            FormLetters.At(Frame, label, X + pen0, at.Y + (!Right(r) && r.Row <= 5 ? 1 : 2), 9, r.Name);
+        }
+        var checks = Checks;
+        for (int i = 0; i < rows.Count; i++)
+            if (checks[i]) { var p = BoxAt(rows[i]); Frame.Text(Font, X + p.X + 1, Y + p.Y - 2, "x"); }
+        var buttons = new List<((int X0, int X1, int Y0, int Y1) R, string Word)> { (Done, "DONE"), (Cancel, "CANCEL") };
+        if (Specials is not null) buttons.Add((Page, _specials ? "WEAPONS" : "SPECIALS"));
+        foreach (var (b, word) in buttons)
+        {
+            pen.Button(X + b.X0, Y + b.Y0, X + b.X1 - 1, Y + b.Y1 - 1);
+            FormLetters.At(Frame, label, X + (b.X0 + b.X1 + 1 - FormLetters.Width(label, 8, word)) / 2, Y + b.Y0 + 4, 8, word);
+        }
+    }
+
     public override IReadOnlyList<PadRegion> PadRegions =>
         [.. Rows.Select(r => PadRegion.Of((X + BoxAt(r).X, X + BoxAt(r).X + Box, Y + BoxAt(r).Y, Y + BoxAt(r).Y + Box))),
          .. Specials is null ? Array.Empty<PadRegion>() : [PadRegion.Of((X + Page.X0, X + Page.X1, Y + Page.Y0, Y + Page.Y1))],
@@ -1897,6 +2011,7 @@ public sealed class RestrictionsPopup : ShellScreen
     private void Close(bool done)
     {
         Shell.Sound(82);
+        _ink.Drop();
         if (!done)
         {
             Array.Copy(_was, List.Checked, _was.Length);

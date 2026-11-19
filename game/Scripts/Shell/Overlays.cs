@@ -337,7 +337,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         Toggle(PortRows[13], () => s.BriefingWhileLoading, () => s.BriefingWhileLoading = !s.BriefingWhileLoading);
         // Turrets (docs/deviations.md): the turret slew of the 1998 build (GOG's and the Nitro Pack's, the default) or the 1997 CD
         // build's; a network game plays the host's
-        Step(PortRows[14], () => s.Turrets1997 = !s.Turrets1997, () => HostFormLayout.TurretsShort(s.Turrets1997));
+        Step(PortRows[14], () => s.Turrets1997 = !s.Turrets1997, () => HostFormArt.TurretsShort(s.Turrets1997));
         // Keyboard Steering Assist (docs/deviations.md): the steer keys eased, held inside the grip and steering into a slide; off, the original's ramp; in play at once
         Toggle(PortRows[15], () => s.AssistedSteering, () => I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = !s.AssistedSteering);
         // Skip Intro Movies: the next start goes straight to the menu (briefings, outros and cut-scenes still play)

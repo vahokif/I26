@@ -177,6 +177,74 @@ public sealed class RestrictionChecklist
     public IReadOnlyList<RestrictionRow> Rows { get; }
     public bool[] Checked { get; }
 
+    /// <summary>
+    /// The checklist art's grid (the Nitro Pack's WEAPONS RESTRICTIONS pop-up, 573 x 430): the boxes' x by column (a half's header
+    /// column, then its STD and TRT columns; the left half, then the right) and their y by row, relative to the pop-up. The Nitro
+    /// shell's own table carries the same numbers (<see cref="RestrictionTable.Grid"/>).
+    /// </summary>
+    public static readonly int[] GridX = [39, 64, 93, 321, 346, 375];
+    public static readonly int[] GridY = [66, 98, 114, 130, 146, 162, 178, 210, 226, 242, 258, 274, 290, 306, 322, 338, 354, 370];
+
+    /// <summary>The headers' names by group (1 slug throwers .. 5 droppers; 0 every weapon), as the Nitro shell's table names them.</summary>
+    public static readonly string[] GroupNames = ["All Weapons", "All Slug Throwers", "All Arc Launchers", "All Missile Launchers", "All Flame Throwers", "All Droppers"];
+
+    /// <summary>A GDF class's group (2 slug throwers .. 6 droppers → 1 .. 5), or 0.</summary>
+    public static int GroupOf(int cls) => cls switch { 2 => 1, 3 => 2, 4 => 3, 5 => 4, 6 => 5, _ => 0 };
+
+    /// <summary>
+    /// The checklist's rows for an install without the Nitro shell's table (the base game), made from its own weapons: every .gdf of
+    /// the five classes the pickers offer, the complete hidden ones too, one line per weapon (its gun's box in the STD column, its
+    /// turret's in the TRT column, the gun's name), grouped by class under a header as the Nitro table groups them and set out the way
+    /// it is: missiles, flamethrowers and droppers down the left half (headers from rows 0, 6 and 12), slug throwers and arc-fire
+    /// launchers down the right (rows 0 and 7), a group lower where the one above runs long; All Weapons on the right's last row.
+    /// Lines past a half's foot are left out (their header still covers them).
+    /// </summary>
+    public static List<RestrictionRow> FromInstall(AssetVfs vfs, bool nitro)
+    {
+        // each weapon once by its (class, tier); a turret's gun is the file of its name with g for t (tdumb, gdumb)
+        var weapons = new Dictionary<(int Class, int Tier), string>();
+        foreach (var n in vfs.Names.Where(n => n.EndsWith(".gdf", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            string stem = n[..^4].ToLowerInvariant();
+            if (WeaponRestrictions.KeyOf(vfs, n) is not { Class: >= 2 and <= 6 } k || !HiddenContent.Offered(stem, nitro, false, true)) continue;
+            weapons.TryAdd(k, stem);
+        }
+        var rows = new List<RestrictionRow> { new(0, -1, -1, 3, GridY.Length - 1, GroupNames[0]) };
+        void Half(int[] classes, int[] at, int col, int last)
+        {
+            int next = 0;
+            for (int g = 0; g < classes.Length; g++)
+            {
+                int cls = classes[g], group = GroupOf(cls);
+                var mine = weapons.Where(w => w.Key.Class == cls).ToList();
+                var guns = mine.Where(w => w.Key.Tier < 100).OrderBy(w => w.Key.Tier).ToList();
+                (int Tier, string Stem)? TurretOf(string gun) =>
+                    mine.FirstOrDefault(w => w.Key.Tier >= 100 && w.Value[1..] == gun[1..] && w.Value[0] == 't') is { Value: not null } t ? (t.Key.Tier, t.Value) : null;
+                // the lines: each gun with its turret, then a turret that has no gun (the Howitzer) after the gun of its tier
+                var lines = guns.Select(w => (Order: w.Key.Tier * 2, Std: ((int, string)?)(w.Key.Tier, w.Value), Trt: TurretOf(w.Value))).ToList();
+                foreach (var t in mine.Where(w => w.Key.Tier >= 100 && !lines.Any(l => l.Trt?.Item2 == w.Value)))
+                    lines.Add((t.Key.Tier % 100 * 2 + 1, null, (t.Key.Tier, t.Value)));
+                if (lines.Count == 0) continue;
+                int head = System.Math.Max(at[g], next);
+                if (head > last - 1) break;
+                rows.Add(new RestrictionRow(group, cls, -1, col, head, GroupNames[group]));
+                int r = head + 1;
+                foreach (var (_, std, trt) in lines.OrderBy(l => l.Order))
+                {
+                    if (r > last) break;
+                    if (std is { } s) rows.Add(new RestrictionRow(group, cls, s.Item1, col + 1, r, HiddenContent.WeaponName(vfs, s.Item2)));
+                    if (trt is { } t) rows.Add(new RestrictionRow(group, cls, t.Item1, col + 2, r, HiddenContent.WeaponName(vfs, t.Item2)));
+                    r++;
+                }
+                // the next header a row below the last line, unless the grid's own gap lies there
+                next = r < GridY.Length && GridY[r] - GridY[r - 1] > 20 ? r : r + 1;
+            }
+        }
+        Half([4, 5, 6], [0, 6, 12], 0, GridY.Length - 1);
+        Half([2, 3], [0, 7], 3, GridY.Length - 2);
+        return rows;
+    }
+
     public RestrictionChecklist(IReadOnlyList<RestrictionRow> rows, bool[]? state = null)
     {
         Rows = rows;

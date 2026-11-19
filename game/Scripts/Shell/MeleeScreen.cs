@@ -8,8 +8,8 @@ namespace I76.Game.Shell;
 /// The melee forms:
 /// mode 0 INSTANT MELEE (record 24: an arena and up to seven A.I. drivers),
 /// mode 1 SCENARIO (record 25), and the network melees (NetForms.cs): 3 and
-/// 4 the NET MELEE HOST EVENT FORM (record 19, the LAN and an address; the
-/// base game's drawn by the port, HostForm.cs), 7 and 8 its ENTRY ROSTER
+/// 4 the NET MELEE HOST EVENT FORM (record 19, the LAN and an address; drawn
+/// by the port after the Nitro Pack's, HostForm.cs), 7 and 8 its ENTRY ROSTER
 /// (record 18). The buttons are painted in the art;
 /// clicks go through the hotspot table (strict), every handled click plays
 /// record 82, all text is font 0x45, lists show six 17-px rows. The car's
@@ -28,14 +28,13 @@ public sealed partial class MeleeScreen : ShellScreen
     private bool Hosting => Mode is >= 2 and <= 5;
 
     // the hotspot table: id → x0, x1, y0, y1
-    private static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> Hot = new()
+    internal static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> Hot = new()
     {
         [0] = (31, 216, 150, 270), [1] = (9, 27, 128, 144), [2] = (9, 27, 250, 268), [3] = (610, 621, 400, 415), [4] = (437, 449, 419, 434),
         [5] = (456, 616, 422, 435), [6] = (229, 369, 453, 471), [7] = (12, 165, 44, 58), [8] = (150, 166, 288, 303), [9] = (198, 213, 288, 303),
         [10] = (9, 215, 335, 454), [11] = (31, 216, 150, 270), [12] = (9, 27, 128, 144), [13] = (9, 27, 250, 268), [14] = (173, 213, 46, 57),
         [15] = (489, 630, 453, 471),
-        // (the base game's host form is the port's own sheet, its hotspots HostFormLayout's: 8, 9 and 16..38 there)
-        // the Nitro host form's WEAPON RESTRICTIONS (its own rectangle is NitroHost's)
+        // the host form's WEAPON RESTRICTIONS (its own rectangle is NitroHost's: the host form of both games is the Nitro form's, HostFormArt)
         [24] = (31, 193, 310, 326),
         // the internet roster's SERVERS (the port's, drawn: NetForms.cs), the address book
         [39] = (42, 183, 453, 471),
@@ -45,17 +44,15 @@ public sealed partial class MeleeScreen : ShellScreen
     {
         0 => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         1 => [0, 1, 2, 3, 4, 5, 6, 7, 14, 15],
-        3 or 4 when Nitro => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 22, 23, 24, 25, 27],
-        // the base game's: the drawn form's rows (a co-op game has no team play, score limit, Bots or custom map to share)
-        3 or 4 => [.. HostHot.Keys.Order()],
+        // the host form (both games: the Nitro form's, its art or the port's drawing of it)
+        3 or 4 => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 8, 9, 22, 23, 24, 25, 27],
         8 => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 39],
         _ => [3, 4, 5, 6, 7, 11, 12, 13, 14, 15],
     };
     private (int X0, int X1, int Y0, int Y1) Rect(int id) =>
-        DrawnHost ? HostHot[id] :
         // Nitro's instant melee table is the base one's but for the driver box, 11..170: the MAKE / MODEL and VARIANT arrows are only the arrows
         Nitro && !Hosting && id == 7 ? Hot[7] with { X0 = 11, X1 = 170 } :
-        Nitro && Hosting && NitroHost.TryGetValue(id, out var r) ? r : Hot[id];
+        NitroForm && NitroHost.TryGetValue(id, out var r) ? r : Hot[id];
 
     private const int Row = 17, Rows = 6;
     /// <summary>The drivers' box shows seven rows (the original's whole list: the player and seven opponents fill it); I26 allows <see cref="MaxOpponents"/> opponents and scrolls the box.</summary>
@@ -132,8 +129,8 @@ public sealed partial class MeleeScreen : ShellScreen
     /// Where list row k's text goes. The Nitro host form's art has its first row 22 px tall (the highlight's own row, rules at 147 and 169) and the
     /// rest 17 each from 169, where the other forms' rules run 147, 164, 181...; the rows follow the rules there, so no line cuts through the words.
     /// </summary>
-    private int ListRowY(int k) => Nitro && Hosting && k > 0 ? 154 + Row * k : 149 + Row * k;
-    private int ListRowAt(int y) => Nitro && Hosting ? (y < 169 ? 0 : 1 + (y - 169) / Row) : (y - 151) / Row;
+    private int ListRowY(int k) => NitroForm && k > 0 ? 154 + Row * k : 149 + Row * k;
+    private int ListRowAt(int y) => NitroForm ? (y < 169 ? 0 : 1 + (y - 169) / Row) : (y - 151) / Row;
 
     private string ListName(int i) => Mode == 1 ? MeleeData.Scenarios[i].Name : Arenas[i].Name;
 
@@ -176,6 +173,7 @@ public sealed partial class MeleeScreen : ShellScreen
         if (DrawnHost) RepaintDrawnHost();
         else if (Nitro && Mode == 0) Frame.LoadBackground(Shell.Db.BackgroundNative(20), 24, 20);   // base 24's art, byte for byte
         else Frame.LoadBackground(Shell.Db, Mode switch { 0 => 24, 1 => 25, 3 or 4 => 19, _ => 18 });
+        if (!DrawnHost) LeaveDrawnHost();
         Draw();
     }
 
@@ -183,7 +181,7 @@ public sealed partial class MeleeScreen : ShellScreen
     private void Draw()
     {
         Frame.RestoreAll();
-        if (DrawnHost) { DrawDrawnHost(); return; }
+        if (DrawnHost) DrawHostWords();
         var (name, model, variant) = _slots[_shown];
         int x0 = Mode == 1 ? 40 : 34;
         Frame.Text(_font, 12, 45, _slots[0].Name + (_renaming ? "_" : ""));
@@ -192,10 +190,10 @@ public sealed partial class MeleeScreen : ShellScreen
         else if (ListCount == 0) Frame.Text(_font, x0, 109, "No arenas");
         else
         {
-            DrawListRow(Area, x0, Nitro && Hosting ? 130 : 109);
+            DrawListRow(Area, x0, NitroForm ? 130 : 109);
             for (int k = 0; k < Rows && _scroll + k < ListCount; k++) DrawListRow(_scroll + k, x0, ListRowY(k));
         }
-        if (Nitro && Hosting) DrawNitroHost();
+        if (NitroForm) DrawNitroHost();
         if (Mode == 1 && Victory.Lightest(MeleeData.Scenarios[Area].Msn) is { } best && best.Model >= 0 && best.Model < _data.Models.Count)
             Frame.Text(_font, 16, 308, _data.Models[best.Model].MakeModel);     // after the art's "Lightest car to win:"
         if (Mode == 0)
@@ -210,22 +208,44 @@ public sealed partial class MeleeScreen : ShellScreen
             Frame.Text(_font, 330, 399, "Mission's own car");
             Frame.Text(_font, 292, 421, "the story's own");
         }
-        else DrawCar(Frame, _font, _cars, _data, model, variant, Shell.Parts);
+        else DrawCar(Frame, _font, _cars, _data, model, variant, Shell.Parts, inkOnly: DrawnHost);
+        if (DrawnHost) DrawnHostDone();
     }
 
     /// <summary>The car panel the melee and scenario forms share: the blueprint views, the weapons, the make and model, the variant.</summary>
-    public static void DrawCar(ShellFrame frame, ShellFont font, SpriteBank cars, MeleeData data, int model, int variant, I76.Sim.Trip.PartsDatabase parts, string? makeModel = null, string? variantText = null)
+    /// <param name="inkOnly">On the port's own paper (the drawn host form): only the drawings' strokes, not the art's paper they carry round them (<see cref="BlitInk"/>).</param>
+    public static void DrawCar(ShellFrame frame, ShellFont font, SpriteBank cars, MeleeData data, int model, int variant, I76.Sim.Trip.PartsDatabase parts, string? makeModel = null, string? variantText = null, bool inkOnly = false)
     {
         var m = data.Models[model];
         int v = m.Art;
-        frame.Blit(cars[2 * v], 229, 79);
-        frame.Blit(cars[2 * v + 1], 229, 301);
+        if (inkOnly) { BlitInk(frame, cars[2 * v], 229, 79); BlitInk(frame, cars[2 * v + 1], 229, 301); }
+        else
+        {
+            frame.Blit(cars[2 * v], 229, 79);
+            frame.Blit(cars[2 * v + 1], 229, 301);
+        }
         var weapons = data.Weapons(model, variant);
         for (int k = 0; k < weapons.Count; k++) frame.Text(font, 470, 58 + Row * k, weapons[k]);
         var kit = data.Parts(model, variant, parts);
         for (int k = 0; k < kit.Count; k++) frame.Text(font, 470, 177 + Row * k, kit[k]);
         frame.Text(font, 330, 399, makeModel ?? m.MakeModel);
         frame.Text(font, 292, 421, variantText ?? m.Variants[Math.Clamp(variant - 1, 0, m.Variants.Count - 1)]);
+    }
+
+    /// <summary>
+    /// A blueprint view on paper of its own: the sprite carries the form's paper round its drawing, a tone off any other sheet's, so only
+    /// what is darker than paper is put down (pixel by pixel).
+    /// </summary>
+    public static void BlitInk(ShellFrame frame, Sprite? s, int x, int y)
+    {
+        if (s is null) return;
+        var pal = frame.Palette;
+        for (int r = 0; r < s.Height; r++)
+            for (int c = 0; c < s.Width; c++)
+            {
+                int i = r * s.Width + c, p = s.Pixels[i] * 3;
+                if (s.Opaque[i] && pal[p] * 0.299f + pal[p + 1] * 0.587f + pal[p + 2] * 0.114f < 160) frame.Fill(x + c, y + r, 1, 1, s.Pixels[i]);
+            }
     }
 
     public override bool TextEditing => _renaming || _naming;
@@ -258,13 +278,12 @@ public sealed partial class MeleeScreen : ShellScreen
             var l = new List<PadRegion>();
             foreach (int id in Live)
             {
-                if (id == 11 && DrawnHost) HostListRegions(l);
-                else if (id is 0 or 11)
+                if (id is 0 or 11)
                 {
                     bool games = Mode is 7 or 8;
                     int rows = games ? ListRows : Rows, y0 = id == 11 ? (games ? (Nitro ? 173 : 151) : 151) : Hot[0].Y0 + 1;
                     int n = Math.Min(rows, ListCount - _scroll), x0 = Rect(id).X0 + 1, x1 = games ? 206 : Rect(id).X1 - 1;
-                    bool nh = !games && Nitro && Hosting;
+                    bool nh = !games && NitroForm;
                     for (int k = 0; k < n; k++)
                     {
                         int kk = k;
@@ -299,7 +318,7 @@ public sealed partial class MeleeScreen : ShellScreen
         int id = HitId(Shell.Mouse);
         if (id < 0) return;
         Shell.Sound(82);
-        if (id is 1 or 2 or 8 or 9 or 12 or 13 or 20 or 21) _hold.Begin(id);
+        if (id is 1 or 2 or 8 or 9 or 12 or 13) _hold.Begin(id);
         Act(id, Shell.Mouse);
         if (Shell.Current == this) Draw();
     }
@@ -481,8 +500,46 @@ public sealed class ListPopup : ShellScreen
     /// <summary>The cursor shows from the start (the list was opened from the pad); else on the D-pad's first press.</summary>
     public bool CursorShown { get; set; }
     public override bool EscapeOpensOptions => false;
+    /// <summary>
+    /// A drawn list (the port's, where the host form is drawn: <see cref="HostFormArt.Drawn"/>): the Nitro Pack's list pop-up (bank 30
+    /// sprite 8) shape for shape without its DONE and DELETE, this title on its strip and <see cref="Current"/> in the box under it.
+    /// </summary>
+    public string? DrawnTitle { get; init; }
+    /// <summary>The drawn list's choice as it stands, in the box under the title.</summary>
+    public string? Current { get; init; }
+    private readonly PopupInk _ink = new();
     private int _scroll, _w, _h, _cursor;
     private const int Row = 17;
+
+    /// <summary>A drawn list of <paramref name="items"/> (<see cref="DrawnTitle"/>), centred: 8 rows, the arrows at its left, CANCEL at its foot.</summary>
+    public static ListPopup DrawnList(string title, List<string> items, int current, ShellFont font, Action<int> picked) => new()
+    {
+        Sprite = 0, X = 220, Y = 114, TextX = 16, TextY = 82, Visible = 8, Items = items, Font = font,
+        Up = new(14, 38, 60, 78), Down = new(14, 38, 220, 238), List = new(12, 188, 80, 216), Cancel = new(117, 188, 225, 242),
+        Picked = picked, DrawnTitle = title, Current = current >= 0 && current < items.Count ? items[current] : null,
+    };
+
+    /// <summary>The drawn list's paper and shapes, its title, its box's choice and CANCEL's word.</summary>
+    private void DrawDrawn()
+    {
+        FormPaper.Panel(Frame, X, Y, _w, _h);
+        var pen = _ink.Begin(Shell);
+        pen.Box(X, Y, X + _w - 1, Y + _h - 1, 2);
+        pen.Box(X + 12, Y + 9, X + 187, Y + 217);
+        pen.Strip(X + 13, Y + 10, X + 186, Y + 24);
+        pen.Rect(X + 12, Y + 26, 176, 1, Paint.Ink);
+        pen.Box(X + 17, Y + 36, X + 182, Y + 56);
+        pen.Triangle(X + 22, Y + 63, up: true);
+        for (int k = 0; k < 8; k++) pen.Rect(X + 12, Y + 81 + Row * k, 176, 1, Paint.Ink);
+        pen.Triangle(X + 22, Y + 224, up: false);
+        pen.Button(X + 117, Y + 226, X + 187, Y + 241);
+        var label = Shell.Db.Font(0x47);
+        FormLetters.At(Frame, label, X + 100 - FormLetters.Width(label, 10, DrawnTitle!) / 2, Y + 13, 10, DrawnTitle!);
+        FormLetters.At(Frame, label, X + 152 - FormLetters.Width(label, 9, "CANCEL") / 2, Y + 230, 9, "CANCEL");
+        if (Current is { } c) Frame.Text(Font, X + 24, Y + 37 + (19 - Font.Height) / 2, AddressBookPopup.Fit(Font, c, 150));
+    }
+
+    public override void Leave() => _ink.Drop();
     private readonly I76.Formats.Input.PadRepeater _pad = new();
     private readonly I76.Formats.Input.HoldRepeat _hold = new();
 
@@ -494,8 +551,8 @@ public sealed class ListPopup : ShellScreen
             if (DeleteRequested is not null) (Done, DeleteBtn) = (nl.Done, nl.Delete);
         }
         else if (DeleteRequested is not null) DrawnDelete = (Cancel.X0 - 49, Cancel.X0 - 4, Cancel.Y0, Cancel.Y1);
-        var s = Art;
-        _w = s?.Width ?? 200; _h = s?.Height ?? 236;
+        var s = DrawnTitle is null ? Art : null;
+        _w = s?.Width ?? 200; _h = s?.Height ?? (DrawnTitle is null ? 236 : 252);
         _scroll = Math.Clamp(Scroll, 0, Math.Max(0, Items.Count - Visible));
         _cursor = _scroll;
         if (Select || DrawnDelete is not null)
@@ -516,9 +573,13 @@ public sealed class ListPopup : ShellScreen
 
     private void Draw()
     {
-        Frame.Blit(Art, X, Y);
-        Frame.Fill(X + 6, Y + _h, _w, 6, 0x0f);
-        Frame.Fill(X + _w, Y + 6, 6, _h, 0x0f);
+        if (DrawnTitle is not null) DrawDrawn();
+        else
+        {
+            Frame.Blit(Art, X, Y);
+            Frame.Fill(X + 6, Y + _h, _w, 6, 0x0f);
+            Frame.Fill(X + _w, Y + 6, 6, _h, 0x0f);
+        }
         // an entry marked '*' (a list header) is drawn without it
         for (int k = 0; k < Visible && _scroll + k < Items.Count; k++) Frame.Text(Font, X + TextX, Y + TextY + Row * k, Items[_scroll + k].StartsWith('*') ? Items[_scroll + k][1..] : Items[_scroll + k]);
         if (DrawnDelete is { } d) DrawDeleteButton(d);
@@ -635,6 +696,7 @@ public sealed class ListPopup : ShellScreen
     private void Close(int i)
     {
         Shell.Sound(82);
+        _ink.Drop();
         Frame.Restore(X, Y, _w + 6, _h + 6);
         Shell.Modal(null);
         Scrolled?.Invoke(_scroll);

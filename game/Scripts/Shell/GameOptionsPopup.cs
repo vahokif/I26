@@ -12,7 +12,9 @@ public sealed record OptionRow(string Label, bool Step, bool On, string Value, A
 /// and DELETE do nothing here). Drawn the way the Nitro shell draws its own COMBAT / RACING OPTIONS popups (bank 30
 /// sprites 41 and 39: the title strip, the boxes, the - and + buttons, DONE and CANCEL are copied out of them) on the blank
 /// notice's parchment (sprite 16), with the words in the shell's fonts. Every control acts where it stands; DONE keeps
-/// what was set and CANCEL (or Esc) puts it back, which <see cref="Closed"/> does.
+/// what was set and CANCEL (or Esc) puts it back, which <see cref="Closed"/> does. Where the host form is the port's drawing
+/// (<see cref="HostFormArt.Drawn"/>: the base game, and the Nitro Pack's modern look) the panel is drawn too, shape for shape after
+/// sprite 41 (<see cref="Drawn"/>), so it needs no Nitro art.
 /// </summary>
 public sealed class GameOptionsPopup : ShellScreen
 {
@@ -23,7 +25,10 @@ public sealed class GameOptionsPopup : ShellScreen
     public required Action<bool> Closed { get; init; }
     /// <summary>A <see cref="OptionRow.Link"/> row was pressed: the popup has stepped aside (it is not <see cref="Closed"/>) and this opens what the row names.</summary>
     public Action? Link { get; init; }
+    /// <summary>The panel is the port's drawing (its paper, frame, strip, boxes, − and +, DONE and CANCEL), not sprite 41's pixels.</summary>
+    public bool Drawn { get; init; }
     public override bool EscapeOpensOptions => false;
+    private readonly PopupInk _ink = new();
 
     public const int W = 267, X = 316, Pitch = 22, MaxRows = 8;
     /// <summary>The panel's top: 96, or higher where a long list would run off the 480-line frame (with its 6 px shadow).</summary>
@@ -93,8 +98,41 @@ public sealed class GameOptionsPopup : ShellScreen
             }
     }
 
+    /// <summary>The drawn panel's shapes and DONE / CANCEL's words (the rows' words are <see cref="Draw"/>'s).</summary>
+    private void DrawPanel()
+    {
+        FormPaper.Panel(Frame, X, Y, W, _h);
+        var pen = _ink.Begin(Shell);
+        pen.Box(X, Y, X + W - 1, Y + _h - 1, 2);
+        pen.Box(X + 10, Y + BoxTop, X + 255, Y + BoxBottom);
+        pen.Strip(X + 11, Y + BoxTop + 1, X + 254, Y + StripEnd - 2);
+        pen.Rect(X + 10, Y + StripEnd, 246, 1, Paint.Ink);
+        for (int i = 0; i < _rows.Count; i++)
+        {
+            var r = _rows[i];
+            int y = RowY(i);
+            if (r.Link) pen.Rect(X + LineX0, y + 12, LineX1 - LineX0 + 1, 1, Paint.Ink);
+            else if (!r.Step) pen.Check(X + 19, y, 14);
+            else
+            {
+                pen.Minus(X + MinusX, y + 2);
+                pen.Plus(X + PlusX, y + 2);
+                pen.Rect(X + LineX0, y + 12, LineX1 - LineX0 + 1, 1, Paint.Ink);
+            }
+        }
+        pen.Button(X + DoneX0, Y + BtnTop, X + DoneX1, Y + BtnTop + BtnH - 1);
+        pen.Button(X + CancelX0, Y + BtnTop, X + CancelX1, Y + BtnTop + BtnH - 1);
+        // the words as sprite 41 letters them (DONE's ink 18 px in from its left, 4 down, 9 tall)
+        var label = _label!;
+        foreach (var (word, x0, x1) in new[] { ("DONE", DoneX0, DoneX1), ("CANCEL", CancelX0, CancelX1) })
+            FormLetters.At(Frame, label, X + (x0 + x1 + 1 - FormLetters.Width(label, 9, word)) / 2, Y + BtnTop + 4, 9, word);
+    }
+
+    public override void Leave() => _ink.Drop();
+
     private void Draw()
     {
+        if (Drawn) { DrawDrawn(); return; }
         var n = Notice; var c = Combat;
         if (n is null || c is null) return;
         // the parchment: the blank notice's corners and edges, its plain middle repeated down to this height
@@ -145,6 +183,43 @@ public sealed class GameOptionsPopup : ShellScreen
         Copy(c, X + CancelX0, Y + BtnTop, CancelX1 - CancelX0 + 1, BtnH, x => CancelX0 + x, yy => 145 + yy);
     }
 
+    /// <summary>The drawn panel: its shapes, then the rows' words in the art's lettering and their values as the sprite version has them.</summary>
+    private void DrawDrawn()
+    {
+        DrawPanel();
+        var label = _label!;
+        // a row's name: capitals 8 pixels tall (smaller where a long one would reach the − beside it), centred on the row's box
+        void Word(int x, int y, string s, int room)
+        {
+            int cap = 8;
+            while (cap > 6 && FormLetters.Width(label, cap, s) > room) cap--;
+            FormLetters.At(Frame, label, x, y + (14 - cap) / 2, cap, s);
+        }
+        FormLetters.At(Frame, label, X + 133 - FormLetters.Width(label, 10, "GAME OPTIONS") / 2, Y + BoxTop + 4, 10, "GAME OPTIONS");
+        for (int i = 0; i < _rows.Count; i++)
+        {
+            var r = _rows[i];
+            int y = RowY(i);
+            if (r.Link)
+            {
+                Word(X + 19, y, r.Label, LineX0 - 23);
+                var lv = Fit(r.Value, LineX1 - LineX0 - 8);
+                Frame.Text(Font, X + (LineX0 + LineX1) / 2 - Font.Measure(lv) / 2, y + 12 - Font.Height + 1, lv);
+                if (!r.Locked) Word(X + PlusX + 2, y, ">", 10);
+                continue;
+            }
+            if (!r.Step)
+            {
+                if (r.On) DrawCross(X + 19, y);
+                Word(X + 41, y, r.Label, W - 55);
+                continue;
+            }
+            Word(X + 19, y, r.Label, MinusX - 23);
+            var v = Fit(r.Value, LineX1 - LineX0 - 8);
+            Frame.Text(Font, X + (LineX0 + LineX1) / 2 - Font.Measure(v) / 2, y + 12 - Font.Height + 1, v);
+        }
+    }
+
     /// <summary>The label font struck twice a pixel apart: the sprites' lettering is bolder than any face the shell has.</summary>
     private void Bold(int x, int y, string s)
     {
@@ -164,6 +239,7 @@ public sealed class GameOptionsPopup : ShellScreen
     private void Close(bool done)
     {
         Shell.Sound(82);
+        _ink.Drop();
         Frame.Restore(X, Y, W + 6, _h + 6);
         Shell.Modal(null);
         Closed(done);
@@ -180,6 +256,7 @@ public sealed class GameOptionsPopup : ShellScreen
         if (r.Link)
         {
             // steps aside without closing: whatever the row opens takes the screen, and gives it back through Link
+            _ink.Drop();
             Frame.Restore(X, Y, W + 6, _h + 6);
             Shell.Modal(null);
             Link?.Invoke();

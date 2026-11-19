@@ -40,7 +40,6 @@ public sealed class HdPackThreadTests : IDisposable
             foreach (int i in files)
                 using (var s = z.CreateEntry($"tex-world/t{i:000}.dds").Open()) s.Write(Content(i));
         }
-
     }
 
     private static void Hammer(HdSource src, int files)

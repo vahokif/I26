@@ -204,7 +204,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// <summary>
     /// The road layer's textures (by index: the roads', then the road pieces' tops and ground decals') with a texture pack's upscales
     /// in place of the originals it has (<paramref name="drawn"/>: a member as drawn and its scale), or null when it has none: the
-    /// layers are then upstream's, one set at <see cref="RoadLayerResolution"/>. A flat colour ("#rrggbb") has no member.
+    /// layers are then as without a pack, one set at <see cref="RoadLayerResolution"/>. A flat colour ("#rrggbb") has no member.
     /// </summary>
     public static Dictionary<int, RoadRaster.Tex?>? HdRoadTextures(IReadOnlyDictionary<int, RoadRaster.Tex?> roadTex,
         IEnumerable<(int Index, string? Member)> members, Func<string, (RoadRaster.Tex Tex, int Scale)?> drawn)

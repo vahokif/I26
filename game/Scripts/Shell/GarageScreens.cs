@@ -1,4 +1,5 @@
 using Godot;
+using I76.Formats.Imaging;
 using I76.Formats.Input;
 using I76.Formats.Shell;
 using I76.Sim.Trip;
@@ -328,6 +329,11 @@ public sealed class GarageScreen : GarageBase, IChassisForm
     public MeleeChassis? Melee { get; init; }
     private bool _built, _changed, _renamed, _renaming;
     private string _entryName = "", _entryVtf = "";
+    /// <summary>I26's respray (the 3D garage's RESPRAY colours, null the factory paint): as the variant came, and as set on the form.</summary>
+    private CarPaint? _colours, _entryColours;
+    private Garage3D.SwatchLayer? _swatches;
+    private ArtButtons.ArtLabel? _weightLabel;
+    private readonly List<(Rect2I, Color)> _swatchList = [];
     private readonly List<int> _parts = [], _weapons = [], _droppers = [], _specials = [];
     private readonly List<string> _weaponLabels = [];
     private readonly List<int> _weaponGroup = [];       // 0 Fwd, 1 Top, 2 Rear
@@ -348,8 +354,11 @@ public sealed class GarageScreen : GarageBase, IChassisForm
                 var car = TripCar.FromVcf(vfs.Read((mc.Data ?? Shell.Melee).Vcf(mc.Model, mc.Variant)), n => I76.Sim.Vehicles.VehicleFactory.EngineCompId(vfs, n));
                 Setup(TripInventory.FromCar(car, Shell.Parts, vfs));
                 (_entryName, _entryVtf) = (Inv.Car.Variant, Inv.Car.Vtf);
+                _colours = _entryColours = (mc.Data ?? Shell.Melee).Colours(mc.Model, mc.Variant);
                 BuildLists();
             }
+            _swatches = new Garage3D.SwatchLayer { Name = "FormSwatches" };
+            Shell.AddLayerOverFrame(_swatches);
             Repaint();
             return;
         }
@@ -400,6 +409,7 @@ public sealed class GarageScreen : GarageBase, IChassisForm
             Frame.Blit(Shell.Install.IsNitro ? Shell.Db.BankNative(55)[art] : Shell.Db.Bank(0x3d)[art], 450, 70);
             Frame.BlitAt(arrow, 254, 332);
             DrawPaint();
+            DrawRespray();
         }
         else Text(F45, 82, 10, Inv.MakeModel);
         for (int k = 0; k < PartLabels.Length; k++) { Text(F47, 31, 43 + k * P, PartLabels[k]); Frame.BlitAt(arrow, 254, 40 + k * P); }
@@ -548,6 +558,8 @@ public sealed class GarageScreen : GarageBase, IChassisForm
         int held = _hold.Id, hit = In(Shell.Mouse, DefenseR) ? 0 : In(Shell.Mouse, (450, 468, 48, 64)) ? 1 : In(Shell.Mouse, (450, 468, 235, 264)) ? 2 : -1;
         for (int n = _hold.Update(Shell.MouseHeld, hit, Shell.Delta); n > 0; n--)
             if (held == 0) Defense(_repeatAtMouse); else ScrollRepairs(held == 1 ? -1 : 1);
+        // the swatches are over the frame: off while a pop-up or the options are over the form
+        if (_swatches is not null) _swatches.Visible = !Shell.ModalOpen && !Shell.OverlayOpen;
         if (_renaming) { Rename(); return; }
         if (Shell.Wheel != 0 && In(Shell.Mouse, RepairR))
         {
@@ -568,6 +580,8 @@ public sealed class GarageScreen : GarageBase, IChassisForm
             else if (In(m, RenameR)) { Click(); _renaming = true; DrawName(); }
             else if (In(m, DoneR)) { Click(); MeleeDone(); }
             else if (In(m, PaintR)) { Click(); PaintPicker(); }
+            else if (In(m, ColourR)) { Click(); ColourPicker(); }
+            else if (In(m, FinishR)) { Click(); FinishPicker(); }
         }
         else if (In(m, RepairR)) { Click(); RepairClick(m); }
         else if (In(m, DefenseR)) { Click(); if (Defense(m)) { _hold.Begin(0); _repeatAtMouse = m; } }
@@ -583,6 +597,7 @@ public sealed class GarageScreen : GarageBase, IChassisForm
     {
         if (Melee is not { } mc) return;
         (Inv.Car.Variant, Inv.Car.Vtf) = (_entryName, _entryVtf);
+        _colours = _entryColours;
         mc.Cancel();
     }
 
@@ -637,7 +652,7 @@ public sealed class GarageScreen : GarageBase, IChassisForm
                 l.Add(PadRegion.Of((254, 263, RowY[k][0], RowY[k][1])));
             }
             l.Add(PadRegion.Of((185, 246, 422, 435)));
-            if (Melee is not null) l.AddRange([PadRegion.Of(CancelR), PadRegion.Of(CatalogR), PadRegion.Of(RenameR), PadRegion.Of(DoneR), PadRegion.Of(PaintR)]);
+            if (Melee is not null) l.AddRange([PadRegion.Of(CancelR), PadRegion.Of(CatalogR), PadRegion.Of(RenameR), PadRegion.Of(DoneR), PadRegion.Of(PaintR), PadRegion.Of(ColourR), PadRegion.Of(FinishR)]);
             else l.AddRange([PadRegion.Of(SalvageR), PadRegion.Of(DoneR), PadRegion.Of(BookmarkR)]);
             return l;
         }
@@ -746,6 +761,92 @@ public sealed class GarageScreen : GarageBase, IChassisForm
         });
     }
 
+    // ---- I26's respray on the original's form (#205): the colour and the finish the 3D garage's RESPRAY sets, written as it writes them ----
+
+    /// <summary>The two rows' hit boxes, stacked on the total weight box (448..631, 418..439), 24 px wider to the left for the colours' names.</summary>
+    private static readonly (int, int, int, int) ColourR = (424, 630, 378, 398), FinishR = (424, 630, 398, 418);
+
+    private static Color SwatchOf(PaintColour c) => Color.Color8(c.R, c.G, c.B);
+
+    /// <summary>
+    /// COLOUR and FINISH (the port's, #205): two boxes ruled as the form's total weight box under them (its top and left rules and its underline,
+    /// copied on the background, so an upscaled background takes them too), labelled as it is labelled (Arial Bold at the art's size,
+    /// <see cref="ArtButtons.LetterAt"/>), the value in font 0x45 on the line, the colour's swatch before it (true over the frame, the form's
+    /// palette has no such colours), and the form's arrow.
+    /// </summary>
+    private void DrawRespray()
+    {
+        _swatchList.Clear();
+        var arrow = Shell.Db.Bank(0x24)[14];
+        // the weight box's own label in the form's picture (the art's ink, the size it is lettered at), read once
+        if (_weightLabel is null && Shell.Db.Background(2) is { } bg)
+            _weightLabel = ArtButtons.Label((x, y) => bg.Pixels[Math.Clamp(y, 0, bg.Height - 1) * bg.Width + Math.Clamp(x, 0, bg.Width - 1)], bg.Palette, new Rect2I(452, 420, 66, 16));
+        var like = _weightLabel;
+        // the weight box's top rule carried out to the wider boxes' left edge
+        Frame.CopyBackground(448, 418, 24, 1, 424, 418);
+        string[] labels = ["colour:", "finish:"];
+        string[] values = [CarPaints.NameOf(_colours?.Primary), (_colours?.Finish ?? PaintFinish.Gloss).ToString()];
+        for (int k = 0; k < 2; k++)
+        {
+            int top = (k == 0 ? ColourR : FinishR).Item3, vx = 474;
+            Frame.CopyBackground(448, 418, 182, 1, 448, top);
+            Frame.CopyBackground(448, 418, 24, 1, 424, top);
+            Frame.CopyBackground(448, 419, 2, 19, 424, top + 1);
+            Frame.CopyBackground(521, 433, 101, 1, 472, top + 15);
+            Frame.CopyBackground(521, 433, 40, 1, 573, top + 15);
+            if (like is not null) ArtButtons.LetterAt(Frame, F47, labels[k], like, "total weight:", new Vector2I(434, like.Box.Position.Y + top - 418));
+            if (k == 0 && _colours?.Primary is { } c) { _swatchList.Add((new Rect2I(vx, top + 3, 13, 11), SwatchOf(c))); vx += 17; }
+            Text(F45, vx, top + 2, Fit(values[k], 614 - vx));
+            Frame.BlitAt(arrow, 617, top + 3);
+        }
+        _swatches?.Set([.. _swatchList], !Shell.ModalOpen);
+    }
+
+    private string Fit(string s, int width)
+    {
+        if (F45.Measure(s) <= width) return s;
+        while (s.Length > 1 && F45.Measure(s + "..") > width) s = s[..^1];
+        return s + "..";
+    }
+
+    /// <summary>COLOUR: the factory paint or one of the classic paints (a colour mixed in the 3D garage shows as Custom until another is picked).</summary>
+    private void ColourPicker()
+    {
+        var rows = new List<(string, Color?)> { ("Factory", null) };
+        rows.AddRange(CarPaints.Classic.Select(x => (x.Name, (Color?)SwatchOf(x.Colour))));
+        _swatches?.Set([], false);
+        Shell.Modal(new PaintListPicker
+        {
+            Title = "COLOUR", Rows = rows, Owner = this,
+            Picked = i => SetColours(ChassisRules.WithPrimary(_colours, i == 0 ? null : CarPaints.Classic[i - 1].Colour)),
+        });
+    }
+
+    /// <summary>FINISH: gloss, metallic or matte (the modern look draws it; the 1997 look shows the colour alone, as in the 3D garage).</summary>
+    private void FinishPicker()
+    {
+        PaintFinish[] all = [PaintFinish.Gloss, PaintFinish.Metallic, PaintFinish.Matte];
+        _swatches?.Set([], false);
+        Shell.Modal(new PaintListPicker
+        {
+            Title = "FINISH", Rows = [.. all.Select(f => (f.ToString(), (Color?)null))], Owner = this,
+            Picked = i => SetColours(ChassisRules.WithFinish(_colours, all[i])),
+        });
+    }
+
+    /// <summary>A respray pick: a change counts as an edit (DONE saves it), as in the 3D garage.</summary>
+    private void SetColours(CarPaint c)
+    {
+        if (!Equals(c, _colours)) { _colours = c; _changed = true; }
+        Repaint();
+    }
+
+    public override void Leave()
+    {
+        _swatches?.QueueFree();
+        _swatches = null;
+    }
+
     /// <summary>RENAME: a line edit at (82, 17), at most 15 characters in 160 px; a different name counts as renamed.</summary>
     private void Rename()
     {
@@ -779,7 +880,8 @@ public sealed class GarageScreen : GarageBase, IChassisForm
         var plan = ChassisRules.PlanDone(Inv, _changed, _renamed, mc.Variant, model.Variants, model.Base, Shell.UnlimTurrets);
         void Save(int n)
         {
-            data.SaveVariant(mc.Model, n, ChassisRules.VariantFile(Inv, model.MakeModel, Shell.Install.IsNitro, out var car), car.Variant);
+            // the respray's sidecar as the 3D garage writes it (none: an older one goes)
+            data.SaveVariant(mc.Model, n, ChassisRules.VariantFile(Inv, model.MakeModel, Shell.Install.IsNitro, out var car), car.Variant, ChassisRules.ColoursToSave(_colours), setColours: true);
             mc.Done(n);
         }
         void Ask(string line, Action yes, Action no) => Shell.Modal(new ConfirmPopup { Lines = [line], Answer = a => { if (a) yes(); else no(); } });
@@ -796,6 +898,7 @@ public sealed class GarageScreen : GarageBase, IChassisForm
                     if (!Shell.Install.IsNitro)
                     {
                         (Inv.Car.Variant, Inv.Car.Vtf) = (_entryName, _entryVtf);
+                        _colours = _entryColours;
                         _renamed = false;
                     }
                     Repaint();

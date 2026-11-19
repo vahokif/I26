@@ -6,7 +6,7 @@ namespace I76.Game.Tests;
 
 /// <summary>
 /// The road layer with a texture pack: its upscales of the roads, the road pieces' tops and the ground decals bake the modern look's
-/// layer; without any, nothing changes (one set of layers, upstream's). Tiny synthetic textures only.
+/// layer; without any, nothing changes (one set of layers, as before). Tiny synthetic textures only.
 /// </summary>
 public class HdRoadLayerTests
 {

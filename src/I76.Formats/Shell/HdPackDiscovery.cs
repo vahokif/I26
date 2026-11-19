@@ -20,8 +20,9 @@ public enum HdPackPlace
 /// <summary>A pack found: its layout's name (tex-menu, or another the caller named), the folder or zip, the zip's folder that holds the layout.</summary>
 public sealed record HdPackFound(string Name, string Path, string? ZipRoot, HdPackPlace Place, HdPackInfo? Info)
 {
-    /// <summary>The pack as a source (a new one each call: the caller owns it).</summary>
-    public HdSource Open() => ZipRoot is null ? new HdDirSource(Path) : new HdZipSource(Path, ZipRoot);
+    /// <summary>The pack as a source (a new one each call: the caller owns it); a world texture pack's folder is read flat, as HdTextures does.</summary>
+    public HdSource Open() => ZipRoot is not null ? new HdZipSource(Path, ZipRoot)
+        : Name.Equals(HdPackDiscovery.Menu, StringComparison.OrdinalIgnoreCase) ? new HdDirSource(Path) : new HdFlatDirSource(Path);
 
     /// <summary>Where, in the log's and the row's plain words.</summary>
     public string Where => Place switch

@@ -156,11 +156,21 @@ public sealed partial class NetMeleeServer : IDisposable
         catch (WireException) { req.RejectForce(); return; }
         // a player of the game this one took over, coming back to its seat (host migration)
         if (j.Rejoin is not null) { RequestRejoin(req, j); return; }
-        string? why = j.Version != Protocol.Version ? $"protocol {j.Version}; this server speaks {Protocol.Version}"
-            : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint, j.Password)
-            ?? (_lobbyClosed ? LobbyClosedText : Host.Seats.Count + _lobby.Count + _requests.Count + _waiting.Count + _invites.Count >= Options.MaxPlayers ? "the server is full"
-            : Host.Over ? (CarriesOn ? "between rounds: try again in a few seconds" : Options.Coop is not null ? "the mission is over" : "the melee is over")
-            : Host.Mode.CanJoin() ?? Host.CheckJoin(j.Car, j.Config));
+        string? why;
+        try
+        {
+            why = j.Version != Protocol.Version ? $"protocol {j.Version}; this server speaks {Protocol.Version}"
+                : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint, j.Password)
+                ?? (_lobbyClosed ? LobbyClosedText : Host.Seats.Count + _lobby.Count + _requests.Count + _waiting.Count + _invites.Count >= Options.MaxPlayers ? "the server is full"
+                : Host.Over ? (CarriesOn ? "between rounds: try again in a few seconds" : Options.Coop is not null ? "the mission is over" : "the melee is over")
+                : Host.Mode.CanJoin() ?? Host.CheckJoin(j.Car, j.Config));
+        }
+        catch (Exception ex)
+        {
+            // a join the checks fail on (nothing of it is seated yet) is turned away, not the end of everyone's game in the poll
+            Log?.Invoke($"{j.Name}'s join could not be checked: {ex}");
+            why = "the server could not check this join";
+        }
         if (why is not null)
         {
             var w = new NetDataWriter();
@@ -776,6 +786,24 @@ public sealed partial class NetMeleeServer : IDisposable
             Summarize(NetClock.Seconds(clock));
             next += Host.Session.TickSeconds;
         }
+        if (Fault is { } fault && !_stop) Goodbye(fault);
+    }
+
+    /// <summary>
+    /// The server stopped on a fault: its players are told at once, as when a host quits: handed to the successor when there is
+    /// one, else why the game ended. It went quiet instead, its socket still answering, so a game that hands over waited out the
+    /// host's silence (on the listen host's own screen too) and any other stood still with nothing coming.
+    /// </summary>
+    private void Goodbye(Exception fault)
+    {
+        var w = new NetDataWriter();
+        w.Put(_mig is { Successor: not null } && !_lobbyOpen && !(Host.Over && !CarriesOn) ? I76.Net.HostMigration.HostLeavingReason : $"the server stopped ({fault.GetType().Name})");
+        lock (_lock)
+        {
+            Anet?.Dispose();
+            Anet = null;
+            _net.DisconnectAll(w.Data, 0, w.Length);
+        }
     }
 
     /// <summary>Seconds between the load lines in the log (players, the tick's time, the upload, the snapshots).</summary>
@@ -867,8 +895,9 @@ public sealed partial class NetMeleeServer : IDisposable
     public void Invoke(Action<MeleeHost> a) { lock (_lock) a(Host); }
     public T Invoke<T>(Func<MeleeHost, T> f) { lock (_lock) return f(Host); }
 
-    /// <summary>What stopped the tick loop, if something went wrong.</summary>
-    public Exception? Fault { get; private set; }
+    /// <summary>What stopped the tick loop, if something went wrong (set before the players are told: <see cref="Goodbye"/>).</summary>
+    public Exception? Fault { get => Volatile.Read(ref _fault); private set => Volatile.Write(ref _fault, value); }
+    private Exception? _fault;
 
     /// <summary>The thread is still ticking.</summary>
     public bool Running => _thread?.IsAlive == true;

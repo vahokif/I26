@@ -1175,6 +1175,12 @@ lowest remaining player id became the host ("*** %s is now the host!"; docs/devi
 - **Bots** (docs above, "Bots") ride in the savestate with their brains and slots; the successor's game has them, and the options it was built
   from say how many to keep.
 - **A quiet host that speaks again** before anything was done (the player's own link had dropped) keeps its player.
+- **A server that stops on a fault** (a failed tick or network poll: the game is not run on in a broken state) says goodbye at
+  once, as a host that quits: `HostLeavingReason` when a successor is named, else "the server stopped (the exception's
+  type)", which ends the game for its players with that reason. It used to go quiet with its socket still answering: the
+  players waited out the 3 s, and in a game nobody took over they stood joined with nothing coming. The listen host's own
+  game drops the stopped server (its prompts and boots are no longer the host's), says "*** Your server stopped (...): you
+  are no longer the host." and its player goes to the successor as the others do.
 - **The feed**: "*** Migrating host..." (ours), then the original's "*** NAME is now the host!" or "*** You are now the
   host!", and the old host's "has left the game" from the new host. A migration that has not seated a player in 10 s
   ends the game for it as before ("connection to the host lost").

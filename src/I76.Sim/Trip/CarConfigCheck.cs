@@ -45,9 +45,10 @@ public static class CarConfigCheck
         if (car.Variant.Length == 0 || car.Variant.Any(char.IsControl)) { error = "a nameless variant"; return null; }
 
         // armour and chassis: the garage conserves their total (Defense: +-10 between a zone and the pool), so no more than the
-        // heaviest stock variant carries, or than the secret body is given; none negative
-        int Total(TripCar c) => c.Armour.Sum() + c.Chassis.Sum() + c.Ninth;
-        int allowed = 0;
+        // heaviest stock variant carries, or than the secret body is given; none negative. Added as 64-bit numbers: each zone is a
+        // 32-bit field of the file, and a total past an int threw here, in the server's network poll, which stopped the game
+        long Total(TripCar c) => c.Armour.Sum(a => (long)a) + c.Chassis.Sum(a => (long)a) + c.Ninth;
+        long allowed = 0;
         for (int n = 1; n < 10 && vfs.TryRead($"{stem}{n}.vcf") is { } sd; n++) allowed = System.Math.Max(allowed, Total(TripCar.FromVcf(sd)));
         if (secret is { } body) allowed += body.Total;      // the secret replaces the zones it names, keeping the rest of the Rattler's
         if (car.Armour.Any(a => a < 0) || car.Chassis.Any(c => c < 0) || car.Ninth < 0 || Total(car) > allowed) { error = "armour beyond the model's"; return null; }

@@ -25,7 +25,19 @@ public partial class NetSession : Node
 
     public override void _Ready() => ProcessMode = ProcessModeEnum.Always;
 
-    public override void _Process(double delta) => Client.Poll();
+    public override void _Process(double delta)
+    {
+        // this machine's own server stopped on a fault (before the client reads its goodbye): the host hears why, and hosts no
+        // more; the goodbye then hands the game over (this player rejoins the successor as the others do) or ends it
+        if (Server is { Fault: { } fault } dead)
+        {
+            GD.PrintErr($"listen server stopped: {fault}");
+            Client.Notices.Enqueue(NetLines.ServerStopped(fault));
+            Server = null;
+            dead.Dispose();
+        }
+        Client.Poll();
+    }
 
     /// <summary>Builds and starts the listen server (seconds: it loads the arena), off the main thread.</summary>
     public async System.Threading.Tasks.Task<NetMeleeServer> Host(ServerOptions o)

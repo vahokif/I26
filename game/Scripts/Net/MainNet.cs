@@ -639,6 +639,8 @@ public partial class Main
         NetMovie(c);
         // this game took over as host (host migration): the host's prompts and boots are its own now
         if (_netHud is { Server: null } hud && _net.Server is { } taken) { hud.Server = taken; hud.Host = true; }
+        // this game's own server stopped on a fault (NetSession let it go): the prompts and boots are no longer its own
+        else if (_netHud is { Server: { Fault: not null } } gone && !ReferenceEquals(gone.Server, _net.Server)) { gone.Server = null; gone.Host = false; }
         // the server started another round on this connection: reload as a fresh join, the seat kept
         if (c.Rounds > _roundsAtBuild && c.State is not (ClientState.Disconnected or ClientState.Rejected)) { CarryNetwork(); return; }
         // a server that carries on is waited for (its pause, and some leeway for it to build the next arena)

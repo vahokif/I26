@@ -79,6 +79,9 @@ public static class NetLines
     /// <summary>The gap while the successor takes over (I26's: the original's peers carried on without one).</summary>
     public const string Migrating = "*** Migrating host...";
 
+    /// <summary>The listen host's own server stopped on a fault (I26's): said on the host's screen before the game is handed over or ends.</summary>
+    public static string ServerStopped(Exception fault) => $"*** Your server stopped ({fault.GetType().Name}): you are no longer the host.";
+
     /// <summary>
     /// The end's line on this machine: the base game's "maximum score" lines for a points goal ("*** You have reached the
     /// maximum score! You win!", "*** %s has reached the maximum score! You lose, chump!", the "Team %s" forms), else Nitro's

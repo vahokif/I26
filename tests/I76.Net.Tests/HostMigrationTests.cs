@@ -339,6 +339,37 @@ public class HostMigrationTests(ITestOutputHelper output)
         return $"the replay differs from the host at byte {i} of {a.Length} / {b.Length}, in {section}: host {Around(a)}, replay {Around(b)}";
     }
 
+    /// <summary>
+    /// The listen host's server stops on a fault (one is injected while it handles the host's own chat line): it says goodbye at
+    /// once, as a host that quits, so every player, the host's own among them, goes to the successor without waiting out the
+    /// host's silence, and the host's player plays on there as a client. Before, the server went quiet with its socket still
+    /// answering, and each client (on the host's own screen "Migrating host...") waited the timeout first.
+    /// </summary>
+    [Fact]
+    public void TheHostsServerFaultsAndTheGameIsHandedOverAtOnce()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        using var g = Start(install, 2);
+        GiveScores(g);
+        WaitForSuccessor(g, 0);
+        g.Server.Log += m => { if (m.StartsWith("chat: Hal: fault", StringComparison.Ordinal)) throw new InvalidOperationException("injected"); };
+        int hostSlot = g.HostPlayer.Accept!.Slot;
+        var cut = Stopwatch.StartNew();
+        g.HostPlayer.SendChat("fault");
+        Assert.True(g.Wait(() => g.Server.Fault is not null, 5000), "the fault");
+        var everyone = g.Clients.ToList();
+        Assert.True(g.Wait(() => everyone.All(c => c.State == ClientState.Joined && c.Migrations == 1), 15000),
+            string.Join(", ", everyone.Select(c => $"{c.State} {c.Reason}")));
+        double gap = cut.Elapsed.TotalSeconds;
+        output.WriteLine($"fault: {g.Server.Fault!.GetType().Name}; everyone back with the new host after {gap:0.00} s (the host's silence counts after {HostMigration.HostTimeoutSeconds} s)");
+        Assert.True(gap < HostMigration.HostTimeoutSeconds, $"took {gap:0.00} s");
+        Assert.False(g.Server.Running);
+        var server = g.Players[0].Standby.Server!;
+        Assert.True(g.Wait(() => server.AwaitingRejoin == 0));
+        Assert.Contains(server.Invoke(h => h.Seats.Select(s => s.Slot).ToList()), s => s == hostSlot);
+        Assert.Contains(g.HostPlayer.Notices, n => n == "*** Ann is now the host!");
+    }
+
     /// <summary>The host's packets stop (the link drops them all): the players take it as gone after the timeout and go to the successor.</summary>
     [Fact]
     [Trait("Load", "Sensitive")]   // wall-clock timing: flakes on a busy machine; feature runs skip it (--filter "Load!=Sensitive"), a release check runs it

@@ -529,8 +529,10 @@ the original; single player stays the base melee. They are here server-side
   2 dropped (modelled, never entered, as in the original), 4 carried. An enemy
   picks the flag up from its home stand only; touching any stand of one's own
   colour with an enemy flag captures it (the flag goes home at once, and the
-  own flag need not be home); touching one's own flag never returns it. The
-  flag stays on the wreck and goes home when the car respawns, regens or leaves.
+  own flag need not be home); touching one's own flag never returns it. A
+  carried flag goes home when its carrier dies (the original's wreck routine
+  returns it on the death itself: to its stand, "returned to its base"; it is
+  never dropped nor left on the wreck), respawns, regens or leaves.
   A capture is +1 to every member of the capturing team and +1 death to the
   members of the flag's team. Flags are indestructible (they already were), and
   no obstacle: a car drives through the flag and its base, whose parts (node types

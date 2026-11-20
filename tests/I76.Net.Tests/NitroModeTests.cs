@@ -147,7 +147,7 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         var f2 = game.Ctf.Flags.First(f => f.Team == 2);
         Assert.Equal(CtfFlag.Home, f1.State);
         Assert.Equal(CtfFlag.Home, f2.State);
-        // red takes green's flag, and dies with it: the flag stays on the wreck
+        // red takes green's flag, and dies with it: the flag goes home at the death, as the original's wreck routine sends it
         DriveThrough(host, red, f2.HomePos);
         Assert.Equal(CtfFlag.Carried, f2.State);
         Assert.Same(red.Player, f2.Carrier);
@@ -155,8 +155,9 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Contains(snap.Flags, f => f.Team == 2 && f.State == 4 && f.Carrier == red.CarSerial);
         host.Setup.Damage.Destroy(red.Player.Car);
         Steps(host, 5);
-        Assert.Equal(CtfFlag.Carried, f2.State);
-        // and it goes home when red respawns (red presses RAISE_DEAD once the 5 s are up)
+        Assert.Equal(CtfFlag.Home, f2.State);
+        Assert.Null(f2.Carrier);
+        // red comes back (RAISE_DEAD once the 5 s are up), the flag still home
         Steps(host, (int)(host.Options.RespawnDelay / SimRate.Default.TickSeconds) + 30);
         Assert.Null(game.RequestRespawn(red.Player));
         Steps(host, 2);
@@ -240,6 +241,79 @@ public class NitroModeTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.True(worstDrop < 0.5f, $"the car was slowed at the flag: {worstDrop:0.00} m/s in a tick");
         Assert.Equal(CtfFlag.Carried, f2.State);
         Assert.Same(red.Player, f2.Carrier);
+    }
+
+    /// <summary>
+    /// A carrier's death, with two clients mirroring the game (#213). The original's wreck routine returns a carried flag to its
+    /// stand on the death itself ("returned to its base"); it is never left on the wreck. So the flag is home at once on the server
+    /// and in both clients' flags, stays home however long the dead carrier waits to respawn, and the carrier's teammate can take
+    /// it from its stand meanwhile, while the flag's own team touching it does nothing.
+    /// </summary>
+    [Fact]
+    public void ACarriersFlagGoesHomeAtTheDeathAndCanBeTakenThereWhileTheCarrierWaits()
+    {
+        if (Nitro is null) return;
+        var host = new MeleeHost(new ServerOptions { Install = Nitro, Arena = "N40.CF2", Kind = MeleeKind.Ctf, CtfTeams = 2, GoalValue = 5 });
+        var game = host.Game;
+        var red = host.Join("red", "vppirna1.vcf", 1);
+        var green = host.Join("green", "vppirna1.vcf", 2);
+        var red2 = host.Join("red2", "vppirna1.vcf", 1);
+        var clients = new List<(Seat Seat, ClientWorld Mirror, MeleeClient Net)>();
+        void AddClient(Seat s)
+        {
+            var install = new I76.Formats.Vfs.GameInstall(Nitro!);
+            var vfs = new I76.Formats.Vfs.AssetVfs(install);
+            var asm = new I76.Formats.Assembly.ModelAssembler(vfs);
+            var w = new I76.Formats.Assembly.MissionWorld(vfs, asm, install.FindMission("N40.CF2")!);
+            var setup = MissionSetup.Build(vfs, w, asm, melee: [], meleeRules: new MeleeRules { Network = true, Kind = MeleeKind.Ctf, CtfTeams = 2 });
+            clients.Add((s, new ClientWorld(setup, host.AcceptFor(s)), new MeleeClient()));
+        }
+        var lines = new List<string>();
+        void Run(double seconds)
+        {
+            for (int k = 0; k < seconds / host.Session.TickSeconds; k++)
+            {
+                host.Step();
+                var events = host.TakeEvents();
+                lines.AddRange(events.OfType<ChatEvent>().Select(c => c.Text));
+                foreach (var c in clients)
+                {
+                    if (events.Count > 0) c.Net.Events.Enqueue(new EventBatch(host.Tick, events));
+                    c.Net.Inject(PredictionTests.Through(host, c.Seat));
+                    c.Mirror.Advance(host.Session.TickSeconds, c.Net);
+                }
+            }
+        }
+        AddClient(red); AddClient(green);
+        Run(1);
+        var f2 = game.Ctf!.Flags.First(f => f.Team == 2);
+        FlagState Seen((Seat Seat, ClientWorld Mirror, MeleeClient Net) c) => c.Mirror.Flags.Single(f => f.Team == 2);
+        bool AtHome(FlagState s) => s.State == CtfFlag.Home && System.Math.Abs(s.Pos.X - f2.HomePos.X) < 0.5 && System.Math.Abs(s.Pos.Z - f2.HomePos.Z) < 0.5;
+        DriveThrough(host, red, f2.HomePos); Run(0.5);
+        Assert.Same(red.Player, f2.Carrier);
+        Assert.All(clients, c => Assert.Equal(CtfFlag.Carried, Seen(c).State));
+        // the carrier drives off with it and dies 150 m from the stand: home at once, on the server and on both machines
+        Put(red, new Double3(f2.HomePos.X + 150, f2.HomePos.Y, f2.HomePos.Z)); Run(0.5);
+        Assert.All(clients, c => Assert.False(AtHome(Seen(c))));
+        lines.Clear();
+        host.Setup.Damage.Destroy(red.Player.Car);
+        Run(1);
+        output.WriteLine($"1 s after the death: server {f2.State} at {f2.Pos.X:0},{f2.Pos.Z:0} (home {f2.HomePos.X:0},{f2.HomePos.Z:0}); clients {string.Join(", ", clients.Select(c => $"{Seen(c).State}@{Seen(c).Pos.X:0},{Seen(c).Pos.Z:0}"))}");
+        Assert.Equal(CtfFlag.Home, f2.State);
+        Assert.Null(f2.Carrier);
+        Assert.Contains(lines, l => l.Contains("returned to its base"));
+        Assert.All(clients, c => Assert.True(AtHome(Seen(c)), "the clients see it home"));
+        // the dead carrier does not respawn: 30 s on, the flag is still home and in play
+        Run(30);
+        Assert.True(red.Player.Destroyed);
+        Assert.All(clients, c => Assert.True(AtHome(Seen(c)), "still home while the carrier waits"));
+        // the flag's own team touching it does nothing; the carrier's teammate takes it from the stand
+        DriveThrough(host, green, f2.HomePos);
+        Assert.Equal(CtfFlag.Home, f2.State);
+        Put(green, new Double3(f2.HomePos.X + 200, f2.HomePos.Y, f2.HomePos.Z));
+        DriveThrough(host, red2, f2.HomePos); Run(0.5);
+        Assert.Same(red2.Player, f2.Carrier);
+        Assert.All(clients, c => Assert.Equal(CtfFlag.Carried, Seen(c).State));
     }
 
     private static Snapshot ReadSnapshot(MeleeHost host, Seat seat)

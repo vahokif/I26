@@ -491,6 +491,9 @@ public sealed partial class MeleeGame
                 p.Destroyed = true;
                 p.RespawnAt = Host.Now + Rules.RespawnDelay;
                 p.RespawnWanted = false;
+                // CTF: the original's wreck routine sends a carried flag home on the death itself (the host's, then the
+                // flags' packet): back at its stand, "returned to its base", never left on the wreck
+                Ctf?.CarrierGone(p);
                 // The score for a death: a death, and with no killer 500 points to a floor of 0 (network
                 // combat only); one's own weapon or a teammate's books nothing. The losers blown up at the end have no
                 // killer: they pay too (the original wrote NSCR.DAT after it)

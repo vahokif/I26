@@ -79,7 +79,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
     /// neighbours; an opaque face draws index 255 as a colour, as the original's unkeyed draws do (its 3D card keys only the
     /// blended primitives; the software renderer likewise).
     /// </summary>
-    private static ImageTexture Albedo(TextureFactory.Entry t, FaceMode mode) => mode == FaceMode.Opaque ? t.Opaque : t.Texture;
+    private static ImageTexture Albedo(TextureFactory.Entry t, FaceMode mode) => mode == FaceMode.Opaque ? t.Opaque : t.Drawn;
 
     private int _strips;
 
@@ -133,6 +133,8 @@ public sealed class MaterialLibrary(TextureFactory textures)
     public IEnumerable<object?> SetMode1997Steps(bool on)
     {
         Mode1997 = on;
+        // the pack's upscales in the modern look, the originals in the 1997 look (TextureFactory)
+        foreach (var step in textures.SetHdSteps(!on)) yield return step;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         foreach (var m in _cache.Values.OfType<ShaderMaterial>().ToList())
         {

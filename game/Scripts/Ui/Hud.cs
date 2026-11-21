@@ -114,6 +114,8 @@ public partial class Hud : CanvasLayer
         return l;
     }
 
+    private bool _handsetFaithful;
+
     /// <summary>
     /// The CB handset:
     /// raised while a line the player speaks is on the air (a speaker with
@@ -127,13 +129,18 @@ public partial class Hud : CanvasLayer
     /// </summary>
     private void UpdateHandset(double delta)
     {
+        // made again on a look change: a texture pack's frames are the modern look's only
+        bool faithful = Faithful?.Invoke() == true;
+        if (_handset is not null && faithful != _handsetFaithful) { _handset.QueueFree(); _handset = null; }
         if (_handset is null)
         {
+            _handsetFaithful = faithful;
             // the frames' rows are stored bottom up, as every texture's are (a mesh's UVs take care of that; a
             // bitmap on the screen has to be turned the right way up)
             static Texture2D? Upright(Texture2D? t)
             {
                 if (t?.GetImage() is not { } img) return null;
+                if (img.IsCompressed()) img.Decompress();   // a texture pack's .dds
                 img.FlipY();
                 return ImageTexture.CreateFromImage(img);
             }
@@ -158,7 +165,8 @@ public partial class Hud : CanvasLayer
         _handset.Visible = tex is not null;
         if (tex is null) return;
         _handset.Texture = tex;
-        _handset.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;   // its pixels kept in both looks
+        // its pixels kept in both looks; a texture pack's (more texels than the original's 256x128) filtered
+        _handset.TextureFilter = tex.GetWidth() > 256 ? CanvasItem.TextureFilterEnum.Linear : CanvasItem.TextureFilterEnum.Nearest;
         var size = GetViewport().GetVisibleRect().Size;
         float k = size.Y / 480f;
         _handset.Size = new Vector2(256, 128) * k;

@@ -129,7 +129,7 @@ public sealed class FieldSalvageScreen : GarageBase
                 SortIn(SalvageOf[inv], n);
                 continue;
             }
-            if (inv == 2 && _lists[2].Count > 10) { n.State = PartState.Field; n.Slot = -1; SortIn(7, n); continue; }
+            if (inv == 2 && _lists[2].Count > 10) { Inv.ToField(n); SortIn(7, n); continue; }
             if (inv == 1 && n.State == PartState.Car && n.Health < n.Part.MaxHp) continue;     // listed nowhere
             if (inv == 2) SortIn(2, n);
             else
@@ -276,7 +276,7 @@ public sealed class FieldSalvageScreen : GarageBase
         var n = _lists[from][k];
         _lists[from].RemoveAt(k);
         if (n.State == PartState.Field) n.State = PartState.Van;
-        else { if (n.State == PartState.Repair) Inv.Unqueue(n); n.State = PartState.Field; n.Slot = -1; }
+        else Inv.ToField(n);
         if (Regions[to].Salvage) SortIn(to, n); else _lists[to].Add(n);
         if (Regions[from].Salvage) _scroll[from] = Math.Max(0, Math.Min(_scroll[from], _lists[from].Count - Regions[from].Rows));
         _moved = true;

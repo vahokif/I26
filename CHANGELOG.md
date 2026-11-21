@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- In the modern look a car's shadow falls on the skid marks under it and darkens them with the ground round them, where they showed through it at their full sunlit colour, lighter than the shadow on dirt and grass (#217).
+
 ## 0.13.0 (21 November 2026)
 
 Network games use protocol 26: 0.13.0 does not play with 0.12.1 or earlier, so everyone in a game needs 0.13.0.

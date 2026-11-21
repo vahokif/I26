@@ -53,6 +53,8 @@ public partial class SkidMarks : Node3D
     private readonly List<Strip> _strips = [];
     private readonly HashSet<(Vehicle, int)> _active = [];
     private ShaderMaterial _mat = null!;
+    /// <summary>The marks' place among the transparent things drawn on the ground.</summary>
+    public const int Priority = -110;
     private bool _modern = true, _seen;
     private int _seq, _lastTick = SimClock.Now;
     private float _t;
@@ -60,7 +62,9 @@ public partial class SkidMarks : Node3D
 
     public override void _Ready()
     {
-        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/skid_mark.gdshader") };
+        // drawn before the modern look's drop shadows, so a shadow over a mark darkens it as it darkens the ground, and after the 1997
+        // look's, which writes the frame as it was before any mark (DropShadows.SoftPriority, FlatPriority)
+        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/skid_mark.gdshader"), RenderPriority = Priority };
         _mat.SetShaderParameter("scene_light", SceneLight);
         _origin = Origin();
     }

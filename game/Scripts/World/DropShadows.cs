@@ -34,6 +34,11 @@ public partial class DropShadows : Node3D
     public float Strength { get; set; } = 0.55f;
 
     private const int Layers = 10;
+    /// <summary>
+    /// Where the shadows draw among the transparent things: the 1997 look's first of all, the modern look's layers after the skid marks
+    /// (SkidMarks.Priority), so a shadow falls on a mark as on the ground under it.
+    /// </summary>
+    public const int FlatPriority = -120, SoftPriority = -100;
     private const float Spread = 0.09f;
     // the parameter names once: a string literal makes a new engine name every call
     private static readonly StringName LayerAlpha = "layer_alpha", Jitter = "jitter", SpreadName = "spread", FadeFrom = "fade_from", FadeTo = "fade_to",
@@ -111,7 +116,9 @@ public partial class DropShadows : Node3D
     /// <summary>What <see cref="_Ready"/> makes (the layers' materials), a null after each; all of it before the node is processed.</summary>
     public IEnumerable<object?> ReadySteps()
     {
-        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/drop_shadow_1997.gdshader") };
+        // first of the transparent things: it writes the opaque frame back darkened, which would wipe out a skid mark (or anything
+        // else drawn on the ground) drawn before it; the original darkened whatever lay under it
+        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/drop_shadow_1997.gdshader"), RenderPriority = FlatPriority };
         PrepareShaders();
         yield return null;
         for (int i = 0; i < Layers; i++)
@@ -124,7 +131,7 @@ public partial class DropShadows : Node3D
             m.SetShaderParameter(SpreadName, Spread);
             // the layer's own stencil reference: one pixel is covered once per layer
             // layer-major draw order across all casters (priority first), so one layer's stencil value covers a pixel once for every part
-            m.RenderPriority = -100 + i;
+            m.RenderPriority = SoftPriority + i;
             if (i > 0) _softMats[i - 1].NextPass = m;
             _softMats[i] = m;
             yield return null;
@@ -132,7 +139,7 @@ public partial class DropShadows : Node3D
         _far = new ShaderMaterial { Shader = _farShader };   // one layer, with the first one's stencil reference
         _far.SetShaderParameter(Jitter, Vector2.Zero);
         _far.SetShaderParameter(SpreadName, Spread);
-        _far.RenderPriority = -100;
+        _far.RenderPriority = SoftPriority;
         _soft0 = _softMats[0];
         SetStrength(Strength);
     }

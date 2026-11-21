@@ -6,6 +6,7 @@ using Xunit;
 namespace I76.Net.Tests;
 
 /// <summary>Finding games: the session query and answer, the address book's addresses, a server answering on the LAN.</summary>
+[Collection("AddonOverlay")]
 public class DiscoveryTests
 {
     /// <summary>

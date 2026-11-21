@@ -27,6 +27,9 @@ public sealed class MaterialLibrary(TextureFactory textures)
     /// <summary>The materials drawn from both sides in the modern look but from the front only in the 1997 look (ForTexture's oneSided1997): their shader in each.</summary>
     private readonly Dictionary<ShaderMaterial, (Shader Modern, Shader Faithful)> _oneSided1997 = [];
 
+    /// <summary>The materials of a stock texture with a slip repaired (TextureRepairs): their texture in each look.</summary>
+    private readonly Dictionary<ShaderMaterial, (Texture2D Modern, Texture2D Faithful)> _repaired = [];
+
     /// <summary>Whether materials run the 1997 variants (new ones too).</summary>
     public bool Mode1997 { get; private set; }
 
@@ -110,6 +113,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         if (_cache.TryGetValue(key, out var b)) return b;
         var copy = (ShaderMaterial)s.Duplicate();
         copy.Shader = s.Shader == Back ? Open : Open97;
+        if (_repaired.TryGetValue(s, out var tex)) _repaired[copy] = tex;
         return _cache[key] = copy;
     }
 
@@ -137,6 +141,7 @@ public sealed class MaterialLibrary(TextureFactory textures)
         foreach (var m in _cache.Values.OfType<ShaderMaterial>().ToList())
         {
             m.Shader = _oneSided1997.TryGetValue(m, out var pair) ? (on ? pair.Faithful : pair.Modern) : Swap(m.Shader, on);
+            if (_repaired.TryGetValue(m, out var tex)) m.SetShaderParameter("albedo_tex", on ? tex.Faithful : tex.Modern);
             if (sw.Elapsed.TotalMilliseconds > 10) { yield return null; sw.Restart(); }
         }
     }
@@ -189,6 +194,12 @@ public sealed class MaterialLibrary(TextureFactory textures)
             mat.SetShaderParameter("alpha_key", keyed);
             // a wheel's face (WA<dd><ll><dd>): a disc filling its square, in the modern look edged by a true circle
             mat.SetShaderParameter("round_key", keyed && IsWheelFace(member));
+            // a stock texture's slip repaired in the modern look (TextureRepairs); the 1997 look draws the file as it is
+            if (textures.GetRepaired(member) is { } fixedT)
+            {
+                _repaired[mat] = (Albedo(fixedT, mode), Albedo(t, mode));
+                if (!Mode1997) mat.SetShaderParameter("albedo_tex", _repaired[mat].Modern);
+            }
         }
         else mat.SetShaderParameter("albedo_color", Colors.Magenta);
         if (unlit) mat.SetShaderParameter("unlit_1997", true);

@@ -166,6 +166,19 @@ public static class ChassisRules
         return new(DoneKind.AskOverwrite, Save: idx + 1);
     }
 
+    // ---- I26's respray, which both forms set the same way (the 3D garage's RESPRAY, the 2D form's COLOUR and FINISH rows) ----
+
+    /// <summary>The colours with the primary paint picked (null: the factory paint); the secondary and the finish stay.</summary>
+    public static I76.Formats.Imaging.CarPaint WithPrimary(I76.Formats.Imaging.CarPaint? c, I76.Formats.Imaging.PaintColour? primary) =>
+        (c ?? new I76.Formats.Imaging.CarPaint(null)) with { Primary = primary };
+
+    /// <summary>The colours with the finish picked; the colours stay (a finish can be set before any colour is).</summary>
+    public static I76.Formats.Imaging.CarPaint WithFinish(I76.Formats.Imaging.CarPaint? c, I76.Formats.Imaging.PaintFinish finish) =>
+        (c ?? new I76.Formats.Imaging.CarPaint(null)) with { Finish = finish };
+
+    /// <summary>What the saved variant's sidecar should hold (null: none, the sidecar goes): a finish without a colour is the factory paint.</summary>
+    public static I76.Formats.Imaging.CarPaint? ColoursToSave(I76.Formats.Imaging.CarPaint? c) => c is { IsNone: false } k ? k : null;
+
     /// <summary>The car as DONE writes it into the variant file: the shell's car (<see cref="TripInventory.ToCar"/>) with the Rattler's secrets applied.</summary>
     public static byte[] VariantFile(TripInventory inv, string makeModel, bool nitro, out TripCar car)
     {
@@ -220,7 +233,7 @@ public sealed class ChassisModel
     }
 
     /// <summary>What the sidecar of the saved variant should hold (null: none, the sidecar goes).</summary>
-    public I76.Formats.Imaging.CarPaint? ColoursToSave => Colours is { IsNone: false } c ? c : null;
+    public I76.Formats.Imaging.CarPaint? ColoursToSave => ChassisRules.ColoursToSave(Colours);
 
     /// <summary>The car as its file would be written now (without the Rattler's secrets): the 3D garage's preview.</summary>
     public TripCar Snapshot() => TripCar.FromVcf(Inv.ToCar().ToVcf());

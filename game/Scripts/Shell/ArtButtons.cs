@@ -100,6 +100,19 @@ public static class ArtButtons
         frame.Text(fallback, tx + 1, ty, text, ShellFrame.DefaultInk);
     }
 
+    /// <summary>
+    /// A word the art lacks, lettered at the size the art letters <paramref name="likeText"/> rather than stretched to its ink box (a word
+    /// without the art's descenders keeps its own height), the ink's top-left at <paramref name="at"/>, in the ink <see cref="Letter"/> uses.
+    /// Without Arial, the shell's label face (font 0x47) there.
+    /// </summary>
+    public static void LetterAt(ShellFrame frame, ShellFont fallback, string text, ArtLabel like, string likeText, Vector2I at)
+    {
+        int px = PixelSize(like, likeText);
+        bool vector = frame.HdFonts is not null;
+        if (ShellGlyphs.LabelPixels(text, px) is { } r && frame.Label(new Rect2I(at, new Vector2I(r.W, r.H)), text, vector ? like.Soft : like.Ink, px)) return;
+        frame.Text(fallback, at.X, at.Y - 1, text, ShellFrame.DefaultInk);
+    }
+
     private static readonly Dictionary<(string, Vector2I), int> Sizes = [];
 
     /// <summary>The pixel size at which Arial Bold prints <paramref name="likeText"/> closest to the art's label's ink box (its height counting double).</summary>

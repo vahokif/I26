@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.13.0 (21 November 2026)
+
+Network games use protocol 26: 0.13.0 does not play with 0.12.1 or earlier, so everyone in a game needs 0.13.0.
+
+Thanks again to @therealjkvalentine and @lcosbr, and to DIVER, whose careful comparisons with the original game found how its buildings, walls and road furniture really behave; each line below credits their work.
+
+### New
+- Both games host network games with the Nitro Pack's host form, redrawn by I26 so the base game needs no Nitro Pack file; in the modern look it is drawn crisp at any size, and the Nitro Pack's 1997 look keeps the original art. The base game gains the Nitro form's GAME OPTIONS and WEAPON RESTRICTIONS: its checklist lists the base game's own weapons, and the host's restrictions reach the server, the game list's popup and every joining car.
+- WEAPON RESTRICTIONS has a second page, SPECIALS, to keep specials (the Radar Jammer, the Blower and the rest) out of a game: a joining car with one is refused with the reason, and bots lose theirs. i26-server's --restrict takes specials too.
+- Checkpoints: with Checkpoints on, a trip mission's Esc menu offers Save Bookmark beside Retry from Checkpoint, and loading that bookmark later resumes the mission at the checkpoint (thanks @lcosbr, #151).
+- Keyboard Steering Assist (Play Options, on by default): the steer keys turn the car about as sharply as a stick does and catch a slide, instead of the original's slow three-second ramp to full lock. Off steers as the original.
+- Skip Intro Movies (Play Options, off by default): the game starts straight at the main menu without the intro and credits; briefings and cut-scenes still play (#206).
+- In a network game a tap of the standings key (Tab) locks the standings open, with a pointer that pages them; the host can boot a driver by clicking their row (#107, thanks @therealjkvalentine). The standings key can be rebound in Control Configuration's new Scores (online) row.
+- The Controller screen lets you pick a stick's up / down, so Accelerate / Brake can go on a stick's up and down.
+- The map editor lays wide roads (20 m, the original builder's "4 Lanes"), and a road's open ends can be capped, turned round or turned into a dirt road with the stock maps' own pieces. A new ROAD PIECES tab places the runway, start and finish lines and the other hand-placed road pieces.
+- The modern look's brush answers the fighting: rounds, cars, blasts and fire bend, flatten and scorch the plants (thanks @therealjkvalentine).
+- In the modern look the lamps warm up and cool down like the period's incandescent bulbs, with a softer halo; at night the tail and brake lamps light the road behind the car, and a gun's flash lights the ground and cliffs ahead of it (thanks @therealjkvalentine).
+- The HD Menu Pack is found wherever players are likely to put it (one folder too deep, the folder Windows' Extract All makes, beside the program, or still zipped), and the log says what was found (thanks @therealjkvalentine).
+
+### Changed
+- Mission helicopters, tanks, trucks and buses sound like what they are, as the 1997 CD release chose their sounds: no more V6 helicopters or V-10 buses (#159, #174, thanks @therealjkvalentine).
+- The rear-view mirror shows 45 degrees across, as the original's does, and as far as the view ahead (with @therealjkvalentine).
+- The modern look's target health bar has the original's size and place and grows with the window (thanks @therealjkvalentine).
+- A dropper stripped in the garage goes to the van and can be fitted again from there (#179, thanks @therealjkvalentine).
+- Auto Reverse turns the car round a little sooner.
+- With Renderer on Auto, Windows machines with an AMD card now run on Direct3D 12 from their second start, where the 1997 look's ground draws correctly, and Graphic Detail shows what Auto runs on (#133, #198).
+
+### Fixed
+- Capture the Flag: a car drives through a flag and its base instead of crashing into them and taking damage; a taken flag no longer still shows at its base; the flag is picked up where the original picks it up rather than anywhere within 4 m; and a carrier's flag goes home the moment the car blows up, not when the player respawns. CHOOSE A TEAM lists only the arena's teams, by their CTF names (#200, #208).
+- A player trying to join with a broken car file no longer stops the host's game for everyone (the host migration that followed failed too).
+- Shutdown (P13): the police helicopter no longer flies in silently; you hear its rotor as it comes.
+- Race bots on maps with regen pads (such as 4hardwax) carry on from the pad instead of driving into a wall by the start, and a bot that respawns at the start drives the course from there instead of off the edge toward a nearer lane.
+- Winning a trip mission after stripping a dropper no longer throws you to the main menu (#153), and a six-wheeler respawns on six whole tyres (#167) (thanks @therealjkvalentine).
+- Keys work again once a mission's intro hands you the car (Mondo Burger, #175), and the cockpit's free look no longer shows where the driver's arms are cut off (#165) (thanks @therealjkvalentine).
+- A computer car given an order with no target turns its turrets back to straight ahead instead of tracking you (Mother, #176, thanks @therealjkvalentine).
+- The main menu's MAP EDITOR entry is no longer cut off by the hover banners (#156, thanks @therealjkvalentine).
+- The modern sky's clouds no longer show square blocks at night (#149, thanks @therealjkvalentine).
+- Nitro, the jammer, a dry click and a blowing tyre are heard from the car that made them, not left behind where it was (thanks @therealjkvalentine).
+- Every rocket of a salvo leaves at the same speed, as in the original (thanks @therealjkvalentine).
+- A six-wheeler's middle wheels ride their own suspension instead of hanging between the front and rear pair (thanks @therealjkvalentine).
+- Co-op Damage at x0.5 and x0.75 no longer makes the players immune to flame throwers (thanks @therealjkvalentine).
+- Online, a damaged weapon that can jam no longer shows shots the server then takes back (thanks @therealjkvalentine).
+- In the modern look bushes no longer pop in inside the headlamp beam at night (thanks @therealjkvalentine).
+- Telemetry sends at most 60 packets a second, which dashboards such as SimHub can keep up with, and the Live for Speed formats' time never goes back (thanks @therealjkvalentine).
+- Buildings, walls and road furniture behave as in the original in many more ways, most of all on custom maps that place objects with unusual class ids: a destroyed water tower or grain hopper can be driven over, the Autowerks garages' roofs hold a car where the original's do, guard rails, fences and tyre walls take hits and rams as the original's, gates and garage doors can be shot open (T12's compound gate holds much longer), road signs placed as other objects fall to blasts, billboards placed as signs are solid, buildings shown as intersections show only what the original shows, and destroyed objects leave their scorch marks, flattened pipes and burnt hulls on the ground. A destroyed tunnel leaves no road strips behind, the grain hopper's hidden marker no longer floats in the air, and the control tower's wreck no longer turns to face the camera. (thanks to DIVER's investigations)
+- Shooting a building now counts toward a mission's tests of its health, as in the original: shooting the Bar-D in T03 sets its guards on you.
+- Opening the Esc menu or pausing no longer resets the chase view's zoom and mouse orbit (#190).
+- A helicopter's in-car view (F1) shows the modern rotor in the modern look, not the 1997 blades (#177).
+- Opening CONFIGURE CHASSIS straight after the main menu appears shows PLEASE STAND BY instead of a black screen while the garage gets ready (#158).
+- Online co-op: an extra enemy's health bar goes down on every player's screen, not only the host's (#194).
+- The host form remembers No. of Drivers instead of going back to 4 after every race (#204).
+- In a network game your own weapon change click is heard when you press the key, not a moment later (#168).
+- A car's soft shadow in the modern look no longer has a hole behind the cab of the Hacienda's pickup (#123).
+- The internet game list no longer makes the menus lag while a co-op game is listed.
+
 ## 0.12.1 (10 November 2026)
 
 Network games use protocol 24: 0.12.1 does not play with 0.12.0 or earlier, so everyone in a game needs 0.12.1.

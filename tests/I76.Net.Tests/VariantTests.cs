@@ -101,6 +101,43 @@ public class VariantTests
         Assert.Equal(Guns(seat.Player.Car), Guns(theirs.Vehicle));
     }
 
+    /// <summary>
+    /// A car whose armour zones add up past int.MaxValue is refused as too much armour: the check's sum threw an
+    /// OverflowException, which stopped a listen host's server for everyone in the game.
+    /// </summary>
+    [Fact]
+    public void ACarWhoseArmourOverflowsTheSumIsRefused()
+    {
+        if (HostTests.InstallDir is null) return;
+        var (host, vfs) = Host();
+        var why = host.CheckJoin("vppirna4.vcf", Custom(vfs, c => { c.Armour = [int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue]; c.Chassis = [int.MaxValue, 1, 1, 1]; c.Ninth = int.MaxValue; }));
+        Assert.NotNull(why);
+        Assert.Contains("armour", why);
+    }
+
+    /// <summary>Over the wire: that car is refused with the reason, and the server goes on and seats the next player.</summary>
+    [Fact]
+    public void ACarWhoseArmourOverflowsLeavesTheServerRunning()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var (_, vfs) = Host();
+        var bad = Custom(vfs, c => { c.Armour = [int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue]; c.Ninth = int.MaxValue; });
+        using var server = new NetMeleeServer(new ServerOptions { Install = install, Arena = "m01", Port = 0 });
+        server.Start();
+        using var first = new MeleeClient();
+        first.Connect("127.0.0.1", server.Port, "Odd", "vppirna4.vcf", config: bad);
+        for (int t = 0; t < 250 && first.State == ClientState.Connecting; t++) { first.Poll(); Thread.Sleep(20); }
+        Assert.Equal(ClientState.Rejected, first.State);
+        Assert.Contains("armour", first.Reason);
+        Assert.Null(server.Fault);
+        using var second = new MeleeClient();
+        second.Connect("127.0.0.1", server.Port, "Jade", "vcgcour1.vcf");
+        for (int t = 0; t < 250 && second.State == ClientState.Connecting; t++) { second.Poll(); Thread.Sleep(20); }
+        Assert.NotEqual(ClientState.Rejected, second.State);
+        Assert.NotEqual(ClientState.Connecting, second.State);
+        Assert.Null(server.Fault);
+    }
+
     [Fact]
     public void AnImpossibleCarIsRefused()
     {

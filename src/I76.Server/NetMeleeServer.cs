@@ -156,11 +156,22 @@ public sealed partial class NetMeleeServer : IDisposable
         catch (WireException) { req.RejectForce(); return; }
         // a player of the game this one took over, coming back to its seat (host migration)
         if (j.Rejoin is not null) { RequestRejoin(req, j); return; }
-        string? why = j.Version != Protocol.Version ? $"protocol {j.Version}; this server speaks {Protocol.Version}"
-            : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint, j.Password)
-            ?? (_lobbyClosed ? LobbyClosedText : Host.Seats.Count + _lobby.Count + _requests.Count + _waiting.Count + _invites.Count >= Options.MaxPlayers ? "the server is full"
-            : Host.Over ? (CarriesOn ? "between rounds: try again in a few seconds" : Options.Coop is not null ? "the mission is over" : "the melee is over")
-            : Host.Mode.CanJoin() ?? Host.CheckJoin(j.Car, j.Config));
+        string? why;
+        try
+        {
+            why = j.Version != Protocol.Version ? $"protocol {j.Version}; this server speaks {Protocol.Version}"
+                : CheckBan(req.RemoteEndPoint.Address, j.Name) ?? CheckPassword(req.RemoteEndPoint, j.Password)
+                ?? (_lobbyClosed ? LobbyClosedText : Host.Seats.Count + _lobby.Count + _requests.Count + _waiting.Count + _invites.Count >= Options.MaxPlayers ? "the server is full"
+                : Host.Over ? (CarriesOn ? "between rounds: try again in a few seconds" : Options.Coop is not null ? "the mission is over" : "the melee is over")
+                : Host.Mode.CanJoin() ?? Host.CheckJoin(j.Car, j.Config));
+        }
+        catch (Exception ex)
+        {
+            // whatever a request holds (its car is anyone's file), checking it must not end the game for everyone:
+            // an exception here would escape the poll and stop the server (a car whose armour overflowed the check did)
+            Log?.Invoke($"checking {req.RemoteEndPoint}'s join failed: {ex}");
+            why = "the server could not check your car";
+        }
         if (why is not null)
         {
             var w = new NetDataWriter();

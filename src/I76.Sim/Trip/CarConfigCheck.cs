@@ -46,8 +46,10 @@ public static class CarConfigCheck
 
         // armour and chassis: the garage conserves their total (Defense: +-10 between a zone and the pool), so no more than the
         // heaviest stock variant carries, or than the secret body is given; none negative
-        int Total(TripCar c) => c.Armour.Sum() + c.Chassis.Sum() + c.Ninth;
-        int allowed = 0;
+        // summed as long: a sent file's zones can be anything up to int.MaxValue each, and an int sum would overflow (a
+        // checked Sum throws), which a joining car must never make the server do
+        static long Total(TripCar c) => c.Armour.Sum(a => (long)a) + c.Chassis.Sum(x => (long)x) + c.Ninth;
+        long allowed = 0;
         for (int n = 1; n < 10 && vfs.TryRead($"{stem}{n}.vcf") is { } sd; n++) allowed = System.Math.Max(allowed, Total(TripCar.FromVcf(sd)));
         if (secret is { } body) allowed += body.Total;      // the secret replaces the zones it names, keeping the rest of the Rattler's
         if (car.Armour.Any(a => a < 0) || car.Chassis.Any(c => c < 0) || car.Ninth < 0 || Total(car) > allowed) { error = "armour beyond the model's"; return null; }

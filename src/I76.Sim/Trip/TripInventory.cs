@@ -197,6 +197,17 @@ public sealed class TripInventory
         Repairs.Clear();
     }
 
+    /// <summary>
+    /// FIELD SALVAGE's move of a car, van or repair part to the field (a click on it, or the weapons list full): out of the repair order first,
+    /// so the order never holds a part left in the field (#214).
+    /// </summary>
+    public void ToField(PartNode n)
+    {
+        if (n.State == PartState.Repair) Unqueue(n);
+        n.State = PartState.Field;
+        n.Slot = -1;
+    }
+
     /// <summary>Leaving the field: whatever is still there is gone ("anything still in 'Field Salvage' gotta be left behind").</summary>
     public void LeaveField() => Nodes.RemoveAll(n => n.State == PartState.Field);
 
@@ -210,6 +221,9 @@ public sealed class TripInventory
     {
         void Out(PartNode n) { if (catalogue) Nodes.Remove(n); else { n.State = PartState.Van; n.Slot = -1; } }
         if (InSlot(slot) is { } old && old != picked) Out(old);
+        // the slot's own part sitting in the repair order has lost its place: out of the order it comes to the van, not back over the new part (#214)
+        foreach (var q in Repairs)
+            if (q != picked && q.Saved == PartState.Car && q.Slot == slot) { q.Saved = PartState.Van; q.Slot = -1; }
         foreach (int s in sameName ?? [])
             if (s != slot && InSlot(s) is { } o && o != picked && o.Part.Id == picked.Part.Id) Out(o);
         if (picked.State == PartState.Repair) Unqueue(picked);

@@ -367,11 +367,16 @@ public sealed partial class EscapeMenu : Control
             Scrolling(12, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
             // the modern look's plants
             Scrolling(13, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
+            // the modern look's cloud shadows (docs/cloud-shadows.md); the 1997 look has nothing to turn off
+            Scrolling(14, Cycle, "Cloud Shadows", 2, offOn, s => s.CloudShadows ? 1 : 0, (s, v) => s.CloudShadows = v != 0, apply: () => Live?.Invoke(Settings)),
+            // and how fast the sky's sheet drifts, which is also how fast its shade crosses the ground
+            Scrolling(15, Cycle, "Cloud Speed", I76.Game.World.CloudShadow.SpeedNames.Length, I76.Game.World.CloudShadow.SpeedNames,
+                s => Math.Clamp(s.CloudSpeed, 0, I76.Game.World.CloudShadow.SpeedNames.Length - 1), (s, v) => s.CloudSpeed = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
-            Scrolling(14, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(16, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(15, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(16, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(17, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(18, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -452,6 +457,8 @@ public sealed partial class EscapeMenu : Control
         Settings.PaletteGrade = false;
         Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On;
         Settings.Vegetation = 1;
+        Settings.CloudShadows = true;
+        Settings.CloudSpeed = 0;
         Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
         Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;
         Settings.VSync = true;

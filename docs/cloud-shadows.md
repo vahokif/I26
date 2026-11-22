@@ -20,7 +20,9 @@ distant ring — which is the reason it is done this way rather than by casting 
 | `game/Shaders/horizon_terrain.gdshaderinc` | the distant terrain and the chunks past the map, through its own `light()` |
 | `game/project.godot` | `[shader_globals]` entries for the nine globals: a `global uniform` in a shader is not registered by itself, and a push to an unregistered name is dropped |
 | `game/Scripts/Boot/Main.cs` | `ApplySkySteps` starts it with the sky, `ApplyGraphics` takes the two menu settings, `Rebase` moves the origin, `SetMode1997Steps` turns it off |
-| `game/Scripts/Shell/Overlays.cs` | Graphic Detail's rows: Cloud Shadows (On/Off) and Cloud Speed (Normal/Half/Quarter), and shell.cfg's `[port] cloud_shadows` / `cloud_speed` behind them |
+| `game/Scripts/Shell/Overlays.cs` | the front end's Graphic Detail: Cloud Shadows (On/Off) and Cloud Speed (Normal/Half/Quarter) |
+| `game/Scripts/Ui/EscapeMenu.cs` | the same two rows on the pad inside a mission, which is its own copy of that list, and Reset's back to them |
+| `game/Scripts/Shell/Shell.cs` | the two settings on `ShellSettings`, and shell.cfg's `[port] cloud_shadows` / `cloud_speed` behind them |
 | `game/Scripts/Shell/Garage3D/GarageAssets.cs` | off in the 3D garage, and back with the mission's globals when it goes |
 
 ## Where the point's cloud is

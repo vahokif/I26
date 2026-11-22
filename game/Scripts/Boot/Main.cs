@@ -780,6 +780,9 @@ public partial class Main : Node3D
         I76.Game.Sim.LampHalo.Percent = s.LampHalo;
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(s.CarInteriors);
         I76.Game.World.BrushImpacts.Enabled = s.BrushImpacts;
+        // the modern sky's cloud shadows and how fast its sheet drifts (docs/cloud-shadows.md); the 1997 look ignores both
+        I76.Game.World.CloudShadow.SetEnabled(s.CloudShadows);
+        I76.Game.World.CloudShadow.SetSpeed(s.CloudSpeed);
         if (_modernEnv is not null) { _modernEnv.AdjustmentEnabled = true; _modernEnv.AdjustmentBrightness = ModernBrightness(s.Graphics[0xc]); }
         if (_env1997 is not null)
         {

@@ -18,8 +18,9 @@ distant ring — which is the reason it is done this way rather than by casting 
 | `game/Shaders/object.gdshaderinc` | cars and scenery, in the modern branch of its `fragment()` |
 | `game/Shaders/vegetation.gdshader` | the plants, their backlight with them |
 | `game/Shaders/horizon_terrain.gdshaderinc` | the distant terrain and the chunks past the map, through its own `light()` |
-| `game/project.godot` | `[shader_globals]` entries for the eight globals: a `global uniform` in a shader is not registered by itself, and a push to an unregistered name is dropped |
-| `game/Scripts/Boot/Main.cs` | `ApplySkySteps` starts it with the sky, `Rebase` moves the origin, `SetMode1997Steps` turns it off |
+| `game/project.godot` | `[shader_globals]` entries for the nine globals: a `global uniform` in a shader is not registered by itself, and a push to an unregistered name is dropped |
+| `game/Scripts/Boot/Main.cs` | `ApplySkySteps` starts it with the sky, `ApplyGraphics` takes the two menu settings, `Rebase` moves the origin, `SetMode1997Steps` turns it off |
+| `game/Scripts/Shell/Overlays.cs` | Graphic Detail's rows: Cloud Shadows (On/Off) and Cloud Speed (Normal/Half/Quarter), and shell.cfg's `[port] cloud_shadows` / `cloud_speed` behind them |
 | `game/Scripts/Shell/Garage3D/GarageAssets.cs` | off in the 3D garage, and back with the mission's globals when it goes |
 
 ## Where the point's cloud is
@@ -84,8 +85,26 @@ The strength (`i76_cloud_shadow`, how much of the sun a thick cloud takes) and t
 the shaders are given; the policy is all in C#, because the look flips without a sky being rebuilt. `0` in the
 1997 look, which has no sun for a cloud to step in front of — its own shadows are the projected faces of
 `drop_shadow_1997.gdshader` (docs/deviations.md). By night the strength is 0.4 of the day's, and the fill comes
-down with the environment's ambient energy by itself. `I76_CLOUD_SHADOW` and `I76_CLOUD_FILL` override them
-(dev-hooks.md).
+down with the environment's ambient energy by itself. `I76_CLOUD_SHADOW` and `I76_CLOUD_FILL` override them, and
+Graphic Detail's Cloud Shadows row goes through `CloudShadow.SetEnabled`, which is another way of putting the
+strength to zero (dev-hooks.md).
+
+## How fast, and whether at all
+
+Graphic Detail carries two rows for it. **Cloud Shadows** is On by default and takes the whole thing off — the
+shade, the fill and the dome fetch — which is the same thing `I76_CLOUD_SHADOW=0` does and the row a player uses
+to compare the two looks. **Cloud Speed** slows the sky and its shadows together to Half or Quarter, and it is
+there because the sheet's pan is the original's own rate, which was chosen for a dome you watch from under: at
+0.03 of the sheet a second the shadow crosses the ground at 45 m/s, which is a lot faster than a cloud 600 m up
+and a 15 m/s wind would cast, and reads as weather moving at racing speed. Quarter is 11 m/s, about what a high
+cloud really casts, and is the setting to try first on a heaped-sky day. Both rows apply where they are stood
+on, are cancelled by Cancel, restored by Reset, and are held in shell.cfg for the next run (`I76_CLOUD_SPEED`
+= `normal`, `half` or `quarter` overrides the row, as the other settings' variables do).
+
+One honest coarseness: the pattern rides on the shader's own `TIME`, which C# cannot read, so changing the
+speed moves the sheet to a new place rather than carrying the phase over — the clouds jump a little and continue
+from there. What is kept is the relation that matters: the sky and its shadow read the same `i76_cloud_speed`
+global, so they slide the same way and a shade never parts company with its cloud.
 
 ## Seeing it
 
@@ -93,5 +112,7 @@ Nothing here is in the simulation, a snapshot or a save; no test can see it, so 
 the other shader work is. `I76_CLOUD_SHADOW=0` against the default is the A/B, and a day with a heaped sky is
 the case to pick — the sheets differ a lot, and T01's is sparse. Two captures of one drive with the sun low,
 one with the camera looking at the horizon and one down the road, show whether the shadows stand under their
-clouds and whether a car driving through one darkens with the ground under it. If a shade reads grey, the fill
+clouds and whether a car driving through one darkens with the ground under it. For the drift, the same pair at
+Normal and at Quarter (`--fixed-fps 60`, since the sheet rides on `TIME`) should show the clouds and their
+shades moved the same way, not one of the two. If a shade reads grey, the fill
 is too low; if a shaded ground reads milky or its edges glow, too high.

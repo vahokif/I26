@@ -43,6 +43,9 @@ uniform float moon_radius = 0.05;     // radians (the real moon is 0.0045; drawn
 // (the compass), Godot's -Z. The moon's north points at it, so a moon rising in the east leans its north to the left, as it does there
 uniform vec3 moon_north = vec3(0.0, 0.5299, -0.8480);
 uniform float scroll_per_second = 0.02997;
+// Graphic Detail's Cloud Speed: one global for the sky's drift and the shade its clouds cast
+// (Shaders/cloud_shadow.gdshaderinc reads the same number), so a shadow cannot lag behind the cloud over it.
+global uniform float i76_cloud_speed = 1.0;
 uniform float radius = 6000.0;
 uniform float drop = 5400.0;
 uniform float horizon_height = 1170.6;
@@ -111,7 +114,7 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 		float b = g.y * drop;
 		float t = -b + sqrt(b * b - (drop * drop - radius * radius));
 		vec2 xz = (t * g).xz;
-		float off = time * scroll_per_second;
+		float off = time * scroll_per_second * i76_cloud_speed;
 		vec2 uv = (xz / radius + 0.5) * 4.0 + vec2(off);
 		int oct = cubemap ? 2 : 5;
 		float den = density(uv, oct);

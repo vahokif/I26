@@ -266,6 +266,10 @@ i76_cloud_scroll={
 "type": "float",
 "value": 0.02997
 }
+i76_cloud_speed={
+"type": "float",
+"value": 1.0
+}
 i76_cloud_span={
 "type": "vec2",
 "value": Vector2(0.15, 0.8)

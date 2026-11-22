@@ -21,6 +21,7 @@ global uniform vec3 i76_cloud_fill = vec3(0.0);   // what the sky gives a surfac
 global uniform vec3 i76_cloud_anchor = vec3(0.0);   // Coords.ToGodot of the origin Rebase moved to the centre
 global uniform vec2 i76_cloud_dome = vec2(6000.0, 5400.0);   // the sky's radius and drop, so the pattern is its pattern
 global uniform float i76_cloud_scroll = 0.02997;   // and its scroll per second, so the two drift together
+global uniform float i76_cloud_speed = 1.0;   // Graphic Detail's Cloud Speed: the sky multiplies its own scroll by it too
 global uniform vec2 i76_cloud_span = vec2(0.15, 0.8);   // the sheet's open-sky and cloud levels (MissionBuilder.SkyPalette)
 global uniform sampler2D i76_cloud_tex : source_color, filter_linear, repeat_enable;
 
@@ -52,7 +53,7 @@ float i76_cloud_shade(vec3 world) {
 	float k = ((i76_cloud_dome.x - i76_cloud_dome.y) - g.y) / max(i76_cloud_sun.y, 0.15);
 	// the sky samples its sheet in the game frame, which mirrors Godot's Z, and TIME is the sky's own
 	vec2 q = (g.xz + i76_cloud_sun.xz * k) * vec2(1.0, -1.0);
-	vec2 uv = (q / i76_cloud_dome.x + 0.5) * 4.0 + vec2(TIME * i76_cloud_scroll);
+	vec2 uv = (q / i76_cloud_dome.x + 0.5) * 4.0 + vec2(TIME * i76_cloud_scroll * i76_cloud_speed);
 	return 1.0 - strength * i76_cloud_cover(uv);
 }
 

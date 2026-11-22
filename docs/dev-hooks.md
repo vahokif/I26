@@ -212,6 +212,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_DROP_REACH` | tuning | `M`: the modern look's drop shadows reach M metres (Shadow Detail Low 250, High 500 by default; 130 was the old reach). |
 | `I76_SKY_REALTIME` | tuning | `1`: redraw the sky radiance every frame. |
 | `I76_CLOUD_SHADOW`, `I76_CLOUD_FILL` | tuning | The modern look's cloud shadows (docs/cloud-shadows.md): how much of the sun a thick cloud takes (0.65 by day, `0` turns the feature off) and the sky's fill added back in its place (1.0). |
+| `I76_CLOUD_SPEED` | tuning | How fast the modern sky and its shadows drift over Graphic Detail's Cloud Speed: `normal`/`0`, `half`/`1` or `quarter`/`2`. The sheet's own pan is the original's, 45 m/s of shadow; `quarter` is 11 m/s. |
 | `I76_SOFTWARE`, `I76_PALETTE_GRADE` | capture | `1`/`0`: Graphic Detail's 1997 Renderer: Software and Palette Grade on or off for the run, whatever the settings say. |
 | `I76_SW_LINES` | tuning | The Software renderer's grid height (480); `0`: the full resolution. |
 | `I76_SW_GRADE` | debug | `0`: the Software renderer without its final palette pass (the shading and assets alone). |

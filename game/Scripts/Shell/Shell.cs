@@ -278,6 +278,8 @@ public partial class Shell : CanvasLayer
         Settings = ShellSettings.Load();
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(Settings.CarInteriors);
         I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
+        I76.Game.World.CloudShadow.SetEnabled(Settings.CloudShadows);   // the modern sky's shade and its drift (docs/cloud-shadows.md)
+        I76.Game.World.CloudShadow.SetSpeed(Settings.CloudSpeed);
         ApplyMusicLevel();
         I76.Game.Boot.Main.ApplyAudio(Settings);   // the SFX and voice levels Audio Control set live go back too
     }
@@ -337,6 +339,9 @@ public partial class Shell : CanvasLayer
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(Settings.CarInteriors);
         // the menus keep the pointer in the window too (Main's cursor state reads it every frame)
         I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
+        // the cloud speed the player chose is a global the sky and its shade share, so it is due before the first sky
+        I76.Game.World.CloudShadow.SetEnabled(Settings.CloudShadows);
+        I76.Game.World.CloudShadow.SetSpeed(Settings.CloudSpeed);
         AddChild(new ColorRect { Color = Colors.Black, AnchorRight = 1, AnchorBottom = 1, MouseFilter = Control.MouseFilterEnum.Ignore });
         _view = new TextureRect
         {
@@ -1267,6 +1272,14 @@ public sealed class ShellSettings
     public bool KeepMouseInWindow { get; set; }
     /// <summary>The port's own: the modern look's procedural plants (Graphic Detail; 0 Off, 1 Low, 2 High; docs/modern-vegetation.md). Low unless the player chose.</summary>
     public int Vegetation { get; set; } = 1;
+    /// <summary>The port's own: the modern sky's clouds shade what hangs under them (Graphic Detail; World/CloudShadow.cs, docs/cloud-shadows.md; shell.cfg [port] cloud_shadows, written only when off). On unless the player chose.</summary>
+    public bool CloudShadows { get; set; } = true;
+    /// <summary>The port's own: Graphic Detail's Cloud Speed (index into I76.Game.World.CloudShadow.SpeedNames: 0 Normal, 1 Half, 2 Quarter; shell.cfg [port] cloud_speed, written only when not Normal). The sky and its shadows slow together.</summary>
+    public int CloudSpeed { get; set; }
+    /// <summary>Cloud Shadows from shell.cfg's [port] cloud_shadows (null when absent): on, because the feature ships on; off only when the file says off.</summary>
+    public static bool CloudShadowsFrom(string? stored) => !string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Cloud Speed from shell.cfg's [port] cloud_speed (null when absent): an index into CloudShadow.SpeedNames, Normal when absent or out of range.</summary>
+    public static int CloudSpeedFrom(int? stored) => stored is null ? 0 : Math.Clamp(stored.Value, 0, I76.Game.World.CloudShadow.SpeedNames.Length - 1);
     /// <summary>The port's own: Graphic Detail's Draw Distance (I76.Formats.Imaging.DrawDistance: 0 Original, the 600 m clip; 1 Far, to 20 km). Far unless the player chose.</summary>
     public int DrawDistance { get; set; } = I76.Formats.Imaging.DrawDistance.Far;
     /// <summary>
@@ -1396,6 +1409,9 @@ public sealed class ShellSettings
         s.Dash3D = (bool)c.GetValue("port", "dash_3d", true);
         // no version step: a file without the key draws far, as before it existed
         s.DrawDistance = I76.Formats.Imaging.DrawDistance.Parse(c.HasSectionKey("port", "draw_distance") ? (int)c.GetValue("port", "draw_distance") : null);
+        // the modern look's cloud shadows (docs/cloud-shadows.md): no version step, a file without the keys has them on and drifting as the mission has them
+        s.CloudShadows = CloudShadowsFrom(c.HasSectionKey("port", "cloud_shadows") ? c.GetValue("port", "cloud_shadows").ToString() : null);
+        s.CloudSpeed = CloudSpeedFrom(c.HasSectionKey("port", "cloud_speed") ? (int)c.GetValue("port", "cloud_speed") : null);
         // no version step: a file without these keys has them off, which is what they were before they existed
         s.SoftwareRenderer = (bool)c.GetValue("port", "software_renderer", false);
         s.PaletteGrade = (bool)c.GetValue("port", "palette_grade", false);
@@ -1558,6 +1574,8 @@ public sealed class ShellSettings
         if (CoopRollingStart) c.SetValue("port", "coop_rolling_start", true);
         if (!Garage3D) c.SetValue("port", "garage_3d", false);
         if (!BrushImpacts) c.SetValue("port", "brush_impacts", "off");
+        if (!CloudShadows) c.SetValue("port", "cloud_shadows", "off");
+        if (CloudSpeed != 0) c.SetValue("port", "cloud_speed", CloudSpeed);
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);
         if (!CameraReturn) c.SetValue("port", "camera_return", false);
         if (!ZoomReset) c.SetValue("port", "zoom_reset", false);

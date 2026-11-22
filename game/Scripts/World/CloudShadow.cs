@@ -32,8 +32,18 @@ public static class CloudShadow
     /// </summary>
     public static readonly float FillGain = Env("I76_CLOUD_FILL", 1.0f);
 
+    /// <summary>
+    /// Graphic Detail's Cloud Speed, and what each choice divides the scroll by. The sky and the shade read one
+    /// global, so a quarter speed is a quarter for both and a shadow cannot run ahead of its cloud.
+    /// </summary>
+    public static readonly string[] SpeedNames = ["Normal", "Half", "Quarter"];
+    public static readonly float[] Speeds = [1.0f, 0.5f, 0.25f];
+
     private static float _strength;       // the mission's, before the look turns it off
     private static bool _mode1997;
+    private static bool _enabled = true;  // Graphic Detail's Cloud Shadows
+    private static bool _sceneOff;        // a scene that lights itself is up: the garage, with its own noon
+    private static int _speed;
     private static Vector3 _fill;
 
     /// <summary>
@@ -52,6 +62,8 @@ public static class CloudShadow
         var drop = Param(sky, "drop", 5400.0f);
         ObjectLight.Set("i76_cloud_dome", new Vector2(radius, drop));
         ObjectLight.Set("i76_cloud_scroll", Param(sky, "scroll_per_second", 0.02997f));
+        _sceneOff = false;    // a mission's own sky: whatever scene was up before this is gone
+        ObjectLight.Set("i76_cloud_speed", Speeds[_speed]);
         // the sheet's open-sky and cloud levels, measured per mission by MissionBuilder.MeasureSky
         ObjectLight.Set("i76_cloud_span", new Vector2(Param(sky, "sky_lum", 0.15f), Param(sky, "cloud_lum", 0.8f)));
         var mean = skyMean.SrgbToLinear();   // the shader works in linear, the measured colours are stored sRGB
@@ -86,10 +98,52 @@ public static class CloudShadow
     public static void SetOrigin(System.Numerics.Vector3 gameOrigin) =>
         ObjectLight.Set("i76_cloud_anchor", I76.Game.Sim.Coords.ToGodot(gameOrigin));
 
-    private static void Apply() => ObjectLight.Set("i76_cloud_shadow", _mode1997 ? 0.0f : _strength);
+    /// <summary>
+    /// Graphic Detail's Cloud Shadows. Off leaves the sky and its clouds drawn as they were; only nothing under
+    /// them darkens any more. The 1997 look has nothing to turn off: its light is the mission's ramp, and a
+    /// cloud never steps in front of that.
+    /// </summary>
+    public static void SetEnabled(bool on)
+    {
+        _enabled = on;
+        Apply();
+    }
 
-    /// <summary>The look's and the mission's switch for scenes that light themselves: the 3D garage, the map editor.</summary>
-    public static void Off() => RenderingServer.GlobalShaderParameterSet("i76_cloud_shadow", 0.0f);
+    /// <summary>
+    /// Graphic Detail's Cloud Speed: an index into <see cref="Speeds"/>. Both the sky's drift and the shade's
+    /// multiply the engine's own clock, so a change slides the pattern once rather than carrying its place over;
+    /// what cannot happen is the two parting company.
+    /// </summary>
+    public static void SetSpeed(int choice)
+    {
+        _speed = SpeedFor(choice);
+        ObjectLight.Set("i76_cloud_speed", Speeds[_speed]);
+    }
+
+    /// <summary>The setting, with I76_CLOUD_SPEED (0 or normal, 1 or half, 2 or quarter) over it: the capture hook for the drift.</summary>
+    public static int SpeedFor(int setting) => System.Environment.GetEnvironmentVariable("I76_CLOUD_SPEED")?.ToLowerInvariant() switch
+    {
+        "0" or "normal" => 0, "1" or "half" => 1, "2" or "quarter" => 2, _ => Math.Clamp(setting, 0, Speeds.Length - 1),
+    };
+
+    private static void Apply() => ObjectLight.Set("i76_cloud_shadow",
+        _mode1997 || _sceneOff || !_enabled ? 0.0f : _strength);
+
+    /// <summary>A scene that lights itself is up: the 3D garage lights its own car with the mission's globals.</summary>
+    public static void Off()
+    {
+        _sceneOff = true;
+        // through the rendering server and not ObjectLight: what that remembers is put back over a live mission,
+        // and the garage's 0 would go with it
+        RenderingServer.GlobalShaderParameterSet("i76_cloud_shadow", 0.0f);
+    }
+
+    /// <summary>...and has closed, so the mission's shade is due back as the menu and the look have it.</summary>
+    public static void Resume()
+    {
+        _sceneOff = false;
+        Apply();
+    }
 
     private static float Param(ShaderMaterial m, string name, float fallback) =>
         m.GetShaderParameter(name).VariantType == Variant.Type.Float ? m.GetShaderParameter(name).AsSingle() : fallback;

@@ -111,7 +111,11 @@ public sealed class GarageAssets
 
     /// <summary>The 1997 object shaders' global light (what a mission's sky sets): the garage's noon, through the palette's ramp.</summary>
     /// <summary>The globals as the mission last had them, put back when the garage goes: a garage opened over a game that goes on (Reconfigure).</summary>
-    public void RestoreGlobals() => I76.Game.World.ObjectLight.Reapply();
+    public void RestoreGlobals()
+    {
+        I76.Game.World.ObjectLight.Reapply();
+        I76.Game.World.CloudShadow.Resume();   // the garage's Off() goes with the garage, not with the mission
+    }
 
     public void SetGlobals(bool mode1997)
     {

@@ -242,6 +242,38 @@ i76_brush_style={
 "type": "vec4",
 "value": Vector4(1, 0.7, 0.2, 0)
 }
+i76_cloud_shadow={
+"type": "float",
+"value": 0.0
+}
+i76_cloud_sun={
+"type": "vec3",
+"value": Vector3(0, 1, 0)
+}
+i76_cloud_fill={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+i76_cloud_anchor={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+i76_cloud_dome={
+"type": "vec2",
+"value": Vector2(6000, 5400)
+}
+i76_cloud_scroll={
+"type": "float",
+"value": 0.02997
+}
+i76_cloud_span={
+"type": "vec2",
+"value": Vector2(0.15, 0.8)
+}
+i76_cloud_tex={
+"type": "sampler2D",
+"value": ""
+}
 
 [importer_defaults]
 

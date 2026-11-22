@@ -1950,6 +1950,11 @@ public partial class Main : Node3D
         _modernEnv.Sky = new Sky { SkyMaterial = modernSky,
             ProcessMode = System.Environment.GetEnvironmentVariable("I76_SKY_REALTIME") == "1" ? Sky.ProcessModeEnum.Realtime : Sky.ProcessModeEnum.Incremental };
         AddSkyFog(modernSky);
+        // the same sheet shadows the ground (docs/cloud-shadows.md): its fill is the sheet's own average, which
+        // is what the sky under the clouds is worth — bright when the sheet is overcast, so a shade stays pale.
+        I76.Game.World.CloudShadow.Configure(modernSky, _builder.SkyAverage);
+        I76.Game.World.CloudShadow.SetSun(l, light.IsDay, _modernEnv.AmbientLightEnergy);
+        I76.Game.World.CloudShadow.SetOrigin(_origin);
         _env1997.BackgroundMode = Environment.BGMode.Sky;
         _env1997.Sky = sky;
         // no ambient: the 1997 shaders carry the engine's own light, and light() adds only the sun's shadow
@@ -2344,6 +2349,7 @@ public partial class Main : Node3D
         _origin = gameOrigin;
         _worldRoot.Position = -Coords.ToGodot(gameOrigin);
         _sky1997?.SetShaderParameter("origin_y", gameOrigin.Y);   // the horizon ring sinks with the eye's game height
+        I76.Game.World.CloudShadow.SetOrigin(gameOrigin);         // the cloud shadows stay on the map, not on the Godot origin
     }
 
     /// <summary>The 1997 look's sky (sky_dome.gdshader).</summary>
@@ -2556,6 +2562,7 @@ public partial class Main : Node3D
         if (on && _builder is { } built) foreach (var step in built.FaithfulRoadSteps()) yield return step;
         _mode1997 = on;
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
+        I76.Game.World.CloudShadow.SetLook(on);   // the 1997 look has no sun for a cloud to step in front of
         _builder?.Terrain?.UseModern(!on);
         MissionBuilder.Trace("look: terrain");
         yield return null;

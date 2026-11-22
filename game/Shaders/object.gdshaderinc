@@ -27,6 +27,7 @@ global uniform int i76_retro_count;
 global uniform mat4 i76_retro_at;
 global uniform mat4 i76_retro_aim;
 #include "res://Shaders/software.gdshaderinc"
+#include "res://Shaders/cloud_shadow.gdshaderinc"
 
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform sampler2D albedo_cockpit : source_color, filter_linear_mipmap, repeat_disable;   // the cockpit art; clamped, so a face edge sampled a hair past 1.0 (MSAA) never wraps to the far row (the steering wheel quad drew its rim as a 1px line)
@@ -104,6 +105,7 @@ varying flat vec4 v_cab_a;
 varying flat vec4 v_cab_b;
 varying flat vec4 v_eye;   // the F1 view's eye in the mesh's frame (w 1), CUSTOM2: where the driver sits
 varying vec3 v_cam_l;
+varying vec3 v_cloud_world;   // the point in the world, for the cloud overhead (docs/cloud-shadows.md)
 global uniform bool i76_car_materials;   // Ctrl+F8 (a debug key): off, every car without its glass (to compare)
 global uniform bool i76_car_interiors;   // Graphic Detail's Car Interiors: the proxy cabin and driver behind the glass (off: the glass alone)
 uniform bool has_glass = false;    // with car_paint: glass_tex marks the window texels (CarMaterialTable's glass, MaterialLibrary.GlassOf)
@@ -253,6 +255,7 @@ void vertex() {
 	// the camera in the mesh's frame: the transpose of a scaled rotation is the inverse times the scale squared (the 3D garage fits a big
 	// vehicle to the bay by scaling it), so divided by that
 	v_cam_l = has_glass ? transpose(mat3(MODEL_MATRIX)) * (CAMERA_POSITION_WORLD - MODEL_MATRIX[3].xyz) / max(dot(MODEL_MATRIX[0].xyz, MODEL_MATRIX[0].xyz), 1e-6) : vec3(0.0);
+	v_cloud_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 #endif
 #ifdef FAITHFUL
 	vec3 n = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
@@ -744,6 +747,12 @@ void fragment() {
 		CLEARCOAT = CLEARCOAT * (1.0 - wreck.x);
 		EMISSION = g;
 	}
+	// a car or a prop under a cloud loses the sun with it, or it reads as pasted onto the shaded ground
+	// beside it (docs/cloud-shadows.md); the glass and a burnt-out hull's own fire keep their light, and
+	// the lamps are prelit faces, whose albedo is 0
+	float cloud = i76_cloud_shade(v_cloud_world);
+	EMISSION += i76_cloud_fill_back(cloud, METALLIC) * ALBEDO;
+	ALBEDO *= cloud;
 #endif
 #ifdef TRANSLUCENT
 	ALPHA = opacity;

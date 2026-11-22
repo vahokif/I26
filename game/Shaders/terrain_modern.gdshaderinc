@@ -138,6 +138,7 @@ uniform float lot_relief = 0.12;      // the share of the broad undulation a lot
 #endif
 
 #include "res://Shaders/brush_cursor.gdshaderinc"
+#include "res://Shaders/cloud_shadow.gdshaderinc"
 #ifndef PAINTED_GROUND
 // The sward (World/Vegetation.cs, SwardMap; docs/modern-vegetation.md): how grassy the ground between the plants is,
 // a byte a 4 m texel over the map's tiles (rect: its game-frame corner and 1 / its size in metres), and the dry
@@ -154,6 +155,7 @@ varying vec3 g_pos;     // game-frame position: sample * 5, height
 varying vec3 g_nrm;
 varying vec3 g_broad;   // the surface's normal over a broad span (CUSTOM2: TerrainSurface.BroadNormal), for paved road
 varying vec2 road_uv;
+varying vec3 v_cloud_world;   // the point's place in the world, for the cloud overhead (docs/cloud-shadows.md)
 
 // Level-of-detail morph (TerrainLodMesh, TerrainNode.Range): a vertex of level 0 to 3 carries where the next
 // coarser level has its point (CUSTOM0.xyz, chunk-local; CUSTOM0.w = level + 1, 0 for none) and that level's
@@ -179,6 +181,7 @@ void vertex() {
 	g_nrm = vec3(NORMAL.x, NORMAL.y, -NORMAL.z);
 	g_broad = vec3(CUSTOM2.x, sqrt(max(1.0 - dot(CUSTOM2.xy, CUSTOM2.xy), 0.0)), CUSTOM2.y);
 	road_uv = vec2(VERTEX.x, -VERTEX.z) / chunk_units;
+	v_cloud_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 vec3 noise_decode(vec3 t) { return t * vec3(2.0, 8.0, 8.0) - vec3(1.0, 4.0, 4.0); }
@@ -566,6 +569,11 @@ void fragment() {
 	}
 	if (debug_view == 2) ALBEDO = vec3(0.35);   // the light alone, on a grey ground (against the plants' I76_VEG_DEBUG=1)
 	if (use_materials && procedural) { AO = ao; AO_LIGHT_AFFECT = 0.35; }
+	// the shadow of the sky's own clouds (docs/cloud-shadows.md): the sun out of the ground's colour,
+	// the sky's fill back the way the ambient had it, so the desert goes to cool light, not to grey
+	float cloud = i76_cloud_shade(v_cloud_world);
+	EMISSION += i76_cloud_fill_back(cloud, 0.0) * ALBEDO;
+	ALBEDO *= cloud;
 
 	// ---- the relief ----
 	float fine = 1.0 - smoothstep(bump_far * 0.3, bump_far, dist);

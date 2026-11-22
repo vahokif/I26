@@ -20,8 +20,10 @@ uniform float pull = 0.004;
 // the engine's light ramp (the mission's .act and .lum): a vertex lit `light` takes LUMA[round(31·light)]
 #include "res://Shaders/ramp.gdshaderinc"
 #include "res://Shaders/software.gdshaderinc"
+#include "res://Shaders/cloud_shadow.gdshaderinc"
 
 varying vec2 v_intensity;
+varying vec3 v_cloud_world;   // the road's place in the world, for the cloud overhead (docs/cloud-shadows.md)
 
 vec3 to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
 vec3 to_linear(vec3 c) { return mix(c / 12.92, pow(max((c + 0.055) / 1.055, vec3(0.0)), vec3(2.4)), step(vec3(0.04045), c)); }
@@ -33,6 +35,7 @@ void vertex() {
 	// fade the pull in with distance: right at the eye a proportional pull
 	// would drag nearby road up into the view
 	view.xyz *= 1.0 - (pull + 0.12 / max(depth, 1.0)) * smoothstep(1.5, 12.0, depth);
+	v_cloud_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	POSITION = PROJECTION_MATRIX * view;
 }
 
@@ -51,5 +54,10 @@ void fragment() {
 	} else {
 		ALBEDO = t.rgb;
 		ROUGHNESS = 0.9;
+		// the road goes under the same cloud as the ground beside it (docs/cloud-shadows.md); the 1997
+		// branch above is lit by the mission's own ramp and takes no sun to lose
+		float cloud = i76_cloud_shade(v_cloud_world);
+		EMISSION += i76_cloud_fill_back(cloud, 0.0) * ALBEDO;
+		ALBEDO *= cloud;
 	}
 }

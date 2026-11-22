@@ -33,6 +33,15 @@ public static class CloudShadow
     public static readonly float FillGain = Env("I76_CLOUD_FILL", 1.0f);
 
     /// <summary>
+    /// How much of a paint's mirror the thickest cloud takes (I76_CLOUD_SHINE, 0 leaves the shine alone).
+    /// A hull is mostly reflection and the engine gives no per-pixel hold on the sun's specular, so a shade that
+    /// only touches the albedo leaves a car mirror-bright over shaded ground; this takes a share of the shine
+    /// with the shade instead. It is deliberately a share: the same lobe carries the sky's reflection, and the
+    /// sky overhead is still bright on a cloudy day. Matched on captures, as the fill was.
+    /// </summary>
+    public static readonly float Shine = Env("I76_CLOUD_SHINE", 0.6f);
+
+    /// <summary>
     /// Graphic Detail's Cloud Speed, and what each choice divides the scroll by. The sky and the shade read one
     /// global, so a quarter speed is a quarter for both and a shadow cannot run ahead of its cloud.
     /// </summary>
@@ -62,10 +71,17 @@ public static class CloudShadow
         var drop = Param(sky, "drop", 5400.0f);
         ObjectLight.Set("i76_cloud_dome", new Vector2(radius, drop));
         ObjectLight.Set("i76_cloud_scroll", Param(sky, "scroll_per_second", 0.02997f));
+        ObjectLight.Set("i76_cloud_shine", Shine);
         _sceneOff = false;    // a mission's own sky: whatever scene was up before this is gone
         ObjectLight.Set("i76_cloud_speed", Speeds[_speed]);
-        // the sheet's open-sky and cloud levels, measured per mission by MissionBuilder.MeasureSky
-        ObjectLight.Set("i76_cloud_span", new Vector2(Param(sky, "sky_lum", 0.15f), Param(sky, "cloud_lum", 0.8f)));
+        // the sheet's open-sky and cloud levels, measured per mission by MissionBuilder.MeasureSky, with the
+        // capture hook over them: I76_CLOUD_SPAN=0,0.05 reads the whole sheet as cloud, which is how a shade
+        // is looked at without waiting for one to blow over the car
+        var span = System.Environment.GetEnvironmentVariable("I76_CLOUD_SPAN")?.Split(',') is [var lo, var hi]
+            && float.TryParse(lo, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var l)
+            && float.TryParse(hi, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h)
+            ? new Vector2(l, h) : new Vector2(Param(sky, "sky_lum", 0.15f), Param(sky, "cloud_lum", 0.8f));
+        ObjectLight.Set("i76_cloud_span", span);
         var mean = skyMean.SrgbToLinear();   // the shader works in linear, the measured colours are stored sRGB
         _fill = new Vector3(mean.R, mean.G, mean.B) * FillGain;
     }

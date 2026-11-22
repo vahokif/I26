@@ -12,13 +12,13 @@ distant ring — which is the reason it is done this way rather than by casting 
 | Where | What |
 |---|---|
 | `game/Shaders/cloud_shadow.gdshaderinc` | the maths: a point's own cloud, the sky's fill to put back, and the globals carrying both |
-| `game/Scripts/World/CloudShadow.cs` | the policy: the sheet and its dome and levels off the mission's sky material, the strength by day and night, the sky's fill, the map origin, the look |
+| `game/Scripts/World/CloudShadow.cs` | the policy: the sheet and its dome and levels off the mission's sky material, the strength by day and night, the sky's fill, the shine a cloud takes off a hull, the map origin, the look |
 | `game/Shaders/terrain_modern.gdshaderinc` | the ground and its lots (`terrain_lot.gdshader` shares it) |
 | `game/Shaders/road.gdshader` | the roads, in its modern branch only |
-| `game/Shaders/object.gdshaderinc` | cars and scenery, in the modern branch of its `fragment()` |
+| `game/Shaders/object.gdshaderinc` | cars and scenery, in the modern branch of its `fragment()`, taking the shine off painted metal with the shade |
 | `game/Shaders/vegetation.gdshader` | the plants, their backlight with them |
 | `game/Shaders/horizon_terrain.gdshaderinc` | the distant terrain and the chunks past the map, through its own `light()` |
-| `game/project.godot` | `[shader_globals]` entries for the nine globals: a `global uniform` in a shader is not registered by itself, and a push to an unregistered name is dropped |
+| `game/project.godot` | `[shader_globals]` entries for the ten globals: a `global uniform` in a shader is not registered by itself, and a push to an unregistered name is dropped |
 | `game/Scripts/Boot/Main.cs` | `ApplySkySteps` starts it with the sky, `ApplyGraphics` takes the two menu settings, `Rebase` moves the origin, `SetMode1997Steps` turns it off |
 | `game/Scripts/Shell/Overlays.cs` | the front end's Graphic Detail: Cloud Shadows (On/Off) and Cloud Speed (Normal/Half/Quarter) |
 | `game/Scripts/Ui/EscapeMenu.cs` | the same two rows on the pad inside a mission, which is its own copy of that list, and Reset's back to them |
@@ -83,8 +83,45 @@ headlamps do not go dim in a cloud's shade.
 albedo change, so it takes the shade where its sun visibility goes in instead, and its bounce fills against a
 cloud exactly as it does against a slope.
 
-The strength (`i76_cloud_shadow`, how much of the sun a thick cloud takes) and the fill are the only two numbers
-the shaders are given; the policy is all in C#, because the look flips without a sky being rebuilt. `0` in the
+A car's hull wants one thing more, and it is the reason a hill's shadow tells on a hull and a cloud's at first
+did not. The paint is gloss (`CLEARCOAT` 1.0, `SPECULAR` 0.5), so most of what is looked at on a hull is a
+reflection, and a reflection is not made of albedo; a shadow map attenuates the light before either lobe is lit,
+which is why the hill wins. Godot gives a shader no per-pixel hold on one light's specular — its
+`specular_amount` is per light, and a directional light has no projector to cast through — so the hull takes the
+shade off its own shine instead:
+
+```
+float polish = i76_cloud_polish(cloud);
+SPECULAR *= sqrt(polish);   // f0 is quadratic in SPECULAR where the paint has no metal in it
+CLEARCOAT *= polish;
+```
+
+A share of the shine and not all of it, because the same `f0` that catches the sun catches the sky, and a cloud
+overhead is not the sun going out. `i76_cloud_shine` is the share the thickest cloud takes; `I76_CLOUD_SHINE`
+overrides it. Measured on a parked car under a map of forced overcast (`I76_CLOUD_SPAN` below), the default
+leaves it 7% less bright and `0.8` leaves it 15% less; past that the car's mirror goes with the sun's glint, and
+the mirror is a large part of why a modern car looks painted at all. Only the painted host asks for this: the
+terrain and the roads are rough enough to show a shade through the albedo alone, and dimming their mirror would
+take the wet-looking sky off a road.
+
+The share is taken on a curve, and the curve is for the view from the driver's seat:
+
+```
+float i76_cloud_polish(float shade) { return 1.0 - i76_cloud_shine * sqrt(1.0 - shade); }
+```
+
+Behind the wheel the car's own metal is in frame — bonnet, sight post, the offside fender, the mirror's edge — and
+the pixels there are mostly the sky's reflection, which a cloud overhead leaves alone. A linear share therefore
+let a light cloud take the light out of the desert outside about six times faster than it took the shine off that
+metal. The square root leans the share towards the thin end of the sheet: the sun's glint is one direction and the
+first wisp is already in it, where the ground integrates the whole dome. Measured from the cockpit at the day's
+default strength under the mission's real sky, the bonnet goes 5% and 6% darker instead of 2% and 3%, with the
+ground outside at 12% either way; under a sheet thick enough to cover the map the same pair reads 12 to 19% off
+the metal against 30% off the ground. And where the sheet is thickest the curve is the straight line — `sqrt(1)`
+is 1 — so the overcast look above is what it was, pixel for pixel.
+
+The strength (`i76_cloud_shadow`, how much of the sun a thick cloud takes), the fill and the shine are what the
+shaders are given; the policy is all in C#, because the look flips without a sky being rebuilt. `0` in the
 1997 look, which has no sun for a cloud to step in front of — its own shadows are the projected faces of
 `drop_shadow_1997.gdshader` (docs/deviations.md). By night the strength is 0.4 of the day's, and the fill comes
 down with the environment's ambient energy by itself. `I76_CLOUD_SHADOW` and `I76_CLOUD_FILL` override them, and
@@ -118,3 +155,7 @@ clouds and whether a car driving through one darkens with the ground under it. F
 Normal and at Quarter (`--fixed-fps 60`, since the sheet rides on `TIME`) should show the clouds and their
 shades moved the same way, not one of the two. If a shade reads grey, the fill
 is too low; if a shaded ground reads milky or its edges glow, too high.
+
+Waiting for a cloud over one's own car is a poor way to look at the effect, so `I76_CLOUD_SPAN=0,0.05` reads the
+whole sheet as cloud and puts the map under an overcast to be examined at leisure, and `I76_CLOUD_SHINE=0` takes
+the hull's share back out again for the pair. The two are for captures; neither is a setting a player would want.

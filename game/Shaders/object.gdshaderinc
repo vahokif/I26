@@ -749,8 +749,12 @@ void fragment() {
 	}
 	// a car or a prop under a cloud loses the sun with it, or it reads as pasted onto the shaded ground
 	// beside it (docs/cloud-shadows.md); the glass and a burnt-out hull's own fire keep their light, and
-	// the lamps are prelit faces, whose albedo is 0
+	// the lamps are prelit faces, whose albedo is 0. The shine goes with it too: a hull is mostly mirror,
+	// and a mirror the size of a bonnet is the one thing an ALBEDO cannot reach.
 	float cloud = i76_cloud_shade(v_cloud_world);
+	float polish = i76_cloud_polish(cloud);
+	SPECULAR *= sqrt(polish);   // f0 is quadratic in SPECULAR where there is no metal in the paint
+	CLEARCOAT *= polish;
 	EMISSION += i76_cloud_fill_back(cloud, METALLIC) * ALBEDO;
 	ALBEDO *= cloud;
 #endif

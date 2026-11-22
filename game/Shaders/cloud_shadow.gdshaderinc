@@ -23,6 +23,7 @@ global uniform vec2 i76_cloud_dome = vec2(6000.0, 5400.0);   // the sky's radius
 global uniform float i76_cloud_scroll = 0.02997;   // and its scroll per second, so the two drift together
 global uniform float i76_cloud_speed = 1.0;   // Graphic Detail's Cloud Speed: the sky multiplies its own scroll by it too
 global uniform vec2 i76_cloud_span = vec2(0.15, 0.8);   // the sheet's open-sky and cloud levels (MissionBuilder.SkyPalette)
+global uniform float i76_cloud_shine = 0.6;   // how much of a paint's mirror the thickest cloud takes
 global uniform sampler2D i76_cloud_tex : source_color, filter_linear, repeat_enable;
 
 // how much cloud hangs over a dome coordinate: the sky's density() without its detail noise, which at
@@ -62,5 +63,20 @@ float i76_cloud_shade(vec3 world) {
 // engine gives no ambient to a metal at all, so they get none back.
 vec3 i76_cloud_fill_back(float shade, float metallic) {
 	return i76_cloud_fill * (1.0 - shade) * (1.0 - metallic);
+}
+
+// how much of a gloss surface's mirror a cloud leaves, for a host to put on SPECULAR and CLEARCOAT.
+// Scaling ALBEDO takes the sun out of everything the albedo feeds, but a car's hull is mostly reflection,
+// and the engine has no per-pixel hold on the sun's specular: it is one light, and its own multipliers are
+// per light, not per shade. So a gloss hull stays mirror-bright on a desert the sheet has gone dark over,
+// which is the one place the pasted-on look the whole feature exists to stop comes straight back. What is
+// taken is a share of the shine and not all of it, because the same f0 that catches the sun catches the
+// sky, and a cloud overhead is not the sun going out. Only the hosts that are painted want this: the
+// terrain and the road are rough enough that they show the shade through the albedo alone.
+float i76_cloud_polish(float shade) {
+	// the square root is a bias towards the thin end of the sheet: a haze takes the sun's glint off a
+	// car well before it takes the light out of the ground, because the glint is one direction and the
+	// first wisp is already in it. Linear, a cloud that visibly greys the desert leaves a hull mirror-bright.
+	return 1.0 - i76_cloud_shine * sqrt(1.0 - shade);
 }
 #endif

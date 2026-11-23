@@ -208,17 +208,17 @@ public sealed partial class MeleeScreen : ShellScreen
             Frame.Text(_font, 330, 399, "Mission's own car");
             Frame.Text(_font, 292, 421, "the story's own");
         }
-        else DrawCar(Frame, _font, _cars, _data, model, variant, Shell.Parts, inkOnly: DrawnHost);
+        else DrawCar(Frame, _font, _cars, _data, model, variant, Shell.Parts, onSheet: DrawnHost);
         if (DrawnHost) DrawnHostDone();
     }
 
     /// <summary>The car panel the melee and scenario forms share: the blueprint views, the weapons, the make and model, the variant.</summary>
-    /// <param name="inkOnly">On the port's own paper (the drawn host form): only the drawings' strokes, not the art's paper they carry round them (<see cref="BlitInk"/>).</param>
-    public static void DrawCar(ShellFrame frame, ShellFont font, SpriteBank cars, MeleeData data, int model, int variant, I76.Sim.Trip.PartsDatabase parts, string? makeModel = null, string? variantText = null, bool inkOnly = false)
+    /// <param name="onSheet">On the port's own paper (the drawn host form): the drawings darken the sheet as they darken the art's own paper (<see cref="BlueprintInk"/>).</param>
+    public static void DrawCar(ShellFrame frame, ShellFont font, SpriteBank cars, MeleeData data, int model, int variant, I76.Sim.Trip.PartsDatabase parts, string? makeModel = null, string? variantText = null, bool onSheet = false)
     {
         var m = data.Models[model];
         int v = m.Art;
-        if (inkOnly) { BlitInk(frame, cars[2 * v], 229, 79); BlitInk(frame, cars[2 * v + 1], 229, 301); }
+        if (onSheet) { BlueprintInk.Draw(frame, cars[2 * v], 229, 79); BlueprintInk.Draw(frame, cars[2 * v + 1], 229, 301); }
         else
         {
             frame.Blit(cars[2 * v], 229, 79);
@@ -230,22 +230,6 @@ public sealed partial class MeleeScreen : ShellScreen
         for (int k = 0; k < kit.Count; k++) frame.Text(font, 470, 177 + Row * k, kit[k]);
         frame.Text(font, 330, 399, makeModel ?? m.MakeModel);
         frame.Text(font, 292, 421, variantText ?? m.Variants[Math.Clamp(variant - 1, 0, m.Variants.Count - 1)]);
-    }
-
-    /// <summary>
-    /// A blueprint view on paper of its own: the sprite carries the form's paper round its drawing, a tone off any other sheet's, so only
-    /// what is darker than paper is put down (pixel by pixel).
-    /// </summary>
-    public static void BlitInk(ShellFrame frame, Sprite? s, int x, int y)
-    {
-        if (s is null) return;
-        var pal = frame.Palette;
-        for (int r = 0; r < s.Height; r++)
-            for (int c = 0; c < s.Width; c++)
-            {
-                int i = r * s.Width + c, p = s.Pixels[i] * 3;
-                if (s.Opaque[i] && pal[p] * 0.299f + pal[p + 1] * 0.587f + pal[p + 2] * 0.114f < 160) frame.Fill(x + c, y + r, 1, 1, s.Pixels[i]);
-            }
     }
 
     public override bool TextEditing => _renaming || _naming;

@@ -7,7 +7,7 @@ namespace I76.Sim.Missions;
 /// <summary>
 /// Co-op Escorts (the port's, part of Co-op Scaling; docs/multiplayer.md "Co-op Scaling"): a car the mission is about is never
 /// copied (<see cref="CoopKeyCars"/>), so where this table names it, the copies it would have had come as escort cars instead: as
-/// many as Co-op Scaling would copy (min(N − 1, cap)), each a stock car file with its own loadout. An escort keeps station in a
+/// many as Co-op Scaling would copy (min(N − 1, cap)), each a stock car file with its own loadout, taken in turn from the rule's pool. An escort keeps station in a
 /// formation behind the car (the AI's follow order), firing at the nearest human within <see cref="FireRange"/> (in a cut-scene it
 /// holds its fire); a human who
 /// comes within <see cref="EngageRange"/> while the escort is within <see cref="Leash"/> of the car is attacked (the AI's attack
@@ -18,22 +18,35 @@ namespace I76.Sim.Missions;
 public static class CoopEscorts
 {
     /// <summary>
-    /// A mission's escort rule: in <paramref name="Mission"/> (the file's stem), the key car placed as <paramref name="KeyCar"/>
-    /// is escorted by <paramref name="Car"/> (a car file: the chassis and its loadout), driven at setSkill
+    /// An escort's car: <paramref name="Car"/> (a car file: the chassis and its loadout), driven at setSkill
     /// (<paramref name="DriveSkill"/>, <paramref name="ShootSkill"/>) and setAgg <paramref name="Agg"/>.
     /// </summary>
-    public sealed record Rule(string Mission, string KeyCar, string Car, int DriveSkill, int ShootSkill, int Agg);
+    public sealed record EscortCar(string Car, int DriveSkill, int ShootSkill, int Agg);
+
+    /// <summary>
+    /// A mission's escort rule: in <paramref name="Mission"/> (the file's stem), the key car placed as <paramref name="KeyCar"/>
+    /// is escorted by cars of <paramref name="Pool"/>, the k-th escort (from 1) by the pool's (k − 1) mod its size: the same on
+    /// every machine, and a restore makes each escort again from its own car file.
+    /// </summary>
+    public sealed record Rule(string Mission, string KeyCar, IReadOnlyList<EscortCar> Pool)
+    {
+        /// <summary>The car of the k-th escort (from 1).</summary>
+        public EscortCar For(int k) => Pool[(k - 1) % Pool.Count];
+    }
 
     /// <summary>
     /// The table. T09: Callisto's Dover Lightning (he flees along the canyon road and back; disable him, do not kill him, do not
-    /// lose him) is escorted by the stock enemy Courcheval Manta of S02 (s02vcm01.vcf: a HADES turret, a FireRite turret, two
-    /// 7.62 mm machine guns and landmines; the make of T08's and T11's enemies), whose strongest engine keeps up with him; the
-    /// best driving (it holds a formation on a weaving car) and the shooting most of the campaign's attackers get (setSkill 1,
-    /// 3; setAgg 4).
+    /// lose him) is escorted by three of the base game's stock enemy cars, each a different chassis, all with turrets and with
+    /// the engines to keep up with him (measured in the sim: docs/multiplayer.md "Co-op Scaling"): S02's Courcheval Manta
+    /// (s02vcm01: HADES and FireRite turrets, two 7.62 mm machine guns, landmines), T15's light ABX Strider (t15as02: a
+    /// Pyro-Turret and a fire dropper) and S06's heavy Police Car (s06vc01: a HADES turret, a 7.62 mm machine gun, a blox
+    /// dropper). Each takes the best driving (it holds a formation on a weaving car) and the shooting most of the campaign's
+    /// attackers get (setSkill 1, 3; setAgg 4). Only base-game files: T09 is a base-game mission, and a client builds the
+    /// escorts from its own install.
     /// </summary>
     public static readonly IReadOnlyList<Rule> Table =
     [
-        new("t09", "t09dl01", "s02vcm01.vcf", 1, 3, 4),
+        new("t09", "t09dl01", [new("s02vcm01.vcf", 1, 3, 4), new("t15as02.vcf", 1, 3, 4), new("s06vc01.vcf", 1, 3, 4)]),
     ];
 
     /// <summary>The rule for a key car of a mission, or null.</summary>
@@ -92,12 +105,13 @@ public sealed partial class ScriptHost
     private void SpawnEscorts(CoopGroup c, Entity e, CoopEscorts.Rule r, int n)
     {
         for (int k = 1; k <= n; k++) SpawnEscort(c, e, r, k);
-        Log($"co-op: {e.Name} is escorted by {n} {r.Car}");
+        Log($"co-op: {e.Name} is escorted by {n}");
     }
 
     /// <summary>An escort beside the car, facing and moving as it does, on its team, its settings the rule's.</summary>
-    private void SpawnEscort(CoopGroup c, Entity e, CoopEscorts.Rule r, int k)
+    private void SpawnEscort(CoopGroup c, Entity e, CoopEscorts.Rule rule, int k)
     {
+        var r = rule.For(k);
         if (c.BuildEnemy is null || e.Vehicle is not { } o) return;
         var v = c.BuildEnemy(r.Car);
         v.Rot = o.Rot;

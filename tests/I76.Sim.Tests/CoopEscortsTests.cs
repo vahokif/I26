@@ -63,9 +63,12 @@ public class CoopEscortsTests(ITestOutputHelper output)
             Assert.Equal(want, escorts.Count);
             Assert.Equal(cars + want, setup.World.Vehicles.Count);
             Assert.DoesNotContain(h.Entities, e => e.ExtraOf == cal && e.Vehicle!.Definition == cal.Vehicle!.Definition);   // no copy of him
+            // the pool's cars in turn, each escort a different one
+            var rule = CoopEscorts.For("t09", "t09dl01")!;
+            Assert.Equal(escorts.Select((_, i) => rule.For(i + 1).Car.ToLowerInvariant()), escorts.Select(x => x.Vehicle!.Definition!.ToLowerInvariant()));
+            Assert.Equal(want, escorts.Select(x => x.Vehicle!.Definition!.ToLowerInvariant()).Distinct().Count());
             foreach (var x in escorts)
             {
-                Assert.Equal(CoopEscorts.For("t09", "t09dl01")!.Car, x.Vehicle!.Definition, ignoreCase: true);
                 Assert.Contains(x.Vehicle.Armory!.Weapons, w => w.Style == 3);   // turrets
                 Assert.Equal(cal.Team, x.Team);
                 Assert.Empty(x.Id);
@@ -75,6 +78,29 @@ public class CoopEscortsTests(ITestOutputHelper output)
             }
             output.WriteLine($"{humans} humans: {escorts.Count} escorts ({escorts[0].Vehicle!.Definition}: {string.Join(", ", escorts[0].Vehicle!.Armory!.Weapons.Select(w => w.Def.Name))})");
         }
+    }
+
+    /// <summary>The pool: three or four stock car files, all different, each with a turret; the escorts take them in turn from the first.</summary>
+    [Fact]
+    public void ThePoolIsVariedAndEveryCarHasATurret()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var l = new SnapshotRig.Loaded(dir);
+        var rule = CoopEscorts.For("t09", "t09dl01")!;
+        Assert.InRange(rule.Pool.Count, 3, 4);
+        Assert.Equal(rule.Pool.Count, rule.Pool.Select(c => c.Car.ToLowerInvariant()).Distinct().Count());
+        var chassis = new HashSet<string>();
+        foreach (var c in rule.Pool)
+        {
+            var v = VehicleFactory.Create(l.Vfs, c.Car);
+            Assert.Contains(v.Armory!.Weapons, w => w.Style == 3);
+            chassis.Add($"{v.P.Mass:0}");
+            output.WriteLine($"{c.Car}: mass {v.P.Mass:0}, {string.Join(", ", v.Armory.Weapons.Select(w => w.Def.Name + (w.Style == 3 ? " (turret)" : "")))}");
+        }
+        Assert.Equal(rule.Pool.Count, chassis.Count);
+        Assert.Equal(rule.Pool[0], rule.For(1));
+        Assert.Equal(rule.Pool[1], rule.For(2));
+        Assert.Equal(rule.Pool[0], rule.For(rule.Pool.Count + 1));
     }
 
     /// <summary>One human, or the option off: no escorts, nothing made.</summary>
@@ -252,7 +278,7 @@ public class CoopEscortsTests(ITestOutputHelper output)
         var (b, sb) = Make(l, 3, 3);
         b.Restore(snap);
         var ha = sa.Script!.Host; var hb = sb.Script!.Host;
-        Assert.Equal(ha.EscortsOf(Callisto(ha)).Count(), hb.EscortsOf(Callisto(hb)).Count());
+        Assert.Equal(ha.EscortsOf(Callisto(ha)).Select(x => x.Vehicle!.Definition), hb.EscortsOf(Callisto(hb)).Select(x => x.Vehicle!.Definition));
         Assert.NotNull(sb.Damage.Spared);
         Idle(a, 200); Idle(b, 200);
         Assert.Equal(a.StateHash(), b.StateHash());

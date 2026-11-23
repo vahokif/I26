@@ -99,11 +99,18 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     /// </summary>
     public Image? UpscaleImage(string member)
     {
-        if (!Serving || !HdTextures.Has(member) || Get(member) is not { } e) return null;
+        if (!Serving || !DrawsUpscale(member, HdTextures.Has) || Get(member) is not { } e) return null;
         if (_upscaled.Count == 0 && !_drew) _shown = true;
         _drew = true;
         return LoadUpscale(member, e.Rgba, e.Width, e.Height);
     }
+
+    /// <summary>
+    /// Whether the member's upscale is drawn where <paramref name="packHas"/> says the pack has one: not for a stock texture with a
+    /// repair (TextureRepairs), whose upscale is made from the file and so carries the slip; the modern look draws its repaired
+    /// original there (GetRepaired, GetRepairedRgba), and the 1997 look the file.
+    /// </summary>
+    public static bool DrawsUpscale(string member, Func<string, bool> packHas) => !TextureRepairs.Has(member) && packHas(member);
 
     private readonly Dictionary<string, Entry?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Entry?> _repaired = new(StringComparer.OrdinalIgnoreCase);
@@ -133,7 +140,7 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
         e = I76.Formats.Vfs.SessionStore.GetOrAdd("tex|" + _scope + member, () => Make(member), x => x is null ? 0 : x.Rgba.LongLength * (x.HasKey ? 7 : 5) / 2);   // a keyed one also keeps its unkeyed colours
         // the original's entry is kept for the editor session whatever is installed; the upscale is this factory's own, as a look
         // change swaps its picture (SetHdSteps)
-        if (e is not null && HdTextures.Has(member)) { var o = e; e = o with { Upscale = new(() => UpscaleOf(member, o.Rgba, o.Width, o.Height)) }; }
+        if (e is not null && DrawsUpscale(member, HdTextures.Has)) { var o = e; e = o with { Upscale = new(() => UpscaleOf(member, o.Rgba, o.Width, o.Height)) }; }
         _cache[member] = e;
         return e;
     }
@@ -172,7 +179,8 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     public IEnumerable<object?> SetHdSteps(bool modern)
     {
         Hd = modern;
-        if (Serving == _shown) yield break;
+        // nothing to swap without a pack: the cockpit's art is not made again (Swapped)
+        if (!HdTextures.Installed || Serving == _shown) yield break;
         _shown = Serving;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         foreach (var (member, tex, rgba, w, h) in _upscaled)

@@ -63,7 +63,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public Dictionary<int, RoadRaster.Tex?>? RoadTextures97 { get; private set; }
     /// <summary>The modern look's road layers were baked from a texture pack's upscales (<see cref="RoadLayerResolutionHd"/>).</summary>
     public bool HdRoads { get; private set; }
-    private Func<(Dictionary<(int, int), Image> Layers, Dictionary<(int, int), Image> Software, float LightY)>? _faithfulRoads;
+    /// <summary>Takes what the bake reads on the main thread (the road pieces' tops, which a destroyed structure paints out), and returns the bake.</summary>
+    private Func<Func<(Dictionary<(int, int), Image> Layers, Dictionary<(int, int), Image> Software, float LightY)>>? _faithfulRoads;
 
     /// <summary>
     /// With a texture pack's roads (<see cref="HdRoads"/>), the 1997 look's road layers from the originals (the files' own textures,
@@ -75,7 +76,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
     {
         if (_faithfulRoads is not { } bake || Terrain is not { } terrain) yield break;
         _faithfulRoads = null;
-        var task = System.Threading.Tasks.Task.Run(bake);
+        var task = System.Threading.Tasks.Task.Run(bake());
         while (!task.Wait(1)) yield return task;   // (a caller that runs the steps at once waits here rather than spins)
         var (layers, software, lightY) = task.Result;
         foreach (var ((x0, z0), img) in layers)
@@ -694,8 +695,12 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // (with a pack the modern look's layer is the pack's, so the Software renderer's repaired copy is baked wherever one reaches)
         _faithfulRoads = huge || roadTexHd is null ? null : () =>
         {
-            var sw = bakeOrigins.Where(o => Repairs(o.X0, o.Z0)).ToList();
-            return (BakeRoadLayers(flat, pieceTris, roadTex97, bakeOrigins), sw.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, sw), lightY);
+            var tris = pieceTris.ToList();
+            return () =>
+            {
+                var sw = bakeOrigins.Where(o => Repairs(o.X0, o.Z0)).ToList();
+                return (BakeRoadLayers(flat, tris, roadTex97, bakeOrigins), sw.Count == 0 ? [] : BakeRoadLayers(flat, tris, roadTex, sw), lightY);
+            };
         };
         List<RoadRaster.FlatQuad> flatFilled = huge ? [.. flat, .. fills] : [];
         RoadRaster.Index? indexFilled = huge ? new RoadRaster.Index(flatFilled, pieceTris, TerrainNode.Chunk * 5f) : null;

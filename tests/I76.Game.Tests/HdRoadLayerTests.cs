@@ -38,6 +38,16 @@ public class HdRoadLayerTests
     }
 
     [Fact]
+    public void ARepairedStockTextureKeepsItsRepairedOriginalOverAPacksUpscale()
+    {
+        // the factory forecourt's 16-bit copy has a green and blue slip (TextureRepairs) that a pack's upscale of the file carries
+        Assert.False(I76.Game.Assets.TextureFactory.DrawsUpscale("CA_1LT_6.M16", _ => true));
+        Assert.False(I76.Game.Assets.TextureFactory.DrawsUpscale("addon\\ca_1lt_6.m16", _ => true));
+        Assert.True(I76.Game.Assets.TextureFactory.DrawsUpscale("CA_1LT_1.M16", _ => true));
+        Assert.False(I76.Game.Assets.TextureFactory.DrawsUpscale("CA_1LT_1.M16", _ => false));
+    }
+
+    [Fact]
     public void AnUpscaledRoadBakesTheSameRoadAtTwiceTheResolution()
     {
         // a 4-texel road and its 4x upscale, flat colour: a quad baked at 2048 from the upscale covers the same ground as at 1024

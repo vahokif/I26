@@ -41,6 +41,10 @@ uniform bool show_light_only = false;
 uniform float shadow_dark = 0.0;   // the original's shadows were pure black
 uniform sampler2D road_layer : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform bool has_road = false;
+// the Software renderer's layer where a stock texture's slip is repaired (TextureRepairs): the original's software path drew the
+// 8-bit art, which has no slip; the 3D card's keeps it (road_layer)
+uniform sampler2D road_layer_software : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform bool has_road_software = false;
 uniform float chunk_units = 160.0;
 uniform float road_light_y = 0.2588;
 // the outside ground's chunks (OutsideTerrain): cut at this view depth, the original's 600 m clip, whatever the draw distance (0: none)
@@ -98,7 +102,7 @@ void fragment() {
 	ALBEDO = i76_out(to_linear(i76_shade(to_srgb(texel), shade)));
 	if (has_road && !show_light_only) {
 		// the 3D card's roads are bilinear with no mip chain: the layer's top level, however far or slanted
-		vec4 r = i76_software ? i76_point(road_layer, road_uv) : textureLod(road_layer, road_uv, 0.0);
+		vec4 r = i76_software ? (has_road_software ? i76_point(road_layer_software, road_uv) : i76_point(road_layer, road_uv)) : textureLod(road_layer, road_uv, 0.0);
 		r.rgb = i76_tex(r.rgb);
 		if (r.a >= 0.5) ALBEDO = i76_out(to_linear(i76_shade(to_srgb(r.rgb), v_road)));
 	}

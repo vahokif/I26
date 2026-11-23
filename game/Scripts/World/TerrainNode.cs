@@ -239,8 +239,9 @@ public partial class TerrainNode : Node3D
     /// <summary>
     /// The map editor changed the roads under a chunk: its road layer (<see cref="RoadRaster"/>) painted anew, for the modern
     /// look and the 1997 look. A chunk shared its materials with the others until a road crossed it; here it gets its own.
+    /// <paramref name="software"/>: the 1997 look's Software renderer's where a repaired texture reaches (TextureRepairs), else null (the 1997 look's).
     /// </summary>
-    public void SetRoadLayer(int x0, int z0, Texture2D? modern, Texture2D? faithful, float roadLightY)
+    public void SetRoadLayer(int x0, int z0, Texture2D? modern, Texture2D? faithful, float roadLightY, Texture2D? software = null)
     {
         var c = _chunks.FirstOrDefault(k => k.X0 == x0 && k.Z0 == z0);
         if (c is null) return;
@@ -252,6 +253,11 @@ public partial class TerrainNode : Node3D
         }
         ApplyRoadLayer(c.Modern as ShaderMaterial, modern, null);
         ApplyRoadLayer(c.Faithful as ShaderMaterial, faithful, roadLightY);
+        if (c.Faithful is ShaderMaterial fs)
+        {
+            fs.SetShaderParameter("has_road_software", software is not null);
+            if (software is not null) fs.SetShaderParameter("road_layer_software", software);
+        }
         c.Mi.MaterialOverride = _modern ? c.Modern : c.Faithful ?? FaithfulMaterial;
     }
 

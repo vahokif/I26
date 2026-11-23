@@ -2,7 +2,8 @@ namespace I76.Formats.Imaging;
 
 /// <summary>
 /// Stock textures whose 16-bit copy has a slip that its 8-bit art does not, drawn as the art means in the modern look (the 1997 look
-/// draws the file as it is, as the original's 3D-card path does). One so far: CA_1LT_6.M16, the forecourt round the small factory
+/// draws the file as it is, as the original's 3D-card path does, but for its Software renderer's ground layer: the original's software
+/// path drew the 8-bit art). One so far: CA_1LT_6.M16, the forecourt round the small factory
 /// buildings bcaik_s1 to bcaik_s8 (three in T12, one in S03). Its one-texel border is pure green (0x07E0) and pure blue (0x001F),
 /// the only such colours in any stock .m16, where the 8-bit ca_1lt_6.map has two dark shades of its asphalt (palette 187 and 190); the
 /// same art's other forecourt, CA_1LT_1.M16, has greys there, and these take the two it uses most for those two shades. Drawn with

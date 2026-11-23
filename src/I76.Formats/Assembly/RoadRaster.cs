@@ -29,6 +29,32 @@ public static class RoadRaster
     /// </summary>
     public readonly record struct FlatTri(Vector2 A, Vector2 B, Vector2 C, Vector2 Ua, Vector2 Ub, Vector2 Uc, int Texture, Vector2 Min, Vector2 Max);
 
+    /// <summary>
+    /// The texture numbers the two sets draw differently: <paramref name="faithful"/>, the 1997 look's, has a stock texture's slip as the
+    /// file has it where <paramref name="modern"/> has the repaired copy (TextureRepairs). None when they are the one set (the map editor's).
+    /// </summary>
+    public static HashSet<int> Differing(IReadOnlyDictionary<int, Tex?> modern, IReadOnlyDictionary<int, Tex?> faithful)
+    {
+        var d = new HashSet<int>();
+        if (ReferenceEquals(modern, faithful)) return d;
+        foreach (var (i, t) in faithful)
+            if (!modern.TryGetValue(i, out var m) || !ReferenceEquals(m, t)) d.Add(i);
+        foreach (var i in modern.Keys)
+            if (!faithful.ContainsKey(i)) d.Add(i);
+        return d;
+    }
+
+    /// <summary>
+    /// Whether the square [origin, origin + size)² needs a 1997-look layer of its own rather than the modern look's: a gap fill (the
+    /// modern look's only, RoadGaps) reaches it, or a triangle whose texture the looks draw differently (<paramref name="differing"/>,
+    /// from <see cref="Differing"/>). Reaching is by bounds, as <see cref="Bake"/> culls.
+    /// </summary>
+    public static bool OwnFaithful(Vector2 origin, float size, IEnumerable<FlatQuad> fills, IEnumerable<FlatTri> tris, IReadOnlySet<int> differing)
+    {
+        bool Reaches(Vector2 min, Vector2 max) => max.X >= origin.X && max.Y >= origin.Y && min.X < origin.X + size && min.Y < origin.Y + size;
+        return fills.Any(q => Reaches(q.Min, q.Max)) || (differing.Count > 0 && tris.Any(t => differing.Contains(t.Texture) && Reaches(t.Min, t.Max)));
+    }
+
     public static List<FlatQuad> Flatten(IEnumerable<RoadPiece> pieces)
     {
         var o = new List<FlatQuad>();

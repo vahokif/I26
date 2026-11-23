@@ -36,17 +36,18 @@ public static class CoopEscorts
 
     /// <summary>
     /// The table. T09: Callisto's Dover Lightning (he flees along the canyon road and back; disable him, do not kill him, do not
-    /// lose him) is escorted by three of the base game's stock enemy cars, each a different chassis, all with turrets and with
-    /// the engines to keep up with him (measured in the sim: docs/multiplayer.md "Co-op Scaling"): S02's Courcheval Manta
-    /// (s02vcm01: HADES and FireRite turrets, two 7.62 mm machine guns, landmines), T15's light ABX Strider (t15as02: a
-    /// Pyro-Turret and a fire dropper) and S06's heavy Police Car (s06vc01: a HADES turret, a 7.62 mm machine gun, a blox
-    /// dropper). Each takes the best driving (it holds a formation on a weaving car) and the shooting most of the campaign's
+    /// lose him) is escorted by three of the base game's stock enemy cars, villains' cars where they come from (no police, army
+    /// or allies), each a different chassis, all with turrets and with the engines to keep up with him (measured in the sim:
+    /// docs/multiplayer.md "Co-op Scaling"): S02's Courcheval Manta (s02vcm01, S02's enemy3: HADES and FireRite turrets, two
+    /// 7.62 mm machine guns, landmines), T15's light ABX Strider (t15as02, one of T15's enemies 6-10: a Pyro-Turret and a fire
+    /// dropper) and S01's heavy Courcheval Courier (s01cg01, S01's enemy6, the car its third objective is to destroy: a 30 mm
+    /// turret, a Cherub missile, a napalm hose, a fire dropper). Each takes the best driving (it holds a formation on a weaving car) and the shooting most of the campaign's
     /// attackers get (setSkill 1, 3; setAgg 4). Only base-game files: T09 is a base-game mission, and a client builds the
     /// escorts from its own install.
     /// </summary>
     public static readonly IReadOnlyList<Rule> Table =
     [
-        new("t09", "t09dl01", [new("s02vcm01.vcf", 1, 3, 4), new("t15as02.vcf", 1, 3, 4), new("s06vc01.vcf", 1, 3, 4)]),
+        new("t09", "t09dl01", [new("s02vcm01.vcf", 1, 3, 4), new("t15as02.vcf", 1, 3, 4), new("s01cg01.vcf", 1, 3, 4)]),
     ];
 
     /// <summary>The rule for a key car of a mission, or null.</summary>

@@ -809,19 +809,22 @@ many as Co-op Scaling would copy (min(N − 1, cap)), made beside it when the sc
 pool's (k − 1) mod its size: the same on every machine, and a restore makes each escort again from its own car file. T09's
 Callisto (he flees along the canyon road and back: evade on fleepath, sit and success once below 32% health; his death, or the
 humans more than 450 from him, fails the mission) is escorted by three of the base game's stock enemy cars, each a different
-chassis with turrets, at setSkill 1, 3 and setAgg 4 (only base-game files: a client builds them from its own install):
+chassis with turrets and each a villain's car where it comes from (no police, army or allies), at setSkill 1, 3 and setAgg 4 (only
+base-game files: a client builds them from its own install):
 
-| Escort | Car | Weapons | Keeping station (sim, 120 s) |
-|---|---|---|---|
-| 1st | S02's Courcheval Manta, s02vcm01.vcf (2307 kg) | HADES turret, FireRite turret, two 7.62 mm MGs, landmines | 88% of samples within 30 m, median 3 m; after an opening fight 66%, median 8 m |
-| 2nd | T15's ABX Strider, t15as02.vcf (1286 kg, light and fast) | Pyro-Turret, fire dropper | 91%, median 3 m; after a fight 86%, median 3 m |
-| 3rd | S06's Police Car, s06vc01.vcf (2551 kg, heavy) | HADES turret, 7.62 mm MG, blox dropper | 88%, median 3 m; after a fight 71%, median 5 m |
+| Escort | Car | Where from | Weapons | Keeping station (sim, 120 s) |
+|---|---|---|---|---|
+| 1st | Courcheval Manta, s02vcm01.vcf (2307 kg) | S02's enemy3 | HADES turret, FireRite turret, two 7.62 mm MGs, landmines | 88% of samples within 30 m, median 3 m; after an opening fight 66%, median 8 m |
+| 2nd | ABX Strider, t15as02.vcf (1286 kg, light and fast) | one of T15's enemies 6-10 | Pyro-Turret, fire dropper | 91%, median 3 m; after a fight 86%, median 3 m |
+| 3rd | Courcheval Courier, s01cg01.vcf (2602 kg, heavy) | S01's enemy6, the car S01's third objective is to destroy | 30 mm turret, Cherub missile, napalm hose, fire dropper | 92%, median 3 m; after a fight 51%, median 23 m |
 
 So three humans meet the Manta and the Strider, four all three. The measure: T09 with every escort of one car, the humans held
 far off (no fight), or brought up beside the convoy when the intro is skipped (the escorts fight them, then catch up); one
-sample a second per escort. Candidates left out: T05's Manta (t05cm03) lost Callisto before collision avoidance was off in the
-formation, T17's Phaedra Rattler (t17fr03) wrecked itself following him, T15's HADES Strider (t15as04), S01's Courcheval
-(s01cg01) and the Dover Stag (vdstag2) fell back to half or less after a fight. An escort takes no
+sample a second per escort. The Courier keeps the formation best of all but is the slowest back after a fight. Candidates left
+out: S06's Police Car (s06vc01; it kept up, 88% / 71%, but police do not ride with Callisto), T17's Manta (Malocchio's own),
+T05's Manta (t05cm03) lost Callisto before collision avoidance was off in the formation, T17's Phaedra Rattler (t17fr03) and
+S05's Phaedra Clydesdale (s05vfd01, enemy6) wrecked themselves following him, S05's Dover Lightning Grand Sport (s05vdl02,
+enemy3; 87% / 30%), T15's HADES Strider (t15as04) and the Dover Stag (vdstag2) fell back to under half after a fight. An escort takes no
 orders and no settings from the script; every tick after the script (`ScriptHost.EscortFrame`) it is given one of the AI's own
 orders:
 - **attack** the human nearest it once that human is within 70 m (let go past 110 m), while the escort is within 120 m of its car

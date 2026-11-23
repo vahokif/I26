@@ -88,6 +88,8 @@ public class CoopEscortsTests(ITestOutputHelper output)
         var l = new SnapshotRig.Loaded(dir);
         var rule = CoopEscorts.For("t09", "t09dl01")!;
         Assert.InRange(rule.Pool.Count, 3, 4);
+        // villains' cars where they come from (S02's enemy3, one of T15's enemies, S01's enemy6): no police, army or allies
+        Assert.Equal(["s02vcm01.vcf", "t15as02.vcf", "s01cg01.vcf"], rule.Pool.Select(c => c.Car.ToLowerInvariant()));
         Assert.Equal(rule.Pool.Count, rule.Pool.Select(c => c.Car.ToLowerInvariant()).Distinct().Count());
         var chassis = new HashSet<string>();
         foreach (var c in rule.Pool)

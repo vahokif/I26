@@ -552,6 +552,7 @@ public partial class SimDriver : Node
     /// <summary>After an outside write to the cars (a teleport, a restore): each drawn where it is now, with no slide from where it was.</summary>
     public void Jumped()
     {
+        MotionBlur.Cut();
         foreach (var c in Cars) c.SetPoses(c.Sim.Rot, c.Sim.Pos, c.Sim.Rot, c.Sim.Pos);
         foreach (var c in Cars) c.Place(1, Origin());
         Voice3D.ListenerCut();   // the camera jumps with them: no Doppler sweep across the distance

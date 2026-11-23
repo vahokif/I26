@@ -39,6 +39,8 @@ public partial class Main
         bool softRenderer = EnvSwitch("I76_SOFTWARE") ?? s.SoftwareRenderer, soft1997 = _mode1997 && softRenderer;
         Wiggle.CrashBlur = EnvSwitch("I76_CRASH_BLUR") ?? I76.Sim.Views.CrashBlurMode.Resolve(s.CrashBlur);
         Wiggle.Exact = _mode1997;   // the original's whole-pixel blit in the 1997 look (either renderer), smooth in the modern look
+        // Motion Blur: the modern look's (the node leaves the 1997 look alone); I76_MOTION_BLUR=0/1 overrides
+        I76.Game.Sim.MotionBlur.Setting = EnvSwitch("I76_MOTION_BLUR") ?? s.MotionBlur;
         if (_software is null || _cardRamp is null) return;
         bool sw = EnvSwitch("I76_SOFTWARE") ?? s.SoftwareRenderer, grade = EnvSwitch("I76_PALETTE_GRADE") ?? s.PaletteGrade;
         int level = s.Graphics[0xc];

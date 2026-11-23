@@ -40,6 +40,8 @@ public sealed partial class ScriptCamera
     public Vector3 PrevEye { get; private set; }
     public Vector3? PrevLookAt { get; private set; }
     private bool _cut = true;
+    /// <summary>How many cuts the view has made (a new placement with nothing to blend from), for what is drawn across frames (the motion blur skips the frame of a cut).</summary>
+    public int Cuts { get; private set; }
     public Action<string> Log { get; set; } = _ => { };
 
     /// <summary>A placement held after a popCam back into an outer scene, until the script sets the next op.</summary>
@@ -87,6 +89,7 @@ public sealed partial class ScriptCamera
     {
         Depth = active ? 1 : 0;
         _op = active ? "(host)" : "";
+        if (active && prevEye == eye && prevLookAt == lookAt && (eye != Eye || lookAt != LookAt)) Cuts++;   // the host's cut: nothing to blend from, and elsewhere
         (PrevEye, PrevLookAt, Eye, LookAt, Basis) = (prevEye, prevLookAt, eye, lookAt, basis);
     }
 
@@ -194,7 +197,7 @@ public sealed partial class ScriptCamera
     /// <summary>After a cut the previous placement is the current one: nothing to blend from.</summary>
     private void EndUpdate()
     {
-        if (_cut) { PrevEye = Eye; PrevLookAt = LookAt; _cut = false; }
+        if (_cut) { PrevEye = Eye; PrevLookAt = LookAt; _cut = false; Cuts++; }
     }
 
     /// <summary>

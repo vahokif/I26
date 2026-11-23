@@ -1118,7 +1118,7 @@ public partial class Main : Node3D
         {
             melee.Spawned += (v, d) => carNodes[v] = MakeNode(v, d);
             melee.Removed += v => { if (carNodes.Remove(v, out var n)) { _sim.Cars.Remove(n); n.QueueFree(); } };
-            melee.PlayerRenewed += v => { if (carNodes.GetValueOrDefault(v) is { } n) damageView.Restore(n); };
+            melee.PlayerRenewed += v => { if (carNodes.GetValueOrDefault(v) is { } n) damageView.Restore(n); if (v == world.Player) I76.Game.Sim.MotionBlur.Cut(); };
             melee.Start();
             MissionBuilder.Trace("spawn: melee started");
             damageView.PrewarmWrecks(melee.Roster.Concat(carNodes.Values.Select(n => n.Definition)), _car?.Modern ?? true);   // every kind of car that will fall, built once
@@ -1573,6 +1573,7 @@ public partial class Main : Node3D
         AddChild(new CabClip { Name = "CabClip", Player = () => _car, Cars = () => _carNodes.Values });
         var wiggle = new Wiggle { Name = "Wiggle", InCockpit = () => _car?.CockpitCamera?.Current == true, Player = () => _car?.Sim };
         AddChild(wiggle);
+        AddChild(new I76.Game.Sim.MotionBlur { Name = "MotionBlur", Faithful = () => _mode1997 });   // the modern look's motion blur
         if (combat.Damage is I76.Sim.Damage.DamageModel wdm) wdm.Damaging += wiggle.Damaging;
         yield return null;
         var hud = new Hud { Staged = staged, Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Network = () => _net is not null, HostAllowsCrosshair = () => _net?.Client.CrosshairAllowed == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
@@ -1651,12 +1652,15 @@ public partial class Main : Node3D
         return interior.Parts.Any(p => p.NodeName.Equals(twin, System.StringComparison.OrdinalIgnoreCase));
     }
 
+    private int _scriptCuts;
+
     /// <summary>The script's camera, while it holds the view (pushCam ... popCam).</summary>
     private void UpdateScriptCamera()
     {
         if (_script is null || _scriptCam is null || System.Environment.GetEnvironmentVariable("I76_NO_SCRIPT_CAM") == "1") return;   // the capture hook: keep the cockpit through the intro cutscene
         var view = _script.Host.View;
         if (_car is not null) _car.SeenFromOutside = view.Active;
+        if (view.Cuts != _scriptCuts) { _scriptCuts = view.Cuts; I76.Game.Sim.MotionBlur.Cut(); }   // a cut between the scene's shots: no blur across it
         if (!view.Active)
         {
             if (_scriptCam.Current) (_car?.CockpitCamera is { } k && _cockpitBeforeScript ? k : _presetBeforeScript ? _preset : _tvBeforeScript && _tvMode != 0 ? _tv : (Camera3D?)_chase)?.MakeCurrent();
@@ -2343,6 +2347,7 @@ public partial class Main : Node3D
     {
         _origin = gameOrigin;
         _worldRoot.Position = -Coords.ToGodot(gameOrigin);
+        I76.Game.Sim.MotionBlur.Cut();   // everything moved at once: no frame to blend from
         _sky1997?.SetShaderParameter("origin_y", gameOrigin.Y);   // the horizon ring sinks with the eye's game height
     }
 
@@ -2973,6 +2978,7 @@ public partial class Main : Node3D
     private void SelectView(int cmd)
     {
         if (CameraHeld || _car is null || _chase is null) return;
+        I76.Game.Sim.MotionBlur.Cut();   // a view key: the next frame is another view, not a move
         if (cmd is 0x18 or 0x19 or 0x12) { EnterFollowView(cmd); return; }
         if (cmd is 0xe or 0xd && !_car.HasInterior) cmd = 0xf;   // no cockpit model (the Armadillo): the chase view stands in
         // every other view's setup first pops the camera stack when the camera is in mode 4 (a target view); the projectile camera
@@ -3099,6 +3105,7 @@ public partial class Main : Node3D
     private void ApplyExternalView(int cmd)
     {
         if (_car is null || _chase is null) return;
+        I76.Game.Sim.MotionBlur.Cut();
         switch (cmd)
         {
             case 0xf: _chase.MakeCurrent(); break;                                                     // F2: chase

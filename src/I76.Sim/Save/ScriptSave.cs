@@ -232,7 +232,8 @@ public sealed partial class ScriptCamera
                 nameof(_stack), nameof(_heldLook), nameof(_heldBasis))
             .Structural("the terrain's height, linked by the script host", nameof(_ground))
             .Transient("a network client's mirror says whether the view is the player's own scene, every frame", nameof(Personal))
-            .Transient("the host's log", nameof(Log));
+            .Transient("the host's log", nameof(Log))
+            .Transient("a count of cuts for the drawing's motion blur, compared only from frame to frame", nameof(Cuts));
     }
 
     internal void Save(SaveWriter w)

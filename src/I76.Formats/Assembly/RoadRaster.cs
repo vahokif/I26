@@ -55,6 +55,32 @@ public static class RoadRaster
         return fills.Any(q => Reaches(q.Min, q.Max)) || (differing.Count > 0 && tris.Any(t => differing.Contains(t.Texture) && Reaches(t.Min, t.Max)));
     }
 
+    /// <summary>
+    /// The chunks of the ground off the map's tiles (a ZMAP cell marked empty, or past the grid) that a road quad or a painted
+    /// triangle reaches, by bounds as <see cref="Bake"/> culls: the ones whose outside ground carries a road layer. The original
+    /// draws its roads, lots and road pieces with no zone or tile test, so they show there too, on the ground it draws there.
+    /// Chunk origins in samples (multiples of <paramref name="chunk"/>, <paramref name="sampleSize"/> metres apart), in order.
+    /// </summary>
+    public static List<(int X0, int Z0)> OutsideChunks(Mission.TerrainTiles tiles, IEnumerable<FlatQuad> quads, IEnumerable<FlatTri> tris,
+        int chunk = 32, float sampleSize = 5f)
+    {
+        float size = chunk * sampleSize;
+        var found = new HashSet<(int, int)>();
+        void Add(Vector2 min, Vector2 max)
+        {
+            int x0 = (int)MathF.Floor(min.X / size), x1 = (int)MathF.Floor(max.X / size);
+            int z0 = (int)MathF.Floor(min.Y / size), z1 = (int)MathF.Floor(max.Y / size);
+            // a broken quad spanning kilometres: no more than the index looks at (Index)
+            if ((long)(x1 - x0 + 1) * (z1 - z0 + 1) > 1 << 16) { x0 = Math.Max(x0, -128); x1 = Math.Min(x1, 128); z0 = Math.Max(z0, -128); z1 = Math.Min(z1, 128); }
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                    if (tiles.Sample(x * chunk, z * chunk) is null) found.Add((x * chunk, z * chunk));
+        }
+        foreach (var q in quads) Add(q.Min, q.Max);
+        foreach (var t in tris) Add(t.Min, t.Max);
+        return [.. found.OrderBy(o => o.Item2).ThenBy(o => o.Item1)];
+    }
+
     public static List<FlatQuad> Flatten(IEnumerable<RoadPiece> pieces)
     {
         var o = new List<FlatQuad>();

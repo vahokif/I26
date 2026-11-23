@@ -97,6 +97,31 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public sealed record SkyPalette(Color Sky, Color Cloud, Color Shade, float SkyLum, float CloudLum);
 
     /// <summary>
+    /// The faces <see cref="RoadPieceTops"/> paints, without their textures: each painted face facing up, of each road-piece placement and
+    /// grounded scenery (GroundDecals.PaintedFaces, honouring <paramref name="groundList"/>), its corners placed in the game frame's XZ.
+    /// </summary>
+    public static IEnumerable<(I76.Formats.Assembly.Placement P, bool Decals, I76.Formats.Assembly.AssembledModel Model, I76.Formats.Assembly.ModelPart Part,
+        I76.Formats.Geo.GeoFace Face, System.Numerics.Vector2[] W)> PaintedTops(I76.Formats.Assembly.MissionWorld world, I76.Formats.Assembly.ModelAssembler asm, bool groundList)
+    {
+        var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        float Lowest(I76.Formats.Assembly.Placement p, I76.Formats.Assembly.AssembledModel m) =>
+            lowestOf.TryGetValue(p.Definition!, out float l) ? l : lowestOf[p.Definition!] = GroundDecals.LowestY(m);
+        foreach (var p in world.Placements.Concat(world.LinePlacements))
+        {
+            if (p.Definition is null || !GroundDecals.Applies(p) && !ScenerySpawner.IsRoadPiece(p.Object.ObjectType)) continue;
+            bool decals = GroundDecals.Applies(p);
+            var place = I76.Formats.Assembly.Affine.FromEngine(p.Object.Rotation, world.GroundedPosition(p));
+            foreach (var (model, part, f) in GroundDecals.PaintedFaces(p, asm.Assemble(p.Definition), groundList, Lowest))
+            {
+                var n = place.Rotate(part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z)));
+                if (n.LengthSquared() < 0.5f || -n.Y / n.Length() < 0.6f) continue;   // outward is -plane: only tops
+                var w = f.Vertices.Select(v => place.Apply(part.ToModel.Apply(part.Mesh.Vertices[v.Index]))).Select(v => new System.Numerics.Vector2(v.X, v.Z)).ToArray();
+                yield return (p, decals, model, part, f, w);
+            }
+        }
+    }
+
+    /// <summary>
     /// The upward faces of every painted road-piece placement (types 0x50–0x5f, flat models: RoadPieceObjects), and
     /// the ground-level faces of grounded scenery (GroundDecals), in the game
     /// frame's XZ, with their UVs and textures (a flat colour as a 1×1
@@ -119,35 +144,23 @@ public sealed class MissionBuilder(AssetVfs vfs)
             if (!texIndex.TryGetValue(key, out int i)) { texIndex[key] = i = texList.Count; texList.Add(make()); }
             return i;
         }
-        var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        float Lowest(I76.Formats.Assembly.Placement p, I76.Formats.Assembly.AssembledModel m) =>
-            lowestOf.TryGetValue(p.Definition!, out float l) ? l : lowestOf[p.Definition!] = GroundDecals.LowestY(m);
-        foreach (var p in world.Placements.Concat(world.LinePlacements))
+        foreach (var (p, decals, model, part, f, w) in PaintedTops(world, asm, groundList))
         {
-            if (p.Definition is null || !GroundDecals.Applies(p) && !ScenerySpawner.IsRoadPiece(p.Object.ObjectType)) continue;
-            bool decals = GroundDecals.Applies(p);
-            var place = I76.Formats.Assembly.Affine.FromEngine(p.Object.Rotation, world.GroundedPosition(p));
-            foreach (var (model, part, f) in GroundDecals.PaintedFaces(p, asm.Assemble(p.Definition), groundList, Lowest))
+            int ti;
+            if (f.Texture.Length > 0 && f.Unk_0x20 != 0 && resolver.ResolveFace(f.Texture, model.ObjectCode, model.TmtNames, vtfMaps: model.VtfMaps) is { } member)
             {
-                var n = place.Rotate(part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z)));
-                if (n.LengthSquared() < 0.5f || -n.Y / n.Length() < 0.6f) continue;   // outward is -plane: only tops
-                int ti;
-                if (f.Texture.Length > 0 && f.Unk_0x20 != 0 && resolver.ResolveFace(f.Texture, model.ObjectCode, model.TmtNames, vtfMaps: model.VtfMaps) is { } member)
-                {
-                    ti = Tex(member, () => textures.GetRepairedRgba(member) ?? textures.GetRgba(member));
-                    if (textures.GetRepairedRgba(member) is not null && !original.ContainsKey(ti)) original[ti] = textures.GetRgba(member);
-                }
-                else
-                    ti = Tex($"#{f.R:x2}{f.G:x2}{f.B:x2}", () => new RoadRaster.Tex(1, 1, [f.R, f.G, f.B, 255]));
-                var w = f.Vertices.Select(v => place.Apply(part.ToModel.Apply(part.Mesh.Vertices[v.Index]))).Select(v => new System.Numerics.Vector2(v.X, v.Z)).ToArray();
-                var uv = f.Vertices.Select(v => new System.Numerics.Vector2(v.U, v.V)).ToArray();
-                for (int k = 1; k + 1 < w.Length; k++)
-                {
-                    var min = System.Numerics.Vector2.Min(System.Numerics.Vector2.Min(w[0], w[k]), w[k + 1]);
-                    var max = System.Numerics.Vector2.Max(System.Numerics.Vector2.Max(w[0], w[k]), w[k + 1]);
-                    tris.Add(new RoadRaster.FlatTri(w[0], w[k], w[k + 1], uv[0], uv[k], uv[k + 1], ti, min, max));
-                    owners.Add(decals ? (p, part.NodeName) : null);
-                }
+                ti = Tex(member, () => textures.GetRepairedRgba(member) ?? textures.GetRgba(member));
+                if (textures.GetRepairedRgba(member) is not null && !original.ContainsKey(ti)) original[ti] = textures.GetRgba(member);
+            }
+            else
+                ti = Tex($"#{f.R:x2}{f.G:x2}{f.B:x2}", () => new RoadRaster.Tex(1, 1, [f.R, f.G, f.B, 255]));
+            var uv = f.Vertices.Select(v => new System.Numerics.Vector2(v.U, v.V)).ToArray();
+            for (int k = 1; k + 1 < w.Length; k++)
+            {
+                var min = System.Numerics.Vector2.Min(System.Numerics.Vector2.Min(w[0], w[k]), w[k + 1]);
+                var max = System.Numerics.Vector2.Max(System.Numerics.Vector2.Max(w[0], w[k]), w[k + 1]);
+                tris.Add(new RoadRaster.FlatTri(w[0], w[k], w[k + 1], uv[0], uv[k], uv[k + 1], ti, min, max));
+                owners.Add(decals ? (p, part.NodeName) : null);
             }
         }
         return (tris, texList, owners, original);
@@ -362,6 +375,18 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// <summary>For a map that fills the grid: the road's quads past the grid's edge, drawn as strips in either look (the rest is painted into the terrain).</summary>
     public RoadNode? RoadsOffGround { get; private set; }
 
+    /// <summary>The chunks of the ground past the map's tiles that a road, a lot or a road piece reaches (RoadRaster.OutsideChunks): drawn with a road layer.</summary>
+    public int OutsideRoadChunks { get; private set; }
+
+    /// <summary>
+    /// The chunks of the ground past the map's tiles (an empty ZMAP cell, or past the grid) that carry a road layer: those a road quad
+    /// (<paramref name="quads"/>, the gap fills too) or a painted face (<paramref name="tris"/>: lots and road pieces) reaches
+    /// (RoadRaster.OutsideChunks). None on a map that fills the grid, whose roads past the tiles are drawn as strips (RoadsOffGround),
+    /// nor on one with no outside ground.
+    /// </summary>
+    public static List<(int X0, int Z0)> OutsideRoadOrigins(I76.Formats.Assembly.MissionWorld world, IReadOnlyList<RoadRaster.FlatQuad> quads, IReadOnlyList<RoadRaster.FlatTri> tris) =>
+        world.Terrain.Huge || world.Outside is null ? [] : RoadRaster.OutsideChunks(world.Terrain, quads, tris);
+
     public Node3D Build(string msnPath)
     {
         Stage("build start");
@@ -575,12 +600,18 @@ public sealed class MissionBuilder(AssetVfs vfs)
         bool Fills(int x0, int z0) => RoadRaster.OwnFaithful(new(x0 * 5f, z0 * 5f), chunkSize, fills, [], differing97);
         bool Repairs(int x0, int z0) => repairs.Count > 0 && RoadRaster.OwnFaithful(new(x0 * 5f, z0 * 5f), chunkSize, [], repairs, differing97);
         // (a map that fills the grid paints each chunk's layer as it streams in: LazyRoad, below)
-        var origins97 = huge ? [] : origins.Where(o => Own97(o.X0, o.Z0)).ToList();
+        // the ground past the tiles where a road, a lot or a road piece reaches it (an empty ZMAP cell, or past the grid): the original
+        // draws them there too, with no zone test (OutsideTerrain draws these chunks with the layer); a map that fills the grid draws
+        // its roads there as strips instead (RoadsOffGround). No stock map has any.
+        var outsideOrigins = OutsideRoadOrigins(world, [.. flat, .. fills], pieceTris);
+        OutsideRoadChunks = outsideOrigins.Count;
+        var bakeOrigins = outsideOrigins.Count == 0 ? origins : [.. origins, .. outsideOrigins];
+        var origins97 = huge ? [] : bakeOrigins.Where(o => Own97(o.X0, o.Z0)).ToList();
         // the 1997 look's Software renderer where a repaired texture reaches: the repaired copy (the original's software path drew the
         // 8-bit art, which has no slip), without the gap fills; the modern look's own layer where no fill reaches the chunk too
-        var originsSw = huge ? [] : origins.Where(o => Repairs(o.X0, o.Z0) && Fills(o.X0, o.Z0)).ToList();
+        var originsSw = huge ? [] : bakeOrigins.Where(o => Repairs(o.X0, o.Z0) && Fills(o.X0, o.Z0)).ToList();
         Stage("road bake");
-        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTex, origins);
+        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTex, bakeOrigins);
         var layers97 = huge || origins97.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex97, origins97);
         var layersSw = originsSw.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, originsSw);
         List<RoadRaster.FlatQuad> flatFilled = huge ? [.. flat, .. fills] : [];
@@ -702,8 +733,14 @@ public sealed class MissionBuilder(AssetVfs vfs)
         root.AddChild(Terrain);
         if (world.Outside is not null && System.Environment.GetEnvironmentVariable("I76_OUTSIDE_CHUNKS") != "0")   // I76_OUTSIDE_CHUNKS=0: the ring alone out there (A/B)
         {
-            OutsideNode = new OutsideTerrain { Name = "OutsideTerrain" };
+            OutsideNode = new OutsideTerrain { Name = "OutsideTerrain", Roads = !huge };
             OutsideNode.Setup(world, TerrainMaterial);
+            float roadLightY = Light.Direction.Y * Light.Intensity;
+            foreach (var (x0, z0) in outsideOrigins)
+            {
+                var (t97, tsw) = Layer97(x0, z0);
+                OutsideNode.SetRoadLayer(x0, z0, Layer(x0, z0), t97, roadLightY, tsw);
+            }
             root.AddChild(OutsideNode);
         }
         RoadBakeMs = sw.ElapsedMilliseconds;

@@ -48,6 +48,16 @@ const float MORPH_LIFT = 2.5;
 // repeating every 40 m as the engine's does, so the near ground has grain; its mipmaps settle to the mean, the ring's own colour
 uniform sampler2D ground_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform bool has_ground_tex = false;
+// a chunk's road layer (RoadRaster: roads, lots and road pieces reaching the ground past the tiles, which the original draws there too),
+// blended in as terrain_modern.gdshaderinc blends it on the map's own ground (without the materials' grain and edge break, which this
+// ground has not): its corner (centre-relative, game frame) and size, and the modern terrain's road parameters
+uniform sampler2D road_layer : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform bool has_road = false;
+uniform vec2 road_origin = vec2(0.0);
+uniform float road_units = 160.0;
+uniform float asphalt_tone = 0.85;
+uniform vec2 asphalt_shine = vec2(0.8, 0.2);  // roughness, specular
+uniform vec2 dirt_road_shine = vec2(0.96, 0.08);
 #endif
 
 uniform float debug_tint = 0.0;   // I76_HORIZON_TINT=1: the ring drawn magenta (to see where it shows)
@@ -126,6 +136,20 @@ void fragment() {
 	float steep = 1.0 - n.y;
 	// steeper ground, rougher bumps
 	grad *= mix(0.6, 1.6, smoothstep(0.1, 0.6, steep));
+	float road = 0.0, dirt = 0.0;
+	vec3 road_rgb = vec3(0.0);
+#ifndef HORIZON_RING
+	if (has_road) {
+		vec4 rc = texture(road_layer, (g_pos.xz - road_origin) / road_units);
+		road = rc.a;
+		// asphalt (grey) against dirt tracks (coloured)
+		float sat = max(rc.r, max(rc.g, rc.b)) - min(rc.r, min(rc.g, rc.b));
+		dirt = smoothstep(0.05, 0.2, sat);
+		road_rgb = rc.rgb * mix(asphalt_tone, 1.0, dirt);
+		// the ground's bumps mostly gone under a road, wholly under asphalt
+		grad *= (1.0 - 0.7 * road) * (1.0 - road * (1.0 - dirt));
+	}
+#endif
 	vec3 nb = normalize(n - vec3(grad.x, 0.0, grad.y) * (1.0 - abs(n.y) * 0.2));
 
 	// ---- colour ----
@@ -156,6 +180,7 @@ void fragment() {
 		float s = smoothstep(0.35, 0.6, rocky + detail * 0.1) * smoothstep(0.45, 0.75, nb.y) * clamp(snow * 6.0, 0.0, 1.0);
 		albedo = mix(albedo, vec3(0.85, 0.87, 0.9), s);
 	}
+	albedo = mix(albedo, road_rgb, road);
 
 	// ---- haze toward the sky's horizon, in this direction ----
 	vec3 view_w = normalize((INV_VIEW_MATRIX * vec4(VERTEX, 0.0)).xyz);
@@ -170,8 +195,13 @@ void fragment() {
 #endif
 	ALBEDO = albedo * (1.0 - f);
 	EMISSION = haze_col * f;
+#ifndef HORIZON_RING
+	ROUGHNESS = mix(1.0, mix(asphalt_shine.x, dirt_road_shine.x, dirt), road);
+	SPECULAR = mix(0.0, mix(asphalt_shine.y, dirt_road_shine.y, dirt), road);
+#else
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
+#endif
 	vec3 nw = vec3(nb.x, nb.y, -nb.z);   // game -> Godot
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	v_up = (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz;

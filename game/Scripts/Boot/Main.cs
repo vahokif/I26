@@ -1723,7 +1723,7 @@ public partial class Main : Node3D
         _builder!.Scenery!.Modern = !_mode1997;
         var w = _builder.World!;
         _status = $"{w.Mission.Name}: {sw.ElapsedMilliseconds} ms, {_builder.Terrain!.ChunkCount} chunks, " +
-                  $"{_builder.Roads!.Quads} road quads ({_builder.RoadChunks} chunks painted, {_builder.RoadBakeMs} ms), {_builder.Scenery!.Loaded}/{w.Placements.Count + w.LinePlacements.Count} placements incl. {w.LinePlacements.Count} fence links ({_builder.Scenery.Keywords} keywords, {_builder.Scenery.Failed} failed)";
+                  $"{_builder.Roads!.Quads} road quads ({_builder.RoadChunks} chunks painted{(_builder.OutsideRoadChunks > 0 ? $", {_builder.OutsideRoadChunks} of them past the tiles" : "")}, {_builder.RoadBakeMs} ms), {_builder.Scenery!.Loaded}/{w.Placements.Count + w.LinePlacements.Count} placements incl. {w.LinePlacements.Count} fence links ({_builder.Scenery.Keywords} keywords, {_builder.Scenery.Failed} failed)";
         GD.Print(_status);
         yield return null;
         foreach (var step in ApplySkySteps()) yield return step;

@@ -24,6 +24,11 @@ namespace I76.Game.World;
 /// too (HorizonTerrain.Use1997); and in either look a chunk's level goes by its distance from the camera in 3D, as the editor's camera
 /// flies high.</item>
 /// </list>
+/// Roads, parking lots and road pieces reach the outside ground as the original draws them, with no zone test: a chunk they reach
+/// (RoadRaster.OutsideChunks; <see cref="SetRoadLayer"/>) carries their road layer, as the map's own chunks do, in a material of its own:
+/// the 1997 look's, the map's 1997 terrain with the layer (in the map editor's 1997 view at any distance); the modern look's, the ring's
+/// shading with the layer blended in as the modern terrain blends it (horizon_terrain.gdshaderinc). Not on a map that fills the grid
+/// (<see cref="Roads"/>), whose roads past the tiles are strips.
 /// </summary>
 public partial class OutsideTerrain : Node3D
 {
@@ -86,7 +91,8 @@ public partial class OutsideTerrain : Node3D
             if (_groundTex is not null) { _near.SetShaderParameter("ground_tex", _groundTex); _near.SetShaderParameter("has_ground_tex", true); }
             _near.SetShaderParameter("morph_start", MorphStart);
             _near.SetShaderParameter("morph_end", ModernReach);
-            if (_modern) foreach (var p in _pieces.Values) if (p.Level >= 0 && p.Mi is not null) p.Mi.MaterialOverride = _near;
+            foreach (var r in _roads.Values) r.NearMat = null;   // made again from the new parameters
+            if (_modern) foreach (var (key, p) in _pieces) if (p.Level >= 0 && p.Mi is not null) p.Mi.MaterialOverride = MaterialFor(key, p.Level);
         }
     }
     private ShaderMaterial? _ring, _near;
@@ -108,6 +114,67 @@ public partial class OutsideTerrain : Node3D
     public ShaderMaterial? Ring1997 { get => _ring1997; set { _ring1997 = value; _maskDirty = true; } }
     private ShaderMaterial? _ring1997;
     private ShaderMaterial? _faithful, _faithfulOpen, _near1997;
+
+    /// <summary>Whether chunks take road layers: not on a map that fills the grid, which draws its roads past the tiles as strips (MissionBuilder.RoadsOffGround).</summary>
+    public bool Roads { get; set; } = true;
+
+    /// <summary>A chunk's road layers (as TerrainNode.SetRoadLayer's) and the materials made with them.</summary>
+    private sealed class RoadLayer
+    {
+        public Texture2D? Modern, Faithful, Software;
+        public float LightY;
+        public ShaderMaterial? NearMat, FaithfulMat, FaithfulOpenMat;
+    }
+    private readonly Dictionary<(int X, int Z), RoadLayer> _roads = [];   // by chunk coordinates
+
+    /// <summary>
+    /// The road layer of the outside chunk at sample origin (x0, z0): the modern look's, the 1997 look's and its Software renderer's
+    /// (null: the 1997 look's), as TerrainNode.SetRoadLayer takes them; none (both null) takes the layer away.
+    /// </summary>
+    public void SetRoadLayer(int x0, int z0, Texture2D? modern, Texture2D? faithful, float roadLightY, Texture2D? software = null)
+    {
+        if (!Roads) return;
+        var key = (x0 / Chunk, z0 / Chunk);
+        if (modern is null && faithful is null) { if (!_roads.Remove(key)) return; }
+        else _roads[key] = new RoadLayer { Modern = modern, Faithful = faithful, Software = software, LightY = roadLightY };
+        if (_pieces.TryGetValue(key, out var p) && p.Mi is not null && p.Level != int.MinValue) p.Mi.MaterialOverride = MaterialFor(key, p.Level);
+    }
+
+    /// <summary>The material a chunk shown at <paramref name="level"/> is drawn with (its own where it has a road layer).</summary>
+    private Material? MaterialFor((int, int) key, int level) =>
+        level < 0 ? RoadFaithful(key) ?? (_editorView ? _faithfulOpen : _faithful) : _modern ? RoadNear(key) ?? _near : _near1997;
+
+    /// <summary>The modern look's material for a chunk with a road layer: the ring's shading with it (null: none, or no ring yet).</summary>
+    private ShaderMaterial? RoadNear((int X, int Z) key)
+    {
+        if (_near is null || _ground is null || !_roads.TryGetValue(key, out var r) || r.Modern is null) return null;
+        if (r.NearMat is not null) return r.NearMat;
+        var m = (ShaderMaterial)_near.Duplicate();
+        m.SetShaderParameter("road_layer", r.Modern);
+        m.SetShaderParameter("has_road", true);
+        // the chunk's corner, centre-relative (the chunks' vertices are)
+        var c = _ground.Centre;
+        m.SetShaderParameter("road_origin", new Vector2(key.X * ChunkSize - c.X, key.Z * ChunkSize - c.Y));
+        m.SetShaderParameter("road_units", ChunkSize);
+        return r.NearMat = m;
+    }
+
+    /// <summary>The 1997 look's material for a chunk with a road layer: the map's 1997 terrain with it, cut as the chunks are (null: none).</summary>
+    private ShaderMaterial? RoadFaithful((int, int) key)
+    {
+        if (!_roads.TryGetValue(key, out var r) || r.Faithful is null) return null;
+        var basis = _editorView ? _faithfulOpen : _faithful;
+        if (basis is null) return null;
+        ref var made = ref _editorView ? ref r.FaithfulOpenMat : ref r.FaithfulMat;
+        if (made is not null) return made;
+        var m = (ShaderMaterial)basis.Duplicate();
+        m.SetShaderParameter("road_layer", r.Faithful);
+        m.SetShaderParameter("has_road", true);
+        m.SetShaderParameter("road_light_y", r.LightY);
+        m.SetShaderParameter("has_road_software", r.Software is not null);
+        if (r.Software is not null) m.SetShaderParameter("road_layer_software", r.Software);
+        return made = m;
+    }
 
     private sealed class Piece
     {
@@ -186,9 +253,10 @@ public partial class OutsideTerrain : Node3D
     /// <summary>
     /// The level a chunk is drawn at, <paramref name="distance"/> from the camera (<see cref="LevelDistance"/>), <paramref name="shown"/>
     /// the level it shows (int.MinValue: none): modern, 0..3 by <see cref="LevelRange"/>; 1997, -1 (the map's own 1997 terrain), and in the
-    /// map editor's view the 10 m level (3) past <see cref="LevelRange"/>[2]. Back to a finer level only well inside its range.
+    /// map editor's view the 10 m level (3) past <see cref="LevelRange"/>[2], but for a chunk with a road layer (<paramref name="road"/>),
+    /// which stays the map's 1997 terrain, carrying it. Back to a finer level only well inside its range.
     /// </summary>
-    public static int Level(bool modern, bool editorView, float distance, int shown)
+    public static int Level(bool modern, bool editorView, float distance, int shown, bool road = false)
     {
         if (modern)
         {
@@ -197,7 +265,7 @@ public partial class OutsideTerrain : Node3D
             if (shown >= 0 && want < shown && distance > LevelRange[want] - 10) want = shown;
             return want;
         }
-        if (!editorView) return -1;
+        if (!editorView || road) return -1;
         float near = LevelRange[^1];
         return distance < near && !(shown == Levels - 1 && distance > near - 10) ? -1 : Levels - 1;
     }
@@ -247,7 +315,7 @@ public partial class OutsideTerrain : Node3D
                     _pieces[(cx, cz)] = p = new Piece();
                 }
                 p.Distance = d;
-                p.Want = Level(modern, _editorView, LevelDistance(_editorView, d, eye.Y - (float.IsNaN(p.Top) ? eyeGround : p.Top)), p.Level);
+                p.Want = Level(modern, _editorView, LevelDistance(_editorView, d, eye.Y - (float.IsNaN(p.Top) ? eyeGround : p.Top)), p.Level, _roads.ContainsKey((cx, cz)));
             }
         // finished jobs become meshes, a few a frame
         int uploads = 0;
@@ -288,7 +356,7 @@ public partial class OutsideTerrain : Node3D
         }
         UpdateMask(modern || open);
         if (Debug && Engine.GetProcessFrames() % 30 == 0)
-            GD.Print($"outside: {(modern ? "modern" : open ? "1997 (editor)" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_jobs.Busy} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
+            GD.Print($"outside: {(modern ? "modern" : open ? "1997 (editor)" : "1997")}, eye {ex:0},{eye.Y:0},{ez:0}, reach {reach:0}, {_pieces.Count} chunks wanted, {Drawn} drawn, {_roads.Count} with roads, {_jobs.Busy} jobs, faithful {(_faithful is null ? "none" : "set")}, levels {string.Join(",", _pieces.Values.GroupBy(q => (q.Level, q.Want, q.Job is null, q.Mi is null)).Select(g => $"{g.Key}x{g.Count()}"))}");
     }
 
     private void Clear()
@@ -334,14 +402,11 @@ public partial class OutsideTerrain : Node3D
         p.Mi ??= new MeshInstance3D { Name = $"outside_{key.X}_{key.Z}", Layers = TerrainNode.TerrainLayer, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         if (!p.Mi.IsInsideTree()) AddChild(p.Mi);
         p.Mi.Mesh = mesh;
+        p.Mi.MaterialOverride = MaterialFor(key, level);
         if (level < 0)
-        {
-            p.Mi.MaterialOverride = _editorView ? _faithfulOpen : _faithful;
             p.Mi.Position = new Vector3(key.X * ChunkSize, 0, -key.Z * ChunkSize);
-        }
         else
         {
-            p.Mi.MaterialOverride = _modern ? _near : _near1997;
             var c = _ground!.Centre;
             p.Mi.Position = new Vector3(c.X, 0, -c.Y);
         }

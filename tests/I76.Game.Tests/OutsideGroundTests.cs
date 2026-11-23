@@ -256,5 +256,10 @@ public class OutsideGroundTests(ITestOutputHelper log) : IDisposable
         Assert.Equal(OutsideTerrain.Levels - 1, OutsideTerrain.Level(true, true, OutsideTerrain.LevelDistance(true, 0, 3000), int.MinValue));
         Assert.Equal(OutsideTerrain.Levels - 1, OutsideTerrain.Level(false, true, OutsideTerrain.LevelDistance(true, 0, 3000), int.MinValue));
         Assert.Equal(0, OutsideTerrain.Level(true, false, OutsideTerrain.LevelDistance(false, 0, 3000), int.MinValue));
+        // a chunk with a road layer (a road or a lot in an empty cell) stays the map's 1997 terrain, which carries it, at any distance
+        // in the editor's 1997 view; the modern look's levels are the same with or without
+        Assert.Equal(-1, OutsideTerrain.Level(false, true, 900, int.MinValue, road: true));
+        Assert.Equal(-1, OutsideTerrain.Level(false, true, 595, OutsideTerrain.Levels - 1, road: true));
+        Assert.Equal(OutsideTerrain.Level(true, true, 900, int.MinValue), OutsideTerrain.Level(true, true, 900, int.MinValue, road: true));
     }
 }

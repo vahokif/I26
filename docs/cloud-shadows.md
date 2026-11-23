@@ -6,8 +6,9 @@ the day's one light setting whatever hung overhead, so a day with a heaped sky l
 shadow could not be seen anywhere but under a bridge. Now the sheet casts. Each pixel of the world is slid up
 the sun onto the dome and takes the sun out of itself wherever the sheet shows cloud, so a shade stands under
 the cloud that hangs over it, edges soft, and the two drift together as the sheet scrolls. It is one texture
-fetch, no geometry, no extra light and no shadow map, and it reaches the whole extended terrain out to the
-distant ring — which is the reason it is done this way rather than by casting the clouds.
+fetch, no geometry, no extra light and no shadow map, and it reaches as far as the sky's own sheet does — which
+is the reason it is done this way rather than by casting the clouds, and the reason it stops short of the
+horizon rather than shading ground the sky has no cloud over.
 
 | Where | What |
 |---|---|
@@ -30,27 +31,52 @@ distant ring — which is the reason it is done this way rather than by casting 
 `modern_sky` meets the eye's ray with a sphere of `radius` about a centre `drop` below the eye and takes the
 intersection's XZ as the sheet's UV: `uv = (xz / radius + 0.5) * 4 + scroll`, in the game frame (the sky mirrors
 Godot's Z to get it, and the shadow mirrors it back the same way, four tiles across the sheet). A cloud is a
-long way up, so the ground under it is not in the direction the cloud is seen but a little the way the sun is:
-for a sheet `radius - drop` over the ground — 600 m on the mission's numbers — a point `p` lies under the cloud
-at
+long way up, so the ground under it is not in the direction the cloud is seen but a little the way the sun is.
+The shadow is therefore the same intersection, taken from the ground up the sun instead of from the eye out —
+the sheet is a sphere, not a ceiling, and it is the sky's sphere, over the eye:
+
+```
+o = p + (0, drop, 0)                                // from the sheet's centre, drop below the eye
+c = o·o - radius²                                   // negative where there is a sheet overhead
+k = -(o·sun) + sqrt((o·sun)² - c)                   // how far up the sun to the sheet above
+uv = (((p + sun * k).xz + anchor.xz) / radius + 0.5) * 4 + TIME * scroll_per_second
+```
+
+Outside that sphere — further from the eye than `sqrt(radius² - drop²)`, 2615 m on the mission's numbers — there
+is no sheet over the ground at all, and the point takes no shade: its sun comes from open sky, and the clouds
+near it are behind the horizon rather than above it.
+
+`sun` is the direction to the sun in Godot's frame, as `i76_light_dir` has it, and `TIME * scroll_per_second`
+is the sky's own scroll, so a shadow is under its cloud and moves with it. The sheet's and the dome's numbers
+are read off the modern sky's material by `CloudShadow.Configure` rather than written again here, and the
+threshold between open sky and cloud is the mission's measured `sky_lum` and `cloud_lum`
+(`MissionBuilder.MeasureSky`), so the shade agrees with what the sky shows instead of with a guess. The crossing
+and its fade are also `CloudShadow.SheetHit` and `SheetShows`, which is where
+`tests/I76.Game.Tests/CloudShadowSheetTests.cs` can reach them: which ground has a sheet over it, and how much
+of that sheet the sky shows, are geometry rather than taste.
+
+The maths used to be a plane at the crown's height instead:
 
 ```
 k = (600 - p.y) / max(sun.y, 0.15)          // how far up the sun, and how far along the ground
 uv = ((p.xz + sun.xz * k) / radius + 0.5) * 4 + TIME * scroll_per_second
 ```
 
-`sun` is the direction to the sun in Godot's frame, as `i76_light_dir` has it, and `TIME * scroll_per_second`
-is the sky's own scroll, so a shadow is under its cloud and moves with it. The sheet's and the dome's numbers
-are read off the modern sky's material by `CloudShadow.Configure` rather than written again here, and the
-threshold between open sky and cloud is the mission's measured `sky_lum` and `cloud_lum`
-(`MissionBuilder.MeasureSky`), so the shade agrees with what the sky shows instead of with a guess.
+That is right close under and wrong in two ways away from it, both of which showed up as clouds seeming to
+render through distant mountains. A fixed height is a ceiling, so ground higher than 600 m gave a negative `k`
+and sampled the sheet on the far side of the sun: a drifting shade crossed high ground backwards. And a plane
+has no edge, so the whole map and the 3D horizon's ring were shaded, out to where the sky's clouds are *behind*
+the mountains rather than over them — a peak 6 km out carried a shade no cloud in the visible sky accounted for.
+The sun's own fade covered neither.
 
 Three things follow. The pattern is anchored to the map, not to the eye: `Rebase` moves the Godot origin under a
-long trip, and `i76_cloud_anchor` adds it back, so a shadow does not slide sideways when it does. The projection
-is a plane, not the sphere, which is right close under and wrong near the horizon, where a cloud is drawn a long
-way from where it would cast; the fade of the strength by the sun's height (`smoothstep(0.08, 0.3, sun.y)`)
-covers the low-sun case, where the plane runs off to kilometres and the light is grazing anyway. And the cloud's
-own detail noise (the sky's erosion and billow) is left out: at ground scale it would crawl under a moving car,
+long trip, and `i76_cloud_anchor` adds it back — at the UV end only, so a shadow does not slide sideways when it
+does while the dome stays where the sky puts it, over the eye. The reach is the dome's: the sky ends 2615 m out,
+and the shade is faded out over the last stretch by the same term the sky uses to fade its own clouds into the
+horizon (`smoothstep(0, 0.12, elevation)` of the crossing), so the sheet's edge is a fade rather than a circle of
+shaded ground with sun outside it, and a low sun — whose crossing runs a long way toward that rim — loses its
+shade for the same reason the sky loses its clouds. And the cloud's own detail noise (the sky's erosion and
+billow) is left out: at ground scale it would crawl under a moving car,
 and one fetch at a mipmap level, which softens as the sheet's texels go sub-pixel, gives edges as soft as a
 cloud 600 m up should.
 

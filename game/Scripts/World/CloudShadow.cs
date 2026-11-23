@@ -6,8 +6,10 @@ namespace I76.Game.World;
 /// The shadow of the mission sky's own clouds (docs/cloud-shadows.md). A shader slides a point of the world up
 /// the sun onto the sky's dome and takes the sun out of it wherever the sheet shows cloud, so a shadow arrives
 /// under the cloud hanging over it and the two drift together. Nothing is drawn and no light is cast: that is
-/// what lets it cover the whole extended terrain and the distant ring without a shadow cascade, and cost a
-/// texture fetch instead. Only the modern look asks for it — the 1997 look lights the world from the mission's
+/// what lets it cover the whole extended terrain without a shadow cascade, and cost a texture fetch instead. The
+/// sheet is where the sky puts it — over the eye, out to the dome's own edge — so the shade reaches the ground the
+/// sky can have cloud over and no further, which is the difference between a cloud shadow and a cloud seen
+/// through a distant mountain. Only the modern look asks for it — the 1997 look lights the world from the mission's
 /// own ramp and has no sun to lose (docs/deviations.md).
 /// The strength, the sky's fill and the look are decided here; the shaders only multiply by the result.
 /// </summary>
@@ -141,6 +143,36 @@ public static class CloudShadow
     {
         "0" or "normal" => 0, "1" or "half" => 1, "2" or "quarter" => 2, _ => Math.Clamp(setting, 0, Speeds.Length - 1),
     };
+
+    /// <summary>
+    /// Where the sun above a point of the world (Godot frame, so the eye is at the origin) meets the sky's sheet,
+    /// or null where there is no sheet over that point. The sky draws its clouds on a sphere of <paramref
+    /// name="radius"/> whose centre sits <paramref name="drop"/> below the eye, so it covers the ground only out to
+    /// about sqrt(r²−d²) — and a point past that has its sun coming from the sky behind it, not from under cloud.
+    /// The shaders do this per pixel; it is here as a number a test can hold, since the bug it pins — a shade on a
+    /// peak 6 km out, reading as cloud inside the rock — is geometry rather than taste. The sun is the unit
+    /// direction the shaders have, and the crossing is the far one: the sheet above, never the one under.
+    /// </summary>
+    public static Vector3? SheetHit(Vector3 point, Vector3 sun, float radius, float drop)
+    {
+        var o = point + new Vector3(0, drop, 0);   // from the sheet's centre, which is below the eye
+        var c = o.LengthSquared() - radius * radius;
+        if (c >= 0f) return null;                  // outside the dome: the sky here is open, cloudless haze
+        var b = o.Dot(sun);
+        return point + sun * (-b + Mathf.Sqrt(b * b - c));   // the far crossing: the sheet above, not the one under
+    }
+
+    /// <summary>
+    /// How much of the sheet over a crossing the sky actually shows: below a few degrees it fades its own clouds
+    /// into the horizon colour (the same 0 to 0.12 its own mix uses), and the crossing of a point near the dome's
+    /// rim runs down into that fade — which is what ends a shade rather than cutting it off at a circle.
+    /// </summary>
+    public static float SheetShows(Vector3 hit)
+    {
+        var e = hit.Y / Mathf.Max(hit.Length(), 1f);
+        var t = Mathf.Clamp(e / 0.12f, 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
 
     private static void Apply() => ObjectLight.Set("i76_cloud_shadow",
         _mode1997 || _sceneOff || !_enabled ? 0.0f : _strength);

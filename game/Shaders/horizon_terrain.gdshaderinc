@@ -222,7 +222,9 @@ uniform float bounce = 3.0;
 void light() {
 	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
 	// the cloud over this part of the ring is just another reason the sun does not reach it, and the
-	// bounced light below fills in against it as it does against a slope (docs/cloud-shadows.md)
+	// bounced light below fills in against it as it does against a slope. It reaches the ring only as far as
+	// the sky's own sheet does, which is the point: past that the mountains have their sun from open sky
+	// (docs/cloud-shadows.md)
 	float vis = LIGHT_IS_DIRECTIONAL ? v_data.r * i76_cloud_shade(v_world) : 1.0;
 	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI * vis;
 	if (LIGHT_IS_DIRECTIONAL) {

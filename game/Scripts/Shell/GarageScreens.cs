@@ -357,7 +357,8 @@ public sealed class GarageScreen : GarageBase, IChassisForm
                 _colours = _entryColours = (mc.Data ?? Shell.Melee).Colours(mc.Model, mc.Variant);
                 BuildLists();
             }
-            _swatches = new Garage3D.SwatchLayer { Name = "FormSwatches" };
+            // over the frame, so off while a pop-up or the Options Menu is over the form (the shell does not tick the form then)
+            _swatches = new Garage3D.SwatchLayer { Name = "FormSwatches", Shown = () => !Shell.ModalOpen && !Shell.OverlayOpen };
             Shell.AddLayerOverFrame(_swatches);
             Repaint();
             return;
@@ -558,8 +559,6 @@ public sealed class GarageScreen : GarageBase, IChassisForm
         int held = _hold.Id, hit = In(Shell.Mouse, DefenseR) ? 0 : In(Shell.Mouse, (450, 468, 48, 64)) ? 1 : In(Shell.Mouse, (450, 468, 235, 264)) ? 2 : -1;
         for (int n = _hold.Update(Shell.MouseHeld, hit, Shell.Delta); n > 0; n--)
             if (held == 0) Defense(_repeatAtMouse); else ScrollRepairs(held == 1 ? -1 : 1);
-        // the swatches are over the frame: off while a pop-up or the options are over the form
-        if (_swatches is not null) _swatches.Visible = !Shell.ModalOpen && !Shell.OverlayOpen;
         if (_renaming) { Rename(); return; }
         if (Shell.Wheel != 0 && In(Shell.Mouse, RepairR))
         {
@@ -799,7 +798,7 @@ public sealed class GarageScreen : GarageBase, IChassisForm
             Text(F45, vx, top + 2, Fit(values[k], 614 - vx));
             Frame.BlitAt(arrow, 617, top + 3);
         }
-        _swatches?.Set([.. _swatchList], !Shell.ModalOpen);
+        _swatches?.Set([.. _swatchList], true);
     }
 
     private string Fit(string s, int width)

@@ -1939,6 +1939,10 @@ public sealed class Garage3DScreen : ShellScreen, IChassisForm
 internal sealed partial class SwatchLayer : Control
 {
     private List<(Rect2I Rect, Color Colour)> _items = [];
+    private bool _on;
+    /// <summary>Whether the layer may show, read every frame (as <see cref="InkLayer.Shown"/>): a form's swatches are not over a pop-up or the
+    /// Options Menu, which the shell puts up without ticking the form. Null: <see cref="Set"/> alone decides.</summary>
+    public Func<bool>? Shown { get; init; }
 
     public SwatchLayer()
     {
@@ -1946,9 +1950,14 @@ internal sealed partial class SwatchLayer : Control
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
     }
 
+    public override void _Ready() => SetProcess(Shown is not null);
+
+    public override void _Process(double delta) => Visible = _on && Shown!();
+
     public void Set(List<(Rect2I, Color)> items, bool visible)
     {
-        Visible = visible;
+        _on = visible;
+        Visible = visible && (Shown?.Invoke() ?? true);
         _items = items;
         QueueRedraw();
     }

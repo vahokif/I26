@@ -10,7 +10,8 @@ namespace I76.Sim.Missions;
 /// takes every order and setting the script gives its original, aimed at the human nearest to the copy; once the original is
 /// dead it attacks the nearest human until it is destroyed. The script never sees the copies: they have no instance id, are
 /// left out of its vehicle lists (allEnemyDead, nearestEnemy, isWithinEnemy) and hold no actor slot, so its counters and
-/// objectives follow the originals alone.
+/// objectives follow the originals alone. A car the mission is about (<see cref="CoopKeyCars"/>: one the script decides an objective
+/// or the mission on alone, or films in a cut-scene) is never copied.
 /// </summary>
 public sealed partial class ScriptHost
 {
@@ -26,9 +27,27 @@ public sealed partial class ScriptHost
         foreach (var x in ExtrasOf(e).ToList()) if (!x.Dead) yield return x;
     }
 
-    /// <summary>A car Co-op Scaling copies: an AI ground car (no helicopter or gun emplacement) on a team neither the humans' nor nobody's.</summary>
+    /// <summary>The cars the mission is about (<see cref="CoopKeyCars"/>), which Co-op Scaling leaves alone; found at load.</summary>
+    public IReadOnlyDictionary<Entity, CoopKeyCars.Why> KeyCars => _keyCars;
+    private readonly Dictionary<Entity, CoopKeyCars.Why> _keyCars = [];
+
+    /// <summary>Finds the key cars in the mission's script (its FSM chunk) once the VM has bound its actors; only under Co-op Scaling.</summary>
+    internal void FindKeyCars(byte[] fsmPayload, FsmVm vm)
+    {
+        _keyCars.Clear();
+        if (Coop is not { ExtraEnemies: > 0 }) return;
+        var a = CoopKeyCars.Analyze(fsmPayload, i => i >= 0 && i < vm.Actors.Count && vm.Actors[i].Handle is { } h && IsPlayerHandle(h));
+        foreach (var (i, why) in a.Key)
+            if (i >= 0 && i < vm.Actors.Count && vm.Actors[i].Handle is Entity e && !IsHumanEntity(e)) _keyCars[e] = _keyCars.GetValueOrDefault(e) | why;
+    }
+
+    /// <summary>
+    /// A car Co-op Scaling copies: an AI ground car (no helicopter or gun emplacement) on a team neither the humans' nor nobody's,
+    /// and not one the mission is about.
+    /// </summary>
     private bool Scalable(Entity e) =>
-        e.Vehicle is { IsHeli: false, IsEmplacement: false } && e.ExtraOf is null && !IsHumanEntity(e) && e.Team != 0 && Lead is { } lead && e.Team != lead.Team;
+        e.Vehicle is { IsHeli: false, IsEmplacement: false } && e.ExtraOf is null && !IsHumanEntity(e) && e.Team != 0 && Lead is { } lead && e.Team != lead.Team
+        && !_keyCars.ContainsKey(e);
 
     /// <summary>
     /// An order to an original reaches its copies: made the first time the script orders it (as many as the humans then present
@@ -40,7 +59,11 @@ public sealed partial class ScriptHost
         if (!e.Scaled)
         {
             e.Scaled = true;
-            if (!Scalable(e)) return;
+            if (!Scalable(e))
+            {
+                if (_keyCars.TryGetValue(e, out var why)) Log($"co-op: {e.Name} is a car the mission is about ({why}): no extras");
+                return;
+            }
             int n = System.Math.Min(c.Seats.Count(s => s.Present) - 1, c.ExtraEnemies);
             for (int k = 0; k < n; k++) SpawnExtra(c, e, k + 1);
         }

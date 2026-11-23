@@ -780,7 +780,8 @@ alive it waits: the script then sees the group dead. Seats' deaths and timers ar
 ### Co-op Scaling
 
 The port's (`CoopSetup.ExtraEnemies`, `ScriptHost.ExtrasOf`, `CoopExtras.cs`; the host form's Co-op Scaling, `--coop-scale N`; off
-by default). With N humans present, each enemy car (team 2; a helicopter or gun emplacement is left alone) gets min(N − 1, cap)
+by default). With N humans present, each enemy car (team 2; a helicopter or gun emplacement is left alone, and so is a car the
+mission is about, below) gets min(N − 1, cap)
 copies, the cap 1–3 (`CoopSetup.MaxExtraEnemies`), decided once, the first time the script orders it (most stock enemies are given
 their sit or hide order on the first tick, so in a game that started from its lobby the copies are there from the start; a game
 whose players came later has the copies of the humans present when each car was first ordered). A copy is the same car file
@@ -789,6 +790,18 @@ moving as it does, with its skill and aggression. Every order the script gives t
 tick, a human target or follow reference taken as the human nearest the copy (`NearestHuman`); its settings (skill, aggression,
 avoidance, attacker cap, start, lights, siren) and a teleport (beside it again) too. Once the original is dead or gone, each living
 copy attacks the human nearest it every tick until destroyed (`ScriptHost.ExtrasFrame`).
+
+A car the mission is about is never copied (#195: T09's Callisto came in threes, and nobody could tell which one not to kill).
+`CoopKeyCars` reads the script once at load, in its source form (the decompiler's: each thread's fields bound to the actors and
+cells its globals name, called scripts followed with their arguments), and calls a car a key car when the script decides an
+objective or the mission on it alone (a rule whose actions, or its branch's steps, include success, fail, successAll, failAll or
+failAllObj has a condition naming it and no other actor, the humans aside, directly or through a flag that only rules on it set),
+or when a camera operation names it (a cut-scene about that car, which copies beside it would spoil). A car whose death only
+counts towards a group (a counter, or a rule on several cars at once, as T13's ten or T02's three) is plain opposition and is
+copied. In the stock missions the key enemy cars are S01's enemy6 and hate, S02's enemy1, S07's milk truck, T04's Patriot, Bandit
+and Knight, T07's cop1 and cop2, T09's Callisto, T12's tanker, DISCO and speedy, T17's cloaker and
+Malocchio; the Nitro Pack's P02's clown, P06's enemy1, P09's sleep1, P10's bob, P12's army1, P13's two Mondo trucks, P14's enemy2,
+P15's three hearses, P17's enemy1, P18's enemy3 and P19's target (`CoopKeyCarsTests`).
 
 The script never sees a copy: no instance id (the registry's lookups miss it), no actor slot, and left out of the host's vehicle
 lists, so `allEnemyDead`, `nearestEnemy` and `isWithinEnemy` and every objective and counter follow the originals alone

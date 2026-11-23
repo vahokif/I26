@@ -549,6 +549,7 @@ public sealed partial class MissionSetup
             }
             ms = new MissionScript(program, host, rand, seed, nitroDriver, i76Lines);
             MarkTaurus(ms.Vm!.Actors);
+            host.FindKeyCars(w.Mission.FsmPayload(), ms.Vm);
         }
         // the explosion templates in the original's load order (the first file with a key keeps it): the startup three, then
         // each scenery object's SDFC file in ODEF order, then the LDEF links'. Weapon effects register as first used; no

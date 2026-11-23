@@ -56,6 +56,29 @@ public class CoopScalingTests(ITestOutputHelper output)
         Assert.All(h.Entities.Where(e => e.Vehicle is not null && e.Team != 2 && e.ExtraOf is null), e => Assert.Empty(h.ExtrasOf(e)));
     }
 
+    /// <summary>
+    /// T09, three humans, the cap at 3 (#195): Callisto, the car the mission is about (disable him, do not kill him), is ordered from the
+    /// first tick and gets no copy; the script's own Callisto stays the only one.
+    /// </summary>
+    [Fact]
+    public void TheCarTheMissionIsAboutIsNotCopied()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var (s, setup) = Make(new SnapshotRig.Loaded(dir), "t09", 3, 3);
+        var h = setup.Script!.Host;
+        var log = new List<string>();
+        h.Logged += log.Add;
+        int cars = setup.World.Vehicles.Count;
+        Idle(s, 100);
+        var callisto = Assert.Single(Enemies(h));
+        Assert.Equal("t09dl01", callisto.Name, ignoreCase: true);
+        Assert.True(callisto.Scaled);                                  // ordered, and decided
+        Assert.Equal(CoopKeyCars.Why.Objective | CoopKeyCars.Why.Filmed, h.KeyCars[callisto]);
+        Assert.Empty(h.ExtrasOf(callisto));
+        Assert.Equal(cars, setup.World.Vehicles.Count);
+        Assert.Contains(log, x => x.Contains("no extras"));
+    }
+
     /// <summary>One human (or the option off) changes nothing: no copies, every car where the plain mission has it.</summary>
     [Fact]
     public void OneHumanOrTheOptionOffChangesNothing()

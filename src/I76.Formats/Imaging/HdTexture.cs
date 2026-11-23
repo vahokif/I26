@@ -139,4 +139,45 @@ public static class HdTexture
             }
         }
     }
+    /// <summary>
+    /// An upscale made from a texture whose 16-bit copy has a slip the modern look repairs (TextureRepairs: the factory forecourt's
+    /// green and blue border), repaired the same way in place, so a pack made from the file draws no green and blue line either.
+    /// <paramref name="original"/> and <paramref name="repaired"/> are the texture's texels before and after the repair (RGBA, the
+    /// original's size, the same stored order as the upscale). The upscale's texels over a repaired texel take its repaired colour;
+    /// those within two texels of one, where the upscaler spread the slip's colour, take the repaired texel's colour at their own
+    /// lightness, held within 24 levels of it. Alpha is kept, and so is everything further from a repaired texel; an upscale made
+    /// without the slip changes there only in tint. Returns how many texels changed.
+    /// </summary>
+    public static int RepairSlip(byte[] rgba, int w, int h, int scale, byte[] original, byte[] repaired, int ow, int oh)
+    {
+        const int Reach = 2, Light = 24;
+        var slipped = new bool[ow * oh];
+        bool any = false;
+        for (int i = 0; i < slipped.Length; i++)
+            any |= slipped[i] = original[i * 4] != repaired[i * 4] || original[i * 4 + 1] != repaired[i * 4 + 1] || original[i * 4 + 2] != repaired[i * 4 + 2];
+        if (!any) return 0;
+        var near = new bool[ow * oh];
+        for (int y = 0; y < oh; y++)
+            for (int x = 0; x < ow; x++)
+                if (slipped[y * ow + x])
+                    for (int yy = Math.Max(0, y - Reach); yy <= Math.Min(oh - 1, y + Reach); yy++)
+                        for (int xx = Math.Max(0, x - Reach); xx <= Math.Min(ow - 1, x + Reach); xx++) near[yy * ow + xx] = true;
+        int changed = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int o = Math.Min(y / scale, oh - 1) * ow + Math.Min(x / scale, ow - 1);
+                if (!near[o]) continue;
+                int p = (y * w + x) * 4, q = o * 4;
+                int d = slipped[o] ? 0 : Math.Clamp((int)MathF.Round(Lum(rgba[p], rgba[p + 1], rgba[p + 2]) - Lum(repaired[q], repaired[q + 1], repaired[q + 2])), -Light, Light);
+                bool c = false;
+                for (int k = 0; k < 3; k++)
+                {
+                    byte v = (byte)Math.Clamp(repaired[q + k] + d, 0, 255);
+                    if (rgba[p + k] != v) { rgba[p + k] = v; c = true; }
+                }
+                if (c) changed++;
+            }
+        return changed;
+    }
 }

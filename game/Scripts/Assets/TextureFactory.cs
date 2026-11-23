@@ -192,15 +192,29 @@ public sealed class TextureFactory(TextureResolver resolver, Palette? palette)
     private Image? LoadUpscale(string member, byte[] rgba, int w, int h)
     {
         if (HdTextures.Load(member, rgba, w, h) is not { } img) return null;
+        // a texture with a slip the modern look repairs (TextureRepairs): a pack's upscale made from the file is repaired too, sent as
+        // RGBA8 with new mipmaps (a pack's own copy made without the slip comes out the same but for its tint there)
+        if (TextureRepairs.Has(member) && GetRgba(member) is { } o && GetRepairedRgba(member) is { } r)
+        {
+            var fixedUp = Texels(img);
+            HdTexture.RepairSlip(fixedUp, img.GetWidth(), img.GetHeight(), img.GetWidth() / o.Width, o.Rgba, r.Rgba, o.Width, o.Height);
+            return Picture(fixedUp, img.GetWidth(), img.GetHeight());
+        }
         if (_greyed is not { } g || resolver.Load(member) is not { Palette: null } t || !HdTexture.Uses(t.Indices, g)) return img;
         // a .dds over the greyed entries is decompressed, turned grey and sent as RGBA8 with new mipmaps
+        int uw = img.GetWidth(), uh = img.GetHeight();
+        var data = Texels(img);
+        HdTexture.Recolour(data, uw, uh, uw / w, t.Indices, w, h, g, palette!, _packPalette!);
+        return Picture(data, uw, uh);
+    }
+
+    /// <summary>An upscale's texels, RGBA8 in its stored order (a .dds decompressed; the image is changed).</summary>
+    private static byte[] Texels(Image img)
+    {
         img.ClearMipmaps();
         if (img.IsCompressed()) img.Decompress();
         img.Convert(Image.Format.Rgba8);
-        int uw = img.GetWidth(), uh = img.GetHeight();
-        var data = img.GetData();
-        HdTexture.Recolour(data, uw, uh, uw / w, t.Indices, w, h, g, palette!, _packPalette!);
-        return Picture(data, uw, uh);
+        return img.GetData();
     }
 
     private static Image Picture(byte[] rgba, int w, int h)

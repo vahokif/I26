@@ -63,6 +63,21 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public Dictionary<int, RoadRaster.Tex?>? RoadTextures97 { get; private set; }
     /// <summary>The modern look's road layers were baked from a texture pack's upscales (<see cref="RoadLayerResolutionHd"/>).</summary>
     public bool HdRoads { get; private set; }
+    /// <summary>With <see cref="HdRoads"/>, the member each road-layer texture number draws (the roads', then the piece tops' and ground decals').</summary>
+    private List<(int Index, string? Member)>? _hdRoadMembers;
+
+    /// <summary>
+    /// With a texture pack's roads (<see cref="HdRoads"/>), the modern look's road-layer textures for painting the chunks in the world
+    /// rectangle <paramref name="area"/> (x0, z0, x1, z1) again (RoadPainter: a destroyed structure's ground): <see cref="RoadTextures"/>
+    /// with the pack's upscales of the roads and of the piece tops and ground decals reaching the area, decoded here (the calling
+    /// thread's); null without a pack's roads, or while none is served (the 1997 look: that repaint keeps the originals).
+    /// </summary>
+    public Dictionary<int, RoadRaster.Tex?>? HdRoadTexturesFor(System.Numerics.Vector4 area)
+    {
+        if (_hdRoadMembers is not { } members || RoadTextures is not { } texs || RoadPieceTris is not { } tris || Textures is not { } textures || RoadNames is not { } names) return null;
+        var near = tris.Where(t => t.Texture >= 0 && t.Max.X >= area.X && t.Max.Y >= area.Y && t.Min.X < area.Z && t.Min.Y < area.W).Select(t => t.Texture).ToHashSet();
+        return HdRoadTextures(texs, members.Where(m => m.Index < names.Length || near.Contains(m.Index)), textures.GetDrawnRgba);
+    }
     private Func<(Dictionary<(int, int), Image> Layers, Dictionary<(int, int), Image> Software, float LightY)>? _faithfulRoads;
 
     /// <summary>
@@ -624,9 +639,10 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // one set of layers, as without a pack); a repaired texture the pack has no upscale of stays the repaired copy
         // (not in the map editor: its repaints of edited roads are the originals', and the 1997 look's layers made later would
         // be the roads as they were at the build)
-        var roadTexHd = I76.Game.Editor.EditorSession.Active ? null : HdRoadTextures(roadTex, roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))),
-            m => textures.GetDrawnRgba(m));
+        var roadMembers = roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))).ToList();
+        var roadTexHd = I76.Game.Editor.EditorSession.Active ? null : HdRoadTextures(roadTex, roadMembers, m => textures.GetDrawnRgba(m));
         HdRoads = roadTexHd is not null;
+        _hdRoadMembers = HdRoads ? roadMembers : null;
         for (int i = 0; i < pieceTris.Count; i++) pieceTris[i] = pieceTris[i] with { Texture = pieceTris[i].Texture + roadNames.Length };
         RoadNames = roadNames; RoadTextures = roadTex; RoadTextures97 = roadTex97; RoadPieceTris = pieceTris; RoadPieceOwners = pieceOwners;
         // not in the cache: the ground materials are made while the roads bake

@@ -10,7 +10,8 @@ namespace I76.Game.Editor.RoadTools;
 /// whole map are flattened (cheap), the layers of the touched chunks are rasterised on the thread pool (RoadRaster, the loader's own
 /// code, with the gap fills and the repaired textures the modern look has; the 1997 look's apart where either reaches a chunk, and
 /// its Software renderer's where a repaired texture does), and the finished layers swap into the chunks' materials a few at a time
-/// on the main thread (TerrainNode.SetRoadLayer).
+/// on the main thread (TerrainNode.SetRoadLayer). With a texture pack's roads (MissionBuilder.HdRoads, a mission's: the map editor
+/// bakes none) the modern look's layer is painted from the pack's upscales at its density, and the 1997 look's apart in every chunk.
 /// </summary>
 public sealed class RoadPainter(MissionBuilder builder)
 {
@@ -59,6 +60,10 @@ public sealed class RoadPainter(MissionBuilder builder)
         if (origins.Count == 0) return;
         _clock = System.Diagnostics.Stopwatch.StartNew();
         var tri = tris.ToList();
+        // the pack's upscales for the chunks painted, decoded here (the texture factory is the main thread's)
+        var hd = builder.HdRoads ? builder.HdRoadTexturesFor(new(origins.Min(o => o.X0) * 5f, origins.Min(o => o.Z0) * 5f,
+            origins.Max(o => o.X0) * 5f + chunk, origins.Max(o => o.Z0) * 5f + chunk)) : null;
+        int resModern = hd is null ? Res : MissionBuilder.RoadLayerResolutionHd;
         _job = Task.Run(() =>
         {
             // the quads of every road as the loader flattens them, with the gap fills the modern look adds
@@ -73,21 +78,22 @@ public sealed class RoadPainter(MissionBuilder builder)
             Parallel.ForEach(origins, o =>
             {
                 var origin = new System.Numerics.Vector2(o.X0 * 5f, o.Z0 * 5f);
-                Image? Make(IReadOnlyList<RoadRaster.FlatQuad> q, RoadRaster.Index ix, Dictionary<int, RoadRaster.Tex?> set)
+                Image? Make(IReadOnlyList<RoadRaster.FlatQuad> q, RoadRaster.Index ix, Dictionary<int, RoadRaster.Tex?> set, int res = Res)
                 {
-                    var layer = RoadRaster.Bake(q, origin, chunk, Res, i => set.GetValueOrDefault(i), tris: tri, index: ix);
+                    var layer = RoadRaster.Bake(q, origin, chunk, res, i => set.GetValueOrDefault(i), tris: tri, index: ix);
                     if (layer is null) return null;
-                    var img = Image.CreateFromData(Res, Res, false, Image.Format.Rgba8, layer);
+                    var img = Image.CreateFromData(res, res, false, Image.Format.Rgba8, layer);
                     img.GenerateMipmaps();
                     return img;
                 }
-                var modern = Make(modernQuads, indexModern, texs);
-                // the 1997 look draws no fills, and the files' own textures: the same image where neither a fill nor a repaired texture reaches the chunk
-                bool own = RoadRaster.OwnFaithful(origin, chunk, fills, tri, differing);
+                var modern = Make(modernQuads, indexModern, hd ?? texs, resModern);
+                // the 1997 look draws no fills, and the files' own textures: the same image where neither a fill nor a repaired texture
+                // reaches the chunk (and no pack's upscale is in the modern look's)
+                bool own = hd is not null || RoadRaster.OwnFaithful(origin, chunk, fills, tri, differing);
                 // its Software renderer, where a repaired texture reaches: the repaired copy without the fills (the modern look's image where none reaches)
                 Image? software = null;
                 if (own && RoadRaster.OwnFaithful(origin, chunk, [], tri, differing))
-                    software = RoadRaster.OwnFaithful(origin, chunk, fills, [], differing) ? Make(flat, indexFaithful, texs) : modern;
+                    software = hd is not null || RoadRaster.OwnFaithful(origin, chunk, fills, [], differing) ? Make(flat, indexFaithful, texs) : modern;
                 result[(o.X0, o.Z0)] = (modern, own ? Make(flat, indexFaithful, texs97) : modern, software);
             });
             return new Dictionary<(int, int), (Image?, Image?, Image?)>(result);

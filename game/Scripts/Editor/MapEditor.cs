@@ -71,6 +71,7 @@ public partial class MapEditor : Node
         _overlay = new SurfaceOverlay(Doc);
         Doc.Changed += OnChanged;
         Doc.LookChanged += OnLookChanged;
+        Doc.SurfacesChanged += SyncUi;
         Cam.GroundAt = (x, z) => (float)World.BilinearHeight(x, z);
         Cam.Origin = Origin;
         Cam.Cursor = () => _hit;
@@ -104,6 +105,7 @@ public partial class MapEditor : Node
     {
         Doc.Changed -= OnChanged;
         Doc.LookChanged -= OnLookChanged;
+        Doc.SurfacesChanged -= SyncUi;
         if (GodotObject.IsInstanceValid(Builder.Terrain)) Terrain.Refreshed -= OnTerrainRefreshed;
         RenderingServer.GlobalShaderParameterSet("i76_brush", Vector4.Zero);
         RenderingServer.GlobalShaderParameterSet("i76_surface_on", Vector4.Zero);
@@ -226,8 +228,10 @@ public partial class MapEditor : Node
 
     private Color BrushColour(BrushKind k)
     {
-        // the surface tool's cursor is pale so it shows over its own overlay; the panel and the status line name the type
-        return k == BrushKind.Surface ? new Color(1f, 0.97f, 0.85f) : ToolColour(k);
+        // the surface tool's cursor is the chosen type's colour, a little lightened so its ring shows over that type's own patch
+        if (k != BrushKind.Surface) return ToolColour(k);
+        var t = SurfaceTypes.All[Brush.SurfaceId & 7];
+        return new Color(t.R / 255f, t.G / 255f, t.B / 255f).Lerp(Colors.White, 0.15f);
     }
 
     public static Color ToolColour(BrushKind k) => k switch
@@ -275,6 +279,8 @@ public partial class MapEditor : Node
             GD.Print($"editor stroke: {Brush.Kind} r {Brush.Radius:0} m, {_strokeFrames} frames, ground now {(_lastStamp is { } ls ? GroundH(ls.X, ls.Z) : 0):0.0} m, {_strokeMs / _strokeFrames:0.0} ms average (idle {(_idleFrames > 0 ? _idleMs / _idleFrames : 0):0.0} ms) ({1000 * _strokeFrames / Math.Max(_strokeMs, 1):0} fps), worst {_strokeMax:0.0} ms, {Terrain.StaleChunks} chunks still stale; surface refresh {(Terrain.RefreshCount > 0 ? Terrain.RefreshMs / Terrain.RefreshCount : 0):0.0} ms x {Terrain.RefreshCount} off the main thread");
         _strokeFrames = 0; _strokeMs = 0; _strokeMax = 0;
         if (cmd is not null) Undo.Push(cmd);
+        // what a surface stroke did, said in words: the ground looks the same, only the surface map and the car's handling change
+        if (cmd is not null && Brush.Kind == BrushKind.Surface) Toast($"Painted {SurfaceAndValues(Brush.SurfaceId & 7)}");
         _slowClock = 0;   // the objects and plants catch up at once
     }
 
@@ -288,6 +294,34 @@ public partial class MapEditor : Node
         if (Doc.Look is not { } before || look.Equals(before)) return;
         Undo.Push(new LookCommand(name, before, look));
         Doc.SetLook(look);
+    }
+
+    /// <summary>
+    /// The surface table window's edit (or a script's surfacerow): the table goes into the document as one undo step. Nothing is rebuilt:
+    /// the brush's labels follow, a playtest's sim reads the table, Save writes it.
+    /// </summary>
+    public void ApplySurfaces(I76.Formats.Mission.SurfaceTable table, string name)
+    {
+        EndStroke();
+        if (Doc.Surfaces is not { } before || table.Equals(before)) return;
+        Undo.Push(new SurfaceTableCommand(name, before, table));
+        Doc.SetSurfaces(table);
+        GD.Print($"editor: {name}");
+    }
+
+    // surfacerow:id,PRESET or surfacerow:id,grip,rolling,bump,damage: a row of the surface table, as the window sets it
+    private void SurfaceRowScripted(string[] a)
+    {
+        if (Doc.Surfaces is not { } table) throw new InvalidOperationException("no surface table");
+        int id = int.Parse(a[0]) & 7;
+        if (a.Length == 2)
+        {
+            var p = SurfacePresets.All.First(x => x.Name.Replace(" ", "").Equals(a[1].Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+            ApplySurfaces(table.With(id, p.Apply(id, table[id])), $"surface {SurfaceTypes.All[id].Name.ToLowerInvariant()}: {p.Name.ToLowerInvariant()}");
+            return;
+        }
+        float F(int i) => float.Parse(a[i], System.Globalization.CultureInfo.InvariantCulture);
+        ApplySurfaces(table.With(id, table[id] with { Grip = F(1), Rolling = F(2), Bump = F(3), Damage = int.Parse(a[4]) }), $"surface {SurfaceTypes.All[id].Name.ToLowerInvariant()}");
     }
 
     /// <summary>
@@ -344,6 +378,7 @@ public partial class MapEditor : Node
         Objects.Deactivate();
         PathsTool.Deactivate();
         Brush.Kind = k;
+        if (k == BrushKind.Surface) _overlayOn = true;   // the surface map is what shows the tool doing anything: on whenever the tool is chosen
         SyncUi();
     }
 
@@ -354,7 +389,7 @@ public partial class MapEditor : Node
             if (_hit is not { } sh || !Doc.Locate((int)Math.Floor(sh.X * MissionWorld.SampleScale + 0.5), (int)Math.Floor(sh.Z * MissionWorld.SampleScale + 0.5), out int tile, out int off)) { Toast("Point at the ground to pick its surface"); return; }
             Brush.SurfaceId = SurfaceTypes.Of(Doc.GetSample(tile, off));
             SyncUi();
-            Toast($"Surface {SurfaceTypes.All[Brush.SurfaceId].Name.ToLowerInvariant()}");
+            Toast($"Surface {SurfacePresets.Label(Brush.SurfaceId, Doc.Surfaces).ToLowerInvariant()}");
             return;
         }
         if (_hit is not { } h) { Toast("Point at the ground to pick its height"); return; }
@@ -746,6 +781,8 @@ public partial class MapEditor : Node
                 case "help": ToggleHelp(); break;
                 case "style": OpenStyle(args.Length > 0 && int.TryParse(args[0], out int tab) ? tab : 0); break;
                 case "mapstyle": MapStyleScripted(args); break;
+                case "surfaces": if (args.Length > 0 && args[0] == "0") CloseSurfaceTable(); else OpenSurfaceTable(); break;   // surfaces[:0]: the surface table window
+                case "surfacerow": SurfaceRowScripted(args); break;
                 case "menu": ToggleMenu(); break;
                 case "pick": OpenPicker(); break;
                 case "save": Save(); break;

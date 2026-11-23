@@ -109,19 +109,23 @@ public static class SurfaceTypes
 {
     public const int Count = 8;
 
-    /// <summary>A class as the editor lists it: name, what it does (sounds, clutter), and its colour in the overlay (RGB).</summary>
+    /// <summary>
+    /// A class as the editor lists it: name, what it does (sounds, clutter), and its colour in the overlay (RGB, sRGB). The colours are
+    /// eight hues far apart and saturated so they read over the desert, snow and grass grounds; the earlier earthy ones (dirt, dirt road and
+    /// planks three browns, sand a pale yellow) vanished into the ground textures.
+    /// </summary>
     public sealed record Info(int Id, string Name, string Tip, byte R, byte G, byte B);
 
     public static readonly Info[] All =
     [
-        new(0, "DIRT", "Id 0: dirt (dirt rolling sound, small tufts). Most of the melee arenas and A01", 176, 128, 70),
-        new(1, "SAND", "Id 1: sand (sand rolling sound, waist-high bushes). Most of the trip and Nitro maps", 232, 205, 110),
-        new(2, "ASPHALT", "Id 2: asphalt road (road skids, silent rolling, no plants). Under asphalt roads", 90, 90, 100),
-        new(3, "DIRT ROAD", "Id 3: dirt road (dirt sounds, no plants). Under dirt roads", 140, 85, 45),
-        new(4, "PLANKS", "Id 4: plank road (dirt sounds, no plants). Under plank roads and bridges", 150, 110, 60),
-        new(5, "GRAVEL", "Id 5: rough ground (gravel sounds, yuccas and cholla). Big patches in S02 and M06", 130, 150, 120),
-        new(6, "PARKING LOT", "Id 6: parking lot (road skids, silent rolling). Under asphalt intersections", 70, 130, 190),
-        new(7, "DIRT JUNCTION", "Id 7: dirt intersection (dirt sounds). Under dirt intersections", 200, 90, 160),
+        new(0, "DIRT", "Id 0: dirt (dirt rolling sound, small tufts). Most of the melee arenas and A01", 120, 72, 30),
+        new(1, "SAND", "Id 1: sand (sand rolling sound, waist-high bushes). Most of the trip and Nitro maps", 245, 210, 20),
+        new(2, "ASPHALT", "Id 2: asphalt road (road skids, silent rolling, no plants). Under asphalt roads", 40, 40, 48),
+        new(3, "DIRT ROAD", "Id 3: dirt road (dirt sounds, no plants). Under dirt roads", 235, 95, 20),
+        new(4, "PLANKS", "Id 4: plank road (dirt sounds, no plants). Under plank roads and bridges", 150, 70, 210),
+        new(5, "GRAVEL", "Id 5: rough ground (gravel sounds, yuccas and cholla). Big patches in S02 and M06", 40, 175, 60),
+        new(6, "PARKING LOT", "Id 6: parking lot (road skids, silent rolling). Under asphalt intersections", 30, 110, 240),
+        new(7, "DIRT JUNCTION", "Id 7: dirt intersection (dirt sounds). Under dirt intersections", 235, 40, 150),
     ];
 
     /// <summary>The surface id of a raw sample (the sim's SurfaceId).</summary>

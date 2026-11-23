@@ -120,6 +120,20 @@ public sealed class MapDocument
         }
     }
 
+    /// <summary>
+    /// The surface table (WRLD +0x97, +0x8a in a WREV 8 level; <see cref="SurfaceTable"/>): each surface id's grip, rolling, bump and damage.
+    /// Setting it writes only the rows that differ. Null if the WRLD is too short.
+    /// </summary>
+    public SurfaceTable? Surfaces
+    {
+        get => WorldPayload is { } p ? SurfaceTable.Read(p, WorldRevision) : null;
+        set
+        {
+            if (WorldPayload is not { } p) throw new InvalidOperationException("no WRLD chunk");
+            (value ?? throw new ArgumentNullException(nameof(value))).WriteTo(p, WorldRevision);
+        }
+    }
+
     /// <summary>The CD track (WRLD +0).</summary>
     public uint CdTrack
     {

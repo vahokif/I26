@@ -23,6 +23,8 @@ public partial class MapEditor
     private HSlider _radius = null!, _strength = null!;
     private readonly List<Control> _heightOnly = [], _surfaceOnly = [];
     private readonly Dictionary<int, Button> _surfaceButtons = [];
+    /// <summary>Each surface type's grip and damage, beside its button (the map's surface table).</summary>
+    private readonly Dictionary<int, Label> _surfaceValues = [];
     private Button _overlayButton = null!;
     private LineEdit _height = null!;
     private Control? _menu, _help, _dialog;
@@ -54,7 +56,7 @@ public partial class MapEditor
         _root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _layer.AddChild(_root);
         AddChild(_layer);
-        _toolButtons.Clear(); _falloffButtons.Clear(); _heightOnly.Clear(); _surfaceOnly.Clear(); _surfaceButtons.Clear();
+        _toolButtons.Clear(); _falloffButtons.Clear(); _heightOnly.Clear(); _surfaceOnly.Clear(); _surfaceButtons.Clear(); _surfaceValues.Clear();
 
         // ---- the top bar
         var top = new PanelContainer { Name = "TopBar" };
@@ -113,6 +115,12 @@ public partial class MapEditor
             tools.AddChild(b);
             _toolButtons[kind] = b;
         }
+        // the map's surface table (what each surface type does to a car): a window, not a tool
+        var table = EditorStyle.Button("SURFACE TABLE", ToggleSurfaceTable, s, 18);
+        table.TooltipText = "Each surface type's grip and damage on this map: ice, damaging ground";
+        table.Alignment = HorizontalAlignment.Left;
+        table.CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 34 * s);
+        tools.AddChild(table);
         RoadsTool.BuildPalette(tools, s);
         Objects.BuildUi(_root, tools, group, s);
         PathsTool.BuildPalette(tools, s);
@@ -190,9 +198,13 @@ public partial class MapEditor
         bx.AddChild(hint);
         for (int i = firstHeightOnly; i < bx.GetChildCount(); i++) _heightOnly.Add((Control)bx.GetChild(i));
 
-        // the surface tool's list: the ground's classes, each with its colour in the overlay
-        var sl = new Label { Text = "SURFACE TYPE" };
-        EditorStyle.Body(sl, 16 * s);
+        // the surface tool's list: the ground's classes, each with its colour in the overlay (the map's legend) and what it does to a car
+        var sl = new HBoxContainer();
+        var slName = new Label { Text = "SURFACE TYPE", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        EditorStyle.Body(slName, 16 * s);
+        var slValues = new Label { Text = "GRIP  DAMAGE/s", HorizontalAlignment = HorizontalAlignment.Right };
+        EditorStyle.Body(slValues, 13 * s, dim: true);
+        sl.AddChild(slName); sl.AddChild(slValues);
         bx.AddChild(sl); _surfaceOnly.Add(sl);
         var sg = new ButtonGroup();
         foreach (var info in SurfaceTypes.All)
@@ -206,12 +218,19 @@ public partial class MapEditor
             sb2.ButtonGroup = sg; sb2.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; sb2.TooltipText = info.Tip;
             sb2.Alignment = HorizontalAlignment.Left;
             row.AddChild(sb2);
+            var values = new Label { CustomMinimumSize = new Vector2(96 * s, 0), HorizontalAlignment = HorizontalAlignment.Right };
+            EditorStyle.Body(values, 15 * s);
+            row.AddChild(values);
+            _surfaceValues[id] = values;
             bx.AddChild(row); _surfaceOnly.Add(row);
             _surfaceButtons[id] = sb2;
         }
         _overlayButton = EditorStyle.Button("SURFACE MAP  ;", () => { _overlayOn = !_overlayOn; SyncUi(); }, s, 18, toggle: true);
         bx.AddChild(_overlayButton); _surfaceOnly.Add(_overlayButton);
-        var sh = new Label { Text = "Hard-edged brush; heights are kept. Alt+click or I picks the type under the cursor", AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        var tb = EditorStyle.Button("SURFACE TABLE", ToggleSurfaceTable, s, 18);
+        tb.TooltipText = "Each type's grip and damage on this map (ICE, DAMAGING presets)";
+        bx.AddChild(tb); _surfaceOnly.Add(tb);
+        var sh = new Label { Text = "Hard-edged brush; heights are kept. Alt+click or I picks the type under the cursor. The names follow the map's surface table", AutowrapMode = TextServer.AutowrapMode.WordSmart };
         EditorStyle.Body(sh, 13 * s, dim: true);
         bx.AddChild(sh); _surfaceOnly.Add(sh);
 
@@ -232,6 +251,7 @@ public partial class MapEditor
 
         // ---- the map style window (open across a rebuild of the map or the window)
         if (EditorSession.StyleTab >= 0) OpenStyle(EditorSession.StyleTab);
+        else if (_surfaceTableOpen) OpenSurfaceTable();
 
         // ---- the message line
         _toast = new Label { HorizontalAlignment = HorizontalAlignment.Center, Visible = false };
@@ -270,10 +290,42 @@ public partial class MapEditor
     private void OpenStyle(int tab)
     {
         if (Doc.Look is null) { Toast("This map has no style to edit", true); return; }
+        CloseSurfaceTable();
         _style?.QueueFree();
         EditorSession.StyleTab = tab;
         _style = new MapLookPanel { Doc = Doc, Builder = Builder, S = _s, Tab = tab, Apply = ApplyLook, TabChanged = t => EditorSession.StyleTab = t };
         _root.AddChild(_style);
+    }
+
+    private SurfaceTablePanel? _surfaceTable;
+    /// <summary>The surface table window is open (kept across a rebuild of the widgets).</summary>
+    private bool _surfaceTableOpen;
+
+    private void ToggleSurfaceTable()
+    {
+        if (_surfaceTable is not null && IsInstanceValid(_surfaceTable)) { CloseSurfaceTable(); return; }
+        OpenSurfaceTable();
+    }
+
+    private void OpenSurfaceTable()
+    {
+        if (Doc.Surfaces is null) { Toast("This map has no surface table", true); return; }
+        if (_style is not null && IsInstanceValid(_style)) CloseStyle();
+        if (_surfaceTable is not null && IsInstanceValid(_surfaceTable)) _surfaceTable.QueueFree();
+        _surfaceTableOpen = true;
+        _surfaceTable = new SurfaceTablePanel
+        {
+            Doc = Doc, S = _s, Apply = ApplySurfaces, Selected = () => Brush.SurfaceId & 7, Close = CloseSurfaceTable,
+            Select = id => { Brush.SurfaceId = id; SyncUi(); },
+        };
+        _root.AddChild(_surfaceTable);
+    }
+
+    private void CloseSurfaceTable()
+    {
+        _surfaceTable?.QueueFree();
+        _surfaceTable = null;
+        _surfaceTableOpen = false;
     }
 
     private void ApplyHeightText(string text)
@@ -300,7 +352,21 @@ public partial class MapEditor
         bool surface = Brush.Kind == BrushKind.Surface;
         foreach (var c in _heightOnly) c.Visible = !surface;
         foreach (var c in _surfaceOnly) c.Visible = surface;
-        foreach (var (id, b) in _surfaceButtons) b.SetPressedNoSignal(id == Brush.SurfaceId);
+        foreach (var (id, b) in _surfaceButtons)
+        {
+            b.SetPressedNoSignal(id == Brush.SurfaceId);
+            // the names follow the map's surface table (ICE, DAMAGING, or the type's own name while its row is the stock one)
+            b.Text = SurfacePresets.Label(id, Doc.Surfaces);
+            b.TooltipText = SurfaceTypes.All[id].Tip + (Doc.Surfaces is { } st ? "\n" + SurfacePresets.Values(st[id]) : "");
+            if (_surfaceValues.TryGetValue(id, out var vl))
+            {
+                var r = Doc.Surfaces?[id];
+                vl.Text = r is { } rr ? $"{rr.Grip.ToString("0.0#", System.Globalization.CultureInfo.InvariantCulture)}   {rr.Damage}" : "";
+                // what stands out: ice and damage in the warning colour
+                vl.AddThemeColorOverride("font_color", r is { } r2 && (r2.Grip < SurfacePresets.IceBelow || r2.Damage >= SurfacePresets.DamagingFrom) ? HudStyle.Amber : HudStyle.ParchmentDim);
+            }
+        }
+        if (_surfaceTable is not null && IsInstanceValid(_surfaceTable)) _surfaceTable.Refresh();
         _overlayButton.SetPressedNoSignal(_overlayOn);
         if (!_height.HasFocus()) _height.Text = Brush.TargetHeight.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
         _syncing = false;
@@ -340,7 +406,7 @@ public partial class MapEditor
         else
         {
         var tool = Tools.First(t => t.Kind == Brush.Kind).Name;
-        _status.Text = Objects.Active ? Objects.StatusText(_hit) + $"    |    {Engine.GetFramesPerSecond()} fps" : Brush.Kind == BrushKind.Surface ? $"SURFACE {SurfaceTypes.All[Brush.SurfaceId & 7].Name}    radius {Brush.Radius:0} m    |    ground {ground}{UnderCursorSurface()}    |    {Engine.GetFramesPerSecond()} fps" : $"{tool}    radius {Brush.Radius:0} m    strength {Brush.Strength * 100:0}%    {Brush.Falloff.ToString().ToLowerInvariant()}    |    ground {ground}"
+        _status.Text = Objects.Active ? Objects.StatusText(_hit) + $"    |    {Engine.GetFramesPerSecond()} fps" : Brush.Kind == BrushKind.Surface ? $"SURFACE {SurfaceAndValues(Brush.SurfaceId & 7)}    radius {Brush.Radius:0} m    |    ground {ground}{UnderCursorSurface()}    |    {Engine.GetFramesPerSecond()} fps" : $"{tool}    radius {Brush.Radius:0} m    strength {Brush.Strength * 100:0}%    {Brush.Falloff.ToString().ToLowerInvariant()}    |    ground {ground}"
             + $"    |    {Engine.GetFramesPerSecond()} fps";
         }
         _title.Text = $"{TitleLabel()}{(Doc.Modified ? " *" : "")}";
@@ -353,8 +419,13 @@ public partial class MapEditor
     private string UnderCursorSurface()
     {
         if (_hit is not { } h || !Doc.Locate((int)Math.Floor(h.X * MissionWorld.SampleScale + 0.5), (int)Math.Floor(h.Z * MissionWorld.SampleScale + 0.5), out int t, out int o)) return "";
-        return $"   under it {SurfaceTypes.All[SurfaceTypes.Of(Doc.GetSample(t, o))].Name}";
+        return $"   under it {SurfaceAndValues(SurfaceTypes.Of(Doc.GetSample(t, o)))}";
     }
+
+    /// <summary>"ICE (grip 0.5, damage 0/s)": a type's name as the table makes it, and what it does to a car.</summary>
+    private string SurfaceAndValues(int id) => Doc.Surfaces is { } t
+        ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{SurfacePresets.Label(id, t)} (grip {t[id].Grip:0.0##}, damage {t[id].Damage}/s)")
+        : SurfaceTypes.All[id & 7].Name;
 
     private List<MapListing>? _stock;
 

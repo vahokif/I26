@@ -43,6 +43,15 @@ public sealed class LookCommand(string name, I76.Formats.Mission.MapLook before,
     public void Redo(IMapDocument doc) { if (doc is TerrainDocument t) t.SetLook(after); }
 }
 
+/// <summary>A change of the map's surface table (grip, rolling, bump, damage of the surface ids): undone, it puts the earlier table back.</summary>
+public sealed class SurfaceTableCommand(string name, I76.Formats.Mission.SurfaceTable before, I76.Formats.Mission.SurfaceTable after) : IEditCommand
+{
+    public string Name { get; } = name;
+    public int Size => 1;
+    public void Undo(IMapDocument doc) { if (doc is TerrainDocument t) t.SetSurfaces(before); }
+    public void Redo(IMapDocument doc) { if (doc is TerrainDocument t) t.SetSurfaces(after); }
+}
+
 /// <summary>Undo and redo: a stack of commands, the oldest dropped past a limit on the samples held.</summary>
 public sealed class UndoStack(IMapDocument start, int limit = 6_000_000)
 {

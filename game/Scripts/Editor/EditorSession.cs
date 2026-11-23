@@ -46,6 +46,9 @@ public static class EditorSession
     /// <summary>The map's look (the map style) as the editor has it, carried across a reload: the world is rebuilt from the file with this over it. Null: the file's own.</summary>
     public static I76.Formats.Mission.MapLook? Look { get; private set; }
 
+    /// <summary>The map's surface table as the editor has it, carried across a reload: a playtest's sim reads it (patched over the file's in memory). Null: the file's own.</summary>
+    public static I76.Formats.Mission.SurfaceTable? Surfaces { get; private set; }
+
     /// <summary>The map style window's tab while it is open (it stays open across the rebuild its changes make), -1 when closed.</summary>
     public static int StyleTab { get; set; } = -1;
 
@@ -70,7 +73,7 @@ public static class EditorSession
     public static void End()
     {
         Active = Playtest = Modified = false;
-        PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Paths = null; Layer = null; Look = null; StyleTab = -1;
+        PlaytestAt = null; PlaytestRay = null; PlaytestNoRay = null; Samples = null; Undo = null; Pose = null; Doc = null; Roads = null; Paths = null; Layer = null; Look = null; Surfaces = null; StyleTab = -1;
         I76.Game.Editor.Intersections.IntersectionSession.End();
         I76.Game.Boot.Main.Stash.Drop();
         I76.Formats.Vfs.SessionStore.End();
@@ -85,6 +88,10 @@ public static class EditorSession
         // the map style: the file's look, and the editor's own over it (the palette, sky, ground, horizon and hour the world is built from)
         var fileLook = I76.Formats.Mission.WorldSettings.Read(world.Mission) is { } ws ? I76.Formats.Mission.MapLook.Of(ws) : null;
         if (Look is { } shown && !shown.Equals(fileLook) && I76.Formats.Mission.WorldSettings.Patch(world.Mission, shown)) world.RefreshLook();
+        // the surface table: the file's, and the editor's over it (MissionSetup reads the sim's grip and damage from the mission's WRLD)
+        var fileSurfaces = I76.Formats.Mission.WorldSettings.Read(world.Mission) is { } ws2 ? I76.Formats.Mission.SurfaceTable.Of(ws2) : null;
+        if (Surfaces is { } table && !table.Equals(fileSurfaces) && table.Patch(world.Mission))
+            GD.Print($"editor: the world reads the edited surface table{(Playtest ? " (playtest)" : "")}");
         var listed = I76.Formats.Mission.WorldSettings.ArenaName(world.Mission)?.Trim();
         Roads ??= RoadStore.FromMission(world.Mission.Data);
         I76.Game.Editor.Intersections.IntersectionSession.Prepare(world, Roads);   // the pieces beside the roads
@@ -98,6 +105,7 @@ public static class EditorSession
         }
         var doc = new TerrainDocument(world.Terrain, world.Mission.Name, string.IsNullOrEmpty(listed) ? world.Mission.Name : listed, world.Mission.Path, Install?.AddonDir, Install, Roads);
         doc.InitLook(fileLook, Look);
+        doc.InitSurfaces(fileSurfaces, Surfaces);
         doc.Paths = Paths;
         doc.HorizonEditable = world.Mission.WorldRevision() != 8;
         if (Samples is { } s)
@@ -131,6 +139,7 @@ public static class EditorSession
         if (Doc is null) return;
         Samples = Doc.Snapshot();
         Look = Doc.Look;
+        Surfaces = Doc.Surfaces;
         Modified = Doc.Modified;
         Mission = Doc.BaseMission.ToLowerInvariant();
     }

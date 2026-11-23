@@ -34,6 +34,8 @@ public static class MapSaver
         if (doc is TerrainDocument { Paths: { Dirty: true } paths }) paths.WriteTo(project.Mission);
         // the map style: written only where the editor changed them (a map saved as it was stays byte for byte)
         if (doc is TerrainDocument { Look: { } look } && !look.Equals(project.Mission.Look)) project.Mission.Look = look;
+        // the surface table: only the rows that differ are written
+        if (doc is TerrainDocument { Surfaces: { } table } && !table.Equals(project.Mission.Surfaces)) project.Mission.Surfaces = table;
         bool inPlace = SameFolder(Path.GetDirectoryName(Path.GetFullPath(sourcePath))!, saveDir);
         if (newName is null && !inPlace) throw new InvalidOperationException("a map outside the save folder is saved under a new name");
         if (newName is not null)

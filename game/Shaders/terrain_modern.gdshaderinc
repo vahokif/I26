@@ -559,7 +559,7 @@ void fragment() {
 	{
 		vec4 so = surface_overlay(g_pos.xz);
 		ALBEDO = mix(ALBEDO, so.rgb, so.a);
-		EMISSION += so.rgb * so.a * 0.3;
+		EMISSION += so.rgb * so.a * 0.6;   // the map reads in shade and at night too
 		vec2 bc = brush_cursor(g_pos.xz);
 		ALBEDO = mix(ALBEDO, i76_brush_style.rgb, clamp(bc.x * 0.85 + bc.y * 0.22, 0.0, 1.0));
 		EMISSION += i76_brush_style.rgb * (bc.x * 0.7 + bc.y * 0.1);

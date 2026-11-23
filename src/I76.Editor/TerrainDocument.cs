@@ -17,7 +17,7 @@ public sealed class TerrainDocument : IMapDocument
     private long _revision;
 
     /// <summary>
-    /// Counts every change to the map as the editor holds it (heights, roads, placed objects, the look): never goes down, not even by a save or an undo.
+    /// Counts every change to the map as the editor holds it (heights, roads, placed objects, the look, the surface table): never goes down, not even by a save or an undo.
     /// A copy of the world built at one revision shows the map exactly while the revision is still that one.
     /// </summary>
     public long Revision => _revision + Roads.Version + (Layer?.Version ?? 0) + (Paths?.Version ?? 0);
@@ -53,7 +53,7 @@ public sealed class TerrainDocument : IMapDocument
     public Objects.ObjectLayer? Layer { get; set; }
     /// <summary>The script's nav paths as the editor holds them (set when the editor opens the map); saved with the heights.</summary>
     public Paths.PathStore? Paths { get; set; }
-    public bool Modified => _dirty != 0 || Roads.Dirty || Layer is { } l && l.Version != l.SavedVersion || Paths is { Dirty: true } || Look != FileLook;
+    public bool Modified => _dirty != 0 || Roads.Dirty || Layer is { } l && l.Version != l.SavedVersion || Paths is { Dirty: true } || Look != FileLook || Surfaces != FileSurfaces;
 
     /// <summary>The map's look as it is now (the map style: palette, sky, ground, horizon, hour). <see cref="LookChanged"/> fires when it is set.</summary>
     public MapLook? Look { get; private set; }
@@ -73,6 +73,24 @@ public sealed class TerrainDocument : IMapDocument
         if (look.Equals(Look)) return;
         Look = look; _revision++;
         LookChanged?.Invoke();
+    }
+
+    /// <summary>The map's surface table as it is now (each surface id's grip, rolling, bump and damage: <see cref="SurfaceTable"/>). Null if the WRLD has none.</summary>
+    public SurfaceTable? Surfaces { get; private set; }
+    /// <summary>The surface table the map's file holds: <see cref="Modified"/> when <see cref="Surfaces"/> differs.</summary>
+    public SurfaceTable? FileSurfaces { get; private set; }
+    /// <summary>Raised after <see cref="SetSurfaces"/> (the surface tool's labels follow; nothing is rebuilt: the table is read by the sim when a playtest starts).</summary>
+    public event Action? SurfacesChanged;
+
+    /// <summary>Starts the surface table: what the file holds, and what the editor had (a table not yet saved, carried across a reload).</summary>
+    public void InitSurfaces(SurfaceTable? file, SurfaceTable? current) { FileSurfaces = file; Surfaces = current ?? file; }
+
+    /// <summary>Changes the surface table (an edit, or its undo).</summary>
+    public void SetSurfaces(SurfaceTable table)
+    {
+        if (table.Equals(Surfaces)) return;
+        Surfaces = table; _revision++;
+        SurfacesChanged?.Invoke();
     }
 
     public bool Has(int sx, int sz) => Tiles.Sample(sx, sz) is not null;
@@ -196,6 +214,7 @@ public sealed class TerrainDocument : IMapDocument
         SourcePath = files.First(f => Path.GetFileName(f).Equals(project.MissionFileName, StringComparison.OrdinalIgnoreCase));
         Name = project.Mission.ArenaName is { Length: > 0 } listed ? listed.Trim() : project.Name;
         FileLook = Look;
+        FileSurfaces = Surfaces;
         MarkSaved();
         return files;
     }

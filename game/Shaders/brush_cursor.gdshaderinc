@@ -13,7 +13,8 @@ vec4 surface_overlay(vec2 p) {
 	if (i76_surface_on.x < 0.5) return vec4(0.0);
 	vec2 uv = (p - i76_surface_rect.xy) * i76_surface_rect.zw;
 	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(0.0);
-	return texture(i76_surface, uv);
+	vec4 c = texture(i76_surface, uv);
+	return vec4(pow(c.rgb, vec3(2.2)), c.a);   // the texels are sRGB colours
 }
 
 float brush_weight(float t, float kind) {

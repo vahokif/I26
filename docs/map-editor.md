@@ -107,12 +107,79 @@ and sounds and which plants grow (they are redrawn), not the drawn ground. The r
 (The names are the editor's: the original names none of them; 6 and 7 are what its force feedback calls "parking lot" and "dirt
 intersection".) The brush is a hard-edged disc of the chosen radius (surface is discrete, so strength and falloff are hidden); every sample
 whose centre is inside it takes the type, a stroke is one undo step (`BrushStroke`'s surface mode, the same `StrokeCommand` as the height
-brushes) and the status line says the type under the cursor. While the tool is on, the **surface map** (`SurfaceOverlay`) tints the
-ground by type, one texel a sample over a 768 x 768 sample window that follows the camera and repaints the samples an edit reached; the
-terrain shaders of both looks draw it (`i76_surface*` globals in `brush_cursor.gdshaderinc`). `;` or the SURFACE MAP button hides it. A road
+brushes). While the tool is on, the **surface map** (`SurfaceOverlay`) paints the ground in the types' colours, one texel a sample
+over a 768 x 768 sample window that follows the camera and repaints the samples an edit reached (the next frame); the terrain shaders of
+both looks draw it (`i76_surface*` globals in `brush_cursor.gdshaderinc`). It comes on whenever the SURFACE tool is chosen; `;` or the
+SURFACE MAP button hides it until then.
+
+The feedback, since painting a type changes nothing of the drawn ground: the surface map in eight saturated hues far apart (dirt brown,
+sand yellow, asphalt near-black, dirt road orange, planks violet, gravel green, parking lot blue, dirt junction pink), strong (78 %, the
+colours decoded from sRGB, lit by their own emission in the modern look) with a dark outline wherever two types meet, so a stroke's edge
+always shows; the right panel's list is its legend, each type with its colour, its name as the map's table makes it and its grip and
+damage a second (amber when it is ice or damaging); the brush cursor in the chosen type's colour; the status line names the chosen type
+and the one under the cursor with their grip and damage, and a stroke ends with a message saying what was painted ("Painted ICE (grip
+0.5, damage 0/s)"). Until 0.13.0 the map drew and updated but could hardly be seen: earthy colours at 62 % (dirt, dirt road and planks
+three browns, sand a pale yellow) read as linear, so washed out further, over the desert grounds they matched, a whole new map tinted
+dirt-brown, and no word of grip or damage anywhere: a stroke of sand or dirt road on a desert map looked like nothing at all. A road
 the road tool draws, moves or bulldozes lays or resets its own nibble over its band again, so paint after the roads. Capture script:
 `surface:ID[,overlay 0|1]` and `stroke:Surface,x,z,radius,1,seconds`. Tests: `SurfaceTests` (Editor: the disc, undo and redo, saving and
 reading back), `EditorRoadSurfaceTests` (Sim: a car on painted gravel).
+
+The names in the list follow the map's surface table (below): a type whose row has ice's grip is listed as **ICE**, one that hurts as
+**DAMAGING** or **STRIPPING** (both: `ICE + DAMAGING`), in the list, the status line and the eyedropper's message; the rest keep the names above.
+
+## Surface table
+
+What a surface type does to a car is not fixed: each map carries its own table, eight rows of grip, rolling, bump and damage a second, one
+per type (WRLD +0x97, 20 bytes a row: four floats and an int; `SurfaceTable` in `src/I76.Formats/Mission`). That is how a map has ice or
+ground that hurts: the ground is painted with a type (Surface paint) and that type's row is made slippery or damaging. **SURFACE TABLE**
+(the TERRAIN group, under SURFACE, and the surface brush's panel) opens the window that edits it.
+
+| Field | What the sim does with it |
+|---|---|
+| GRIP | scales every tyre force: drive (wheelspin), braking, the cornering limit at which the car slides, holding on a slope. Stock ground is 1.5 to 2.1 |
+| ROLLING | the rolling resistance (sand 0.1, rough ground 0.2, road 0.01) |
+| BUMP | the suspension's roughness input (0 on almost every stock row) |
+| DAMAGE/s | hit points a second while the car drives forward faster than 7.65 m/s (17 mph); reversing, slow or airborne cars take none. It goes under the armour: the chassis reinforcement first, then the tyres, engine, brakes and weapons. It never kills (the original's terrain damage has no kill roll): a car stripped by it is wrecked by its next hit |
+
+The fourth float of a row (+0x0c) is read by nothing in the game and is 0 in every stock map; the editor keeps it as it is.
+
+Each row's fields take a typed value (Enter or leaving the field); the buttons under the table set the selected row from a **preset**,
+keeping the fields the preset does not name. Clicking a type's name selects it, and it is the surface brush's type too, so the next stroke paints it.
+
+| Preset | Sets | From |
+|---|---|---|
+| STOCK | the whole row back to the one most stock maps have for the type | the table 92 of the 114 stock missions hold (`SurfaceTable.Stock`) |
+| ICE | grip 0.5, rolling 0.01, bump 0 | none: no stock map has ice. The Piranha reaches 13 m/s in 6 s at full throttle (31 on stock dirt) and spins out at full lock |
+| BLACK ICE | grip 0.2, rolling 0.01, bump 0 | none; 0.2 is the least grip the original's oil slick leaves alone (it takes away only grip above 0.2). 4.5 m/s in 6 s: barely any traction |
+| SNOW | grip 1.2, rolling 0.03, bump 0 | Matterhorn Run's dirt roads (N24, ids 3 and 7), the least grip of a stock road |
+| ROUGH | grip 1.0, rolling 0.5, bump 0.5, 14 damage | S02's rough ground (id 5) |
+| DAMAGING | 200 damage a second | Piece B with U's rough ground (P07, id 5): through the chassis reinforcement in a few seconds |
+| STRIPPING | 999999999 damage a second | The Noose and Cactus Mountain off the track (N29, N21, id 5): reinforcement and parts gone at once |
+| NO DAMAGE | 0 damage a second | Rift's rough ground (N05; a new flat map's table is Rift's) |
+
+The stock tables, surveyed over both installs' 114 missions: 92 hold the stock one (dirt 1.9, sand 1.5 and 3 damage a second, asphalt 2.1,
+dirt road 1.9, planks 1.5, rough ground 1.5 and 12 a second, parking lot 2.1, dirt junction 1.9). The others vary a little: grippier roads
+(M07, T01: 2.3), S02's and Mojave Sprint's rougher rough ground (grip 1.0, bump 0.5 and 0.75, 14 a second), Matterhorn Run's 1.2 roads,
+Mojave Sprint's dirt (1.1, 2 a second), more damage on sand (5 to 15 a second in S02, N11, N13, N25, The Noose), S05's rough ground at
+9.999 for everything, and the heavy damage rows: Piece B with U 200, Pitchfork 5000, The Noose and Cactus Mountain 999999999 on the rough
+ground off their tracks. The least grip of any row is 1.0; no stock map is icy, so ice is the editor's. The names: a row with grip under 1
+is ICE, damage from 100 a second DAMAGING, from 10000 STRIPPING (`SurfacePresets.Label`).
+
+**What follows the id, not the table**: the tyre skid, turn and rolling sounds (by id, `TyreSounds`: an ICE row painted as type 2
+still skids like asphalt), the original's ground clutter and the modern look's plants (by id), and the surface map's colours. The skid
+marks read the row's grip. Both physics models (the original's and Modern Physics) read grip, rolling and damage from the row; the AI's
+speed and the keyboard steering assist read its grip too. Nothing of the table is drawn, so it is the same in the 1997 and modern looks.
+
+**Where it goes.** An edit is one undo step (`SurfaceTableCommand`) and marks the map modified; nothing is rebuilt. Save writes the rows
+that differ into the mission file's WRLD (`MapDocument.Surfaces`; a table left alone stays byte for byte, a stock map saved under a new
+name carries it). A playtest (F5) reads it before it is saved: the editor puts the table over the mission's WRLD in memory as it does the
+map style (`EditorSession.Prepare`, `SurfaceTable.Patch`), and the sim reads its grip and damage from there (`MissionSetup`). In a network
+game the table is in the mission file, which a host sends to a player who lacks the map or has another version of it (docs/multiplayer.md
+"Custom maps": a changed table changes the map's hash), so every machine's sim has the same table. Capture script: `surfaces[:0]`,
+`surfacerow:ID,PRESET` or `surfacerow:ID,grip,rolling,bump,damage` (docs/dev-hooks.md). Tests: `SurfaceTableTests` (Formats: saving and
+reading back, the WREV 8 layout, the in-memory patch, the stock table), `SurfaceTableEditTests` (Editor: presets, names, undo, saving),
+`EditorSurfaceTableTests` (Sim: a melee on an editor-made map with painted ice and damaging ground, built from the saved file).
 
 ## Building
 
@@ -710,7 +777,7 @@ a spawn in the middle.
 ## Code
 
 - `src/I76.Editor` (no Godot): `IMapDocument`, `TerrainDocument`, `BrushStroke` and `BrushMath`, `SurfaceTypes`, `StrokeCommand` and `UndoStack`,
-  `MapSaver`, `NewMap`, `MapLookCatalog` (the choices of the map style) and `LookCommand`; `Geo/` (`i76 geomap`: see Geographic maps); `Roads/`: `RoadCurves`, `RoadBuilder`, `RoadGrade`, `RoadTerrain`, `RoadSnap`, `RoadPlanner`, `RoadOps`,
+  `MapSaver`, `NewMap`, `MapLookCatalog` (the choices of the map style) and `LookCommand`, `SurfacePresets` and `SurfaceTableCommand` (the surface table); `Geo/` (`i76 geomap`: see Geographic maps); `Roads/`: `RoadCurves`, `RoadBuilder`, `RoadGrade`, `RoadTerrain`, `RoadSnap`, `RoadPlanner`, `RoadOps`,
   `RoadEditing`, `RoadCommand`, `RoadStore`; `Intersections/`: `PieceCatalogue` (the stock pieces, arms and top faces), `JunctionRules` (the angles,
   the fit), `Junctions` (detect, cut, settle after edits), `PieceStore`, `JunctionCommand`; `StructureAttach` (the ends of a deck or ramp, shared with the object tool); `Objects/`: `ObjectCatalogue`, `ObjectLayer` and `ObjectCommands`, `Footprint` and `PlaceRules`, `Snapping`, `RoadGeometry`, `RoadSplit`, `MapChecks`. Tests: `tests/I76.Editor.Tests` (brush maths, strokes, undo, saving through the real writers in a scratch folder,
   and that a refreshed `TerrainSurface` draws where a fresh one does; `RoadTests.cs`: curve sampling, snapping, grade limiting, the RSEG
@@ -723,7 +790,7 @@ a spawn in the middle.
   script around it unchanged, paths in a map without a script, the analysis over the stock scripts), `EditorPathTests.cs` (I76.Sim.Tests).
 - `src/I76.Editor/ViewStash.cs` and `game/Scripts/Boot/MainStash.cs`: the editor's scene kept aside for its playtest (tests: `ViewStashTests` in `EditorTests.cs`, `RevisionCountsEveryEditAndNeverGoesDown`).
 - `src/I76.Sim/Terrain/PlaytestSpawn.cs`: the cursor ray to the playtest's spawn point and its refusals (tests: `PlaytestSpawnTests.cs`).
-- `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `FitScroll` (the columns that scroll), `EditorSession`, `MapLookPanel` (the map style window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.
+- `game/Scripts/Editor`: `MapEditor` (+ `MapEditorUi`), `SurfaceOverlay`, `EditorCamera`, `EditorPicker`, `FormDialog`, `EditorStyle`, `FitScroll` (the columns that scroll), `EditorSession`, `MapLookPanel` (the map style window), `SurfaceTablePanel` (the surface table window); `Roads/`: `RoadTool` (input, state, the panel and the `road:` script commands), `RoadVisuals` (preview, grade ribbon, handles, snap ring), `RoadPainter`; `Intersections/`: `IntersectionSession` (the pieces across playtest reloads, put into the world's placements), `PieceView` (the preview), `MissionBuilder.RefreshPieceTops` repaints the pieces' tops after an edit (tests: `IntersectionTests.cs`: rules, arms in the engine's frame, the junction edits and their undo, the surface, saving, the stock maps against the rules); `Objects/`: `ObjectEditor` (+ `ObjectUi`), `MarkerView`, `Thumbnails`.
 - The object surveys behind the catalogue and the snapping rules are in `tools/I76.Cli/ObjectSurvey.cs`: `i76 objects OUT.tsv` (every name, type
   and flag the stock maps place, with counts, kinds of map and model sizes), `i76 facing` (which side of a building the stock maps put
   the road on), `i76 decks` (road points inside each stock bridge, ramp and tunnel), `i76 bridges` and `i76 roadpts MAP` (roads near

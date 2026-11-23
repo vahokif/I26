@@ -48,6 +48,35 @@ public class HdRoadLayerTests
     }
 
     [Fact]
+    public void TheOutsideGroundsChunksTakeTheSameLayersAsTheMapsOwn()
+    {
+        // two chunks of the map's own and one past its tiles (an empty ZMAP cell) that a road reaches; the 1997 look's own layer where a
+        // gap fill reaches (the outside chunk), its Software renderer's where a repaired texture does (the map's second)
+        List<(int X0, int Z0)> map = [(0, 0), (32, 0)], outside = [(-32, 0)], all = [(0, 0), (32, 0), (-32, 0)];
+        bool Own97(int x0, int z0) => x0 != 0;
+        bool Software(int x0, int z0) => x0 == 32;
+        // no pack: as before, the outside chunk baked with the map's by the same rules
+        var plain = MissionBuilder.PlanRoadLayers(map, outside, pack: false, Own97, Software);
+        Assert.Equal(all, plain.Modern);
+        Assert.Equal(MissionBuilder.RoadLayerResolution, plain.Res);
+        Assert.Equal([(32, 0), (-32, 0)], plain.Faithful);
+        Assert.Equal([(32, 0)], plain.Software);
+        Assert.Empty(plain.Deferred);
+        // a pack's roads: the modern look's layer of every chunk, the outside one too, from its upscales, denser; the 1997 look's of every
+        // chunk, the outside one too, from the originals the first time the look is asked for, and none made with the mission
+        var pack = MissionBuilder.PlanRoadLayers(map, outside, pack: true, Own97, Software);
+        Assert.Equal(all, pack.Modern);
+        Assert.Equal(MissionBuilder.RoadLayerResolutionHd, pack.Res);
+        Assert.Empty(pack.Faithful);
+        Assert.Empty(pack.Software);
+        Assert.Equal(all, pack.Deferred);
+        // a map that streams its chunks bakes none with the mission (each as it streams in) and has no outside layers
+        var huge = MissionBuilder.PlanRoadLayers([], [], pack: true, Own97, Software);
+        Assert.Empty(huge.Modern);
+        Assert.Empty(huge.Deferred);
+    }
+
+    [Fact]
     public void AnUpscaledRoadBakesTheSameRoadAtTwiceTheResolution()
     {
         // a 4-texel road and its 4x upscale, flat colour: a quad baked at 2048 from the upscale covers the same ground as at 1024

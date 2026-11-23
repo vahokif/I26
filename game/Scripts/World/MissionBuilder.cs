@@ -62,14 +62,20 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// </summary>
     public Dictionary<int, RoadRaster.Tex?>? RoadTextures97 { get; private set; }
     /// <summary>The modern look's road layers were baked from a texture pack's upscales (<see cref="RoadLayerResolutionHd"/>).</summary>
-    public bool HdRoads { get; private set; }
+    public bool HdRoads => RoadTexturesHd is not null;
+    /// <summary>
+    /// The modern look's <see cref="RoadTextures"/> with a texture pack's upscales in place of the originals it has (HdRoadTextures), when
+    /// they are served; else null. RoadPainter paints the modern look's layer from them, at <see cref="RoadLayerResolutionHd"/>.
+    /// </summary>
+    public Dictionary<int, RoadRaster.Tex?>? RoadTexturesHd { get; private set; }
     /// <summary>Takes what the bake reads on the main thread (the road pieces' tops, which a destroyed structure paints out), and returns the bake.</summary>
     private Func<Func<(Dictionary<(int, int), Image> Layers, Dictionary<(int, int), Image> Software, float LightY)>>? _faithfulRoads;
 
     /// <summary>
     /// With a texture pack's roads (<see cref="HdRoads"/>), the 1997 look's road layers from the originals (the files' own textures,
     /// <see cref="RoadTextures97"/>, and the Software renderer's repaired copy where a repaired texture reaches), baked the first time
-    /// the look is asked for (off the main thread; a step yields the task while it runs) and given to the terrain's 1997 materials.
+    /// the look is asked for (off the main thread; a step yields the task while it runs) and given to the terrain's 1997 materials, and
+    /// the outside ground's where a road reaches past the map's tiles.
     /// Without, nothing: the layers were made with the mission, as they always were.
     /// </summary>
     public IEnumerable<object?> FaithfulRoadSteps()
@@ -80,8 +86,13 @@ public sealed class MissionBuilder(AssetVfs vfs)
         while (!task.Wait(1)) yield return task;   // (a caller that runs the steps at once waits here rather than spins)
         var (layers, software, lightY) = task.Result;
         foreach (var ((x0, z0), img) in layers)
-            terrain.SetFaithfulRoadLayer(x0, z0, ImageTexture.CreateFromImage(img), lightY,
-                software.TryGetValue((x0, z0), out var sw) ? ImageTexture.CreateFromImage(sw) : null);
+        {
+            var t = ImageTexture.CreateFromImage(img);
+            var st = software.TryGetValue((x0, z0), out var sw) ? ImageTexture.CreateFromImage(sw) : null;
+            // a chunk of the ground past the map's tiles (an empty ZMAP cell, or past the grid): the outside ground's, as RoadPainter does it
+            if (World?.Terrain.Sample(x0, z0) is null) OutsideNode?.SetFaithfulRoadLayer(x0, z0, t, lightY, st);
+            else terrain.SetFaithfulRoadLayer(x0, z0, t, lightY, st);
+        }
         GD.Print($"road layers: the 1997 look's {layers.Count} baked from the originals");
     }
     public List<RoadRaster.FlatTri>? RoadPieceTris { get; private set; }
@@ -435,6 +446,22 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public static List<(int X0, int Z0)> OutsideRoadOrigins(I76.Formats.Assembly.MissionWorld world, IReadOnlyList<RoadRaster.FlatQuad> quads, IReadOnlyList<RoadRaster.FlatTri> tris) =>
         world.Terrain.Huge || world.Outside is null ? [] : RoadRaster.OutsideChunks(world.Terrain, quads, tris);
 
+    /// <summary>
+    /// The chunks whose road layers are baked with the mission (not a map that streams its chunks: pass none): every chunk a road
+    /// reaches, the map's (<paramref name="origins"/>) and the outside ground's (<paramref name="outside"/>, OutsideRoadOrigins) alike,
+    /// gets the modern look's, from a texture pack's upscales at <see cref="RoadLayerResolutionHd"/> with <paramref name="pack"/>, else
+    /// at <see cref="RoadLayerResolution"/>; the 1997 look's own where <paramref name="own97"/> says it differs, and its Software
+    /// renderer's where <paramref name="software"/> does. With a pack every chunk's 1997 layer is its own, from the originals, and waits
+    /// for the first time the look is asked for (Deferred: FaithfulRoadSteps).
+    /// </summary>
+    public static (List<(int X0, int Z0)> Modern, int Res, List<(int X0, int Z0)> Faithful, List<(int X0, int Z0)> Software, List<(int X0, int Z0)> Deferred)
+        PlanRoadLayers(List<(int X0, int Z0)> origins, List<(int X0, int Z0)> outside, bool pack, Func<int, int, bool> own97, Func<int, int, bool> software)
+    {
+        var all = outside.Count == 0 ? origins : [.. origins, .. outside];
+        if (pack) return (all, RoadLayerResolutionHd, [], [], all);
+        return (all, RoadLayerResolution, all.Where(o => own97(o.X0, o.Z0)).ToList(), all.Where(o => software(o.X0, o.Z0)).ToList(), []);
+    }
+
     public Node3D Build(string msnPath)
     {
         Stage("build start");
@@ -652,7 +679,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // be the roads as they were at the build)
         var roadTexHd = I76.Game.Editor.EditorSession.Active ? null : HdRoadTextures(roadTex, roadNames.Select((n, i) => (i, resolver.FindByStem(n))).Concat(pieceMembers.Select((m, i) => (roadNames.Length + i, (string?)m))),
             m => textures.GetDrawnRgba(m));
-        HdRoads = roadTexHd is not null;
+        RoadTexturesHd = roadTexHd;
         for (int i = 0; i < pieceTris.Count; i++) pieceTris[i] = pieceTris[i] with { Texture = pieceTris[i].Texture + roadNames.Length };
         RoadNames = roadNames; RoadTextures = roadTex; RoadTextures97 = roadTex97; RoadPieceTris = pieceTris; RoadPieceOwners = pieceOwners;
         // not in the cache: the ground materials are made while the roads bake
@@ -678,28 +705,29 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // its roads there as strips instead (RoadsOffGround). No stock map has any.
         var outsideOrigins = OutsideRoadOrigins(world, [.. flat, .. fills], pieceTris);
         OutsideRoadChunks = outsideOrigins.Count;
-        var bakeOrigins = outsideOrigins.Count == 0 ? origins : [.. origins, .. outsideOrigins];
-        // with a pack's roads the modern layers are its, denser, outside chunks too; the 1997 look's, the originals' for every chunk
+        // with a pack's roads the modern layers are its, denser, the outside chunks' too; the 1997 look's, the originals' for every chunk
         // (and the Software renderer's where a repaired texture reaches), are baked the first time the look is asked for
-        // (FaithfulRoadSteps): until then it has none
-        var origins97 = huge || roadTexHd is not null ? [] : bakeOrigins.Where(o => Own97(o.X0, o.Z0)).ToList();
-        // the 1997 look's Software renderer where a repaired texture reaches: the repaired copy (the original's software path drew the
-        // 8-bit art, which has no slip), without the gap fills; the modern look's own layer where no fill reaches the chunk too
-        var originsSw = huge || roadTexHd is not null ? [] : bakeOrigins.Where(o => Repairs(o.X0, o.Z0) && Fills(o.X0, o.Z0)).ToList();
-        int resModern = roadTexHd is null ? RoadLayerResolution : RoadLayerResolutionHd;
+        // (FaithfulRoadSteps): until then it has none. Without, the 1997 look's apart where a gap fill or a repaired texture reaches,
+        // and its Software renderer's where a repaired texture does: the repaired copy (the original's software path drew the 8-bit
+        // art, which has no slip), without the gap fills; the modern look's own layer where no fill reaches the chunk too
+        var plan = PlanRoadLayers(huge ? [] : origins, outsideOrigins, roadTexHd is not null, Own97, (x0, z0) => Repairs(x0, z0) && Fills(x0, z0));
+        var origins97 = plan.Faithful;
+        var originsSw = plan.Software;
+        int resModern = plan.Res;
         Stage("road bake");
-        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTexHd ?? roadTex, bakeOrigins, resModern);
-        var layers97 = huge || origins97.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex97, origins97);
+        var layers = huge ? [] : BakeRoadLayers([.. flat, .. fills], pieceTris, roadTexHd ?? roadTex, plan.Modern, resModern);
+        var layers97 = origins97.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex97, origins97);
         var layersSw = originsSw.Count == 0 ? [] : BakeRoadLayers(flat, pieceTris, roadTex, originsSw);
         var lightY = Light.Direction.Y * Light.Intensity;
         // (with a pack the modern look's layer is the pack's, so the Software renderer's repaired copy is baked wherever one reaches)
-        _faithfulRoads = huge || roadTexHd is null ? null : () =>
+        var deferred = plan.Deferred;
+        _faithfulRoads = deferred.Count == 0 ? null : () =>
         {
             var tris = pieceTris.ToList();
             return () =>
             {
-                var sw = bakeOrigins.Where(o => Repairs(o.X0, o.Z0)).ToList();
-                return (BakeRoadLayers(flat, tris, roadTex97, bakeOrigins), sw.Count == 0 ? [] : BakeRoadLayers(flat, tris, roadTex, sw), lightY);
+                var sw = deferred.Where(o => Repairs(o.X0, o.Z0)).ToList();
+                return (BakeRoadLayers(flat, tris, roadTex97, deferred), sw.Count == 0 ? [] : BakeRoadLayers(flat, tris, roadTex, sw), lightY);
             };
         };
         List<RoadRaster.FlatQuad> flatFilled = huge ? [.. flat, .. fills] : [];

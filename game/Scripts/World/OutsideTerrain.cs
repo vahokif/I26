@@ -140,6 +140,13 @@ public partial class OutsideTerrain : Node3D
         if (_pieces.TryGetValue(key, out var p) && p.Mi is not null && p.Level != int.MinValue) p.Mi.MaterialOverride = MaterialFor(key, p.Level);
     }
 
+    /// <summary>
+    /// The 1997 look's road layer of the outside chunk at sample origin (x0, z0), given after the mission was built (MissionBuilder.FaithfulRoadSteps,
+    /// with a texture pack's roads): the modern look's kept. <paramref name="software"/> as <see cref="SetRoadLayer"/> takes it.
+    /// </summary>
+    public void SetFaithfulRoadLayer(int x0, int z0, Texture2D faithful, float roadLightY, Texture2D? software = null) =>
+        SetRoadLayer(x0, z0, _roads.GetValueOrDefault((x0 / Chunk, z0 / Chunk))?.Modern, faithful, roadLightY, software);
+
     /// <summary>The material a chunk shown at <paramref name="level"/> is drawn with (its own where it has a road layer).</summary>
     private Material? MaterialFor((int, int) key, int level) =>
         level < 0 ? RoadFaithful(key) ?? (_editorView ? _faithfulOpen : _faithful) : _modern ? RoadNear(key) ?? _near : _near1997;

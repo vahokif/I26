@@ -11,7 +11,9 @@ namespace I76.Game.Editor.RoadTools;
 /// code, with the gap fills and the repaired textures the modern look has; the 1997 look's apart where either reaches a chunk, and
 /// its Software renderer's where a repaired texture does), and the finished layers swap into the chunks' materials a few at a time
 /// on the main thread (TerrainNode.SetRoadLayer). The ground past the map's tiles in the edit's reach too (OutsideTerrain.SetRoadLayer):
-/// the original draws roads, lots and road pieces there as well.
+/// the original draws roads, lots and road pieces there as well. With a texture pack's roads (MissionBuilder.RoadTexturesHd: a game,
+/// not the map editor) the modern look's layer is painted from its upscales at MissionBuilder.RoadLayerResolutionHd, and the 1997
+/// look's, every chunk's own then, from the originals, as the mission's load bakes them.
 /// </summary>
 public sealed class RoadPainter(MissionBuilder builder)
 {
@@ -53,6 +55,9 @@ public sealed class RoadPainter(MissionBuilder builder)
         if (builder.RoadTextures is not { } texs || builder.RoadPieceTris is not { } tris) return;
         // the 1997 look's textures: a stock texture's slip as the file has it (TextureRepairs); the map editor's are the same set
         var texs97 = builder.RoadTextures97 ?? texs;
+        // the modern look's with a texture pack's roads: its upscales, denser (null: the same set as the 1997 look's Software renderer's)
+        var texsHd = builder.RoadTexturesHd;
+        int resModern = texsHd is null ? Res : MissionBuilder.RoadLayerResolutionHd;
         var differing = RoadRaster.Differing(texs, texs97);
         float chunk = TerrainNode.Chunk * TerrainNode.SampleSize, margin = 12f;
         var origins = TerrainNode.ChunkOrigins(world.Terrain)
@@ -84,21 +89,23 @@ public sealed class RoadPainter(MissionBuilder builder)
             Parallel.ForEach(origins, o =>
             {
                 var origin = new System.Numerics.Vector2(o.X0 * 5f, o.Z0 * 5f);
-                Image? Make(IReadOnlyList<RoadRaster.FlatQuad> q, RoadRaster.Index ix, Dictionary<int, RoadRaster.Tex?> set)
+                Image? Make(IReadOnlyList<RoadRaster.FlatQuad> q, RoadRaster.Index ix, Dictionary<int, RoadRaster.Tex?> set, int res = Res)
                 {
-                    var layer = RoadRaster.Bake(q, origin, chunk, Res, i => set.GetValueOrDefault(i), tris: tri, index: ix);
+                    var layer = RoadRaster.Bake(q, origin, chunk, res, i => set.GetValueOrDefault(i), tris: tri, index: ix);
                     if (layer is null) return null;
-                    var img = Image.CreateFromData(Res, Res, false, Image.Format.Rgba8, layer);
+                    var img = Image.CreateFromData(res, res, false, Image.Format.Rgba8, layer);
                     img.GenerateMipmaps();
                     return img;
                 }
-                var modern = Make(modernQuads, indexModern, texs);
-                // the 1997 look draws no fills, and the files' own textures: the same image where neither a fill nor a repaired texture reaches the chunk
-                bool own = RoadRaster.OwnFaithful(origin, chunk, fills, tri, differing);
-                // its Software renderer, where a repaired texture reaches: the repaired copy without the fills (the modern look's image where none reaches)
+                var modern = Make(modernQuads, indexModern, texsHd ?? texs, resModern);
+                // the 1997 look draws no fills, and the files' own textures: the same image where neither a fill nor a repaired texture reaches
+                // the chunk (never with a pack's roads, the modern look's)
+                bool own = texsHd is not null || RoadRaster.OwnFaithful(origin, chunk, fills, tri, differing);
+                // its Software renderer, where a repaired texture reaches: the repaired copy without the fills (the modern look's image where none
+                // reaches, unless that is a pack's)
                 Image? software = null;
                 if (own && RoadRaster.OwnFaithful(origin, chunk, [], tri, differing))
-                    software = RoadRaster.OwnFaithful(origin, chunk, fills, [], differing) ? Make(flat, indexFaithful, texs) : modern;
+                    software = texsHd is not null || RoadRaster.OwnFaithful(origin, chunk, fills, [], differing) ? Make(flat, indexFaithful, texs) : modern;
                 result[(o.X0, o.Z0)] = (modern, own ? Make(flat, indexFaithful, texs97) : modern, software);
             });
             return new Dictionary<(int, int), (Image?, Image?, Image?)>(result);

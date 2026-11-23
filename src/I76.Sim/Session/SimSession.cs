@@ -141,8 +141,11 @@ public sealed partial class SimSession
     /// <summary>In a cut-scene the script drives the player's car too; otherwise the keys do.</summary>
     public bool Cutscene => Script?.Host.View.Active == true;
 
-    /// <summary>A co-op player's own camera scene (<c>CoopCameras</c>) holds that car's keys as a cut-scene does; the others play on.</summary>
-    public bool CutsceneOf(Vehicle car) => Cutscene || Script?.Host.PersonalSceneOf(car) == true;
+    /// <summary>
+    /// A co-op player's own camera scene (<c>CoopCameras</c>) holds that car's keys as a cut-scene does; the others play on.
+    /// So does the script driving the player's car outside a cut-scene, for the frame after it did (ScriptHost.ScriptDrove).
+    /// </summary>
+    public bool CutsceneOf(Vehicle car) => Cutscene || Script?.Host is { } h && (h.PersonalSceneOf(car) || h.ScriptDrove(car));
 
     /// <summary>A human driver for <paramref name="car"/>, fed inputs[n] for the n-th added; the car takes the player's rules.</summary>
     public Driver AddDriver(Vehicle car)

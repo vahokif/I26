@@ -104,21 +104,29 @@ public sealed partial class ScriptHost : IFsmHost
     private Ptable? _ptable;
     private int _playerDrivenTick = -10;
     public Ptable Ptable => _ptable ??= new Ptable(this);
+
+    /// <summary>
+    /// The script drove the player's car on the last script tick (an order, a teleport or a driveControl entry): the
+    /// original's input handler then leaves the car's controls as the script set them, so the keys do nothing this frame.
+    /// Single player only (co-op drops its humans' orders outside a cut-scene, <see cref="Order"/>).
+    /// </summary>
+    public bool ScriptDrove(Vehicle car) => Coop is null && _playerDrivenTick == FsmTick - 1 && Player?.Vehicle == car;
     /// <summary>The AI tactics table the Ptable binds (read from the install's executable, <see cref="I76.Formats.Exe.TacticsTable"/>); null: no AI orders in this world.</summary>
     public I76.Formats.Exe.PtEntry[]? Tactics { get; init; }
 
     /// <summary>
     /// The order opcodes: their fields, then the script's AI order, which is the AI's
-    /// whole tick for the frame. The player's car obeys only while the script
-    /// holds the camera; otherwise its orders are dropped (the keys drive it).
-    /// In co-op every human's car is the player's in this.
+    /// whole tick for the frame. The player's car obeys whenever it is ordered, as in the original: an order outside a
+    /// cut-scene (P11's one-second goto after a skipped opening, which puts the car in drive) holds the keys for the next
+    /// frame (<see cref="ScriptDrove"/>). In co-op every human's car is the player's in this, and there a human's car
+    /// obeys only while the script holds the camera; otherwise its orders are dropped (the keys drive it).
     /// </summary>
     public void Order(object actor, object? target, AiOrder order, IReadOnlyList<Vector3>? path, float speed, int followFlag = 0, float f1 = 0, float f2 = 0, object? reference = null)
     {
         var e = E(actor);
         if (e.Vehicle is null) return;
         bool human = IsHumanEntity(e);
-        if (human && !View.Active) return;
+        if (human && !View.Active && Coop is not null) return;
         if (human) Moved(e);
         var t = target as Entity;
         if (order is AiOrder.Goto or AiOrder.Evade or AiOrder.Race) { e.Path = path; e.OrderSpeed = speed; e.Ai.CommandSpeed = speed; }

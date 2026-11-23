@@ -350,6 +350,38 @@ public class VehicleStepTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     [Fact]
+    public void AFarCarTeleportedInAtOneMetrePerSecondStopsUnderItsBrake()
+    {
+        // Nitro P13's police: teleport(car, nav, speed 1, heading 1), then sit (full brake), far from the player. Measured in
+        // the original: speed 1.0 on the first frame, 1.0000043 on the second (the levelled forward row's length), then the
+        // brake, faster than 1 at last, stops the car (0.21 m from its post). With an exact normalisation the speed stayed
+        // at 1.0, which the brake does not touch, and the car crept on at 1 m/s for good
+        var step = new VehicleStep(new Flat(), new CrtRand());
+        var v = Car();
+        v.P.BrakeStrength = 1.5f;
+        v.Rot = Rows.Euler(0, 1 * 0.017445918f, 0);
+        v.Speed = 1; v.Vel = v.Rot.Forward; v.Throttle = -1; v.DriveState = 3; v.Flags |= VehicleFlags.EngineOn;
+        var start = v.Pos;
+        var speeds = new List<float>();
+        for (int i = 0; i < 28; i++) { step.CheapFrame(v, 1f / 28, isPlayer: false); speeds.Add(v.Speed); }
+        Assert.Equal(1f, speeds[0]);
+        Assert.InRange(speeds[1], 1.000004f, 1.0000046f);
+        Assert.Equal(0f, speeds[2]);
+        Assert.All(speeds.Skip(2), x => Assert.Equal(0f, x));
+        double moved = System.Math.Sqrt((v.Pos.X - start.X) * (v.Pos.X - start.X) + (v.Pos.Z - start.Z) * (v.Pos.Z - start.Z));
+        Assert.InRange(moved, 0.05, 0.15);
+    }
+
+    [Fact]
+    public void TheEngineRsqrtIsWithinItsSeedAndNewtonError()
+    {
+        foreach (double x in (double[])[0.25, 0.5, 0.999, 1, 1.0000001, 1.5, 2, 3.7, 100, 12345.6])
+            Assert.InRange(EngineRsqrt.Of(x) * System.Math.Sqrt(x), 1 - 2e-5, 1 + 1.1e-5);
+        // the unit vector a far car's heading gives: a hair over 1, as measured in the original (1.0000043)
+        Assert.InRange(EngineRsqrt.Of(1.0), 1.000004, 1.0000046);
+    }
+
+    [Fact]
     public void SteeringTurnsTheHeading()
     {
         var step = new VehicleStep(new Flat(), new CrtRand());

@@ -78,6 +78,8 @@ public static class SnapshotEquivalence
             new("rounds in flight", s => s.Combat?.Rounds.Any(r => r.Kind is not (0xc or 0xe or 0xf or 0x10 or 0x11)) == true, 400, 4000),
             new("dying car", s => s.World.Vehicles.Any(v => ((uint)v.Flags & 0x8000) != 0 && !v.Wreck), 0, 4000),
             new("wreck", s => s.World.Vehicles.Any(v => v.Wreck), 0, 4000),
+            // taken when it happens rather than left to a fixed tick that may come before it (a01 and t01 at 28 Hz destroy one past 60 s)
+            new("structure destroyed", s => s.World.Ground is Collision.IHasStatics hs && hs.World.Objects.Any(o => o.Destroyed || o.Nodes.Any(n => n.Destroyed)), 0, 4000),
             new("gate mid-slide", s => s.World.Ground is Collision.IHasStatics hs && hs.World.Gated.Any(o => o.Nodes.Any(n => n.Gate is { Moving: true })), 0, 4000),
             new("path search", s => s.Script?.Host.Entities.Any(e => e.Search is not null) == true, 400, 4000),
             new("flames", s => s.Combat?.Flames.Count > 0, 0, 4000),

@@ -82,3 +82,36 @@ public static class VecOps
         return (along, v - along);
     }
 }
+
+/// <summary>
+/// The engine's own reciprocal square root, which its vector normalisation uses: a seed of 8 bits from a 256-entry
+/// table indexed by the exponent's parity and the top 7 bits of the mantissa, one Newton step, then a factor of 1.00001.
+/// It is within about 1e-5 of 1/√x, and for most x a little over it, so a vector it normalises comes out slightly longer
+/// than 1 (a far car's levelled forward row is about 1.0000043 long).
+/// </summary>
+public static class EngineRsqrt
+{
+    private static readonly byte[] Seed = BuildSeed();
+
+    private static byte[] BuildSeed()
+    {
+        var t = new byte[256];
+        for (uint i = 0; i < 256; i++)
+        {
+            double x = BitConverter.UInt64BitsToDouble((ulong)((0x1ff00u | i) << 13) << 32);
+            uint hi = (uint)(BitConverter.DoubleToUInt64Bits(1.0 / System.Math.Sqrt(x)) >> 32);
+            t[i] = (byte)((hi + 0x400) >> 12);
+        }
+        // the entry for [1, 1 + 1/128): 1/√1 has the next exponent up, and its mantissa bits are zero
+        t[128] = 0xff;
+        return t;
+    }
+
+    public static double Of(double x)
+    {
+        uint hi = (uint)(BitConverter.DoubleToUInt64Bits(x) >> 32);
+        uint exp = ((0xbfcu - (hi >> 20)) >> 1) << 20;
+        double y = BitConverter.UInt64BitsToDouble((ulong)(exp | (uint)Seed[(hi >> 13) & 0xff] << 12) << 32);
+        return 0.5 * y * (3.0 - x * (y * y)) * 1.00001;
+    }
+}

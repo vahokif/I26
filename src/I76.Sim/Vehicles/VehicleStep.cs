@@ -96,13 +96,18 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         }
         else { sp = 0; pos = posStart; vel = Vector3.Zero; }
         // The rows rebuilt on the ground normal (forced to
-        // (0, 1, 0) on the far path), so a car that went far while climbing stops climbing; then the turn
+        // (0, 1, 0) on the far path), so a car that went far while climbing stops climbing; then the turn.
+        // The right row is normalised with the engine's own reciprocal square root, which leaves the rows a hair longer
+        // than 1 (1.0000043 at most headings): the next frame's speed, the forward row times this one's, grows by as much,
+        // so a car teleported in at exactly 1 m/s and braking is past the brake's "faster than 1" test two frames on and
+        // stops there (P13's police at their posts), where an exact normalisation keeps it at 1.0 with no brake for good
         var n = v.GroundNormal;
         var level = v.Rot;
         var right = Vector3.Cross(n, fwd);
         if (right.LengthSquared() > 1e-12f)
         {
-            right = Vector3.Normalize(right);
+            double inv = EngineRsqrt.Of((double)right.X * right.X + (double)right.Y * right.Y + (double)right.Z * right.Z);
+            right = new Vector3((float)(right.X * inv), (float)(right.Y * inv), (float)(right.Z * inv));
             level = new Rows(right, n, Vector3.Cross(right, n));
         }
         rot = Rows.Concat(Rows.AboutY(-(dt * yaw)), level);

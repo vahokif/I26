@@ -75,4 +75,20 @@ public static class RoadPieceObjects
 
     /// <summary>Whether a placement of this type and model is painted into the road layer (its mesh not drawn).</summary>
     public static bool Painted(uint type, AssembledModel? model) => IsRoadPiece(type) && model is not null && IsFlat(Drawn(model));
+
+    /// <summary>
+    /// Whether a map draws its ground list: every building's lot (SGEO type 0x51, whatever the placement's class) and every
+    /// road-piece placement. The original draws that list in its road pass, after the road strips, and the pass runs only when
+    /// the map has road data, so a map without a single road segment shows no lot and no road piece (M15's donut stand stands
+    /// on the bare arena). A road piece placed with another class id (Struct1, Struct2, Sign, Ramp, Bridge) is drawn with the
+    /// structures, so it still shows, without its lot if it has one.
+    /// </summary>
+    public static bool GroundListDrawn(Mission.MissionFile msn) => msn.RoadSegments().Count > 0;
+
+    /// <summary>
+    /// Whether a placement's part is left out on a map that draws no ground list (<see cref="GroundListDrawn"/>): the whole of a
+    /// road piece, and any placement's lot (its 'A' twin too).
+    /// </summary>
+    public static bool OffTheGroundList(uint type, AssembledModel m, string node, bool groundList) =>
+        !groundList && (IsRoadPiece(type) || m.Lots.Contains(node));
 }

@@ -487,7 +487,7 @@ public partial class DamageView : Node3D
                     if (n.Destroyed && n.Type == 7)
                         Builder.Scenery!.GateDied(p, n.Name, Builder.Meshes!.Build(m, include: part => n.Name.Equals(Builder.Scenery.GateOf(p, part.NodeName), StringComparison.OrdinalIgnoreCase), skipFace: GroundFaces(p, m)));
                 // the camera-facing cards (the pine's stump) are the spawner's to draw
-                alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsGatePart(p, part.NodeName) && !Builder.Scenery.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
+                alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsGatePart(p, part.NodeName) && !Builder.Scenery.IsCardPart(p, part.NodeName) && !NoLot(m, part), skipFace: GroundFaces(p, m));
                 altModel = m;
             }
             else foreach (var n in o.Nodes) if (n.Destroyed && n.Type == 7) Builder.Scenery!.GateDied(p, n.Name, null);
@@ -495,7 +495,7 @@ public partial class DamageView : Node3D
         else if (p.Definition is { } d0 && new ModelAssembler(Builder.Vfs) { Destroyed = true }.Assemble(d0) is { } m
             && Builder.Assembler!.Assemble(d0) is { } intact && m.Parts.Select(x => x.NodeName).SequenceEqual(intact.Parts.Select(x => x.NodeName)) == false)
         {
-            alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsCardPart(p, part.NodeName), skipFace: GroundFaces(p, m));
+            alt = Builder.Meshes!.Build(m, include: part => !Builder.Scenery!.IsCardPart(p, part.NodeName) && !NoLot(m, part), skipFace: GroundFaces(p, m));
             altModel = m;
         }
         Builder.Scenery!.Destroy(p, alt, altModel, altModel is null ? null : GroundFaces(p, altModel), o.Nodes.Count > 0 ? Dead : null);
@@ -512,6 +512,9 @@ public partial class DamageView : Node3D
             Sound(sound, at, sound.Equals("vexplode.wav", StringComparison.OrdinalIgnoreCase) ? Ds3d.LoudMinDistance : Ds3d.MinDistance);
         }
     }
+
+    /// <summary>A lot of a wreck on a map without road data, which draws none (RoadPieceObjects.GroundListDrawn).</summary>
+    private bool NoLot(I76.Formats.Assembly.AssembledModel m, I76.Formats.Assembly.ModelPart part) => !Builder.GroundListDrawn && m.Lots.Contains(part.NodeName);
 
     /// <summary>A line object's wreck mesh by definition: every link of a line swaps to the same 'A' geometry.</summary>
     private readonly Dictionary<string, (Mesh? Mesh, AssembledModel? Model, Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? Skip)> _linkWrecks = [];
@@ -534,15 +537,13 @@ public partial class DamageView : Node3D
     }
 
     /// <summary>
-    /// The wreck of a grounded building keeps its lot painted into the terrain (GroundDecals), so leaves it out of its mesh
-    /// too; a scorch mark or a flattened part its destruction lays on the ground was never painted, so is drawn. A drive-on
-    /// structure's wreck leaves out its lot's alone (GroundDecals.LotsOnly).
+    /// The wreck of a grounded building (a drive-on structure's too) keeps its lot painted into the terrain (GroundDecals), so
+    /// leaves it out of its mesh too; a scorch mark or a flattened part its destruction lays on the ground was never painted, so
+    /// is drawn.
     /// </summary>
     private Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? GroundFaces(Placement p, AssembledModel m)
     {
-        bool lots = World.GroundDecals.LotsOnly(p);
-        if (!World.GroundDecals.Applies(p) && !lots || p.Definition is not { } def || Builder.Assembler!.Assemble(def) is not { } intact) return null;
-        var painted = World.GroundDecals.Painted(intact);
-        return lots ? (part, f) => intact.Lots.Contains(part.NodeName) && painted(part, f) : painted;
+        if (!World.GroundDecals.Applies(p) || p.Definition is not { } def || Builder.Assembler!.Assemble(def) is not { } intact) return null;
+        return World.GroundDecals.Painted(intact);
     }
 }

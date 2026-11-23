@@ -319,6 +319,12 @@ public partial class ScenerySpawner : Node3D
     /// <summary>I76_RETRO_SIGNS (tuning): <c>0</c> leaves the modern look's retroreflective sign faces out (before and after captures).</summary>
     private static readonly bool RetroSigns = System.Environment.GetEnvironmentVariable("I76_RETRO_SIGNS") != "0";
 
+    /// <summary>
+    /// Whether the map draws its lots and road pieces (RoadPieceObjects.GroundListDrawn; MissionBuilder.GroundListDrawn): without,
+    /// the road pieces are not drawn and every placement's lot is left out of its mesh. Set before <see cref="Spawn"/>.
+    /// </summary>
+    public bool GroundListDrawn { get; set; } = true;
+
     public void Spawn(MissionWorld world, ModelAssembler asm, MeshBuilder builder, bool skipVehicles = false)
     {
         _world = world; _asm = asm; _meshes = builder;
@@ -345,26 +351,30 @@ public partial class ScenerySpawner : Node3D
             }
             bool grounded = g.Key.EndsWith(SceneryGroup.Ground, StringComparison.Ordinal);
             bool roadPiece = g.Key.EndsWith(SceneryGroup.Piece, StringComparison.Ordinal);
-            bool lots = g.Key.EndsWith(SceneryGroup.Lots, StringComparison.Ordinal);
-            var def = grounded ? g.Key[..^SceneryGroup.Ground.Length] : roadPiece ? g.Key[..^SceneryGroup.Piece.Length] : lots ? g.Key[..^SceneryGroup.Lots.Length] : g.Key;
+            var def = grounded ? g.Key[..^SceneryGroup.Ground.Length] : roadPiece ? g.Key[..^SceneryGroup.Piece.Length] : g.Key;
+            if (roadPiece && !GroundListDrawn)
+            {
+                Loaded += g.Count();   // a map without road data draws no road piece (RoadPieceObjects.GroundListDrawn)
+                continue;
+            }
             var model = asm.Assemble(def);
             // a road piece shows one node of its model and is no object of the world (no spinners, no gates: RoadPieceObjects);
             // a flat one is painted into the terrain, any other drawn
             if (roadPiece && model is not null) model = RoadPieceObjects.Drawn(model);
             bool painted = roadPiece && model is not null && RoadPieceObjects.IsFlat(model);
             float lowest = model is null ? 0 : GroundDecals.LowestY(model);
-            // a drive-on structure's lot is painted with the ground too (GroundDecals.LotsOnly)
-            Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip = grounded ? (part, f) => GroundDecals.IsGroundFace(part, f, lowest)
-                : lots && model is not null ? (part, f) => GroundDecals.IsLotFace(model, part, f, lowest) : null;
+            Func<ModelPart, I76.Formats.Geo.GeoFace, bool>? skip = grounded ? (part, f) => GroundDecals.IsGroundFace(part, f, lowest) : null;
             var spinners = model is null || roadPiece ? null : SpinnersOf(asm.Vfs, def, model);
             var gates = model is null || roadPiece ? null : GatesOf(asm.Vfs, def);
             // a CTF flag's pole and pennant leave its base while the flag is away (ShowFlag)
             var flagParts = model is null || roadPiece ? null : FlagPartsOf(asm.Vfs, def);
             // the camera-facing cards are drawn on their own
             var cardNames = model is null ? null : CardNamesOf(def);
-            Func<ModelPart, bool>? include = spinners is null && gates is null && cardNames is null && flagParts is null ? null
+            // without a ground list no lot is drawn, whatever the placement's class (RoadPieceObjects.GroundListDrawn)
+            var noLots = !GroundListDrawn && model is { Lots.Count: > 0 } ? model.Lots : null;
+            Func<ModelPart, bool>? include = spinners is null && gates is null && cardNames is null && flagParts is null && noLots is null ? null
                 : part => !(spinners?.Any(s => s.Owns(part.NodeName)) ?? false) && !(gates?.Owns(part.NodeName) ?? false) && !(cardNames?.Contains(part.NodeName) ?? false)
-                    && !(flagParts?.Invoke(part.NodeName) ?? false);
+                    && !(flagParts?.Invoke(part.NodeName) ?? false) && !(noLots?.Contains(part.NodeName) ?? false);
             // a structure's self-lit faces shine at night in the modern look (MeshBuilder.SelfLit), its lamps light what is under them;
             // a road sign's parts (type-4 nodes) are retroreflective instead (RetroLamps), whatever the placements' class ids
             bool selfLit = SelfLitHook != "0" && !roadPiece;
@@ -390,9 +400,11 @@ public partial class ScenerySpawner : Node3D
                     continue;
                 }
             }
-            if (mesh is null && cardNames is null && roadPiece && model is not null)
+            if (mesh is null && cardNames is null && (roadPiece || grounded || noLots is not null) && model is not null)
             {
-                Loaded += g.Count();   // a road piece whose node has nothing to draw (a bridge's marker): the original shows nothing either
+                // a road piece whose node has nothing to draw (a bridge's marker): the original shows nothing either; a model all
+                // painted into the ground (an intersection piece placed as a structure or a ramp), or a lot alone on a map without roads
+                Loaded += g.Count();
                 continue;
             }
             if (mesh is null && cardNames is null)

@@ -22,7 +22,12 @@ public class MotionBlurRulesTests
     }
 
     [Fact]
-    public void TheShutterIsHalfASixtiethOfASecond() => Assert.Equal(0.5f, MotionBlurRules.Scale(1f / 60f), 4);
+    public void TheShutterIsASixtiethOfASecond()
+    {
+        Assert.Equal(1f, MotionBlurRules.Scale(1f / 60f), 4);
+        Assert.Equal(0.5f, MotionBlurRules.Scale(1f / 30f), 4);
+        Assert.Equal(144f / 60f, MotionBlurRules.Scale(1f / 144f), 4);   // a 144 fps frame moves 60/144 as far: scaled up to the same streak
+    }
 
     [Fact]
     public void AHitchStreaksAsATenthOfASecondWould() =>
@@ -36,9 +41,9 @@ public class MotionBlurRulesTests
     }
 
     [Theory]
-    [InlineData(1080, 21.6f)]
-    [InlineData(2160, 43.2f)]   // a 200 % Render Scale of 1080p: the same share of the picture
-    [InlineData(720, 14.4f)]
+    [InlineData(1080, 48.6f)]
+    [InlineData(2160, 97.2f)]   // a 200 % Render Scale of 1080p: the same share of the picture
+    [InlineData(720, 32.4f)]
     public void TheClampIsAShareOfTheHeight(int height, float px) => Assert.Equal(px, MotionBlurRules.MaxPixels(height), 3);
 
     private static readonly Vector3 Fwd = new(0, 0, -1), Up = Vector3.UnitY;
@@ -67,6 +72,12 @@ public class MotionBlurRulesTests
     [Fact]
     public void ANewCameraWithNoPastIsACut() =>
         Assert.True(MotionBlurRules.IsCut(Vector3.Zero, Fwd, Up, 0f, Vector3.Zero, Fwd, Up, 1.3f, 1f / 30f));
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(7, false)]
+    [InlineData(8, true)]   // still for eight frames: the effect rests
+    public void ItRestsAfterEightStillFrames(int quiet, bool idle) => Assert.Equal(idle, MotionBlurRules.Idle(quiet, 8));
 
     [Theory]
     [InlineData(null, true)]    // a file from before the key, or a new player: on

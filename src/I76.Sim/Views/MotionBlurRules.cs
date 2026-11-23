@@ -15,10 +15,10 @@ public static class MotionBlurRules
 
     /// <summary>The reference interval the shutter is a fraction of: one frame at 60 fps.</summary>
     public const float Reference = 1f / 60f;
-    /// <summary>The shutter, a fraction of <see cref="Reference"/> (0.5: a 180-degree shutter at 60 fps, 1/120 s).</summary>
-    public const float DefaultShutter = 0.5f;
-    /// <summary>The longest streak, a fraction of the view's height (2 %: 22 px at 1080p), whatever the resolution or Render Scale.</summary>
-    public const float DefaultMaxLength = 0.02f;
+    /// <summary>The shutter, a fraction of <see cref="Reference"/> (1: open the whole of a 60 fps frame, 1/60 s).</summary>
+    public const float DefaultShutter = 1f;
+    /// <summary>The longest streak, a fraction of the view's height (4.5 %: 49 px at 1080p), whatever the resolution or Render Scale.</summary>
+    public const float DefaultMaxLength = 0.045f;
 
     /// <summary>The frame times the scale is worked out over: a hitch longer than this streaks as a frame of this length would.</summary>
     public const float MinFrame = 1f / 1000f, MaxFrame = 1f / 10f;
@@ -52,6 +52,12 @@ public static class MotionBlurRules
         if (!(prevZoom > 0f) || !(zoom > 0f) || MathF.Abs(zoom / prevZoom - 1f) > CutZoom) return true;
         return false;
     }
+
+    /// <summary>
+    /// The effect rests (draws nothing, asks the engine for no motion vectors) once the camera has been still and the longest
+    /// streak under a pixel for <paramref name="after"/> frames running (<paramref name="quiet"/>): standing, or crawling.
+    /// </summary>
+    public static bool Idle(int quiet, int after) => quiet >= after;
 
     /// <summary>The cfg value: absent is on (the default), written only when off.</summary>
     public static bool From(bool? stored) => stored ?? true;

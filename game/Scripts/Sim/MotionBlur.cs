@@ -12,7 +12,7 @@ namespace I76.Game.Sim;
 /// object's; a car's cabin moves with the camera and has none) and the depth. The sky has no vectors of its own: its move is
 /// the camera's turn alone, from the two frames' cameras. A surface whose vector is far from what the camera's move gives it
 /// has jumped a long way (a car put back on the road) and takes the camera's. The vectors are scaled to a fixed shutter
-/// (<see cref="MotionBlurRules.Scale"/>: half of a 60 fps frame, whatever the frame rate) and clamped to
+/// (<see cref="MotionBlurRules.Scale"/>: a whole 60 fps frame, whatever the frame rate), shortened by a pixel (what crawls stays sharp) and clamped to
 /// <see cref="MotionBlurRules.DefaultMaxLength"/> of the view's height.
 ///
 /// Then the reconstruction filter of McGuire, Hennessy, Bukowski and Osman ("A Reconstruction Filter for Plausible Motion
@@ -20,9 +20,11 @@ namespace I76.Game.Sim;
 /// per pixel along it and along the pixel's own, weighed so that a sharp near thing does not smear into a moving far one
 /// and a moving near thing smears over a still far one; where everything near streaks about as far (the road and the
 /// scenery as the car drives) a plain average along the pixel's own streak. The streaks are worked out at half the view's
-/// size each way (a quarter of the pixels, about half the cost: 1.1 ms against 2.0 at 1080p on an integrated GPU) and laid
+/// size each way (a quarter of the pixels, about half the cost: about 1 ms at 1080p on an integrated GPU at speed) and laid
 /// over the full-size picture by each pixel's own share, so what does not move (the player's car in the chase view, the
-/// cabin) keeps every pixel.
+/// cabin) keeps every pixel. A frame whose longest streak is under a pixel is left alone (the blur's passes are sized on
+/// the GPU to nothing), and while the camera stands still with nothing moving the effect rests altogether (no motion
+/// vectors, no passes), looking again one frame in eight.
 ///
 /// No blur in the frame after a cut (<see cref="Cut"/>: a new camera, a view key, the script camera's cut, a teleport, the
 /// floating origin's rebase, the start of a mission) or when the camera jumps, turns or zooms too far in one frame
@@ -44,12 +46,14 @@ public partial class MotionBlur : Node
 
     private static readonly float Shutter = Env("I76_MOTION_BLUR_SHUTTER", MotionBlurRules.DefaultShutter, 0f, 4f);
     private static readonly float MaxLength = Env("I76_MOTION_BLUR_MAX", MotionBlurRules.DefaultMaxLength, 0f, 0.2f);
-    private static readonly int Samples = (int)Env("I76_MOTION_BLUR_SAMPLES", 12, 2, 64);
+    private static readonly int Samples = (int)Env("I76_MOTION_BLUR_SAMPLES", 8, 2, 64);
     private static readonly int View = (int)Env("I76_MOTION_BLUR_VIEW", 0, 0, 2);
     /// <summary>The streaks are worked out at half the 3D view's size each way and laid over it at full size (I76_MOTION_BLUR_FULL=1: at full size).</summary>
     private static readonly int Scale = System.Environment.GetEnvironmentVariable("I76_MOTION_BLUR_FULL") == "1" ? 1 : 2;
     /// <summary>A vector this long and this far from the camera's move alone (in screen widths and heights, per frame) is a jump, not motion.</summary>
     private const float JumpUv = 0.25f;
+    /// <summary>Each streak is this much shorter (view pixels), so what crawls is not smeared, and a frame whose longest streak is shorter than this is left alone.</summary>
+    private const float DeadPx = 1f;
 
     private static float Env(string name, float def, float lo, float hi) =>
         float.TryParse(System.Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? Math.Clamp(v, lo, hi) : def;
@@ -61,6 +65,15 @@ public partial class MotionBlur : Node
     private static int _cuts, _frame;
     private static float _dt = 1f / 60f;
     private static volatile bool _failed;
+    // Idle: while the camera is still and the longest streak the effect last measured is under a pixel (standing or crawling),
+    // the effect is off (no motion vectors drawn, no passes), but for one frame in eight, which measures again
+    private const int IdleAfter = 8, IdleProbe = 8;
+    private static volatile float _measured = float.MaxValue;
+    private static volatile bool _gapOk;
+    private int _quiet;
+    private bool _wasIdle;
+    private Transform3D _camAt;
+    private float _camFov;
 
     public override void _Ready()
     {
@@ -88,10 +101,23 @@ public partial class MotionBlur : Node
         var cam = GetViewport().GetCamera3D();
         if (cam != _cam) { _cam = cam; Cut(); }
         bool on = Setting && !_failed && Faithful?.Invoke() != true && cam is not null;
-        _effect.Enabled = on;
         _dt = (float)delta;
         System.Threading.Interlocked.Increment(ref _frame);
-        if (!on || cam is null) return;
+        if (cam is not null)
+        {
+            var at = cam.GlobalTransform;
+            float dt = Math.Max((float)delta, 1e-3f);
+            bool still = at.Origin.DistanceTo(_camAt.Origin) < 0.5f * dt && (-at.Basis.Z).AngleTo(-_camAt.Basis.Z) < 0.05f * dt
+                && at.Basis.Y.AngleTo(_camAt.Basis.Y) < 0.05f * dt && MathF.Abs(cam.Fov - _camFov) < 0.01f;
+            _quiet = still && _measured < DeadPx ? _quiet + 1 : 0;
+            _camAt = at; _camFov = cam.Fov;
+        }
+        bool idle = on && MotionBlurRules.Idle(_quiet, IdleAfter) && _frame % IdleProbe != 0;
+        // the first frame drawn after idle ones (a probe, or the camera moving off): the frames between were still, nothing to cut
+        _gapOk = _wasIdle;
+        _wasIdle = idle;
+        _effect.Enabled = on && !idle;
+        if (!on || idle || cam is null) return;
         // the camera's compositor: the smoke layer's, if it has put one there, with this effect added; else one of our own
         var comp = cam.Compositor;
         if (comp is null) cam.Compositor = comp = _own ??= new Compositor();
@@ -133,7 +159,7 @@ public partial class MotionBlur : Node
         }
     }
 
-    private const int UboFloats = 16 * 3 + 4 * 3;
+    private const int UboFloats = 16 * 3 + 4 * 4;
     private static readonly float[] Ubo = new float[UboFloats];
     private static readonly byte[] UboBytes = new byte[UboFloats * 4];
     private static bool _hasPrev, _told;
@@ -151,7 +177,7 @@ public partial class MotionBlur : Node
         int frame = _frame, cuts = _cuts;
         float dt = _dt;
         // a cut, the first frame, a frame after one not drawn here: nothing to blend from; this frame's camera is kept for the next
-        bool cut = !_hasPrev || frame != _lastFrame + 1 || cuts != _seenCuts || MotionBlurRules.IsCut(
+        bool cut = !_hasPrev || (frame != _lastFrame + 1 && !_gapOk) || cuts != _seenCuts || MotionBlurRules.IsCut(
             V(_prevT.Origin), V(-_prevT.Basis.Z.Normalized()), V(_prevT.Basis.Y.Normalized()), MathF.Abs(_prevProj.Y.Y),
             V(camT.Origin), V(-camT.Basis.Z.Normalized()), V(camT.Basis.Y.Normalized()), MathF.Abs(proj.Y.Y), dt);
         var prevT = _prevT;
@@ -187,19 +213,27 @@ public partial class MotionBlur : Node
         Ubo[48] = size.X; Ubo[49] = size.Y; Ubo[50] = 1f / size.X; Ubo[51] = 1f / size.Y;
         Ubo[52] = MotionBlurRules.Scale(dt, Shutter); Ubo[53] = maxPx; Ubo[54] = SmokeDepth.NearerIsLarger(proj) ? 0f : 1f; Ubo[55] = JumpUv;
         Ubo[56] = tile; Ubo[57] = Samples; Ubo[58] = View; Ubo[59] = Scale;
+        Ubo[60] = DeadPx / Scale; Ubo[61] = View > 0 ? -1f : DeadPx / Scale;
         System.Buffer.BlockCopy(Ubo, 0, UboBytes, 0, UboBytes.Length);
         rd.BufferUpdate(_ubo, 0, (uint)UboBytes.Length, UboBytes);
 
         if (!_stale)
         {
+            rd.BufferUpdate(_gbuf, 0, 4, Zero4);   // the frame's longest streak, worked out again
             Dispatch(rd, 0, [Ubuf(0), Tex(1, velocity), Tex(2, depth), Img(3, _packed), Img(4, _tile)], (uint)tiles.X, (uint)tiles.Y);
-            Dispatch(rd, 1, [Ubuf(0), Tex(1, _tile), Img(2, _near)], (uint)(tiles.X + 7) / 8, (uint)(tiles.Y + 7) / 8);
+            Dispatch(rd, 1, [Ubuf(0), Tex(1, _tile), Img(2, _near), Sbuf(3)], (uint)(tiles.X + 7) / 8, (uint)(tiles.Y + 7) / 8);
+            // the next two passes' sizes, none when the longest streak is under a pixel (standing still, crawling)
+            Dispatch(rd, 4, [Ubuf(0), Sbuf(1)], 1, 1);
+            rd.BufferGetDataAsync(_gbuf, Measured, 0, 4);
             _motionOf = frame;
         }
         else if (frame - _motionOf > 3) return;   // the last motion worked out (see Removed), for up to three frames running
-        Dispatch(rd, 2, [Ubuf(0), Tex(1, color, true), Tex(2, _packed), Tex(3, _near), Img(4, _out)], (uint)(work.X + 7) / 8, (uint)(work.Y + 7) / 8);
-        Dispatch(rd, 3, [Ubuf(0), Tex(1, _out, true), Tex(2, _near), Img(3, color)], (uint)(size.X + 7) / 8, (uint)(size.Y + 7) / 8);
+        Dispatch(rd, 2, [Ubuf(0), Tex(1, color, true), Tex(2, _packed), Tex(3, _near), Img(4, _out)], 4);
+        Dispatch(rd, 3, [Ubuf(0), Tex(1, _out, true), Tex(2, _near), Img(3, color)], 16);
     }
+
+    private static readonly byte[] Zero4 = new byte[4];
+    private static readonly Callable Measured = Callable.From<byte[]>(b => { if (b.Length >= 4) _measured = BitConverter.ToSingle(b, 0) * Scale; });
 
     private static System.Numerics.Vector3 V(Vector3 v) => new(v.X, v.Y, v.Z);
 
@@ -223,14 +257,27 @@ public partial class MotionBlur : Node
         to[12] = p.W.X; to[13] = p.W.Y; to[14] = p.W.Z; to[15] = p.W.W;
     }
 
-    private static void Dispatch(RenderingDevice rd, int pass, RDUniform[] uniforms, uint x, uint y)
+    private static void Dispatch(RenderingDevice rd, int pass, RDUniform[] uniforms, uint x, uint y) => Dispatch(rd, pass, uniforms, x, y, -1);
+
+    /// <summary>A pass sized by the buffer the sizes pass wrote, at that byte offset.</summary>
+    private static void Dispatch(RenderingDevice rd, int pass, RDUniform[] uniforms, int argsAt) => Dispatch(rd, pass, uniforms, 0, 0, argsAt);
+
+    private static void Dispatch(RenderingDevice rd, int pass, RDUniform[] uniforms, uint x, uint y, int argsAt)
     {
         var set = UniformSetCacheRD.GetCache(_shaders[pass], 0, new Godot.Collections.Array<RDUniform>(uniforms));
         long list = rd.ComputeListBegin();
         rd.ComputeListBindComputePipeline(list, _pipelines[pass]);
         rd.ComputeListBindUniformSet(list, set, 0);
-        rd.ComputeListDispatch(list, x, y, 1);
+        if (argsAt >= 0) rd.ComputeListDispatchIndirect(list, _gbuf, (uint)argsAt);
+        else rd.ComputeListDispatch(list, x, y, 1);
         rd.ComputeListEnd();
+    }
+
+    private static RDUniform Sbuf(int binding)
+    {
+        var u = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = binding };
+        u.AddId(_gbuf);
+        return u;
     }
 
     private static RDUniform Ubuf(int binding)
@@ -254,15 +301,16 @@ public partial class MotionBlur : Node
         return u;
     }
 
-    private static readonly Rid[] _shaders = new Rid[4], _pipelines = new Rid[4];
-    private static Rid _sampler, _linear, _ubo, _packed, _tile, _near, _out;
+    private static readonly Rid[] _shaders = new Rid[5], _pipelines = new Rid[5];
+    // _gbuf: the longest streak (float bits), then the gather's and the composite's dispatch sizes
+    private static Rid _sampler, _linear, _ubo, _gbuf, _packed, _tile, _near, _out;
     private static Vector2I _size, _tiles;
 
     private static bool Setup(RenderingDevice rd)
     {
-        string[] names = ["motion", "tiles", "gather", "composite"];
-        string[] code = [Motion, Neighbours, Gather, Composite];
-        for (int i = 0; i < 4; i++)
+        string[] names = ["motion", "tiles", "gather", "composite", "sizes"];
+        string[] code = [Motion, Neighbours, Gather, Composite, Sizes];
+        for (int i = 0; i < code.Length; i++)
         {
             var spirv = rd.ShaderCompileSpirVFromSource(new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = Common + code[i] });
             if (spirv.CompileErrorCompute.Length == 0) _shaders[i] = rd.ShaderCreateFromSpirV(spirv);
@@ -275,6 +323,7 @@ public partial class MotionBlur : Node
         _sampler = rd.SamplerCreate(new RDSamplerState { MinFilter = RenderingDevice.SamplerFilter.Nearest, MagFilter = RenderingDevice.SamplerFilter.Nearest, RepeatU = RenderingDevice.SamplerRepeatMode.ClampToEdge, RepeatV = RenderingDevice.SamplerRepeatMode.ClampToEdge });
         _linear = rd.SamplerCreate(new RDSamplerState { MinFilter = RenderingDevice.SamplerFilter.Linear, MagFilter = RenderingDevice.SamplerFilter.Linear, RepeatU = RenderingDevice.SamplerRepeatMode.ClampToEdge, RepeatV = RenderingDevice.SamplerRepeatMode.ClampToEdge });
         _ubo = rd.UniformBufferCreate(UboFloats * 4);
+        _gbuf = rd.StorageBufferCreate(28, new byte[28], RenderingDevice.StorageBufferUsage.Indirect);
         GD.Print($"motion blur: on, shutter {Shutter} of a 60 fps frame, at most {MaxLength * 100:0.#} % of the height, {Samples} samples, {(Scale == 1 ? "full" : "half")} size");
         return true;
     }
@@ -284,9 +333,9 @@ public partial class MotionBlur : Node
     {
         var rd = RenderingServer.GetRenderingDevice();
         if (rd is null) return;
-        foreach (var t in new[] { _packed, _tile, _near, _out, _ubo, _sampler, _linear }) if (t.IsValid) rd.FreeRid(t);
+        foreach (var t in new[] { _packed, _tile, _near, _out, _ubo, _gbuf, _sampler, _linear }) if (t.IsValid) rd.FreeRid(t);
         for (int i = 0; i < _shaders.Length; i++) if (_shaders[i].IsValid) rd.FreeRid(_shaders[i]);   // its pipeline with it
-        _packed = _tile = _near = _out = _ubo = _sampler = _linear = default;
+        _packed = _tile = _near = _out = _ubo = _gbuf = _sampler = _linear = default;
         Array.Clear(_shaders); Array.Clear(_pipelines);
         _hasPrev = false;
     }
@@ -318,6 +367,7 @@ public partial class MotionBlur : Node
             vec4 size;         // the 3D view's width, height, 1 / width, 1 / height
             vec4 a;            // the shutter over the frame, the longest streak (work px), the sky's depth, a jump (uv a frame)
             vec4 b;            // tile (work px), samples, view (0, 1 the motion, 2 the vectors' distance from the camera's), scale
+            vec4 c;            // each streak shortened by (work px), the longest streak a frame is blurred for (work px; < 0: always)
         } u;
         // the size worked at: the view's, or half of it each way
         ivec2 work_size() { int s = int(u.b.w); return (ivec2(u.size.xy) + s - 1) / s; }
@@ -364,7 +414,7 @@ public partial class MotionBlur : Node
                     vec2 v = sky || (off > u.a.w && length(vb) > u.a.w) ? vc : vb;
                     vec2 px = v * vec2(wsz) * u.a.x;
                     float l = length(px);
-                    if (l > u.a.y) px *= u.a.y / l;
+                    px *= l > u.c.x ? min(l - u.c.x, u.a.y) / l : 0.0;   // shortened: what crawls stays sharp
                     vec4 vp = u.inv_proj * vec4(ndc, d, 1.0);
                     float z = sky ? 60000.0 : min(-vp.z / vp.w, 60000.0);
                     imageStore(packed_img, p, vec4(px, z, sky ? 0.0 : off * u.size.y));
@@ -392,9 +442,11 @@ public partial class MotionBlur : Node
         layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
         layout(set = 0, binding = 1) uniform sampler2D tile_tex;
         layout(set = 0, binding = 2, rgba16f) uniform restrict writeonly image2D near_img;
+        layout(set = 0, binding = 3, std430) restrict buffer G { uint longest; uint sizes[6]; } g;
         void main() {
             ivec2 t = ivec2(gl_GlobalInvocationID.xy), n = textureSize(tile_tex, 0);
             if (t.x >= n.x || t.y >= n.y) return;
+            atomicMax(g.longest, floatBitsToUint(length(texelFetch(tile_tex, t, 0).xy)));   // the frame's longest streak
             vec2 best = vec2(0.0);
             float bl = -1.0, least = 1e9;
             for (int y = -1; y <= 1; y++)
@@ -439,7 +491,7 @@ public partial class MotionBlur : Node
             int n = clamp(int(ceil(nl * 0.5)), 2, int(u.b.y));
             // a pixel's own jitter (interleaved gradient noise, the same every frame: there is no TAA to settle it), so the samples' steps show as fine noise, not bands
             float jit = fract(52.9829189 * fract(dot(vec2(p), vec2(0.06711056, 0.00583715))));
-            if (near.z > 0.8 * nl) {
+            if (near.z > 0.5 * nl) {
                 // everything near streaks about as far (the road and the scenery as the car drives): a plain average along the
                 // pixel's own streak, with no weighing, which reads only the colour
                 vec3 acc = vec3(0.0);
@@ -488,6 +540,18 @@ public partial class MotionBlur : Node
             vec4 o = sc == 1 ? texelFetch(out_tex, p, 0) : textureLod(out_tex, (vec2(p) + 0.5) * u.size.zw, 0.0);
             vec4 c = imageLoad(color_img, p);
             imageStore(color_img, p, vec4(c.rgb * (1.0 - o.a) + o.rgb, c.a));
+        }
+        """;
+
+    // the gather's and the composite's sizes, in work groups: none when the frame's longest streak is too short to blur
+    private const string Sizes = """
+        layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+        layout(set = 0, binding = 1, std430) restrict buffer G { uint longest; uint sizes[6]; } g;
+        void main() {
+            bool blur = uintBitsToFloat(g.longest) >= u.c.y;
+            ivec2 w = (work_size() + 7) / 8, f = (ivec2(u.size.xy) + 7) / 8;
+            g.sizes[0] = blur ? uint(w.x) : 0u; g.sizes[1] = uint(w.y); g.sizes[2] = 1u;
+            g.sizes[3] = blur ? uint(f.x) : 0u; g.sizes[4] = uint(f.y); g.sizes[5] = 1u;
         }
         """;
 }

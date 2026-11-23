@@ -11,7 +11,8 @@ namespace I76.Sim.Missions;
 /// dead it attacks the nearest human until it is destroyed. The script never sees the copies: they have no instance id, are
 /// left out of its vehicle lists (allEnemyDead, nearestEnemy, isWithinEnemy) and hold no actor slot, so its counters and
 /// objectives follow the originals alone. A car the mission is about (<see cref="CoopKeyCars"/>: one the script decides an objective
-/// or the mission on alone, or films in a cut-scene) is never copied.
+/// or the mission on alone, or films in a cut-scene) is never copied; where <see cref="CoopEscorts"/> names it, it gets escort cars
+/// instead.
 /// </summary>
 public sealed partial class ScriptHost
 {
@@ -23,7 +24,7 @@ public sealed partial class ScriptHost
     {
         var e = E(o);
         yield return e;
-        if (Coop is not { ExtraEnemies: > 0 } || e.ExtraOf is not null) yield break;
+        if (Coop is not { ExtraEnemies: > 0 } || e.ExtraOf is not null || _escorted.ContainsKey(e)) yield break;   // an escort keeps its own settings
         foreach (var x in ExtrasOf(e).ToList()) if (!x.Dead) yield return x;
     }
 
@@ -31,27 +32,35 @@ public sealed partial class ScriptHost
     public IReadOnlyDictionary<Entity, CoopKeyCars.Why> KeyCars => _keyCars;
     private readonly Dictionary<Entity, CoopKeyCars.Why> _keyCars = [];
 
-    /// <summary>Finds the key cars in the mission's script (its FSM chunk) once the VM has bound its actors; only under Co-op Scaling.</summary>
-    internal void FindKeyCars(byte[] fsmPayload, FsmVm vm)
+    /// <summary>
+    /// Finds the key cars in the mission's script (its FSM chunk) once the VM has bound its actors, and those of them
+    /// <see cref="CoopEscorts"/> gives escorts in <paramref name="mission"/> (the mission file's stem); only under Co-op Scaling.
+    /// </summary>
+    internal void FindKeyCars(byte[] fsmPayload, FsmVm vm, string mission)
     {
         _keyCars.Clear();
+        _escorted.Clear();
         if (Coop is not { ExtraEnemies: > 0 }) return;
         var a = CoopKeyCars.Analyze(fsmPayload, i => i >= 0 && i < vm.Actors.Count && vm.Actors[i].Handle is { } h && IsPlayerHandle(h));
         foreach (var (i, why) in a.Key)
             if (i >= 0 && i < vm.Actors.Count && vm.Actors[i].Handle is Entity e && !IsHumanEntity(e)) _keyCars[e] = _keyCars.GetValueOrDefault(e) | why;
+        FindEscorted(mission);
     }
 
     /// <summary>
     /// A car Co-op Scaling copies: an AI ground car (no helicopter or gun emplacement) on a team neither the humans' nor nobody's,
     /// and not one the mission is about.
     /// </summary>
-    private bool Scalable(Entity e) =>
-        e.Vehicle is { IsHeli: false, IsEmplacement: false } && e.ExtraOf is null && !IsHumanEntity(e) && e.Team != 0 && Lead is { } lead && e.Team != lead.Team
-        && !_keyCars.ContainsKey(e);
+    private bool Scalable(Entity e) => EnemyGroundCar(e) && !_keyCars.ContainsKey(e);
+
+    /// <summary>An AI ground car (no helicopter or gun emplacement, no copy) on a team neither the humans' nor nobody's.</summary>
+    private bool EnemyGroundCar(Entity e) =>
+        e.Vehicle is { IsHeli: false, IsEmplacement: false } && e.ExtraOf is null && !IsHumanEntity(e) && e.Team != 0 && Lead is { } lead && e.Team != lead.Team;
 
     /// <summary>
     /// An order to an original reaches its copies: made the first time the script orders it (as many as the humans then present
     /// call for), then each living copy given the same order, a human target or reference taken as the human nearest the copy.
+    /// A key car with an escort rule gets its escorts then instead, which take no orders from the script (<see cref="ExtrasFrame"/>).
     /// </summary>
     private void OrderExtras(Entity e, Entity? target, AiOrder order, IReadOnlyList<System.Numerics.Vector3>? path, float speed, int followFlag, float f1, float f2, object? reference)
     {
@@ -59,14 +68,16 @@ public sealed partial class ScriptHost
         if (!e.Scaled)
         {
             e.Scaled = true;
+            int n = System.Math.Min(c.Seats.Count(s => s.Present) - 1, c.ExtraEnemies);
+            if (_escorted.TryGetValue(e, out var rule)) { SpawnEscorts(c, e, rule, n); return; }
             if (!Scalable(e))
             {
                 if (_keyCars.TryGetValue(e, out var why)) Log($"co-op: {e.Name} is a car the mission is about ({why}): no extras");
                 return;
             }
-            int n = System.Math.Min(c.Seats.Count(s => s.Present) - 1, c.ExtraEnemies);
             for (int k = 0; k < n; k++) SpawnExtra(c, e, k + 1);
         }
+        if (_escorted.ContainsKey(e)) return;
         foreach (var x in ExtrasOf(e).ToList())
             if (!x.Dead)
                 Order(x, Aimed(target, x), order, path, speed, followFlag, f1, f2, reference is Entity r ? Aimed(r, x) : reference);
@@ -96,7 +107,7 @@ public sealed partial class ScriptHost
         c.RaiseSpawned(v, def);
     }
 
-    /// <summary>The script teleported an original: its living copies come along beside it.</summary>
+    /// <summary>The script teleported an original: its living copies (or escorts) come along beside it.</summary>
     private void TeleportExtras(Entity e)
     {
         if (Coop is not { ExtraEnemies: > 0 } c || e.ExtraOf is not null || e.Vehicle is not { } o) return;
@@ -112,12 +123,22 @@ public sealed partial class ScriptHost
 
     /// <summary>
     /// Co-op Scaling's frame, after the script's: a living copy whose original is dead (or gone) attacks the human nearest it, as
-    /// its original's orders no longer come.
+    /// its original's orders no longer come; so does an escort whose car is. An escort whose car lives escorts it
+    /// (<see cref="EscortFrame"/>).
     /// </summary>
     internal void ExtrasFrame()
     {
         if (Coop is not { ExtraEnemies: > 0 }) return;
-        foreach (var x in Entities.Where(x => x.ExtraOf is { } o && (o.Dead || o.Removed) && !x.Dead && !x.Removed).ToList())
-            if (NearestHuman(x) is Entity h) Order(x, h, AiOrder.Attack, null, 0);
+        var slots = new Dictionary<Entity, int>();
+        foreach (var x in Entities.Where(x => x.ExtraOf is not null && !x.Removed).ToList())
+        {
+            var o = x.ExtraOf!;
+            // an escort's station is its number among its car's escorts, the dead ones too, so a death moves nobody
+            int slot = slots.GetValueOrDefault(o);
+            slots[o] = slot + 1;
+            if (x.Dead) continue;
+            if (o.Dead || o.Removed) { if (NearestHuman(x) is Entity h) Order(x, h, AiOrder.Attack, null, 0); }
+            else if (_escorted.ContainsKey(o)) EscortFrame(x, o, slot);
+        }
     }
 }

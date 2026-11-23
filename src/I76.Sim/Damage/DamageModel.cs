@@ -81,6 +81,12 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// </summary>
     public float CoopDamageFactor { get; set; } = 1f;
 
+    /// <summary>
+    /// The port's co-op escorts (<see cref="Missions.CoopEscorts"/>): whether a hit on a vehicle (the victim, the attacker) is
+    /// dropped whole, before its damage and its record. Null everywhere else.
+    /// </summary>
+    public Func<Vehicle, Vehicle, bool>? Spared { get; set; }
+
     /// <summary>The factor on what <paramref name="v"/> takes: <see cref="CoopDamageFactor"/> on a co-op human's car, else 1.</summary>
     private float IncomingFactor(Vehicle v) => CoopDamageFactor != 1f && World.Coop && World.IsHuman(v) ? CoopDamageFactor : 1f;
 
@@ -130,6 +136,7 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
         switch (victim)
         {
             case Vehicle v:
+                if (p.Attacker is Vehicle sa && Spared?.Invoke(v, sa) == true) return;
                 VehicleSlot(v, p, hitLocal);
                 if (p.Attacker is Vehicle a && a != v) Record(v, a, p.Kind, p.Mask);
                 break;
@@ -590,7 +597,7 @@ public sealed partial class DamageModel : IDamageSink, IStepDamage, IHeliDamage
     /// </summary>
     public void CarContact(Vehicle self, Vehicle other, Contact rec)
     {
-        if (self.Wreck || other.Wreck) return;
+        if (self.Wreck || other.Wreck || Spared?.Invoke(self, other) == true) return;
         var p = Impact(other, other.P.Mass, KVehicle, rec.N, other.Vel - self.Vel);
         VehicleSlot(self, p, rec.C);
         if (AiRammedHuman(self, other, rec)) return;

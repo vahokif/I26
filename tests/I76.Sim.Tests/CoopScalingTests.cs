@@ -58,7 +58,7 @@ public class CoopScalingTests(ITestOutputHelper output)
 
     /// <summary>
     /// T09, three humans, the cap at 3 (#195): Callisto, the car the mission is about (disable him, do not kill him), is ordered from the
-    /// first tick and gets no copy; the script's own Callisto stays the only one.
+    /// first tick and gets no copy; the script's own Callisto stays the only one (his escorts instead: CoopEscortsTests).
     /// </summary>
     [Fact]
     public void TheCarTheMissionIsAboutIsNotCopied()
@@ -74,9 +74,9 @@ public class CoopScalingTests(ITestOutputHelper output)
         Assert.Equal("t09dl01", callisto.Name, ignoreCase: true);
         Assert.True(callisto.Scaled);                                  // ordered, and decided
         Assert.Equal(CoopKeyCars.Why.Objective | CoopKeyCars.Why.Filmed, h.KeyCars[callisto]);
-        Assert.Empty(h.ExtrasOf(callisto));
-        Assert.Equal(cars, setup.World.Vehicles.Count);
-        Assert.Contains(log, x => x.Contains("no extras"));
+        Assert.DoesNotContain(h.ExtrasOf(callisto), x => x.Vehicle!.Definition == callisto.Vehicle!.Definition);
+        Assert.Equal(cars + h.EscortsOf(callisto).Count(), setup.World.Vehicles.Count);
+        Assert.Contains(log, x => x.Contains("is escorted by"));
     }
 
     /// <summary>One human (or the option off) changes nothing: no copies, every car where the plain mission has it.</summary>

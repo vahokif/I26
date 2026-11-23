@@ -803,6 +803,33 @@ and Knight, T07's cop1 and cop2, T09's Callisto, T12's tanker, DISCO and speedy,
 Malocchio; the Nitro Pack's P02's clown, P06's enemy1, P09's sleep1, P10's bob, P12's army1, P13's two Mondo trucks, P14's enemy2,
 P15's three hearses, P17's enemy1, P18's enemy3 and P19's target (`CoopKeyCarsTests`).
 
+**Escorts.** Where a small table names a key car (`CoopEscorts.Table`: mission, the key car's placement, the escort's car file and
+its setSkill and setAgg; only T09 so far), the copies it would have had come as escort cars instead, as many as Co-op Scaling
+would copy (min(N − 1, cap)), made beside it when the script first orders it. T09's Callisto (he flees along the canyon road and
+back: evade on fleepath, sit and success once below 32% health; his death, or the humans more than 450 from him, fails the mission)
+is escorted by S02's stock enemy Courcheval Manta (s02vcm01.vcf: a HADES turret, a FireRite turret, two 7.62 mm machine guns,
+landmines; the Manta's strongest engine keeps up with Callisto's Lightning), at setSkill 1, 3 and setAgg 4. An escort takes no
+orders and no settings from the script; every tick after the script (`ScriptHost.EscortFrame`) it is given one of the AI's own
+orders:
+- **attack** the human nearest it once that human is within 70 m (let go past 110 m), while the escort is within 120 m of its car
+  (let go past 170 m);
+- otherwise **follow** its car at its station (7 m to either side and 9 m behind, then 17 m behind), firing at the nearest human
+  within 200 m (the follow order's fire flag), with collision avoidance off as Callisto drives (on, the escort brakes and swerves
+  away from the car it keeps station on);
+- lost (more than 120 m from its station, back within 70 m), a **goto** at its station by a one-point path of its own
+  (`Entity.OwnPath`, moved with the car, planned again when the station is 100 m on from where the planned way ends), so the AI's
+  planner finds the way round the canyon's walls, at the speed the car was told to go plus 10, firing as above.
+
+While the script holds the camera (or the human is in a personal cut-scene) it only keeps station and holds its fire: in T09 the
+escorts drive in the intro's shots beside Callisto. Whether it is attacking or catching up is its standing order, so nothing new
+is saved. It never targets its car (the fire decision's friendly scan, the original's, also keeps it from firing with its car in
+the line), and nothing it fires, drops or rams hurts its car or tells the script it was attacked (`DamageModel.Spared`), so the
+escorts can neither disable nor kill Callisto. The humans' own rounds still can: a rocket at an escort beside him splashes him,
+and a stray shot that kills him fails the mission. Like a copy, the script never sees an escort, so its death counts for and
+against nothing; once its car is dead it attacks the nearest human as a copy does. On the server the escorts are spawn events with
+their car file, as copies are; a restore makes them again. In the AI's hands an escort can still lose the formation for a while:
+a fight takes it away, the planner's way back is long, and it can stick in a wash as any AI car can (`CoopEscortsTests`).
+
 The script never sees a copy: no instance id (the registry's lookups miss it), no actor slot, and left out of the host's vehicle
 lists, so `allEnemyDead`, `nearestEnemy` and `isWithinEnemy` and every objective and counter follow the originals alone
 (`CoopScalingTests`: T02's objective succeeds when its three enemy cars die, their six copies alive, as without the option). A

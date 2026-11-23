@@ -172,7 +172,10 @@ public sealed partial class Entity(string name, byte[] id, uint type, uint objec
     public float NavReach = DefaultNavReach;
     public const float DefaultNavReach = 40f;
 
-    /// <summary>The path a network melee gave this entity (a bot's route or goal): <see cref="Path"/> and <see cref="NavPath"/> may be this very list, which a savestate then names by the entity.</summary>
+    /// <summary>
+    /// The path a network melee gave this entity (a bot's route or goal), or a co-op escort's way back to its station
+    /// (<see cref="CoopEscorts"/>): <see cref="Path"/> and <see cref="NavPath"/> may be this very list, which a savestate then names by the entity.
+    /// </summary>
     public List<Vector3>? OwnPath;
 
     public bool Lights, Siren;

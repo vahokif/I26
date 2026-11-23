@@ -43,6 +43,22 @@ public class KeyboardSteeringBench(ITestOutputHelper output)
         public Vector3 BareNormal(double x, double z) => Vector3.UnitY;
     }
 
+    /// <summary>
+    /// Flat ground with a kicker across the way once <see cref="On"/>: from z = <paramref name="z0"/> a straight ramp up to
+    /// <paramref name="height"/> m at z = <paramref name="z1"/>, then a drop back to the flat.
+    /// </summary>
+    private sealed class Kicker(float z0, float z1, float height, float grip = 2f) : IGround
+    {
+        public bool On;
+        private float Slope => height / (z1 - z0);
+        private bool OnRamp(double z) => On && z >= z0 && z < z1;
+        public (float Height, Vector3 Normal) Query(double x, double y, double z) => (BareHeight(x, z), BareNormal(x, z));
+        public int SurfaceId(double x, double z) => 0;
+        public Surface Surface(int id) => new(grip, 0.03f, 0, 0, 0);
+        public float BareHeight(double x, double z) => OnRamp(z) ? (float)(z - z0) * Slope : 0;
+        public Vector3 BareNormal(double x, double z) => OnRamp(z) ? Vector3.Normalize(new Vector3(0, 1, -Slope)) : Vector3.UnitY;
+    }
+
     /// <summary>How the steer is made: the original's ramp, a port ramp (with these rates), or a stick.</summary>
     public sealed record Mode(string Name, bool Keys, KeyStick.Assist? Tuning = null, bool Assisted = false)
     {
@@ -73,10 +89,10 @@ public class KeyboardSteeringBench(ITestOutputHelper output)
 
         private readonly float _grip;
 
-        public Run(AssetVfs vfs, Mode mode, SimRate rate, float speed, float grip = 2f, string car = "vppirna1.vcf")
+        public Run(AssetVfs vfs, Mode mode, SimRate rate, float speed, float grip = 2f, string car = "vppirna1.vcf", IGround? ground = null)
         {
             _grip = grip;
-            var g = new Flat(grip);
+            var g = ground ?? new Flat(grip);
             V = VehicleFactory.Create(vfs, car);
             _step = new VehicleStep(g, new CrtRand(1));
             V.Pos = new Double3(0, 0, 0);
@@ -115,6 +131,7 @@ public class KeyboardSteeringBench(ITestOutputHelper output)
             if (!_mode.Keys) input = new CarInput { Buttons = CarButtons.Analog, Steer = (short)MathF.Round(System.Math.Clamp(analog, -1, 1) * 32767) };
             else if (key > 0) input.Buttons = CarButtons.SteerLeft;
             else if (key < 0) input.Buttons = CarButtons.SteerRight;
+            if (handbrake) input.Buttons |= CarButtons.EBrake;
             if (_mode.Assisted) input = _stick.Apply(input, Dt, null, KeyStick.MotionOf(V, _grip));   // the run's ground's grip
             KeyRamp.Apply(ref _ramp, input, Dt, null, ref _thr, ref _steer);
             V.Steer = _steer;
@@ -629,6 +646,128 @@ public class KeyboardSteeringBench(ITestOutputHelper output)
             foreach (int part in new[] { 0, 1 })
                 Assert.True(s.RmsErr[part] <= o.RmsErr[part], $"{hz} Hz, part {part}: Assisted {s.RmsErr[part]:0.00} m, Original {o.RmsErr[part]:0.00} m");
         }
+    }
+
+    public sealed record Flick(Mode Mode, float Mph, float Lead, float Seconds, float Turned, float YawRate, float TurnedAfter, float YawAfter);
+
+    /// <summary>
+    /// A handbrake flick at <paramref name="mph"/>: the left key alone for <paramref name="lead"/> s, then the handbrake with it for
+    /// <paramref name="seconds"/> (the stick at full lock throughout). Turned: the heading's turn from the first press to the end of
+    /// the flick (degrees); yaw rate: the car's at the end (rad/s), what a car leaving a ramp then takes into the air. Then
+    /// <paramref name="after"/> s with the handbrake let go, the key held (<paramref name="keyAfter"/>) or not: how far the
+    /// heading turns on, and the yaw rate at its end.
+    /// </summary>
+    private static Flick FlickRun(AssetVfs vfs, Mode mode, float mph, float lead, float seconds, SimRate rate, float after = 0, bool keyAfter = false)
+    {
+        var r = new Run(vfs, mode, rate, mph * Mph);
+        for (int i = 0; i < (int)(0.5f / r.Dt); i++) r.Tick(0, 0, mph * Mph);
+        float turned = 0, prev = r.Heading;
+        void Step(int key, bool hb)
+        {
+            r.Tick(key, key, mph * Mph, handbrake: hb);
+            turned += MathF.Atan2(MathF.Sin(r.Heading - prev), MathF.Cos(r.Heading - prev)); prev = r.Heading;
+        }
+        for (int i = 0; i < (int)MathF.Round(lead / r.Dt); i++) Step(1, false);
+        for (int i = 0; i < (int)MathF.Round(seconds / r.Dt); i++) Step(1, true);
+        float at = turned * 180 / MathF.PI, yaw = r.V.AngVel.Y;
+        for (int i = 0; i < (int)MathF.Round(after / r.Dt); i++) Step(keyAfter ? 1 : 0, false);
+        return new Flick(mode, mph, lead, seconds, at, yaw, turned * 180 / MathF.PI - at, r.V.AngVel.Y);
+    }
+
+    /// <summary>Assisted as 0.13.0 had it: the countersteer and the hold also with the handbrake held.</summary>
+    private static readonly Mode Assisted0130 = Mode.Assist(KeyStick.Default with { Handbrake = false }, "Assisted 0.13.0");
+
+    /// <summary>
+    /// The stunt drivers' handbrake flick (the handbrake and a key just before a jump, so the car takes its spin into the air)
+    /// at 50, 60 and 70 mph, with the key pressed with the handbrake or 0.3 s before it. At the end of the flick (the takeoff)
+    /// Assisted has turned the car and left it spinning at least as much as the original's keys, and with the handbrake held
+    /// half a second or more its yaw rate is within 60% of a stick's at full lock (the key's ease-in is the difference); with the
+    /// handbrake let go and the key held on, it keeps spinning at least as fast as on the original's keys. Hands off, the
+    /// countersteer recovers the slide, as it is meant to (printed, not held to the original's).
+    /// </summary>
+    [Fact]
+    public void HandbrakeFlickSpins()
+    {
+        if (InstallDir is not { } dir) return;
+        var vfs = new AssetVfs(new GameInstall(dir));
+        var modes = new[] { Mode.Original, Assisted0130, Mode.AssistedKeys, Mode.Stick };
+        var sb = new StringBuilder("handbrake flick: s key alone + s with the handbrake | turned ° / yaw rad/s at the end | 0.3 s on, handbrake let go: key held | both let go (turned on °, yaw)\n");
+        var fails = new List<string>();
+        foreach (var mph in new[] { 50f, 60f, 70f })
+            foreach (var (lead, secs) in new[] { (0f, 0.3f), (0f, 0.5f), (0f, 0.8f), (0f, 1.2f), (0.3f, 0.3f), (0.3f, 0.5f) })
+            {
+                var flicks = modes.ToDictionary(m => m, m => FlickRun(vfs, m, mph, lead, secs, SimRate.R20));
+                var keyHeld = modes.ToDictionary(m => m, m => FlickRun(vfs, m, mph, lead, secs, SimRate.R20, 0.3f, true));
+                foreach (var m in modes)
+                {
+                    var (f, k, n) = (flicks[m], keyHeld[m], FlickRun(vfs, m, mph, lead, secs, SimRate.R20, 0.3f, false));
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"{mph} mph {lead:0.0}+{secs:0.0} s {m.Name,-16} | {f.Turned,6:0.0} {f.YawRate,5:0.00} | {k.TurnedAfter,6:0.0} {k.YawAfter,5:0.00} | {n.TurnedAfter,6:0.0} {n.YawAfter,5:0.00}");
+                }
+                string at = string.Create(CultureInfo.InvariantCulture, $"{mph} mph, {lead:0.0} s + {secs:0.0} s");
+                Flick o = flicks[Mode.Original], s = flicks[Mode.AssistedKeys], st = flicks[Mode.Stick];
+                if (s.Turned < o.Turned || s.YawRate < o.YawRate) fails.Add($"{at}: Assisted {s.Turned:0.0}° {s.YawRate:0.00} rad/s, Original {o.Turned:0.0}° {o.YawRate:0.00}");
+                if (secs >= 0.5f && s.YawRate < 0.6f * st.YawRate) fails.Add($"{at}: Assisted {s.YawRate:0.00} rad/s, the stick {st.YawRate:0.00}");
+                if (keyHeld[Mode.AssistedKeys].YawAfter < keyHeld[Mode.Original].YawAfter)
+                    fails.Add($"{at}, the handbrake let go, the key held: Assisted {keyHeld[Mode.AssistedKeys].YawAfter:0.00} rad/s, Original {keyHeld[Mode.Original].YawAfter:0.00}");
+            }
+        output.WriteLine(sb.ToString());
+        Assert.True(fails.Count == 0, string.Join("\n", fails));
+    }
+
+    public sealed record Jump(Mode Mode, float TakeoffYaw, float ApexYaw, float Turned);
+
+    /// <summary>
+    /// At <paramref name="mph"/> toward a 3 m kicker (15 m long): the handbrake and the left key (the stick at full lock) from
+    /// <paramref name="from"/> m before its lip, the handbrake let go <paramref name="early"/> m before the lip (the key held on),
+    /// everything let go once the car is in the air. The car's yaw rate at takeoff and at the top of the flight (rad/s), and the
+    /// heading's turn from the handbrake to the top (degrees).
+    /// </summary>
+    private static Jump JumpRun(AssetVfs vfs, Mode mode, float mph, float from, float early = 0)
+    {
+        const float z0 = 40, z1 = 55;
+        var k = new Kicker(z0, z1, 3);
+        var r = new Run(vfs, mode, SimRate.R20, mph * Mph, ground: k);
+        k.On = true;
+        float turned = 0, prev = r.Heading, takeoff = float.NaN;
+        bool started = false;
+        while (r.T < 20)
+        {
+            double z = r.V.Pos.Z;
+            bool flying = !float.IsNaN(takeoff);
+            bool spin = !flying && z >= z1 - from;
+            if (spin && !started) { started = true; prev = r.Heading; }
+            float vy = r.V.Vel.Y;
+            r.Tick(spin ? 1 : 0, spin ? 1 : 0, mph * Mph, handbrake: spin && z < z1 - early);
+            turned += MathF.Atan2(MathF.Sin(r.Heading - prev), MathF.Cos(r.Heading - prev)); prev = r.Heading;
+            bool air = (r.V.Flags & VehicleFlags.Airborne) != 0;
+            if (air && !flying) takeoff = r.V.AngVel.Y;
+            if (flying && (!air || r.V.Vel.Y <= 0)) break;
+        }
+        Assert.False(float.IsNaN(takeoff), "the car never left the kicker");
+        return new Jump(mode, takeoff, r.V.AngVel.Y, turned * 180 / MathF.PI);
+    }
+
+    /// <summary>
+    /// A handbrake spin taken off a kicker at 60 mph keeps its yaw rate through the air (no slide in the air, so no countersteer),
+    /// and Assisted takes off spinning at least as fast as the original's keys: the handbrake held to the lip, or let go 4 m
+    /// before it with the key held on (the handbrake from 8 to 20 m before the lip, 0.3 to 0.8 s).
+    /// </summary>
+    [Fact]
+    public void HandbrakeSpinCarriesIntoTheAir()
+    {
+        if (InstallDir is not { } dir) return;
+        var vfs = new AssetVfs(new GameInstall(dir));
+        var sb = new StringBuilder("kicker at 60 mph: handbrake + key from m before the lip | yaw rad/s at takeoff, at the top | turned ° to the top\n");
+        foreach (var (from, early) in new[] { (8f, 0f), (12f, 0f), (16f, 0f), (20f, 0f), (12f, 4f), (16f, 6f), (20f, 6f) })
+        {
+            var jumps = new[] { Mode.Original, Assisted0130, Mode.AssistedKeys, Mode.Stick }.ToDictionary(m => m, m => JumpRun(vfs, m, 60, from, early));
+            foreach (var j in jumps.Values)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"from {from,2} m, handbrake let go {early} m before | {j.Mode.Name,-16} | {j.TakeoffYaw,5:0.00} {j.ApexYaw,5:0.00} | {j.Turned,6:0.0}");
+            var s = jumps[Mode.AssistedKeys];
+            Assert.InRange(s.ApexYaw - s.TakeoffYaw, -0.01f, 0.01f);
+            Assert.True(s.TakeoffYaw >= jumps[Mode.Original].TakeoffYaw, $"from {from} m, let go {early} m before: Assisted {s.TakeoffYaw:0.00} rad/s, Original {jumps[Mode.Original].TakeoffYaw:0.00}");
+        }
+        output.WriteLine(sb.ToString());
     }
 
     /// <summary>I76_KBD_STEER_OUT=dir: steer against time for three key patterns, Original and Assisted (on the flat, no slide), at 20 and 60 Hz.</summary>

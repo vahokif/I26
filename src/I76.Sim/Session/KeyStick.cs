@@ -8,10 +8,13 @@ namespace I76.Sim.Session;
 /// <see cref="Assist.LimitHold"/> s of a press the key's lock is held just short of where the 1997 grip model starts to give way
 /// (<see cref="BlendLock"/>, the turn squeal's onset) and to <see cref="Assist.LatCap"/> of cornering, then let go over <see cref="Assist.LimitLift"/> s, so a correction never
 /// squeals and a held turn has the whole lock; while the car slides a countersteer of <see cref="Assist.CsGain"/> lock a radian
-/// of slip turns its heading onto its velocity. It reads the own car as this machine has it (the sim's, or a network game's
-/// predicted one). All of it is by time, the same at every Sim Rate and at Modern Physics' own steps. The throttle keys keep the
-/// original's ramp (<see cref="KeyRamp"/>, run here with the caller's step) and both go out as the pad's Analog input, so the
-/// simulation, the wire, replays and saves see a stick. A held driving key makes the pad's axes count for nothing, as in the
+/// of slip turns its heading onto its velocity. The handbrake asks for a spin: while it is held, and for the rest of a steer key's
+/// press held with it, there is neither countersteer nor hold (<see cref="Assist.Handbrake"/>), so a handbrake flick spins the car
+/// and a spin taken off a jump keeps its yaw rate (a car in the air does not slide, so no countersteer acts there either); once the
+/// handbrake and that key are both let go the countersteer recovers the slide as before. It reads the own car as this machine
+/// has it (the sim's, or a network game's predicted one). All of it is by time, the same at every Sim Rate and at Modern
+/// Physics' own steps. The throttle keys keep the original's ramp (<see cref="KeyRamp"/>, run here with the caller's step) and
+/// both go out as the pad's Analog input, so the simulation, the wire, replays and saves see a stick. A held driving key makes the pad's axes count for nothing, as in the
 /// original; with no key held a stick's input is left alone. Off, the keys go to the sim as they are, the original's.
 /// Measured in tests/I76.Sim.Tests/KeyboardSteeringBench.cs and KeyboardSteeringTerrainBench.cs.
 /// </summary>
@@ -20,8 +23,10 @@ public sealed class KeyStick(KeyStick.Assist? tuning = null)
     /// <summary>
     /// The constants: the ease toward a key and back (s), the countersteer (lock a radian of slip, at most that lock; only while
     /// the car slides unless <paramref name="CsSlidingOnly"/> is off), the hold (a share of the grip's lock, for so long, let go over so long).
+    /// <paramref name="Handbrake"/>: neither the countersteer nor the hold while the handbrake is held, nor for the rest of a steer key's
+    /// press held with it.
     /// </summary>
-    public sealed record Assist(float SteerTau, float CentreTau, float CsGain, float CsLimit, float GripLimit, float LimitHold, float LimitLift, bool CsSlidingOnly = true, float LatCap = 0);
+    public sealed record Assist(float SteerTau, float CentreTau, float CsGain, float CsLimit, float GripLimit, float LimitHold, float LimitLift, bool CsSlidingOnly = true, float LatCap = 0, bool Handbrake = false);
 
     /// <summary>
     /// Assisted's constants, tuned on the bench and on players' recorded drives: the key's steer eases in with a time constant
@@ -31,9 +36,15 @@ public sealed class KeyStick(KeyStick.Assist? tuning = null)
     /// of where the grip gives way (0.9 of lock for the Piranha on dirt from about 30 mph, 0.6 for A01's car, 0.58 to above full
     /// lock over the stock cars) and to no more than 25 m/s² of cornering (a grippy car, the F9 list's OP Piranha, asked 4–5 g
     /// of a short press at 110 mph), then let go over 0.3 s. No cut of the lock with the speed as such: the 1997 model already
-    /// holds full lock to the grip at speed.
+    /// holds full lock to the grip at speed. The handbrake is the player's own spin: with it (and a key held with it, until that key
+    /// is let go) the key's eased steer goes out alone. A handbrake flick at 60 mph (the handbrake and a key together 0.5 s, the
+    /// moment a car leaving a ramp takes its spin into the air) turns the car 14° and leaves it yawing at 0.92 rad/s, against 6°
+    /// and 0.40 on the original's keys and 27° and 1.42 on a stick; with the countersteer and the hold on through the handbrake
+    /// it was 12° and 0.71, and a longer flick ran down (1.2 s: 0.58 rad/s, the original's keys 1.08, now 2.03). Hands off, the
+    /// countersteer is back at once: the bench cannot tell a driver letting go before a lip from one letting go to recover, the
+    /// recovery is what it is for, and a stunt driver keeps the handbrake or the key to the lip.
     /// </summary>
-    public static readonly Assist Default = new(0.2f, 0.05f, 2f, 1f, 0.98f, 0.6f, 0.3f, LatCap: 25);
+    public static readonly Assist Default = new(0.2f, 0.05f, 2f, 1f, 0.98f, 0.6f, 0.3f, LatCap: 25, Handbrake: true);
 
     /// <summary>The least lock the hold leaves the keys (a steep slope's light load would leave them nearly nothing).</summary>
     public const float MinHold = 0.25f;
@@ -104,9 +115,11 @@ public sealed class KeyStick(KeyStick.Assist? tuning = null)
     /// <summary>The key's eased steer; how long the key now held has been held, and which.</summary>
     private float _eased, _heldFor, _throttle;
     private int _heldKey;
+    /// <summary>The steer key now held was held with the handbrake.</summary>
+    private bool _brakePress;
     private DriverState _ramp;
 
-    public void Reset() { Steer = 0; _eased = 0; _heldFor = 0; _heldKey = 0; _throttle = 0; _ramp = default; }
+    public void Reset() { Steer = 0; _eased = 0; _heldFor = 0; _heldKey = 0; _throttle = 0; _ramp = default; _brakePress = false; }
 
     private const CarButtons DriveKeys = CarButtons.ThrottleUp | CarButtons.ThrottleDown | CarButtons.SteerLeft | CarButtons.SteerRight;
 
@@ -123,18 +136,24 @@ public sealed class KeyStick(KeyStick.Assist? tuning = null)
         bool keys = (input.Buttons & DriveKeys) != 0;
         // the stick, with no key held, is the stick's alone
         if (!keys && input.Has(CarButtons.Analog)) { Reset(); _throttle = input.Throttle / 32767f; return input; }
-        _heldFor = key != 0 && key == _heldKey ? _heldFor + dt : key != 0 ? dt : 0;
+        bool samePress = key != 0 && key == _heldKey;
+        _heldFor = samePress ? _heldFor + dt : key != 0 ? dt : 0;
         _heldKey = key;
+        // the handbrake asks for a spin: while it is held, and for the rest of a steer key's press held with it, no countersteer
+        // and no hold; once both are let go the countersteer is back
+        bool brake = _a.Handbrake && input.Has(CarButtons.EBrake);
+        _brakePress = _a.Handbrake && (brake ? key != 0 : _brakePress && samePress);
+        bool spin = brake || _brakePress;
         _eased += (key - _eased) * (1 - MathF.Exp(-dt / MathF.Max(key != 0 ? _a.SteerTau : _a.CentreTau, 1e-4f)));
         if (key == 0 && MathF.Abs(_eased) < 1e-3f) _eased = 0;
         float slip = _a.CsSlidingOnly && !m.Sliding ? 0 : m.Slip;
-        float cs = System.Math.Clamp(slip * _a.CsGain, -_a.CsLimit, _a.CsLimit);
+        float cs = spin ? 0 : System.Math.Clamp(slip * _a.CsGain, -_a.CsLimit, _a.CsLimit);
         float held = _eased;
         LastLimit = float.NaN;
         float cap = 1;
         if (_a.GripLimit > 0 && m.BlendLock > 0) cap = MathF.Min(cap, _a.GripLimit * m.BlendLock);
         if (_a.LatCap > 0 && m.LatPerLock > 0) cap = MathF.Min(cap, _a.LatCap / m.LatPerLock);
-        if (cap < 1)
+        if (cap < 1 && !spin)
         {
             float lim = System.Math.Clamp(cap, MinHold, 1f);
             // a blown tyre's pull comes on top of the key's: the room is the limit less it on its side, more on the other

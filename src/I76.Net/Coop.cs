@@ -210,3 +210,57 @@ public static class CoopMission
         return setup;
     }
 }
+
+/// <summary>
+/// A lobby's co-op start held for games still loading (docs/multiplayer.md "The co-op lobby"): the slots of the players the
+/// mission's first tick waits for (their games have not built it and sent an input yet) and the seconds until it starts without
+/// them. Sent at the end of the scoreboard while the start is held, and only then (<see cref="Scoreboard.StartWait"/>).
+/// </summary>
+public sealed record CoopStartWait(IReadOnlyList<byte> Slots, int SecondsLeft)
+{
+    /// <summary>The scoreboard's trailer that carries it.</summary>
+    public const byte Tag = 1;
+
+    public void Write(NetWriter w)
+    {
+        w.U8(Tag);
+        w.VarU((uint)Slots.Count);
+        foreach (var s in Slots) w.U8(s);
+        w.U16((ushort)Math.Clamp(SecondsLeft, 0, ushort.MaxValue));
+    }
+
+    /// <summary>Reads the trailer's body (after its tag).</summary>
+    public static CoopStartWait Read(ref NetReader r)
+    {
+        int n = JoinAccept.Count(ref r, 256);
+        var slots = new byte[n];
+        for (int i = 0; i < n; i++) slots[i] = r.U8();
+        return new CoopStartWait(slots, r.U16());
+    }
+}
+
+/// <summary>
+/// What a co-op game shows while its start is held (#196): whom it waits for, by name, and how long until it starts without them.
+/// Shown from the scoreboard that says so until the server's tick moves on past that board's (the start), so it goes the moment the
+/// mission starts rather than at the next board. One's own slot is never named: a game that draws the mission has loaded it.
+/// </summary>
+public sealed record CoopStartNotice(IReadOnlyList<string> Names, int SecondsLeft)
+{
+    /// <summary>The notice for this frame, or null: no hold, or the mission has started since the board was sent.</summary>
+    public static CoopStartNotice? Of(Scoreboard? board, uint newestTick, int mySlot)
+    {
+        if (board?.StartWait is not { } w || newestTick > board.Tick) return null;
+        var names = w.Slots.Where(s => s != mySlot)
+            .Select(s => board.Players.FirstOrDefault(p => p.Slot == s)?.Name is { Length: > 0 } n ? n : $"player {s + 1}").ToList();
+        return names.Count == 0 ? null : new CoopStartNotice(names, w.SecondsLeft);
+    }
+
+    /// <summary>The names as a list in words: "Hal", "Hal and Ann", "Hal, Ann and Bob".</summary>
+    public string Who => Names.Count == 1 ? Names[0] : string.Join(", ", Names.Take(Names.Count - 1)) + " and " + Names[^1];
+
+    /// <summary>The console's line: "*** Waiting for Hal to finish loading".</summary>
+    public string Line => $"*** Waiting for {Who} to finish loading";
+
+    /// <summary>The time left: "Starting without them in 87 s" (him or her are not known; them for one too).</summary>
+    public string Countdown => $"Starting without them in {SecondsLeft} s";
+}

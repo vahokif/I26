@@ -215,9 +215,29 @@ public sealed class CoopMode : IHostMode
         if (seats.Count == 0) return false;
         if (double.IsNaN(_loadAt)) _loadAt = LoadClock();
         if (seats.All(s => s.Inputs.LastReceived > 0)) { _host.Log("co-op: every player has loaded: the mission starts"); return true; }
+        string waits = string.Join(", ", Loading(seats).Select(s => s.Name));
+        if (waits != _waitsFor) { _waitsFor = waits; _host.Log($"co-op: the start waits for {waits}"); }
         if (LoadClock() - _loadAt < _o.LoadSeconds) return false;
         _host.Log($"co-op: {string.Join(", ", seats.Where(s => s.Inputs.LastReceived == 0).Select(s => s.Name))} did not load in {_o.LoadSeconds:0} s: the mission starts without them");
         return true;
+    }
+
+    /// <summary>Whom the start waits for, as the server last logged it.</summary>
+    private string? _waitsFor;
+
+    /// <summary>The seats whose games have not built the mission and sent an input.</summary>
+    private static IEnumerable<Seat> Loading(IReadOnlyList<Seat> seats) => seats.Where(s => s.Inputs.LastReceived == 0);
+
+    /// <summary>
+    /// A lobby's start still held (<see cref="AllLoaded"/>): the slots it waits for and the seconds until it goes without them, for the
+    /// scoreboard (#196), so the players already in the mission see why nothing moves. Null once started, or outside a lobby's start.
+    /// </summary>
+    public CoopStartWait? StartWait(IReadOnlyList<Seat> seats)
+    {
+        if (_started || !_o.Lobby || double.IsNaN(_loadAt)) return null;
+        var slots = Loading(seats).Select(s => (byte)s.Slot).ToList();
+        if (slots.Count == 0) return null;
+        return new CoopStartWait(slots, (int)Math.Ceiling(Math.Max(0, _o.LoadSeconds - (LoadClock() - _loadAt))));
     }
 
     /// <summary>The cut-scenes are the host's to skip: the listen host's seat (or the one that took over), else the lowest.</summary>

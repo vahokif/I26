@@ -490,6 +490,8 @@ public partial class NetHud : CanvasLayer
             if (hs != _hostStatus) { _hostStatus = hs; GD.Print($"[melee] {hs}"); }
             f.HostStatus = hs;
         }
+        // a co-op lobby's start held for the games still loading: whom it waits for, until the server's tick moves on (#196)
+        if (f.Coop && a is not null && Client.State == ClientState.Joined) f.Waiting = CoopStartNotice.Of(sc, Client.NewestTick, a.Slot);
         if (a is not null)
         {
             f.TeamPlay = a.TeamPlay;

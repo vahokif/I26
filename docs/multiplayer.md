@@ -992,6 +992,13 @@ original, whose NET MELEE·ENTRY ROSTER is the list of games to join), so the lo
   or `ServerOptions.LoadSeconds` (120) after the start: the briefing (WRLD +0x04) plays in every game after the accept, the loading card up, then the
   mission is built, so the cars appear together. A game still loading at the timeout is left behind: the mission starts, its seat stays, and its
   inputs are taken from the moment it arrives, as a late joiner's would be (its car stands at the start until then).
+- **Waiting for the others** (#196). While the start is held the games already in the mission say whom it waits for: the 1997 look keeps
+  "*** Waiting for Hal to finish loading (87 s)" as the console window's top line, the modern look a toast at the top ("Waiting for **Hal** to
+  finish loading", "Starting without them in 87 s"). The server names them on the scoreboard (`Scoreboard.StartWait`, `CoopStartWait`: the
+  slots of the seats that have sent no input, and the seconds to the timeout), as a tagged trailer after its slots that left, written only while
+  the start is held, so every other board is byte for byte as before and a build that does not know it reads the board and stops before it; the
+  protocol version is unchanged. A game shows it (`CoopStartNotice`) until the server's tick moves on past that board's, so it goes the moment
+  the mission starts; its own slot is never named. The server logs each change ("co-op: the start waits for Hal").
 - **Late joiners** after the start are seated as always (the accept, then their own briefing before it, if the roster showed the game in progress).
   A joiner that the roster showed in the lobby plays its briefing at the start.
 - **The host leaving the lobby** closes it: "The host closed the lobby." goes to everyone in it and the game takes no more joins. The listen

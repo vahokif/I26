@@ -1137,7 +1137,7 @@ public sealed partial class MeleeHost : IModeHost
         return (Car, Round);
     }
 
-    public Scoreboard Scoreboard() => new(Tick, Setup.Script!.Host.Now, [.. Mode.Board().OrderBy(r => r.Slot)]);
+    public Scoreboard Scoreboard() => new(Tick, Setup.Script!.Host.Now, [.. Mode.Board().OrderBy(r => r.Slot)]) { StartWait = Over ? null : Mode.StartWait(_seats) };
 
     /// <summary>Everyone at the table, humans and bots, by slot: slot, name, player (the melee's).</summary>
     public IEnumerable<(int Slot, string Name, MeleePlayer Player)> Everyone() => ((MeleeMode)Mode).Everyone();

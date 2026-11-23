@@ -9,7 +9,7 @@ namespace I76.Game.Net;
 /// state without staging it in a real game (docs/dev-hooks.md). What: board (the players' window held), teams (the
 /// teams' window held), teamplay, ctf, race, chat (a conversation), typing (the entry open), dead, ready (dead, the
 /// respawn open), end-win, end-lose, timeup, final, invite, boot, host (this machine hosts), page2, pad, locked (the
-/// standings locked up, a cursor on a row), me:NAME (your own row's name).
+/// standings locked up, a cursor on a row), me:NAME (your own row's name), wait (a co-op start held for two players still loading).
 /// </summary>
 public sealed class NetHudDemo
 {
@@ -179,6 +179,7 @@ public sealed class NetHudDemo
         }
         if (Has("invite")) f.Prompt = new(NetHudFrame.PromptKind.Invite, "Cleopatra Jones");
         if (Has("boot")) f.Prompt = new(NetHudFrame.PromptKind.Boot, Name(5));
+        if (Has("wait")) { f.Coop = true; f.Waiting = new I76.Net.CoopStartNotice([Name(1), Name(3)], 87); }
         return f;
     }
 

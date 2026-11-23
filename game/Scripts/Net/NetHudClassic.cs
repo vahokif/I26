@@ -9,7 +9,7 @@ namespace I76.Game.Net;
 /// console's lines (red, in Lee) at (50, 150) of 640x480 and the "Say:" entry at (50, 360) (two windows),
 /// the score window over the console's place with its tab stops (16, 270, 350, 430; the port's ping and
 /// status after them), all scaled by the window's height and measured from its left edge, as on a 640x480 screen,
-/// rather than inside a centred 4:3 box. The host's prompts and the banners are centred; the port's block at the top right (the
+/// rather than inside a centred 4:3 box (a co-op start's wait is the console's top line while it lasts). The host's prompts and the banners are centred; the port's block at the top right (the
 /// ping, the listing, the goal line the original wrote at (50, 360), the keys) shows only with the score window up.
 /// </summary>
 public partial class NetHudClassic : Control
@@ -171,7 +171,10 @@ public partial class NetHudClassic : Control
             : f.Feed.Recent(f.T, HudFeed.ChatLife, 30, l => l.Kind == FeedKind.Chat || f.T - l.At <= HudFeed.Life);
         var texts = lines.Select(l => l.Text).ToList();
         if (more > 0 && !f.ChatOpen) texts.Add($"... and {more} more");
-        _feed.Text = string.Join('\n', Tail(_feed, texts, _feed.Size.X - 16 * HudLayout.ClassicScale(v.Y), 8));
+        // a co-op start held for the games still loading (#196): the console's line, kept at the window's top until the start
+        float fw = _feed.Size.X - 16 * HudLayout.ClassicScale(v.Y);
+        var pinned = f.Waiting is { } wt && !f.ChatOpen ? Tail(_feed, [$"{wt.Line} ({wt.SecondsLeft}\u00a0s)"], fw, 3) : [];
+        _feed.Text = string.Join('\n', pinned.Concat(Tail(_feed, texts, fw, 8 - pinned.Count)));
         _prompt.Text = f.Prompt switch
         {
             { Kind: NetHudFrame.PromptKind.Boot } p => $"Boot {p.Name} from the game? (CTRL-Y / CTRL-N) ",

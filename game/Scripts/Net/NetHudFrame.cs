@@ -59,6 +59,8 @@ public sealed class NetHudFrame
     public bool Host;
     /// <summary>A co-op story mission: no goal, no places; a death comes back by itself beside a teammate.</summary>
     public bool Coop;
+    /// <summary>A co-op lobby's start held for games still loading: whom it waits for and how long until it goes without them (#196).</summary>
+    public I76.Net.CoopStartNotice? Waiting;
 
     public sealed record DeathInfo(string? Killer, int KillerTeam, bool Self, double Left, double Delay, string RaiseKey, string? NextCar);
     /// <summary>The goal was reached (or the time ran out): the original's line on this machine, and who won.</summary>

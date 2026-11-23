@@ -44,6 +44,8 @@ public interface IHostMode
     string? CanJoin() => null;
     /// <summary>The game waits (a co-op mission until its first player is in): the host does not tick it.</summary>
     bool Holding(IReadOnlyList<Seat> seats) => false;
+    /// <summary>Whom a held start waits for (a co-op lobby's: the games still loading), for the scoreboard; null when nothing is held for anyone.</summary>
+    CoopStartWait? StartWait(IReadOnlyList<Seat> seats) => null;
     /// <summary>A seat's client says its copy of the mission's movie is over (a co-op mission's; protocol 19).</summary>
     void MovieDone(Seat seat, string name) { }
     /// <summary>The mode's part of a seat's join accept (a co-op mission's), or null.</summary>

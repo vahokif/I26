@@ -8,7 +8,7 @@ namespace I76.Game.Net;
 /// <summary>
 /// The modern look's network HUD (docs/deviations.md): the same readouts and keys as the original's, drawn as the port's
 /// panels in the game's colours and faces (HudStyle). The mode panel (time, goal, laps and place, the flags) and the kill
-/// feed sit in the two columns under the cockpit's instruments, the chat at the bottom left, the host's prompts, the
+/// feed sit in the two columns under the cockpit's instruments, the chat at the bottom left, the host's prompts, a co-op start's wait, the
 /// death card, the end and the results in the middle, the score window over everything while its key is held. Sizes
 /// follow the window's height (HudLayout.ModernScale) inside a safe margin.
 /// </summary>
@@ -266,6 +266,8 @@ public partial class NetHudModern : Control
         if (f.Board is { } b) Board(f, b, v, sr);
         // the host's prompt over the standings: a boot asked by a click on the locked standings (or Ctrl+n while they are held) is read there
         if (f.Prompt is { } p) Prompt(p, new Vector2(v.X / 2, top));
+        // a co-op start held for the games still loading (#196), under the host's prompt when there is one
+        if (f.Waiting is { } wt && f.Final is null) Waiting(wt, new Vector2(v.X / 2, top + (f.Prompt is not null ? U(124) + U(12) : 0)));
     }
 
     /// <summary>
@@ -627,6 +629,26 @@ public partial class NetHudModern : Control
             float w2 = HintWidth(hh, ["Enter"], null, "START NOW");
             Hint(new Vector2(hx - w2 - U(28), y), hh, ["Enter"], null, "START NOW", HudStyle.Amber);
         }
+    }
+
+    /// <summary>A co-op start held for the games still loading: a toast naming whom it waits for, and the time until it goes without them.</summary>
+    private void Waiting(I76.Net.CoopStartNotice n, Vector2 topCentre)
+    {
+        const string pre = "Waiting for ", post = " to finish loading";
+        int size = Px(24), small = Px(18);
+        float tw = Measure(HudStyle.Regular, pre, size).X + Measure(HudStyle.Bold, n.Who, size).X + Measure(HudStyle.Regular, post, size).X;
+        float w = Math.Min(Math.Max(tw, Measure(HudStyle.Regular, n.Countdown, small).X) + U(120), _view.X - U(24));
+        var r = new Rect2(topCentre.X - w / 2, topCentre.Y, w, U(92));
+        Panel(r);
+        var tag = new Rect2(r.Position.X + U(16), r.Position.Y + U(18), U(70), U(26));
+        Box(tag, HudStyle.Orange, 5);
+        TextCentre(HudStyle.Title, "CO-OP", new Vector2(tag.GetCenter().X, tag.Position.Y + (tag.Size.Y - HudStyle.Title.GetHeight(Px(18))) / 2), Px(18), HudStyle.Ink);
+        float x = r.Position.X + U(100), y = r.Position.Y + U(16);
+        x += Text(HudStyle.Regular, pre, new Vector2(x, y), size, HudStyle.Parchment);
+        string who = Fit(HudStyle.Bold, n.Who, size, Math.Max(U(80), r.End.X - U(16) - x - Measure(HudStyle.Regular, post, size).X));
+        x += Text(HudStyle.Bold, who, new Vector2(x, y), size, HudStyle.Amber);
+        Text(HudStyle.Regular, post, new Vector2(x, y), size, HudStyle.Parchment);
+        Text(HudStyle.Regular, n.Countdown, new Vector2(r.Position.X + U(100), y + U(40)), small, HudStyle.ParchmentDim);
     }
 
     /// <summary>The host's prompt: a toast with the question and its keys.</summary>

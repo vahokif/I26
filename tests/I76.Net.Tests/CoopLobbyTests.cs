@@ -227,10 +227,17 @@ public class CoopLobbyTests(ITestOutputHelper output)
             g.Pump(40);
         }
         Assert.Equal(tick, g.Tick);
+        // the games already in it say whom the start waits for (#196): Bob, by name, from the scoreboard
+        CoopStartNotice? Notice(MeleeClient c) => CoopStartNotice.Of(c.Scores, c.NewestTick, c.Accept!.Slot);
+        Assert.True(g.Wait(() => { hal.SendInput(new CarInput()); ann.SendInput(new CarInput()); return Notice(hal)?.Who == "Bob" && Notice(ann)?.Who == "Bob"; }),
+            $"no notice naming Bob: Hal's {Notice(hal)?.Line ?? "none"}, Ann's {Notice(ann)?.Line ?? "none"}");
+        Assert.InRange(Notice(hal)!.SecondsLeft, 1, 3);
         // Bob's game is up: the mission starts for all of them together
         bob.SendInput(new CarInput());
         Assert.True(g.Wait(() => { hal.SendInput(new CarInput()); return g.Tick > tick + 5; }), "the mission did not start once everyone had loaded");
         Assert.True(g.Wait(() => hal.Snapshots.Count > 0 && bob.Snapshots.Count > 0));
+        // and the notice is gone
+        Assert.True(g.Wait(() => { hal.SendInput(new CarInput()); return Notice(hal) is null && Notice(ann) is null && Notice(bob) is null; }));
     }
 
     [Fact]

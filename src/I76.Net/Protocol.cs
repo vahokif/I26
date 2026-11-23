@@ -501,6 +501,13 @@ public sealed record Scoreboard(uint Tick, float Clock, IReadOnlyList<PlayerRow>
 {
     public const int PingStep = 10;
 
+    /// <summary>
+    /// A lobby's co-op start held for games still loading: whom it waits for (<see cref="CoopStartWait"/>). Written after the
+    /// slots that left, as a tagged trailer, and only while the start is held, so every other board is as before; a reader
+    /// that does not know it stops before it, and a board without it reads as no hold.
+    /// </summary>
+    public CoopStartWait? StartWait { get; init; }
+
     /// <summary>Writes the board against <paramref name="sent"/> (the client's board; null or empty: in full) and brings <paramref name="sent"/> up to what the client will have.</summary>
     public void Write(NetWriter w, Dictionary<byte, PlayerRow>? sent = null)
     {
@@ -535,6 +542,7 @@ public sealed record Scoreboard(uint Tick, float Clock, IReadOnlyList<PlayerRow>
         var gone = full ? [] : sent!.Keys.Where(k => !Players.Any(p => p.Slot == k)).ToList();
         w.VarU((uint)gone.Count);
         foreach (var g in gone) w.U8(g);
+        if (StartWait is { Slots.Count: > 0 } sw) sw.Write(w);
         if (sent is null) return;
         if (full) sent.Clear();
         foreach (var (p, m) in rows)
@@ -567,7 +575,8 @@ public sealed record Scoreboard(uint Tick, float Clock, IReadOnlyList<PlayerRow>
         }
         n = JoinAccept.Count(ref r, 256);
         for (int i = 0; i < n; i++) board.Remove(r.U8());
-        return new Scoreboard(tick, clock, [.. board.Values.OrderBy(p => p.Slot)]);
+        CoopStartWait? wait = r.Remaining > 0 && r.U8() == CoopStartWait.Tag ? CoopStartWait.Read(ref r) : null;
+        return new Scoreboard(tick, clock, [.. board.Values.OrderBy(p => p.Slot)]) { StartWait = wait };
     }
 }
 

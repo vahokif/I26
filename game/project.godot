@@ -282,6 +282,30 @@ i76_cloud_tex={
 "type": "sampler2D",
 "value": ""
 }
+i76_haze_density={
+"type": "float",
+"value": 0.0
+}
+i76_haze_scale={
+"type": "float",
+"value": 400.0
+}
+i76_haze_floor={
+"type": "float",
+"value": 0.0
+}
+i76_haze_sun={
+"type": "vec3",
+"value": Vector3(0, 1, 0)
+}
+i76_haze_tint={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+i76_haze_mie={
+"type": "float",
+"value": 0.0
+}
 
 [importer_defaults]
 

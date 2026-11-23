@@ -783,6 +783,9 @@ public partial class Main : Node3D
         // the modern sky's cloud shadows and how fast its sheet drifts (docs/cloud-shadows.md); the 1997 look ignores both
         I76.Game.World.CloudShadow.SetEnabled(s.CloudShadows);
         I76.Game.World.CloudShadow.SetSpeed(s.CloudSpeed);
+        // the haze over the desert and the sun in it (docs/desert-haze.md); ApplyDrawDistance below is what puts it
+        // on the screen, since the haze lives on the modern look's distance-fog pass
+        I76.Game.World.DesertHaze.SetEnabled(s.DesertHaze);
         if (_modernEnv is not null) { _modernEnv.AdjustmentEnabled = true; _modernEnv.AdjustmentBrightness = ModernBrightness(s.Graphics[0xc]); }
         if (_env1997 is not null)
         {
@@ -1958,6 +1961,12 @@ public partial class Main : Node3D
         I76.Game.World.CloudShadow.Configure(modernSky, _builder.SkyAverage);
         I76.Game.World.CloudShadow.SetSun(l, light.IsDay, _modernEnv.AmbientLightEnergy);
         I76.Game.World.CloudShadow.SetOrigin(_origin);
+        // The air over the land (docs/desert-haze.md) is counted from the mission's own mean ground, so a wash
+        // hazes and the ridge above it does not. That mean walks every sample of the map, so it is measured
+        // here, once with the mission, as the horizon ring measures it once with its build.
+        I76.Game.World.DesertHaze.SetGround(_builder.World is { } ground ? (float) ground.AverageGroundHeight() : 0f);
+        I76.Game.World.DesertHaze.SetSun(l, light.IsDay);   // the tint follows the hour, as the sun's own colour does
+        I76.Game.World.DesertHaze.SetOrigin(_origin);
         _env1997.BackgroundMode = Environment.BGMode.Sky;
         _env1997.Sky = sky;
         // no ambient: the 1997 shaders carry the engine's own light, and light() adds only the sun's shadow
@@ -2260,7 +2269,8 @@ public partial class Main : Node3D
     /// <summary>
     /// Draw Distance on the scene: the modern look at Original fades into the sky by 560 m and shows the sky's horizon
     /// panels, in place of the 3D horizon ring, which the 600 m clip would cut; Far has the ring and no fade. The 1997 look
-    /// only changes its camera's far plane (and keeps the panels).
+    /// only changes its camera's far plane (and keeps the panels). The desert haze rides on the same pass
+    /// (docs/desert-haze.md), so it is what keeps that quad drawn at Far, where nothing else wants a fade.
     /// </summary>
     private void ApplyDrawDistance()
     {
@@ -2269,11 +2279,17 @@ public partial class Main : Node3D
         bool hugeMap = _builder?.World?.Terrain.Huge == true;
         if (_skyFog is not null)
         {
-            _skyFog.Visible = !_mode1997 && (original || hugeMap);
+            _skyFog.Visible = !_mode1997 && (original || hugeMap || I76.Game.World.DesertHaze.Active);
             if (_skyFog.MaterialOverride is ShaderMaterial fm)
             {
-                fm.SetShaderParameter("fog_begin", original ? I76.Formats.Imaging.DrawDistance.FogBegin : World.TerrainNode.StreamRadius * 0.6f);
-                fm.SetShaderParameter("fog_end", original ? I76.Formats.Imaging.DrawDistance.FogEnd : World.TerrainNode.StreamRadius * 0.95f);
+                // The haze brings its own opacity along each ray and needs no fade of the clip's, so where it is the
+                // only reason this pass is drawn the fade is pushed out past the far plane and only the haze counts;
+                // where they both want it the shader combines them rather than stacking one on the other.
+                var (begin, end) = original ? (I76.Formats.Imaging.DrawDistance.FogBegin, I76.Formats.Imaging.DrawDistance.FogEnd)
+                    : hugeMap ? (World.TerrainNode.StreamRadius * 0.6f, World.TerrainNode.StreamRadius * 0.95f)
+                    : (I76.Formats.Imaging.DrawDistance.FarClip, I76.Formats.Imaging.DrawDistance.FarClip * 2f);
+                fm.SetShaderParameter("fog_begin", begin);
+                fm.SetShaderParameter("fog_end", end);
             }
         }
         if (_horizon is not null) _horizon.Visible = !_mode1997 && !original;
@@ -2353,6 +2369,7 @@ public partial class Main : Node3D
         _worldRoot.Position = -Coords.ToGodot(gameOrigin);
         _sky1997?.SetShaderParameter("origin_y", gameOrigin.Y);   // the horizon ring sinks with the eye's game height
         I76.Game.World.CloudShadow.SetOrigin(gameOrigin);         // the cloud shadows stay on the map, not on the Godot origin
+        I76.Game.World.DesertHaze.SetOrigin(gameOrigin);          // and so do the map's own levels of the air
     }
 
     /// <summary>The 1997 look's sky (sky_dome.gdshader).</summary>
@@ -2566,6 +2583,7 @@ public partial class Main : Node3D
         _mode1997 = on;
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
         I76.Game.World.CloudShadow.SetLook(on);   // the 1997 look has no sun for a cloud to step in front of
+        I76.Game.World.DesertHaze.SetLook(on);    // and no air between its clip and its horizon panels
         _builder?.Terrain?.UseModern(!on);
         MissionBuilder.Trace("look: terrain");
         yield return null;

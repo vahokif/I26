@@ -27,4 +27,5 @@ the rules of the project are in [../CHARTER.md](../CHARTER.md).
 | [savestate.md](savestate.md) | Snapshots of the whole simulation: what they hold, versioning, the completeness guard, restoring. |
 | [modern-vegetation.md](modern-vegetation.md) | The modern look's procedural plants: species and their L-systems, placement, drawing, cost. |
 | [cloud-shadows.md](cloud-shadows.md) | The modern look's shadows from the sky's own clouds: the projection, the light it takes, what it costs. |
+| [desert-haze.md](desert-haze.md) | The modern look's haze over the distance: the air counted along each ray, thicker low than high, the sun in it, the numbers and how to look at them. |
 | [compatibility-renderer.md](compatibility-renderer.md) | Running on OpenGL when there is no Vulkan or D3D12: what is lacking and what the game does. |

@@ -377,6 +377,9 @@ public sealed partial class EscapeMenu : Control
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
             Scrolling(17, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
             Scrolling(18, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            // the haze over the distance and the sun's gold in it (docs/desert-haze.md); the modern look only, and the
+            // pass it lives on is the one the draw distance decides about, which is why it is live through Live
+            Scrolling(19, Cycle, "Desert Haze", 2, offOn, s => s.DesertHaze ? 1 : 0, (s, v) => s.DesertHaze = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -459,6 +462,7 @@ public sealed partial class EscapeMenu : Control
         Settings.Vegetation = 1;
         Settings.CloudShadows = true;
         Settings.CloudSpeed = 0;
+        Settings.DesertHaze = true;
         Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
         Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;
         Settings.VSync = true;

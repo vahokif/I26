@@ -484,7 +484,7 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
 {
     protected override int Record => 9;
     private byte[] _saved = [];
-    private bool _savedHd, _savedLook, _savedSoftware, _savedGrade, _savedCloud;
+    private bool _savedHd, _savedLook, _savedSoftware, _savedGrade, _savedCloud, _savedHaze;
     private int _savedBlur;
     private int _savedVeg, _savedDraw, _savedMaxFps, _savedCloudSpeed;
     private I76.Game.Boot.RendererChoice _savedRenderer;
@@ -535,6 +535,7 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         _savedBlur = Shell.Settings.CrashBlur;
         _savedVeg = Shell.Settings.Vegetation;
         _savedCloud = Shell.Settings.CloudShadows;
+        _savedHaze = Shell.Settings.DesertHaze;
         _savedCloudSpeed = Shell.Settings.CloudSpeed;
         _savedDraw = Shell.Settings.DrawDistance;
         _savedMaxFps = Shell.Settings.MaxFps;
@@ -597,6 +598,13 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
             st.CloudSpeed = (st.CloudSpeed + 1) % speed.Length;
             I76.Game.World.CloudShadow.SetSpeed(st.CloudSpeed);
         });
+        // the haze lying in the distance, and the sun's gold in it (docs/desert-haze.md): the modern look's only air,
+        // and it reaches further than the draw distance does, so it is a row of its own
+        Row("Desert Haze", () => st.DesertHaze ? "On" : "Off", () =>
+        {
+            st.DesertHaze = !st.DesertHaze;
+            I76.Game.World.DesertHaze.SetEnabled(st.DesertHaze);
+        });
         // how far the world is drawn, in either look
         Row("Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
         // the frame rate limiter and vsync: drawing only, the simulation keeps the Play Options rate; both live (the engine's, so the shell shows it too)
@@ -615,9 +623,9 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
                 : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };
             st.Renderer = all[(Math.Max(0, Array.IndexOf(all, st.Renderer)) + 1) % all.Length];
         });
-        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = 0; I76.Sim.Views.ViewFov.Apply(0); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); ApplyTextures(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.CloudShadows = true; Shell.Settings.CloudSpeed = 0; I76.Game.World.CloudShadow.SetEnabled(true); I76.Game.World.CloudShadow.SetSpeed(0); Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
+        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = 0; I76.Sim.Views.ViewFov.Apply(0); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); ApplyTextures(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.CloudShadows = true; Shell.Settings.CloudSpeed = 0; I76.Game.World.CloudShadow.SetEnabled(true); I76.Game.World.CloudShadow.SetSpeed(0); Shell.Settings.DesertHaze = true; I76.Game.World.DesertHaze.SetEnabled(true); Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
         Add(350, 438, "Done", () => { Shell.Settings.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); ApplyTextures(_savedHdTex); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.CloudShadows = _savedCloud; Shell.Settings.CloudSpeed = _savedCloudSpeed; I76.Game.World.CloudShadow.SetEnabled(_savedCloud); I76.Game.World.CloudShadow.SetSpeed(_savedCloudSpeed); Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = _savedFov; I76.Sim.Views.ViewFov.Apply(_savedFov); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
+        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); ApplyTextures(_savedHdTex); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.CloudShadows = _savedCloud; Shell.Settings.CloudSpeed = _savedCloudSpeed; I76.Game.World.CloudShadow.SetEnabled(_savedCloud); I76.Game.World.CloudShadow.SetSpeed(_savedCloudSpeed); Shell.Settings.DesertHaze = _savedHaze; I76.Game.World.DesertHaze.SetEnabled(_savedHaze); Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = _savedFov; I76.Sim.Views.ViewFov.Apply(_savedFov); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
     }
 }
 

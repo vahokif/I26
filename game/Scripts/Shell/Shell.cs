@@ -280,6 +280,7 @@ public partial class Shell : CanvasLayer
         I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
         I76.Game.World.CloudShadow.SetEnabled(Settings.CloudShadows);   // the modern sky's shade and its drift (docs/cloud-shadows.md)
         I76.Game.World.CloudShadow.SetSpeed(Settings.CloudSpeed);
+        I76.Game.World.DesertHaze.SetEnabled(Settings.DesertHaze);      // and the haze over the distance (docs/desert-haze.md)
         ApplyMusicLevel();
         I76.Game.Boot.Main.ApplyAudio(Settings);   // the SFX and voice levels Audio Control set live go back too
     }
@@ -342,6 +343,7 @@ public partial class Shell : CanvasLayer
         // the cloud speed the player chose is a global the sky and its shade share, so it is due before the first sky
         I76.Game.World.CloudShadow.SetEnabled(Settings.CloudShadows);
         I76.Game.World.CloudShadow.SetSpeed(Settings.CloudSpeed);
+        I76.Game.World.DesertHaze.SetEnabled(Settings.DesertHaze);
         AddChild(new ColorRect { Color = Colors.Black, AnchorRight = 1, AnchorBottom = 1, MouseFilter = Control.MouseFilterEnum.Ignore });
         _view = new TextureRect
         {
@@ -1276,8 +1278,12 @@ public sealed class ShellSettings
     public bool CloudShadows { get; set; } = true;
     /// <summary>The port's own: Graphic Detail's Cloud Speed (index into I76.Game.World.CloudShadow.SpeedNames: 0 Normal, 1 Half, 2 Quarter; shell.cfg [port] cloud_speed, written only when not Normal). The sky and its shadows slow together.</summary>
     public int CloudSpeed { get; set; }
+    /// <summary>The port's own: the haze lying in the distance of the modern look, and the sun's gold in it (Graphic Detail; World/DesertHaze.cs, docs/desert-haze.md; shell.cfg [port] desert_haze, written only when off). On unless the player chose.</summary>
+    public bool DesertHaze { get; set; } = true;
     /// <summary>Cloud Shadows from shell.cfg's [port] cloud_shadows (null when absent): on, because the feature ships on; off only when the file says off.</summary>
     public static bool CloudShadowsFrom(string? stored) => !string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Desert Haze from shell.cfg's [port] desert_haze (null when absent): on, because the feature ships on; off only when the file says off.</summary>
+    public static bool DesertHazeFrom(string? stored) => !string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase);
     /// <summary>Cloud Speed from shell.cfg's [port] cloud_speed (null when absent): an index into CloudShadow.SpeedNames, Normal when absent or out of range.</summary>
     public static int CloudSpeedFrom(int? stored) => stored is null ? 0 : Math.Clamp(stored.Value, 0, I76.Game.World.CloudShadow.SpeedNames.Length - 1);
     /// <summary>The port's own: Graphic Detail's Draw Distance (I76.Formats.Imaging.DrawDistance: 0 Original, the 600 m clip; 1 Far, to 20 km). Far unless the player chose.</summary>
@@ -1412,6 +1418,7 @@ public sealed class ShellSettings
         // the modern look's cloud shadows (docs/cloud-shadows.md): no version step, a file without the keys has them on and drifting as the mission has them
         s.CloudShadows = CloudShadowsFrom(c.HasSectionKey("port", "cloud_shadows") ? c.GetValue("port", "cloud_shadows").ToString() : null);
         s.CloudSpeed = CloudSpeedFrom(c.HasSectionKey("port", "cloud_speed") ? (int)c.GetValue("port", "cloud_speed") : null);
+        s.DesertHaze = DesertHazeFrom(c.HasSectionKey("port", "desert_haze") ? c.GetValue("port", "desert_haze").ToString() : null);
         // no version step: a file without these keys has them off, which is what they were before they existed
         s.SoftwareRenderer = (bool)c.GetValue("port", "software_renderer", false);
         s.PaletteGrade = (bool)c.GetValue("port", "palette_grade", false);
@@ -1576,6 +1583,7 @@ public sealed class ShellSettings
         if (!BrushImpacts) c.SetValue("port", "brush_impacts", "off");
         if (!CloudShadows) c.SetValue("port", "cloud_shadows", "off");
         if (CloudSpeed != 0) c.SetValue("port", "cloud_speed", CloudSpeed);
+        if (!DesertHaze) c.SetValue("port", "desert_haze", "off");
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);
         if (!CameraReturn) c.SetValue("port", "camera_return", false);
         if (!ZoomReset) c.SetValue("port", "zoom_reset", false);

@@ -419,6 +419,13 @@ public partial class SimDriver : Node
     public bool AutoReverse;
     private I76.Sim.Session.AutoReverse? _autoReverse;
 
+    /// <summary>
+    /// The next frame's time is not play: the mission's first picture was drawn with the game held (Main.GoAfterFirstPicture), and the
+    /// ticks that frame's time would owe are not run at once after it (a network game's clock is the server's).
+    /// </summary>
+    public void SkipFrameTime() { if (Remote is null) _skipFrame = true; }
+    private bool _skipFrame;
+
     /// <summary>Runs tick 0 now (from Main._Ready), before anything is drawn.</summary>
     public void FirstTick()
     {
@@ -489,7 +496,8 @@ public partial class SimDriver : Node
         if (Hold) { Alpha = 1; foreach (var c in Cars) c.Place(1, Origin()); return; }
         // the Developer panel's Freeze: no ticks (Step runs them one at a time); its time scale paces the ticks against the wall clock
         if (DevFrozen) { Alpha = 1; foreach (var c in Cars) c.Place(1, Origin()); return; }
-        _acc += System.Math.Min(delta, 0.25) * DevTimeScale;
+        if (_skipFrame) _skipFrame = false;
+        else _acc += System.Math.Min(delta, 0.25) * DevTimeScale;
         if (!_started) { _started = true; _acc = System.Math.Max(_acc, Tick); }   // tick 0 runs before the first frame is drawn
         while (_acc >= Tick)
         {

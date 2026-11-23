@@ -209,7 +209,8 @@ public partial class Main
             loading.QueueFree();
             MissionBuilder.Trace("loading card gone: the mission goes on");
             _loading = false;
-            GetTree().Paused = false;
+            await GoAfterFirstPicture();
+            if (!IsInsideTree()) return false;
             if (AuditOn) AuditAfter();
             return true;
         }

@@ -454,7 +454,16 @@ public sealed class TripInventory
             if (n.State == PartState.Car) { n.State = PartState.Van; n.Slot = -1; }
             else if (n.State == PartState.Repair && n.Saved == PartState.Car) n.Saved = PartState.Van;   // out of the order, to the van
         }
-        foreach (int i in s.Repairs) if (i >= 0 && i < keep.Count && keep[i] is { } r) inv.Repairs.Add(r);
+        // a bookmark saved with two parts in one slot (a refilled slot's part come back out of the order over the new one, #214):
+        // the first keeps the slot, as its row showed, and the others are in the van
+        var taken = new HashSet<int>();
+        foreach (var n in inv.Nodes)
+            if (n.State == PartState.Car && !taken.Add(n.Slot)) { n.State = PartState.Van; n.Slot = -1; }
+        // the order holds only parts in repair: one a bookmark kept in it after FIELD SALVAGE sent it to the field (#214) is not repaired
+        foreach (int i in s.Repairs) if (i >= 0 && i < keep.Count && keep[i] is { State: PartState.Repair } r) inv.Repairs.Add(r);
+        // a part in the order whose slot another part has taken (a bookmark saved before Install sent it to the van) comes out of it to the van
+        foreach (var r in inv.Repairs)
+            if (r.Saved == PartState.Car && !taken.Add(r.Slot)) { r.Saved = PartState.Van; r.Slot = -1; }
         return inv;
     }
 }

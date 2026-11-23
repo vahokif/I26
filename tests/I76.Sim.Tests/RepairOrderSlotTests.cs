@@ -8,7 +8,7 @@ namespace I76.Sim.Tests;
 /// no slot of it (0.12.1 has no guard there). Two more ways the garage and FIELD SALVAGE leave a part marked in the car where it
 /// does not sit: a part in the repair order whose slot was refilled went back into the car over the new part when it came out of
 /// the order, and a weapon sent to the field (FIELD SALVAGE's full weapons list) stayed in the order. Each is checked alone, then
-/// every shell step between missions at random over many seeds.
+/// every shell step between missions at random over many seeds, and bookmarks saved in each broken state load cleaned up.
 /// </summary>
 public class RepairOrderSlotTests
 {
@@ -81,21 +81,68 @@ public class RepairOrderSlotTests
         Assert.Null(Broken(inv));
     }
 
-    [Fact]
-    public void APartWhoseSlotWasRefilledIsRepairedIntoTheVan()
+    /// <summary>The engine queued for repair and a V6 put in its slot without taking it out of the order, as 0.13.0's Install left them.</summary>
+    private static (TripInventory Inv, PartNode V8, PartNode V6) RefilledWhileQueued()
     {
         var inv = Car();
         var v8 = inv.InSlot(0)!;
         v8.Health = 100;
         Assert.True(inv.QueueRepair(v8));
-        var v6 = new PartNode(P("eng02"), 300, PartState.Van);
+        var v6 = new PartNode(P("eng02"), 300, PartState.Car, 0);
         inv.Nodes.Add(v6);
-        inv.Install(0, v6);
-        var back = TripInventory.Load(inv.Save(), Db(), null!)!;
-        back.MissionWon(new CarState(250, 100, 100, [100, 100, 0, 0, 100, 100], []), null, Db(), () => 0);
-        Assert.Equal(PartState.Van, back.Nodes.Single(n => n.Part.Stem == "eng01").State);
-        Assert.Equal(("eng02", 250), (back.InSlot(0)!.Part.Stem, back.InSlot(0)!.Health));
+        return (inv, v8, v6);
+    }
+
+    private static PartNode Stem(TripInventory inv, string stem) => inv.Nodes.Single(n => n.Part.Stem == stem);
+
+    /// <summary>A bookmark saved with a queued part whose slot was refilled: loaded, the part's way out of the order is the van.</summary>
+    [Fact]
+    public void ABookmarkedPartWhoseSlotWasRefilledComesOutOfTheOrderToTheVan()
+    {
+        var back = TripInventory.Load(RefilledWhileQueued().Inv.Save(), Db(), null!)!;
+        var v8 = Stem(back, "eng01");
+        back.Unqueue(v8);
+        Assert.Equal((PartState.Van, -1), (v8.State, v8.Slot));
+        Assert.Equal("eng02", back.InSlot(0)!.Part.Stem);
         Assert.Null(Broken(back));
+    }
+
+    /// <summary>A bookmark saved after such a part came back over the new one, two parts in one slot: the first keeps it, the other is in the van.</summary>
+    [Fact]
+    public void ABookmarkWithTwoPartsInOneSlotKeepsTheFirst()
+    {
+        var (inv, v8, _) = RefilledWhileQueued();
+        inv.Repairs.Remove(v8);
+        v8.State = PartState.Car;
+        Assert.NotNull(Broken(inv));
+        var back = TripInventory.Load(inv.Save(), Db(), null!)!;
+        Assert.Equal("eng01", back.InSlot(0)!.Part.Stem);
+        Assert.Equal((PartState.Van, -1), (Stem(back, "eng02").State, Stem(back, "eng02").Slot));
+        Assert.Null(Broken(back));
+    }
+
+    /// <summary>
+    /// A bookmark saved with a weapon still in the order after 0.13.0's full FIELD SALVAGE weapons list sent it to the field, or after it
+    /// was taken back to the van: loaded, the order no longer holds it, so a won mission leaves the field one behind and repairs neither.
+    /// </summary>
+    [Theory]
+    [InlineData(PartState.Field)]
+    [InlineData(PartState.Van)]
+    public void ABookmarkedWeaponMovedInFieldSalvageIsOutOfTheOrder(PartState moved)
+    {
+        var inv = Car();
+        var gun = inv.InSlot(7)!;
+        gun.Health = 10;
+        Assert.True(inv.QueueRepair(gun));
+        gun.State = moved;
+        gun.Slot = -1;
+        var back = TripInventory.Load(inv.Save(), Db(), null!)!;
+        Assert.Empty(back.Repairs);
+        Assert.Null(Broken(back));
+        back.MissionWon(null, null, Db(), () => 0);
+        var left = back.Nodes.SingleOrDefault(n => n.Part.Stem == "gmlight.gdf" && n.Slot < 0);
+        if (moved == PartState.Field) Assert.Null(left);
+        else Assert.Equal((PartState.Van, 10), (left!.State, left.Health));
     }
 
     /// <summary>A part picked back into its own slot from the order is in the car again, out of the order.</summary>

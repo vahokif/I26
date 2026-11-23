@@ -117,6 +117,8 @@ public sealed class MissionWorld
 
     private sealed record FootprintSet(long Mark, List<GroundBox> Boxes);
     private FootprintSet? _footprints;
+    private sealed record LinkSet(long Mark, List<(Vector3 A, Vector3 B)> Links);
+    private LinkSet? _links;
 
     /// <summary>
     /// The outlines of the placed objects' ground-standing parts as they stand now (<see cref="GroundFootprints.Of"/>), from models
@@ -129,6 +131,16 @@ public sealed class MissionWorld
         var boxes = GroundFootprints.Of(this, new ModelAssembler(_vfs));
         _footprints = new FootprintSet(mark, boxes);
         return boxes;
+    }
+
+    /// <summary>The ends of the drive-on structures as they stand now (<see cref="GroundFootprints.DriveOnLinks"/>), made again when the placements have changed.</summary>
+    public IReadOnlyList<(Vector3 A, Vector3 B)> DriveOnLinks()
+    {
+        long mark = PlacementMark();
+        if (_links is { } l && l.Mark == mark) return l.Links;
+        var links = GroundFootprints.DriveOnLinks(this, new ModelAssembler(_vfs));
+        _links = new LinkSet(mark, links);
+        return links;
     }
 
     // what the footprints are made from: every placement's model, position and rotation

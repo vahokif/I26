@@ -149,6 +149,8 @@ public class PlacementGroundTests(ITestOutputHelper log) : IDisposable
             }
             foreach (var b in pins)
             {
+                // a part clear of the ground under its middle (a bridge's deck) holds only the gentle cells it rests on (TerrainReachTests)
+                if (!float.IsNegativeInfinity(b.Bottom)) continue;
                 var u = b.AxisU.LengthSquared() < 1e-8f ? Vector2.UnitX : Vector2.Normalize(b.AxisU);
                 var v = new Vector2(-u.Y, u.X);
                 int nu = (int)MathF.Ceiling(b.HalfU), nv = (int)MathF.Ceiling(b.HalfV);

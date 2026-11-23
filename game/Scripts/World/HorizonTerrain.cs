@@ -278,7 +278,8 @@ public partial class HorizonTerrain : Node3D
         string key;
         using (var k = new I76.Formats.Assembly.BakeCache.Key("horizon-ring"))
         {
-            k.Add(I76.Formats.Assembly.TerrainSurface.CacheKey(world.Terrain, I76.Formats.Assembly.TerrainSurface.Seeds(world).ToList(), world.Outside, world.Footprints()));
+            k.Add(I76.Formats.Assembly.TerrainSurface.CacheKey(world.Terrain, I76.Formats.Assembly.TerrainSurface.Seeds(world).ToList(), world.Outside, world.Footprints(),
+                I76.Formats.Assembly.TerrainSurface.Links(world)));
             k.Add<float>(profile.Height).Add<Color>(profile.Rock).Add(profile.Scrub.ToRgba32().ToString()).Add(profile.RockLight.ToRgba32().ToString())
                 .Add(profile.RockDark.ToRgba32().ToString()).Add(profile.Snow).Add(profile.Dark);
             k.Add(lightGame.X).Add(lightGame.Y).Add(lightGame.Z).Add(ground.ToRgba32().ToString()).Add(Segments).Add(Reach).Add(Aspect);

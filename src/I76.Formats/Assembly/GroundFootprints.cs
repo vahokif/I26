@@ -4,9 +4,11 @@ namespace I76.Formats.Assembly;
 
 /// <summary>
 /// An upright box's outline on the ground (game-frame X and Z, metres): its centre, its first axis (any length: the user
-/// normalises it), half its extent along that axis and across it.
+/// normalises it), half its extent along that axis and across it. <see cref="Bottom"/> is the box's lowest height when it stands on
+/// the ground only in places (a bridge's deck, resting on its banks over a gap): it holds the ground only where that is within
+/// <see cref="GroundFootprints.Reach"/> of it; negative infinity, the default, holds all of the ground under it.
 /// </summary>
-public readonly record struct GroundBox(Vector2 Centre, Vector2 AxisU, float HalfU, float HalfV)
+public readonly record struct GroundBox(Vector2 Centre, Vector2 AxisU, float HalfU, float HalfV, float Bottom = float.NegativeInfinity)
 {
     /// <summary>Whether the box, grown by <paramref name="margin"/> on every side, overlaps the rectangle [min, max] (separating axes).</summary>
     public bool Overlaps(Vector2 min, Vector2 max, float margin)
@@ -34,9 +36,11 @@ public static class GroundFootprints
 
     /// <summary>
     /// The ground-standing parts of a placed model at <paramref name="pos"/>: each part's bounds as an upright box, its outline seen
-    /// from above (a tilted part's axes foreshortened, at least 0.3 of their length).
+    /// from above (a tilted part's axes foreshortened, at least 0.3 of their length). With <paramref name="resting"/>, the parts that
+    /// stand clear of the ground under their middle too, with their lowest height as <see cref="GroundBox.Bottom"/> (a bridge's deck
+    /// rests on the ground at its ends).
     /// </summary>
-    public static IEnumerable<GroundBox> Parts(MissionWorld world, Placement p, Vector3 pos, AssembledModel model)
+    public static IEnumerable<GroundBox> Parts(MissionWorld world, Placement p, Vector3 pos, AssembledModel model, bool resting = false)
     {
         var place = Affine.FromEngine(p.Object.Rotation, pos);
         var u = place.Rotate(Vector3.UnitX); var w = place.Rotate(Vector3.UnitZ);
@@ -54,15 +58,17 @@ public static class GroundFootprints
                 var corner = new Vector3((k & 1) == 0 ? mn.X : mx.X, (k & 2) == 0 ? mn.Y : mx.Y, (k & 4) == 0 ? mn.Z : mx.Z);
                 lowest = MathF.Min(lowest, place.Apply(corner).Y);
             }
-            if (lowest > world.BilinearHeight(centre.X, centre.Z) + Reach) continue;
+            bool clear = lowest > world.BilinearHeight(centre.X, centre.Z) + Reach;
+            if (clear && !resting) continue;
             yield return new GroundBox(new Vector2(centre.X, centre.Z), new Vector2(u.X, u.Z),
-                (mx.X - mn.X) * 0.5f * MathF.Max(lu, 0.3f), (mx.Z - mn.Z) * 0.5f * MathF.Max(lw, 0.3f));
+                (mx.X - mn.X) * 0.5f * MathF.Max(lu, 0.3f), (mx.Z - mn.Z) * 0.5f * MathF.Max(lw, 0.3f), clear ? lowest : float.NegativeInfinity);
         }
     }
 
     /// <summary>
-    /// Every placed object's ground-standing parts (<see cref="Parts"/>) and a metre square round where it is put, the line objects' too; a
-    /// model that does not assemble stands on a 4 m square. Cars are left out (where they start is ground a car reaches), and so is anything with no model.
+    /// Every placed object's ground-standing parts (<see cref="Parts"/>, the resting ones too) and a metre square round where it is put, the line
+    /// objects' too; a model that does not assemble stands on a 4 m square. Cars are left out (where they start is ground a car reaches), and so
+    /// is anything with no model.
     /// </summary>
     public static List<GroundBox> Of(MissionWorld world, ModelAssembler assembler)
     {
@@ -74,10 +80,51 @@ public static class GroundFootprints
             var pos = world.GroundedPosition(p);
             if (!models.TryGetValue(p.Definition, out var model)) models[p.Definition] = model = assembler.Assemble(p.Definition);
             if (model is null) { boxes.Add(new GroundBox(new Vector2(pos.X, pos.Z), Vector2.UnitX, 4, 4)); continue; }
-            boxes.AddRange(Parts(world, p, pos, model));
+            boxes.AddRange(Parts(world, p, pos, model, resting: true));
             // and where it is put on the ground (a bridge's deck, all of it over a gap, stands at its origin's ground height)
             boxes.Add(new GroundBox(new Vector2(pos.X, pos.Z), Vector2.UnitX, 0.5f, 0.5f));
         }
         return boxes;
+    }
+
+    /// <summary>The placement types a car drives onto: ramps 0xb, bridges 0xc, and 0xd.</summary>
+    public static bool DriveOn(uint type) => type is 0xb or 0xc or 0xd;
+
+    /// <summary>A link's end stands this far out past the structure's end, metres.</summary>
+    public const float LinkReach = 1f;
+
+    /// <summary>
+    /// The two ends of every drive-on structure (<see cref="DriveOn"/>: a bridge, a ramp), game frame: the middles of the short sides of the
+    /// model's bounds, <see cref="LinkReach"/> past them, at the height of the structure's top there (a deck's end, a ramp's foot or lip). A car on
+    /// the ground at one end, at about that height, reaches the ground at the other over it (not the ground far under a ramp's lip).
+    /// </summary>
+    public static List<(Vector3 A, Vector3 B)> DriveOnLinks(MissionWorld world, ModelAssembler assembler)
+    {
+        var links = new List<(Vector3, Vector3)>();
+        var models = new Dictionary<string, AssembledModel?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in world.Placements.Concat(world.LinePlacements))
+        {
+            if (!DriveOn(p.Object.ObjectType) || p.Definition is null || p.Refused) continue;
+            if (!models.TryGetValue(p.Definition, out var model)) models[p.Definition] = model = assembler.Assemble(p.Definition);
+            if (model is null) continue;
+            var verts = model.Parts.SelectMany(part => part.Mesh.Vertices.Select(v => part.ToModel.Apply(v))).ToList();
+            if (verts.Count == 0) continue;
+            var mn = verts.Aggregate(new Vector3(float.MaxValue), Vector3.Min);
+            var mx = verts.Aggregate(new Vector3(float.MinValue), Vector3.Max);
+            var place = Affine.FromEngine(p.Object.Rotation, world.GroundedPosition(p));
+            // along the model's longer side; each end's height is its highest vertex within a metre of it
+            bool alongX = mx.X - mn.X >= mx.Z - mn.Z;
+            float T(Vector3 v) => alongX ? v.X : v.Z;
+            float t0 = alongX ? mn.X : mn.Z, t1 = alongX ? mx.X : mx.Z;
+            Vector3 End(float t, float sign)
+            {
+                float top = verts.Where(v => MathF.Abs(T(v) - t) <= 1f).Max(v => place.Apply(v).Y);
+                var c = (mn + mx) * 0.5f;
+                var at = place.Apply(alongX ? new Vector3(t + sign * LinkReach, c.Y, c.Z) : new Vector3(c.X, c.Y, t + sign * LinkReach));
+                return new Vector3(at.X, top, at.Z);
+            }
+            links.Add((End(t0, -1), End(t1, 1)));
+        }
+        return links;
     }
 }

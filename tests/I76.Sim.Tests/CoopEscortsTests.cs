@@ -66,7 +66,7 @@ public class CoopEscortsTests(ITestOutputHelper output)
             // the pool's cars in turn, each escort a different one
             var rule = CoopEscorts.For("t09", "t09dl01")!;
             Assert.Equal(escorts.Select((_, i) => rule.For(i + 1).Car.ToLowerInvariant()), escorts.Select(x => x.Vehicle!.Definition!.ToLowerInvariant()));
-            Assert.Equal(want, escorts.Select(x => x.Vehicle!.Definition!.ToLowerInvariant()).Distinct().Count());
+            Assert.Equal(System.Math.Min(want, rule.Pool.Count), escorts.Select(x => x.Vehicle!.Definition!.ToLowerInvariant()).Distinct().Count());
             foreach (var x in escorts)
             {
                 Assert.Contains(x.Vehicle.Armory!.Weapons, w => w.Style == 3);   // turrets
@@ -80,16 +80,16 @@ public class CoopEscortsTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>The pool: three or four stock car files, all different, each with a turret; the escorts take them in turn from the first.</summary>
+    /// <summary>The pool: stock car files, all different chassis, each with a turret; the escorts take them in turn from the first.</summary>
     [Fact]
     public void ThePoolIsVariedAndEveryCarHasATurret()
     {
         if (SnapshotRig.Install is not { } dir) return;
         var l = new SnapshotRig.Loaded(dir);
         var rule = CoopEscorts.For("t09", "t09dl01")!;
-        Assert.InRange(rule.Pool.Count, 3, 4);
-        // villains' cars where they come from (S02's enemy3, one of T15's enemies, S01's enemy6): no police, army or allies
-        Assert.Equal(["s02vcm01.vcf", "t15as02.vcf", "s01cg01.vcf"], rule.Pool.Select(c => c.Car.ToLowerInvariant()));
+        Assert.InRange(rule.Pool.Count, 2, 4);
+        // villains' cars where they come from (T05's enemy12 and enemy8): no police, army or allies
+        Assert.Equal(["t05cm03.vcf", "t05fc01.vcf"], rule.Pool.Select(c => c.Car.ToLowerInvariant()));
         Assert.Equal(rule.Pool.Count, rule.Pool.Select(c => c.Car.ToLowerInvariant()).Distinct().Count());
         var chassis = new HashSet<string>();
         foreach (var c in rule.Pool)
@@ -103,6 +103,29 @@ public class CoopEscortsTests(ITestOutputHelper output)
         Assert.Equal(rule.Pool[0], rule.For(1));
         Assert.Equal(rule.Pool[1], rule.For(2));
         Assert.Equal(rule.Pool[0], rule.For(rule.Pool.Count + 1));
+    }
+
+    /// <summary>
+    /// Every escort weapon is one the trip has shown by T09: on a car placed in T01-T09 or in the field salvage won after
+    /// T01-T08 (<see cref="CoopEscorts.TripWeapons"/>). The set holds the trip's own (T01's FireRite rockets, T05's FireRite
+    /// turret) and not the later ones (the HADES turret, the Cherub missile, the fire dropper).
+    /// </summary>
+    [Fact]
+    public void EveryEscortWeaponIsOneTheTripHasShownByT09()
+    {
+        if (SnapshotRig.Install is not { } dir) return;
+        var l = new SnapshotRig.Loaded(dir);
+        var allowed = CoopEscorts.TripWeapons(l.Vfs, l.Install.FindMission);
+        output.WriteLine(string.Join(" ", allowed.Order(StringComparer.OrdinalIgnoreCase)));
+        Assert.Contains("gdumb.gdf", allowed);
+        Assert.Contains("tdumb.gdf", allowed);
+        Assert.DoesNotContain("tchades.gdf", allowed);
+        Assert.DoesNotContain("gscherub.gdf", allowed);
+        Assert.DoesNotContain("gfirdrop.gdf", allowed);
+        foreach (var r in CoopEscorts.Table)
+            foreach (var c in r.Pool)
+                foreach (var w in VehicleFactory.Create(l.Vfs, c.Car).Armory!.Weapons)
+                    Assert.True(allowed.Contains(w.Def.File), $"{c.Car}: {w.Def.Name} ({w.Def.File}) is not in the trip by T09");
     }
 
     /// <summary>One human, or the option off: no escorts, nothing made.</summary>

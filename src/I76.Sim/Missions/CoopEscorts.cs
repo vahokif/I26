@@ -36,19 +36,43 @@ public static class CoopEscorts
 
     /// <summary>
     /// The table. T09: Callisto's Dover Lightning (he flees along the canyon road and back; disable him, do not kill him, do not
-    /// lose him) is escorted by three of the base game's stock enemy cars, villains' cars where they come from (no police, army
-    /// or allies), each a different chassis, all with turrets and with the engines to keep up with him (measured in the sim:
-    /// docs/multiplayer.md "Co-op Scaling"): S02's Courcheval Manta (s02vcm01, S02's enemy3: HADES and FireRite turrets, two
-    /// 7.62 mm machine guns, landmines), T15's light ABX Strider (t15as02, one of T15's enemies 6-10: a Pyro-Turret and a fire
-    /// dropper) and S01's heavy Courcheval Courier (s01cg01, S01's enemy6, the car its third objective is to destroy: a 30 mm
-    /// turret, a Cherub missile, a napalm hose, a fire dropper). Each takes the best driving (it holds a formation on a weaving car) and the shooting most of the campaign's
-    /// attackers get (setSkill 1, 3; setAgg 4). Only base-game files: T09 is a base-game mission, and a client builds the
-    /// escorts from its own install.
+    /// lose him) is escorted by two of the base game's stock enemy cars, villains' cars where they come from (no police, army
+    /// or allies), each a different chassis with turrets, the engines to keep up with him (measured in the sim:
+    /// docs/multiplayer.md "Co-op Scaling") and only weapons the trip has shown by T09 (<see cref="TripWeapons"/>): T05's
+    /// Courcheval Manta (t05cm03, T05's enemy12: a FireRite turret and a .30 cal turret) and T05's light Phaedra Coupe
+    /// (t05fc01, T05's enemy8: a FireRite turret and an Aim-Nein missile). Each takes the best driving (it holds a formation on
+    /// a weaving car) and the shooting most of the campaign's attackers get (setSkill 1, 3; setAgg 4). Only base-game files:
+    /// T09 is a base-game mission, and a client builds the escorts from its own install, from the car file alone (so an
+    /// escort's loadout is its file's: no weapon is swapped in).
     /// </summary>
     public static readonly IReadOnlyList<Rule> Table =
     [
-        new("t09", "t09dl01", [new("s02vcm01.vcf", 1, 3, 4), new("t15as02.vcf", 1, 3, 4), new("s01cg01.vcf", 1, 3, 4)]),
+        new("t09", "t09dl01", [new("t05cm03.vcf", 1, 3, 4), new("t05fc01.vcf", 1, 3, 4)]),
     ];
+
+    /// <summary>
+    /// The rule an escort's weapons keep to: only weapons the trip has shown by T09, that is every weapon (by its .gdf file) on
+    /// a car placed in T01 to T09 (enemies, allies and Groove's own car, whose wrecks are salvaged too) and in the field salvage
+    /// lists won after T01 to T08 (each mission's .fsi), which is what a player can have going into T09.
+    /// </summary>
+    public static readonly string[] TripMissions = ["t01", "t02", "t03", "t04", "t05", "t06", "t07", "t08", "t09"];
+
+    /// <summary>The weapons (.gdf files) the trip has shown by T09: see <see cref="TripMissions"/>.</summary>
+    public static ISet<string> TripWeapons(I76.Formats.Vfs.AssetVfs vfs, Func<string, string?> findMission)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in TripMissions)
+        {
+            if (findMission(m) is not { } path) continue;
+            foreach (var o in new I76.Formats.Mission.MissionFile(path).PlacedObjects())
+                if (vfs.TryRead(o.Name + ".vcf") is not null && VehicleFactory.Create(vfs, o.Name + ".vcf").Armory is { } a)
+                    foreach (var w in a.Weapons) set.Add(w.Def.File);
+            if (m == "t09" || vfs.TryRead(m + ".fsi") is not { } fsi) continue;
+            foreach (var line in System.Text.Encoding.Latin1.GetString(fsi).Split('\n'))
+                if (line.Trim().Split(' ')[0] is var f && f.EndsWith(".gdf", StringComparison.OrdinalIgnoreCase)) set.Add(f);
+        }
+        return set;
+    }
 
     /// <summary>The rule for a key car of a mission, or null.</summary>
     public static Rule? For(string mission, string keyCar) =>

@@ -808,23 +808,29 @@ cars, each a car file with its setSkill and setAgg; only T09 so far), the copies
 many as Co-op Scaling would copy (min(N − 1, cap)), made beside it when the script first orders it. The k-th escort takes the
 pool's (k − 1) mod its size: the same on every machine, and a restore makes each escort again from its own car file. T09's
 Callisto (he flees along the canyon road and back: evade on fleepath, sit and success once below 32% health; his death, or the
-humans more than 450 from him, fails the mission) is escorted by three of the base game's stock enemy cars, each a different
-chassis with turrets and each a villain's car where it comes from (no police, army or allies), at setSkill 1, 3 and setAgg 4 (only
-base-game files: a client builds them from its own install):
+humans more than 450 from him, fails the mission) is escorted by two of the base game's stock enemy cars, each a different
+chassis with turrets, each a villain's car where it comes from (no police, army or allies), and carrying only weapons the trip
+has shown by T09, at setSkill 1, 3 and setAgg 4 (only base-game files: a client builds them from its own install, from the car
+file alone, so an escort's loadout is its file's):
 
 | Escort | Car | Where from | Weapons | Keeping station (sim, 120 s) |
 |---|---|---|---|---|
-| 1st | Courcheval Manta, s02vcm01.vcf (2307 kg) | S02's enemy3 | HADES turret, FireRite turret, two 7.62 mm MGs, landmines | 88% of samples within 30 m, median 3 m; after an opening fight 66%, median 8 m |
-| 2nd | ABX Strider, t15as02.vcf (1286 kg, light and fast) | one of T15's enemies 6-10 | Pyro-Turret, fire dropper | 91%, median 3 m; after a fight 86%, median 3 m |
-| 3rd | Courcheval Courier, s01cg01.vcf (2602 kg, heavy) | S01's enemy6, the car S01's third objective is to destroy | 30 mm turret, Cherub missile, napalm hose, fire dropper | 92%, median 3 m; after a fight 51%, median 23 m |
+| 1st, 3rd | Courcheval Manta, t05cm03.vcf (1818 kg) | T05's enemy12 | FireRite turret, .30 cal turret | 85% of samples within 30 m, median 5 m; after an opening fight 59%, median 16 m |
+| 2nd | Phaedra Coupe, t05fc01.vcf (980 kg, light and fast) | T05's enemy8 | FireRite turret, Aim-Nein missile | 84%, median 4 m; after a fight 73%, median 5 m |
 
-So three humans meet the Manta and the Strider, four all three. The measure: T09 with every escort of one car, the humans held
-far off (no fight), or brought up beside the convoy when the intro is skipped (the escorts fight them, then catch up); one
-sample a second per escort. The Courier keeps the formation best of all but is the slowest back after a fight. Candidates left
-out: S06's Police Car (s06vc01; it kept up, 88% / 71%, but police do not ride with Callisto), T17's Manta (Malocchio's own),
-T05's Manta (t05cm03) lost Callisto before collision avoidance was off in the formation, T17's Phaedra Rattler (t17fr03) and
-S05's Phaedra Clydesdale (s05vfd01, enemy6) wrecked themselves following him, S05's Dover Lightning Grand Sport (s05vdl02,
-enemy3; 87% / 30%), T15's HADES Strider (t15as04) and the Dover Stag (vdstag2) fell back to under half after a fight. An escort takes no
+So three humans meet the Manta and the Coupe, four a second Manta too. **The trip's weapons by T09** (`CoopEscorts.TripWeapons`):
+every weapon (by its .gdf file) on a car placed in T01 to T09 (enemies, allies and Groove's own car; the wrecks' weapons are what
+field salvage hands out) and in the field salvage lists won after T01 to T08 (each mission's .fsi): the 30cal, 50cal and 7.62 mm
+MGs, the 20, 25 and 30 mm cannons, FireRite rockets, the Aim-Nein missile, the gas launcher, flamethrower and napalm hose, the HE
+and WP mortars, landmines, oil and blox, and the 20 mm, 25 mm, FireRite, .30 cal, .50 cal and DrRadar turrets. Not the HADES,
+30 mm or Pyro turrets, the Cherub missile or the fire dropper, which come later (`CoopEscortsTests` checks every escort weapon).
+
+The measure: T09 with every escort of one car, the humans held far off (no fight), or brought up beside the convoy when the intro
+is skipped (the escorts fight them, then catch up); one sample a second per escort. No heavier car qualifies: the trip-legal
+heavier turreted enemies fall far back after a fight (S05's Piranha s05vpp01 19%, S03's Caver s03vc01 0%, T08's Manta X2
+t08cm01 22% and wrecked), T05's ABX Leprechaun (t05al03) wrecked itself following him, and the heavy generic cars with legal
+loadouts (Dover Stag, Jefferson Sovereign, Phaedra Clydesdale variants) are no mission's enemies. Earlier pools (S02's Manta,
+T15's Strider, S01's Courier) carried later weapons; S06's Police Car is police. An escort takes no
 orders and no settings from the script; every tick after the script (`ScriptHost.EscortFrame`) it is given one of the AI's own
 orders:
 - **attack** the human nearest it once that human is within 70 m (let go past 110 m), while the escort is within 120 m of its car

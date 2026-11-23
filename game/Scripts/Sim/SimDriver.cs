@@ -191,15 +191,18 @@ public partial class SimDriver : Node
         Voice3D.Followed = () => CameraSubject?.Invoke() ?? (Player is { } p && IsInstanceValid(p) && p.IsInsideTree() ? p.GlobalPosition : null);
         Voice3D.PlayerCar = () => Player is { } p && IsInstanceValid(p) ? p : null;
         Voice3D.InCockpit = () => InCockpit?.Invoke() == true;
+        Voice3D.Origin = () => Origin();
+        Voice3D.ListenerCut();
         SimClock.Rate = Session.Rate;
         SimClock.Ticks = () => Ticks;
     }
 
-    public override void _ExitTree() { _inputLog?.Dispose(); _inputLog = null; Voice3D.Followed = null; Voice3D.PlayerCar = null; Voice3D.InCockpit = null; if (SimClock.Ticks is not null) SimClock.Ticks = null; }
+    public override void _ExitTree() { _inputLog?.Dispose(); _inputLog = null; Voice3D.Followed = null; Voice3D.PlayerCar = null; Voice3D.InCockpit = null; Voice3D.Origin = null; Voice3D.ListenerCut(); if (SimClock.Ticks is not null) SimClock.Ticks = null; }
 
     public override void _Ready()
     {
         // the pad's force feedback (presentation only; none in a headless run)
+        AddChild(new ListenerTracker { Name = "ListenerTracker" });   // the camera's motion, for the voices' Doppler shift
         if (DisplayServer.GetName() != "headless") AddChild(new ForceFeedback { Name = "ForceFeedback", Player = () => Player?.Sim });
         // the telemetry feed (I76_TELEMETRY_UDP, [port] telemetry): off unless set
         if (TelemetryOut.Configured() is { } telemetry) AddChild(telemetry);
@@ -551,6 +554,7 @@ public partial class SimDriver : Node
     {
         foreach (var c in Cars) c.SetPoses(c.Sim.Rot, c.Sim.Pos, c.Sim.Rot, c.Sim.Pos);
         foreach (var c in Cars) c.Place(1, Origin());
+        Voice3D.ListenerCut();   // the camera jumps with them: no Doppler sweep across the distance
     }
 
     private readonly Dictionary<string, Voice3D> _tyre = new(StringComparer.OrdinalIgnoreCase);

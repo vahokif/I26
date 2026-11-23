@@ -1148,7 +1148,7 @@ public partial class CarNode : Node3D
             for (int i = 0; i < _rearGlare.Length; i++) { _rearGlare[i].Visible = rear > 0 && RearHeld(i); _rearGlare[i].SetInstanceShaderParameter("level", rear); }
         }
         _siren?.Update(shown, !Wrecked, Modern);
-        if (_engine is not null) _engine.PitchScale = _engineRevable ? EngineSoundPitch.Scale(Sim.Engine.Rpm, _engineRate) : 1f;
+        if (_engine is not null) _engine.BasePitch = _engineRevable ? EngineSoundPitch.Scale(Sim.Engine.Rpm, _engineRate) : 1f;
         double gx = Lerp(_prevPos.X, _pos.X), gz = Lerp(_prevPos.Z, _pos.Z);
         double gy = far ? GroundForDisplay!(gx, gz) : Lerp(_prevPos.Y, _pos.Y);
         if (live is { } lp) (gx, gy, gz) = (lp.Pos.X, lp.Pos.Y, lp.Pos.Z);

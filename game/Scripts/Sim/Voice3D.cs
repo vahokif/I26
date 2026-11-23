@@ -10,7 +10,11 @@ namespace I76.Game.Sim;
 /// cannot hold at a max distance (its max distance silences, and fades
 /// linearly on the way), so the volume is worked out here each frame from
 /// the distance to the listener and Godot only pans; its distance low-pass,
-/// which DirectSound did not have, is off.
+/// which DirectSound did not have, is off. The Doppler shift is worked out here
+/// too (<see cref="Ds3d.DopplerPitch"/>), from the sim's velocities rather than
+/// Godot's tracking of the nodes' drawn motion: a voice on a car moves with the
+/// car's velocity (a network client's other cars: the snapshots'), any other
+/// stands still, and the listener moves with the camera (<see cref="ListenerMotion"/>).
 /// </summary>
 public partial class Voice3D : AudioStreamPlayer3D
 {
@@ -19,6 +23,9 @@ public partial class Voice3D : AudioStreamPlayer3D
 
     /// <summary>The voice's own volume, before the distance.</summary>
     public float BaseDb { get; set; }
+
+    /// <summary>The voice's own pitch (an engine loop's, from its rpm), before the Doppler shift: what <see cref="AudioStreamPlayer3D.PitchScale"/> is set to, times the shift.</summary>
+    public float BasePitch { get; set; } = 1f;
 
     public Voice3D()
     {
@@ -83,6 +90,32 @@ public partial class Voice3D : AudioStreamPlayer3D
 
     /// <summary>The player's car node, set by the SimDriver: its voices are placed at the listener in the cockpit (<see cref="Ds3d.AtListener"/>).</summary>
     public static Func<Node?>? PlayerCar { get; set; }
+
+    /// <summary>The floating origin (the game-frame point at Godot's 0), set by the SimDriver: the listener's motion is followed in the game's frame, so a rebase is not a step.</summary>
+    public static Func<System.Numerics.Vector3>? Origin { get; set; }
+
+    private static readonly ListenerMotion Listener = new();
+
+    /// <summary>The camera jumped (a teleport, a restore, a new session): the listener stands still for a frame rather than flying the distance.</summary>
+    public static void ListenerCut() => Listener.Cut();
+
+    /// <summary>The listener's velocity (game frame), as <see cref="TrackListener"/> last found it.</summary>
+    public static System.Numerics.Vector3 ListenerVelocity => Listener.Velocity;
+
+    /// <summary>What the voices are heard from: the current AudioListener3D, else the camera.</summary>
+    private static Node3D? Ear(Viewport? vp) => vp?.GetAudioListener3D() is { } l && l.IsCurrent() ? l : vp?.GetCamera3D();
+
+    /// <summary>
+    /// The listener's motion over the frame now ending (<see cref="ListenerTracker"/>, after every other node's _Process, so the
+    /// camera has been placed): its position in the game's frame, so a rebase of the floating origin is not a step.
+    /// </summary>
+    public static void TrackListener(Viewport? vp, double delta)
+    {
+        if (Ear(vp) is not { } ear || !ear.IsInsideTree()) { Listener.Cut(); return; }
+        var at = Coords.ToGame(ear.GlobalPosition) + (Origin?.Invoke() ?? default);
+        var v = Listener.Update(at, ear, (float)delta);
+        if (LogEnabled && Godot.Engine.GetProcessFrames() % 30 == 0) Trace($"listener v {v.X:0.0} {v.Y:0.0} {v.Z:0.0} ({v.Length():0.0} m/s) {ear.Name}");
+    }
 
     /// <summary>The voice was parked 600 m or more from the followed car (a looping one waits to resume; a one-shot is dropped).</summary>
     private bool _parked;
@@ -166,13 +199,24 @@ public partial class Voice3D : AudioStreamPlayer3D
 
     private void Attenuate()
     {
-        var vp = GetViewport();
-        Node3D? ear = vp?.GetAudioListener3D() is { } l && l.IsCurrent() ? l : vp?.GetCamera3D();
+        var ear = Ear(GetViewport());
         // The player's own car's voices in the cockpit sit at the listener: centred, at full volume
         bool atEar = IsInsideTree() && GetParent() is { } car && PlayerCar?.Invoke() == car && Ds3d.AtListener(true, InCockpit?.Invoke() == true);
         PanningStrength = atEar ? 0 : 1;
         float db = BaseDb + (ear is null || atEar || !IsInsideTree() ? 0 : Ds3d.AttenuationDb(GlobalPosition.DistanceTo(ear.GlobalPosition), MinDistance));
         // a car at a NaN position (a respawn or a lost snapshot) would set a NaN volume: the engine logs an error for every voice, every frame
         if (!float.IsNaN(db)) VolumeDb = db;
+        float pitch = BasePitch * (ear is null || atEar || !IsInsideTree() ? 1f : Doppler(ear));
+        if (pitch > 0f && float.IsFinite(pitch) && MathF.Abs(pitch - PitchScale) > 1e-4f) PitchScale = pitch;
+    }
+
+    /// <summary>The Doppler shift for this frame: the voice's car's sim velocity (none for a voice not on a car), the listener's from the camera's motion.</summary>
+    private float Doppler(Node3D ear)
+    {
+        var lv = ListenerVelocity;
+        var sv = GetParent() is CarNode { Sim: { } car } ? car.Vel : default;
+        float k = Ds3d.DopplerPitch(Coords.ToGame(GlobalPosition), sv, Coords.ToGame(ear.GlobalPosition), lv);
+        if (LogEnabled && Godot.Engine.GetProcessFrames() % 30 == 0 && MathF.Abs(k - 1f) > 0.005f) Trace($"doppler {Who} x{k:0.000} src v {sv.Length():0.0} m/s at {GlobalPosition.DistanceTo(ear.GlobalPosition):0} m");
+        return k;
     }
 }

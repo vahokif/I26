@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace I76.Sim.Sound;
 
 /// <summary>
@@ -50,6 +52,34 @@ public static class Ds3d
     /// right of the driver's seat). In every other view it is a 3D buffer at the car like any other.
     /// </summary>
     public static bool AtListener(bool onPlayersCar, bool cockpitView) => onPlayersCar && cockpitView;
+
+    /// <summary>The listener's Doppler factor (0.8): the velocities count at 0.8 of their real size.</summary>
+    public const float DopplerFactor = 0.8f;
+
+    /// <summary>The speed of sound DirectSound3D works in, at distance factor 1 (one unit a metre): 343 m/s.</summary>
+    public const float SpeedOfSound = 343f;
+
+    /// <summary>
+    /// The pitch a voice is heard at for its motion and the listener's, as DirectSound3D's software 3D
+    /// works it out: only the relative velocity along the line between them counts (the source's minus
+    /// the listener's, positive when they draw apart), scaled by the distance factor (1) and the Doppler
+    /// factor (0.8), limited to half the speed of sound either way, and then
+    /// <c>f' = f · c / (c + v)</c>. So a source closing at 50 m/s (40 m/s after the factor) plays 1.13
+    /// times higher, one drawing away 0.90 times as high, and the shift never passes 2 (closing) or
+    /// 2/3 (drawing apart). A voice with no motion relative to the listener, or at the listener
+    /// itself, is not shifted; nor is one whose positions or velocities are not finite.
+    /// </summary>
+    public static float DopplerPitch(Vector3 source, Vector3 sourceVel, Vector3 listener, Vector3 listenerVel, float factor = DopplerFactor)
+    {
+        var d = source - listener;
+        var rel = sourceVel - listenerVel;
+        float len = d.Length();
+        if (!(len > 1e-4f) || !float.IsFinite(len) || rel == Vector3.Zero) return 1f;
+        float v = Vector3.Dot(rel, d) / len * factor;
+        if (!float.IsFinite(v)) return 1f;
+        v = System.Math.Clamp(v, -SpeedOfSound / 2, SpeedOfSound / 2);
+        return SpeedOfSound / (SpeedOfSound + v);
+    }
 
     /// <summary>Admission for a looping fire voice: under 600 m from the player's car.</summary>
     public static bool LoopStarts(float distanceFromPlayer) => distanceFromPlayer * distanceFromPlayer < StartCutoff * StartCutoff;

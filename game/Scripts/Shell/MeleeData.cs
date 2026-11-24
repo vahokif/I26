@@ -276,6 +276,15 @@ public sealed class MeleeSetup
         c.Save(Path);
     }
 
+    /// <summary>LOCAL DRIVER's name alone (the co-op lobby's RENAME), the file's other keys as they are: what the next game's form opens with.</summary>
+    public static void SaveDriver(string driver)
+    {
+        var c = new ConfigFile();
+        c.Load(Path);
+        c.SetValue("melee", "driver", driver);
+        c.Save(Path);
+    }
+
     public static MeleeSetup Load()
     {
         var s = new MeleeSetup();

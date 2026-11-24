@@ -416,4 +416,44 @@ public class CoopLobbyTests(ITestOutputHelper output)
             return null;
         }
     }
+
+    /// <summary>RENAME in the lobby (#228: it did nothing there): the player's new name on the wire (protocol 27).</summary>
+    [Fact]
+    public void ARenameTravelsOnTheWire()
+    {
+        var w = new NetWriter();
+        new LobbyName("Annie").Write(w);
+        var r = new NetReader(w.ToArray());
+        Assert.Equal(MsgType.LobbyName, (MsgType)r.U8());
+        Assert.Equal("Annie", LobbyName.Read(ref r).Name);
+    }
+
+    /// <summary>A player renames themself in the lobby: everyone's list and the listing show the new name, the chat says it, and the start seats them under it.</summary>
+    [Fact]
+    public void ARenameInTheLobbyIsEveryonesToSeeAndTheSeatGoesUnderIt()
+    {
+        if (Install is not { } install) return;
+        using var g = new Lobby(install, output);
+        var hal = g.Join("Hal");
+        var ann = g.Join("Ann");
+        Assert.True(g.Wait(() => hal.Lobby!.Members.Count == 2));
+        // cleaned as a join's name: no control characters, trimmed
+        Assert.True(ann.SendLobbyName("  Annie\t "));
+        Assert.True(g.Wait(() => hal.Lobby!.Members.Select(m => m.Name).SequenceEqual(["Hal", "Annie"])));
+        Assert.True(g.Wait(() => ann.Lobby!.Me!.Name == "Annie"));
+        Assert.True(g.Wait(() => hal.LobbyLines.Any(l => l == new LobbyChat("Server", "Ann is now Annie."))));
+        Assert.Equal(["Hal", "Annie"], g.Server.LobbyPlayers.Select(p => p.Name));
+        Assert.Equal(["Hal", "Annie"], new SessionInfoProbe(g.Server.Port).Ask()!.Drivers.Select(d => d.Name));
+        // the host renames too; an empty name changes nothing and is not sent
+        Assert.True(hal.SendLobbyName("Hal 9000"));
+        Assert.False(hal.SendLobbyName("   "));
+        Assert.True(g.Wait(() => ann.Lobby!.Members[0].Name == "Hal 9000"));
+        ann.SendLobbySet(true);
+        Assert.True(g.Wait(() => hal.Lobby!.Members.Any(m => m is { Name: "Annie", Ready: true })));
+        hal.SendLobbyStart(false);
+        Assert.True(g.Wait(() => g.Players.All(p => p.Client.State == ClientState.Joined)));
+        Assert.Equal(["Hal 9000", "Annie"], g.Server.Invoke(h => h.Seats.OrderBy(x => x.Slot).Select(x => x.Name).ToList()));
+        // once seated it is too late: the lobby is gone
+        Assert.False(ann.SendLobbyName("Anna"));
+    }
 }

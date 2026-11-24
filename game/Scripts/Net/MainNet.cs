@@ -271,6 +271,14 @@ public partial class Main
                 Chat = c.SendChat,
                 Boot = who => _net.Server?.Kick(who),
                 Quit = () => { _lobbyLeft = true; c.Leave(); },
+                // RENAME: the server's lobby takes it, and the rest of this session's joins go under it
+                Rename = name =>
+                {
+                    if (!c.SendLobbyName(name)) return false;
+                    GD.Print($"network: lobby: renamed {name}");
+                    _opt.PlayerName = name;
+                    return true;
+                },
                 FallbackModel = _launch?.ModelIndex ?? -1,
             };
             GD.Print($"network: lobby: {c.Lobby?.Members.Count} players, the car is {start}");

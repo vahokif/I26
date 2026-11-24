@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### New
+- The 2D instruments over a chase view can be drawn smaller. Play Options' **Chase HUD Top Part** picks a size (1/4, 1/2, 1/1) for the radar, the weapon housing and the damage panel, and **Chase HUD Bottom Part** the same for the compass, the speedometer, the tacho, the gear strip and the specials; each row shrinks about the middle of the screen and its own edge, so the panels keep their places in it and their gaps shrink with them. The top row starts at half the original's size, the bottom row as the original drew it, and the cockpit's own dash is always its usual size.
+
 ## 0.13.0 (21 November 2026)
 
 Network games use protocol 26: 0.13.0 does not play with 0.12.1 or earlier, so everyone in a game needs 0.13.0.

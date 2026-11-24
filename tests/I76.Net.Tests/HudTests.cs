@@ -196,5 +196,21 @@ public class HudTests
         Assert.Equal(119 * 2.25f, HudLayout.TopInstruments(1920, 1080, false)[0].Bottom, 2);
     }
 
+    /// <summary>Play Options' Chase HUD Top Part: the three panels drawn smaller, the row shrinking as a row about the frame's middle
+    /// line so its panels stay as close to one another as they were, and the columns beside them may start higher. The mirror is the
+    /// cockpit's own and stays where it is.</summary>
+    [Fact] public void AShrunkTopRowLetsTheColumnsUp()
+    {
+        var full = HudLayout.TopInstruments(1920, 1080, false);
+        var half = HudLayout.TopInstruments(1920, 1080, false, top: 0.5f);
+        Assert.Equal(full[0].Y, half[0].Y, 2);                     // the row still hangs from the top of the frame
+        Assert.Equal(full[0].Bottom / 2, half[0].Bottom, 2);       // and ends half as far down
+        Assert.True(half[0].X > full[0].X && half[0].X < full[2].X);   // the row comes in towards the middle line, panels and gaps alike
+        Assert.Equal(full[2].W / 2, half[2].W, 2);                 // the damage panel is half as wide and nearer the middle
+        Assert.True(half[2].Right < full[2].Right);
+        Assert.True(HudLayout.UnderAll(half, 0, 0) < HudLayout.UnderAll(full, 0, 0));
+        Assert.Equal(HudLayout.TopInstruments(1920, 1080, true)[3], HudLayout.TopInstruments(1920, 1080, true, top: 0.5f)[3]);
+    }
+
     [Fact] public void RacePlaceSharesTies() => Assert.Equal(2, ScoreTable.Place(3, [4, 3, 3, 1]));
 }

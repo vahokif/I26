@@ -1242,6 +1242,14 @@ public sealed class ShellSettings
     /// <summary>The port's own: a 3D-projected aiming crosshair in the F2 chase view (shell.cfg [port] chase_crosshair; off).</summary>
     public bool ChaseCrosshair { get; set; }
     /// <summary>
+    /// The port's own: Play Options' Chase HUD Top Part — how big the top row of the external instruments (radar, weapons, damage panel)
+    /// is drawn over a chase view, as a choice of 1/4, 1/2 or 1/1 (shell.cfg [port] hud_top_row = the denominator; written only when not
+    /// the default). The original draws it full size; this defaults to a half. No version step: a file without the key gets the default.
+    /// </summary>
+    public int HudTopRow { get; set; } = I76.Sim.Views.HudScale.TopDefault;
+    /// <summary>The port's own: the same for the bottom row (compass, speedometer, tacho, gear, specials; [port] hud_bottom_row; a whole).</summary>
+    public int HudBottomRow { get; set; } = I76.Sim.Views.HudScale.BottomDefault;
+    /// <summary>
     /// The port's own: the turrets turn as the 1997 CD build's, 1.5 rad/s times their health ratio, rather than the 1998 build's (GOG's
     /// and the Nitro Pack's) 1.7 times 0.75 + 0.25 of it (Play Options' Turrets; shell.cfg [port] turret_slew = 1997, written only then).
     /// Offline only: a network game's is the host's (<see cref="HostTurrets1997"/>).
@@ -1431,6 +1439,9 @@ public sealed class ShellSettings
         s.MouseInvertY = (bool)c.GetValue("port", "mouse_invert_y", false);
         s.MouseCockpit = (bool)c.GetValue("port", "mouse_cockpit", false);
         s.ChaseCrosshair = (bool)c.GetValue("port", "chase_crosshair", false);
+        // no version step: absent, the port's own sizes (the top row at a half of the original's, the bottom row as the original drew it)
+        s.HudTopRow = I76.Sim.Views.HudScale.Parse((int)c.GetValue("port", "hud_top_row", 0), I76.Sim.Views.HudScale.TopDefault);
+        s.HudBottomRow = I76.Sim.Views.HudScale.Parse((int)c.GetValue("port", "hud_bottom_row", 0), I76.Sim.Views.HudScale.BottomDefault);
         s.BriefingWhileLoading = (bool)c.GetValue("port", "briefing_while_loading", true);
         s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
         // version 13 added Skip Intro Movies: older files have none, so it is off and the intro plays, as before
@@ -1527,6 +1538,9 @@ public sealed class ShellSettings
         if (MouseInvertY) c.SetValue("port", "mouse_invert_y", true);
         if (MouseCockpit) c.SetValue("port", "mouse_cockpit", true);
         if (ChaseCrosshair) c.SetValue("port", "chase_crosshair", true);
+        // each row's own default is left out of the file; 0 is not a denominator, so a file without the key reads back the default
+        if (HudTopRow != I76.Sim.Views.HudScale.TopDefault) c.SetValue("port", "hud_top_row", I76.Sim.Views.HudScale.Denominator(HudTopRow));
+        if (HudBottomRow != I76.Sim.Views.HudScale.BottomDefault) c.SetValue("port", "hud_bottom_row", I76.Sim.Views.HudScale.Denominator(HudBottomRow));
         if (!BriefingWhileLoading) c.SetValue("port", "briefing_while_loading", false);
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
         if (SkipIntro) c.SetValue("port", "skip_intro", true);

@@ -324,6 +324,12 @@ public sealed partial class EscapeMenu : Control
                 else if (m == 9) { Settings.SkipIntro = _snap.SkipIntro; it.Value = Settings.SkipIntro ? 1 : 0; }
             },
         });
+        // Chase HUD Top / Bottom Part: the size each half of the 2D instruments over a chase view is drawn (the original's own
+        // size is 1/1, and the cockpit's dash is always that); from the resume on, like the crosshair above
+        _play.Items.Add(Setting(Cycle, PlayOptionsScreen.HudTopPartRow, 35, I76.Sim.Views.HudScale.Fractions.Length, I76.Sim.Views.HudScale.Names,
+            s => s.HudTopRow, (s, v) => s.HudTopRow = v, live: false));
+        _play.Items.Add(Setting(Cycle, PlayOptionsScreen.HudBottomPartRow, 36, I76.Sim.Views.HudScale.Fractions.Length, I76.Sim.Views.HudScale.Names,
+            s => s.HudBottomRow, (s, v) => s.HudBottomRow = v, live: false));
         // every row in one list that scrolls over the pad's rows, in the order added; Done and Cancel stay put
         int at = 1;
         foreach (var it in _play.Items) it.At = at++;

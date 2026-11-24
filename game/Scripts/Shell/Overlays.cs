@@ -223,7 +223,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private int _savedRumbleStrength;
     private bool _savedSteering;
     private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997, _savedSkipIntro;
-    private int _savedRate, _savedDownloads;
+    private int _savedRate, _savedDownloads, _savedHudTop, _savedHudBottom;
     /// <summary>The original's six check rows and their bits (Nitro's sheet has only Arcade Phys. and Unlim. Wiper Fluid).</summary>
     private static readonly (string Label, int Bit)[] Checks =
     [
@@ -237,6 +237,9 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         return o[(i + 1) % o.Length].Label;
     }
     private static readonly string[] Levels = ["Wimp", "Champion", "Badass"];
+    /// <summary>The choice after the current one for a Chase HUD row (1/4, 1/2, 1/1, then round again), and its label.</summary>
+    private static int NextHudRow(int choice) => (I76.Sim.Views.HudScale.Clamp(choice) + 1) % I76.Sim.Views.HudScale.Fractions.Length;
+    private static string HudRowName(int choice) => I76.Sim.Views.HudScale.Names[I76.Sim.Views.HudScale.Clamp(choice)];
     /// <summary>The list slots that are check rows (the others a value): their line gets the sheet's check box.</summary>
     private readonly HashSet<int> _checks = [];
 
@@ -253,10 +256,13 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
         "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
-        "Turrets", "Keyboard Steering Assist", SkipIntroRow,
+        "Turrets", "Keyboard Steering Assist", SkipIntroRow, HudTopPartRow, HudBottomPartRow,
     ];
-    /// <summary>The port's Skip Intro Movies row (<see cref="ShellSettings.SkipIntro"/>), in the front end's and the mission menu's Play Options.</summary>
+    /// <summary>The port's Skip Intro Movies row (<see cref="ShellSettings.SkipIntro"/>) in the front end's and the mission menu's Play Options.</summary>
     public const string SkipIntroRow = "Skip Intro Movies";
+    /// <summary>The port's two Chase HUD rows (<see cref="ShellSettings.HudTopRow"/> and <see cref="ShellSettings.HudBottomRow"/>): the size
+    /// of each half of the external instruments over a chase view, stepped 1/4, 1/2, 1/1.</summary>
+    public const string HudTopPartRow = "Chase HUD Top Part", HudBottomPartRow = "Chase HUD Bottom Part";
 
     /// <summary>Every row of the list, in order: the original's check rows (Nitro's two), Difficulty, then the port's rows.</summary>
     public static string[] ListRows(bool nitro) =>
@@ -283,6 +289,8 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedTurrets1997 = s.Turrets1997;
         _savedSteering = s.AssistedSteering;
         _savedSkipIntro = s.SkipIntro;
+        _savedHudTop = s.HudTopRow;
+        _savedHudBottom = s.HudBottomRow;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
 
@@ -342,6 +350,11 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         Toggle(PortRows[15], () => s.AssistedSteering, () => I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = !s.AssistedSteering);
         // Skip Intro Movies: the next start goes straight to the menu (briefings, outros and cut-scenes still play)
         Toggle(PortRows[16], () => s.SkipIntro, () => s.SkipIntro = !s.SkipIntro);
+        // Chase HUD Top / Bottom Part (docs/deviations.md): how big each half of the 2D instruments over a chase view is drawn.
+        // The original draws both at full size; a click steps 1/4, 1/2, 1/1, the row shrinking about the frame's middle line and
+        // its own edge so its panels stay as close together as they were. The cockpit's dash is always full size, and a network game draws each player's own choice.
+        Step(PortRows[17], () => s.HudTopRow = NextHudRow(s.HudTopRow), () => HudRowName(s.HudTopRow));
+        Step(PortRows[18], () => s.HudBottomRow = NextHudRow(s.HudBottomRow), () => HudRowName(s.HudBottomRow));
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
     }
@@ -384,6 +397,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     {
         var s = Shell.Settings;
         s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing; s.Turrets1997 = _savedTurrets1997; s.SkipIntro = _savedSkipIntro;
+        s.HudTopRow = _savedHudTop; s.HudBottomRow = _savedHudBottom;
         I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = _savedSteering;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored

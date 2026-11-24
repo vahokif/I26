@@ -750,6 +750,9 @@ public partial class Main : Node3D
         if (_sim is not null) _sim.AutoReverse = s.AutoReverse;
         I76.Game.ForceFeedback.Enabled = s.ForceFeedback;
         I76.Game.Ui.ChaseCrosshair.Enabled = s.ChaseCrosshair;
+        // Chase HUD Top / Bottom Part: the size each half of the 2D instruments is drawn at over a chase view (docs/playing.md);
+        // the HUD asks for the fractions as it draws, and the cockpit's own dash stays full size
+        _hudTop = s.HudTopRow; _hudBottom = s.HudBottomRow;
         I76.Game.ForceFeedback.Mode = s.RumbleMode;
         I76.Game.ForceFeedback.Strength = s.RumbleStrength;
         I76.Game.ForceFeedback.Held = () => _menu is not null || _picture is not null || _ended || _loading;     // and nothing behind the loading card
@@ -868,6 +871,8 @@ public partial class Main : Node3D
     }
 
     private bool _extInstruments = true;
+    /// <summary>Play Options' Chase HUD Top / Bottom Part as choices (I76.Sim.Views.HudScale): the size of each half of the external instruments.</summary>
+    private int _hudTop = I76.Sim.Views.HudScale.TopDefault, _hudBottom = I76.Sim.Views.HudScale.BottomDefault;
     private int _skippedTick = int.MinValue;
 
     /// <summary>The audio levels on their buses: Music, SFX and Voice, level 1 off, 8 as recorded; Music 2 dB a step, SFX and Voice the original's 4 dB per halving (AudioLevels); the driver's cues at the SFX level. Makes the buses (AudioMix) the first time.</summary>
@@ -1581,7 +1586,7 @@ public partial class Main : Node3D
         AddChild(wiggle);
         if (combat.Damage is I76.Sim.Damage.DamageModel wdm) wdm.Damaging += wiggle.Damaging;
         yield return null;
-        var hud = new Hud { Staged = staged, Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Network = () => _net is not null, HostAllowsCrosshair = () => _net?.Client.CrosshairAllowed == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
+        var hud = new Hud { Staged = staged, Car = () => _car?.Sim, Debug = () => _overlay?.Visible == true, Combat = combat, Origin = () => _origin, CarOf = v => _carNodes.GetValueOrDefault(v), InCockpit = () => _car?.CockpitCamera?.Current == true, ExtInstruments = () => _extInstruments, ChaseScale = () => (I76.Sim.Views.HudScale.Of(_hudTop), I76.Sim.Views.HudScale.Of(_hudBottom)), Pit = () => _pit, Cutscene = () => _scriptCam?.Current == true, Transmitting = () => _netHud?.CbTransmitting == true, Network = () => _net is not null, HostAllowsCrosshair = () => _net?.Client.CrosshairAllowed == true, Script = _script, Objectives = _objectives, Name = "Hud", Visible = System.Environment.GetEnvironmentVariable("I76_NO_OVERLAY") != "1",
             Texture = n => _builder?.Resolver?.FindByStem(n) is { } m ? _builder.Textures?.Get(m)?.Drawn : null, Faithful = () => _mode1997, Palette = _builder?.ActPalette, Variant = DriverVariant(), ReadFile = n => _builder?.Vfs.TryRead(n) };
         AddChild(hud);
         if (staged) foreach (var step in hud.ReadySteps()) yield return step;

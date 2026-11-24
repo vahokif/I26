@@ -42,7 +42,7 @@ public partial class MapEditor
         (BrushKind.Flatten, "4", "FLATTEN", "To the height under the first click"),
         (BrushKind.Level, "5", "LEVEL", "To a typed or picked height"),
         (BrushKind.Noise, "6", "ROUGHEN", "Add noise"),
-        (BrushKind.Surface, "", "SURFACE", "Paint the ground's surface type: tyre grip and sounds, plants"),
+        (BrushKind.Surface, "7", "SURFACE", "Paint the ground's surface type: tyre grip and sounds, plants"),
     ];
 
     private void BuildUi()
@@ -115,12 +115,6 @@ public partial class MapEditor
             tools.AddChild(b);
             _toolButtons[kind] = b;
         }
-        // the map's surface table (what each surface type does to a car): a window, not a tool
-        var table = EditorStyle.Button("SURFACE TABLE", ToggleSurfaceTable, s, 18);
-        table.TooltipText = "Each surface type's grip and damage on this map: ice, damaging ground";
-        table.Alignment = HorizontalAlignment.Left;
-        table.CustomMinimumSize = new Vector2(EditorStyle.ToolWidth * s, 34 * s);
-        tools.AddChild(table);
         RoadsTool.BuildPalette(tools, s);
         Objects.BuildUi(_root, tools, group, s);
         PathsTool.BuildPalette(tools, s);
@@ -531,12 +525,13 @@ public partial class MapEditor
     [
         ("LEFT BUTTON", "Paint with the brush"),
         ("1 2 3 4 5 6", "Raise, lower, smooth, flatten, level, roughen"),
-        ("SURFACE (palette)", "Paint the ground's surface type (grip, tyre sounds, plants) with a hard-edged brush ([ ] sizes it); Alt+click or I picks the type under the cursor; ; shows or hides the surface map"),
+        ("7", "SURFACE: paint the ground's surface type; its panel at the right has the SURFACE TABLE (each type's grip and damage on this map)"),
+        ("SURFACE", "Paint the ground's surface type (grip, tyre sounds, plants) with a hard-edged brush ([ ] sizes it); Alt+click or I picks the type under the cursor; ; shows or hides the surface map"),
         ("[  ]", "Brush radius down, up (also Shift + wheel)"),
         ("Shift+[  Shift+]", "Brush strength down, up (also Ctrl + wheel)"),
         ("G", "Next falloff shape"),
         ("Alt + click, I", "Pick the ground's height for the Level brush"),
-        ("7  8  9  0", "Road tool: straight, curve (8 again: cubic), freeform, select and edit"),
+        ("8  9  0  -", "Road tool: straight, curve (9 again: cubic), freeform, select and edit"),
         ("U  X", "Road tool: upgrade a road's type, bulldoze a road"),
         ("Shift + click", "Roads: chain the next piece from this click. Enter finishes, Backspace takes a click back, Esc cancels"),
         ("V  H  C  O", "Roads: angle snap, grid snap, chain, cut and fill the ground"),
@@ -549,7 +544,7 @@ public partial class MapEditor
         ("Drag, Alt+drag", "Objects: move the selection; copy it"),
         ("Del  Ctrl+C  Ctrl+V", "Objects: bulldoze; copy; paste"),
         ("N   L   T", "Objects: snap (roads, grid, off; Alt: off while held); level the ground under a building; team or finish line"),
-        ("-   =", "Path tool: edit paths (select, drag points); draw a new path (click its points; Enter, a right click or a double click finishes)"),
+        ("=", "Path tool: edit paths (select, drag points); NEW PATH (the button) draws one: click its points; Enter, a right click or a double click finishes"),
         ("Paths, edit", "Double-click a path's line or Insert adds a point, Delete removes the selected point (or asks to delete the path), Esc deselects"),
         ("Ctrl+Z", "Undo a stroke, a road or an object edit"),
         ("Ctrl+Y, Ctrl+Shift+Z", "Redo"),

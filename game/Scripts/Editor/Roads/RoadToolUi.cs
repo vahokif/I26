@@ -18,10 +18,10 @@ public sealed partial class RoadTool
 
     private static readonly (RoadMode Mode, string Key, string Name, string Tip)[] Modes =
     [
-        (RoadMode.Straight, "7", "STRAIGHT", "Straight roads, Shift chains"),
-        (RoadMode.Curve, "8", "CURVE", "Start, control point, end; 8 again for a cubic"),
-        (RoadMode.Freeform, "9", "FREEFORM", "A spline through your clicks"),
-        (RoadMode.Select, "0", "SELECT", "Pick a road: drag points, add, delete, split"),
+        (RoadMode.Straight, "8", "STRAIGHT", "Straight roads, Shift chains"),
+        (RoadMode.Curve, "9", "CURVE", "Start, control point, end; 9 again for a cubic"),
+        (RoadMode.Freeform, "0", "FREEFORM", "A spline through your clicks"),
+        (RoadMode.Select, "-", "SELECT", "Pick a road: drag points, add, delete, split"),
         (RoadMode.Upgrade, "U", "UPGRADE", "Change a road's type"),
         (RoadMode.Bulldoze, "X", "BULLDOZE", "Remove a road"),
     ];

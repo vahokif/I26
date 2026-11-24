@@ -19,12 +19,12 @@ the modern look is the one it is built for.
 |---|---|
 | Left button | paint with the brush |
 | `1` `2` `3` `4` `5` `6` | raise, lower, smooth, flatten, level, roughen |
-| SURFACE button (no key: `7`-`0` are the road tool's) | paint the ground's surface type (see Surface paint); `;` shows or hides its map, Alt + click or `I` picks the type under the cursor |
+| `7` | SURFACE: paint the ground's surface type (see Surface paint); `;` shows or hides its map, Alt + click or `I` picks the type under the cursor |
 | `[` `]` (also Shift + wheel) | brush radius down, up (x1.15 a press; 5 to 400 m) |
 | Shift+`[` Shift+`]` (also Ctrl + wheel) | brush strength down, up (2 to 100 %) |
 | `G` | next falloff: smooth (cosine), linear, sharp, plateau |
 | Alt + click, `I` | take the ground's height under the cursor for the Level brush (and select it) |
-| `7` `8` `9` `0` | the road tool: straight, curve (`8` again: cubic), freeform, select and edit (see Roads) |
+| `8` `9` `0` `-` | the road tool: straight, curve (`9` again: cubic), freeform, select and edit (see Roads) |
 | `U` `X` (road tool) | upgrade (change a road's type), bulldoze |
 | Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z | undo, redo, redo (a road and the ground cut for it are one step) |
 | Ctrl+S | save |
@@ -59,7 +59,7 @@ before); 1997 2.0/2.7, 3.0/2.8, 3.3/2.9 (1.6 to 2.7 before, when it drew little 
 
 **Music.** The game's soundtrack plays while you edit: the CD tracks of the install the editor was opened from (Interstate '76's or the Nitro Pack's, whichever the map belongs to), a random one after another and never the one just played, at the Music level of Audio Control (nothing plays at level 0 or 1, or with no tracks in the install). The top bar's **MUSIC** button switches it off and on; the choice is kept with the player's settings (`editor_music` in the `[port]` section, written only when off). A playtest (F5) fades the music out for the mission's own and the editor starts a track again on the way back; leaving the editor ends it for the menu's music. `I76_EDITOR_MUSIC_SEEK=SECONDS` starts each track that far in (capture scripts: `music` presses the button, `key:F12` sends a key).
 | `M` `P` | the object tools: select, build (the palette). `J` `R` `Y` `Z` arm a spawn point, regen pad, CTF flag, race checkpoint (the rest of their keys are in "Building" below) |
-| `-` `=` | the path tool: edit paths, draw a new path (see Paths) |
+| `=` | the path tool: edit paths; NEW PATH (its button, no key) draws one (see Paths) |
 
 The status bar shows the tool, radius, strength, falloff, the ground's height and position under the cursor, and the frame rate.
 
@@ -133,7 +133,7 @@ The names in the list follow the map's surface table (below): a type whose row h
 What a surface type does to a car is not fixed: each map carries its own table, eight rows of grip, rolling, bump and damage a second, one
 per type (WRLD +0x97, 20 bytes a row: four floats and an int; `SurfaceTable` in `src/I76.Formats/Mission`). That is how a map has ice or
 ground that hurts: the ground is painted with a type (Surface paint) and that type's row is made slippery or damaging. **SURFACE TABLE**
-(the TERRAIN group, under SURFACE, and the surface brush's panel) opens the window that edits it.
+(in the surface brush's panel at the right, under SURFACE MAP) opens the window that edits it.
 
 | Field | What the sim does with it |
 |---|---|
@@ -183,7 +183,7 @@ reading back, the WREV 8 layout, the in-memory patch, the stock table), `Surface
 
 ## Building
 
-The OBJECTS group of the tool column (and the keys `M`, `P`, `J`, `R`, `Y`, `Z`; the road tool has `7`-`0`, `U`, `X`, `V`, `H`, `C`, `O`, `K`, `T`, and gives way to these tools and they to it) switches the brush for the object tools; `1`-`6` or a terrain button
+The OBJECTS group of the tool column (and the keys `M`, `P`, `J`, `R`, `Y`, `Z`; the road tool has `8`-`0`, `-`, `U`, `X`, `V`, `H`, `C`, `O`, `K`, `T`, and gives way to these tools and they to it) switches the brush for the object tools; `1`-`7` or a terrain button
 switches back. The code is `src/I76.Editor/Objects` (no Godot: catalogue, layer, commands, footprints, snapping, road cut, map check) and
 `game/Scripts/Editor/Objects` (`ObjectEditor`: input, ghost, selection; `ObjectUi`: palette, inspector, map check panel; `MarkerView`;
 `Thumbnails`).
@@ -365,8 +365,8 @@ A tile the ZMAP grid shows in more than one cell is one set of samples, so an ed
 
 ## Roads
 
-The road tool (`game/Scripts/Editor/Roads`, the maths in `src/I76.Editor/Roads`) draws roads in the original format. `7` `8` `9` `0` `U` `X`
-or the palette's ROADS group turn it on; a brush key (`1`-`6`) turns it off. The panel at the right replaces the brush's: the type of new
+The road tool (`game/Scripts/Editor/Roads`, the maths in `src/I76.Editor/Roads`) draws roads in the original format. `8` `9` `0` `-` `U` `X`
+or the palette's ROADS group turn it on; a brush key (`1`-`7`) turns it off. The panel at the right replaces the brush's: the type of new
 roads (ASPHALT, DIRT, PLANKS: the three texture families of RSEG kind % 3), their width (STANDARD 10 m or WIDE 20 m, see Wide roads), the
 snaps, chaining, whether the ground is cut and filled, the maximum grade and the shoulder.
 
@@ -394,10 +394,10 @@ bulldozing it would, and ending a wide road on a bridge or ramp end works but th
 `EditorRoadTests` (Sim: an AI car follows a wide road).
 
 **Drawing.** Click to start, click to end (`Esc` cancels, `Backspace` takes the last click back, `Enter` or a double click finishes).
-- Straight: start, end. Hold Shift on a click (or turn Chain on with `C`) and the next piece goes on from it: one road, its corners
+- Straight (`8`): start, end. Hold Shift on a click (or turn Chain on with `C`) and the next piece goes on from it: one road, its corners
   rounded to a radius of about 32 (stock roads turn under 9 degrees a point in 99 % of cases).
-- Curve (`8`): start, control point, end, a quadratic Bezier; `8` again for a cubic (start, two controls, end). Shift chains.
-- Freeform (`9`): click points, a spline passes through them.
+- Curve (`9`): start, control point, end, a quadratic Bezier; `9` again for a cubic (start, two controls, end). Shift chains.
+- Freeform (`0`): click points, a spline passes through them.
 - The preview is the real road mesh and texture (`RoadNode`, both looks) with a ribbon over it for the grade: green up to 60 % of the
   limit, yellow up to the limit, red beyond, for the ground's own steepness along the path. The panel says the length, the points, the
   steepest ground, the cut and fill the grading will need; a bend tighter than 6 units (11 for a wide road) is refused (the quads would fold).
@@ -524,7 +524,7 @@ Tests: `RoadStructureTests` (Editor: the pieces and their choice, the grade and 
 on the ground, one undo step), `EditorRoadStructureTests` (Sim: a ground road, a bridge over a valley on a slope and a ground road drive end to end in a
 saved map without sinking through the deck or a jump at a joint; a tunnel with its road on a slope drives portal to portal).
 
-**Editing** (`0`, select): click a road to select it; its points show as handles.
+**Editing** (`-`, select): click a road to select it; its points show as handles.
 - Drag a handle: the road bends about it (the 6 points either side follow by a smoothstep; Alt: that point alone). The ground under the
   moved stretch is graded when you let go. An end dragged onto a bridge or ramp snaps to it.
 - Double click on the road or `Insert`: a point at the cursor. `Delete`: the selected point, or with none the whole road. `K`: split the
@@ -544,7 +544,7 @@ line (all 458 ticks on the road).
 
 ## Paths
 
-The **path tool** (`-` and `=`, or the PATHS group at the bottom of the tool column; `game/Scripts/Editor/Paths`, the table and
+The **path tool** (`=`, or the PATHS group at the bottom of the tool column; `game/Scripts/Editor/Paths`, the table and
 its edits in `src/I76.Editor/Paths`) edits the **nav paths** of the map's mission script: the routes and spots its orders and
 tests name. `goto`, `race` and `evade` send a car along one, `teleport` puts a car at its first point, `isWithinNav` and
 `isWithinSqNav` test a car against its first point (a circle, a square), and the cut-scene cameras stand on or travel along one.
@@ -567,8 +567,8 @@ path tool is on, and with every tool when SHOW PATHS (the palette, or the panel'
 
 | Mode | Key | Does |
 |---|---|---|
-| EDIT PATHS | `-` | click a path (its line or a point) to select it; drag a point to move it; a double click on the selected path's line, or `Insert` with the cursor near it, puts a point there; `Delete` or `Backspace` removes the selected point, or with no point selected asks to delete the path; `Esc` deselects |
-| NEW PATH | `=` | click the points on the ground in driving order; `Enter`, a right click or a double click finishes (a right click otherwise orbits as ever); `Backspace` takes the last point back, `Esc` cancels. The path is labelled `path1`, `path2`... and selected for its label |
+| EDIT PATHS | `=` | click a path (its line or a point) to select it; drag a point to move it; a double click on the selected path's line, or `Insert` with the cursor near it, puts a point there; `Delete` or `Backspace` removes the selected point, or with no point selected asks to delete the path; `Esc` deselects |
+| NEW PATH | (button) | click the points on the ground in driving order; `Enter`, a right click or a double click finishes (a right click otherwise orbits as ever); `Backspace` takes the last point back, `Esc` cancels. The path is labelled `path1`, `path2`... and selected for its label |
 | INSERT POINT | | click on a path's line: a point goes there, and holding the button drags it into place |
 | DELETE | | click a point to remove it (a path keeps at least one: the tests read its first); click a line to delete its path, after "Delete the path NAME?" (YES / CANCEL) |
 

@@ -140,7 +140,7 @@ public sealed partial class RoadTool : Node
     public string ModeHelp() => IsStretch ? $"{(Build == BuildMode.Bridge ? "Bridge" : "Tunnel")}: click the start, click toward the far end (curves are laid straight). Shift+Tab: ground, bridge, tunnel." : Mode switch
     {
         RoadMode.Straight => "Straight road: click the start, click the end. Hold Shift on a click to chain on. Enter finishes.",
-        RoadMode.Curve => Cubic ? "Cubic curve: start, two control points, end. Shift chains on." : "Curve: start, control point, end. Shift chains on. (8 again: cubic)",
+        RoadMode.Curve => Cubic ? "Cubic curve: start, two control points, end. Shift chains on." : "Curve: start, control point, end. Shift chains on. (9 again: cubic)",
         RoadMode.Freeform => "Freeform: click points to bend a spline through; Enter or a double click finishes.",
         RoadMode.Select => "Select a road to edit: drag a point, double-click to add one, Delete removes, K splits, T changes the type.",
         RoadMode.Upgrade => "Upgrade: click a road to give it the road type and width chosen in the panel.",
@@ -194,10 +194,10 @@ public sealed partial class RoadTool : Node
         bool ctrl = k.CtrlPressed;
         switch (k.Keycode)
         {
-            case Key.Key7 or Key.Kp7 when !ctrl: SetMode(RoadMode.Straight); return true;
-            case Key.Key8 or Key.Kp8 when !ctrl: SetMode(RoadMode.Curve); return true;
-            case Key.Key9 or Key.Kp9 when !ctrl: SetMode(RoadMode.Freeform); return true;
-            case Key.Key0 or Key.Kp0 when !ctrl: SetMode(RoadMode.Select); return true;
+            case Key.Key8 or Key.Kp8 when !ctrl: SetMode(RoadMode.Straight); return true;
+            case Key.Key9 or Key.Kp9 when !ctrl: SetMode(RoadMode.Curve); return true;
+            case Key.Key0 or Key.Kp0 when !ctrl: SetMode(RoadMode.Freeform); return true;
+            case Key.Minus or Key.KpSubtract when !ctrl && !k.AltPressed && !k.Echo: SetMode(RoadMode.Select); return true;
         }
         if (!Active) return false;
         switch (k.Keycode)

@@ -627,6 +627,7 @@ public partial class MapEditor : Node
             case Key.Key4 or Key.Kp4: SetTool(BrushKind.Flatten); break;
             case Key.Key5 or Key.Kp5: SetTool(BrushKind.Level); break;
             case Key.Key6 or Key.Kp6: SetTool(BrushKind.Noise); break;
+            case Key.Key7 or Key.Kp7: SetTool(BrushKind.Surface); break;
             case Key.Semicolon when SurfaceToolOn && !key.CtrlPressed && !key.Echo: _overlayOn = !_overlayOn; Toast(_overlayOn ? "Surface map on" : "Surface map off"); SyncUi(); break;
             case Key.I when !key.CtrlPressed: Eyedrop(); break;
             case Key.F when !key.CtrlPressed && !key.Echo: FocusCursor(); break;

@@ -21,8 +21,8 @@ public sealed partial class PathTool
 
     private static readonly (PathMode Mode, string Key, string Name, string Tip)[] Modes =
     [
-        (PathMode.Edit, "-", "EDIT PATHS", "Select a path, drag its points; a double click on its line inserts a point, Delete removes one"),
-        (PathMode.New, "=", "NEW PATH", "Click the points of a new path in the order it is driven; Enter or a right click finishes"),
+        (PathMode.Edit, "=", "EDIT PATHS", "Select a path, drag its points; a double click on its line inserts a point, Delete removes one"),
+        (PathMode.New, "", "NEW PATH", "Click the points of a new path in the order it is driven; Enter or a right click finishes"),
         (PathMode.Insert, "", "INSERT POINT", "Click on a path's line to put a point there"),
         (PathMode.Delete, "", "DELETE", "Click a point to remove it, or a line to delete its path"),
     ];

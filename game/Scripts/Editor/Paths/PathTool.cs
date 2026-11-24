@@ -142,8 +142,7 @@ public sealed partial class PathTool : Node
         if (k.CtrlPressed || k.AltPressed) return false;
         switch (k.Keycode)
         {
-            case Key.Minus or Key.KpSubtract when !k.Echo: SetMode(PathMode.Edit); return true;
-            case Key.Equal or Key.KpAdd when !k.Echo: SetMode(PathMode.New); return true;
+            case Key.Equal or Key.KpAdd when !k.Echo: SetMode(PathMode.Edit); return true;
         }
         if (!Active) return false;
         switch (k.Keycode)

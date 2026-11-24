@@ -1250,6 +1250,12 @@ public sealed class ShellSettings
     /// <summary>The port's own: the same for the bottom row (compass, speedometer, tacho, gear, specials; [port] hud_bottom_row; a whole).</summary>
     public int HudBottomRow { get; set; } = I76.Sim.Views.HudScale.BottomDefault;
     /// <summary>
+    /// The port's own: Play Options' Original Chase Framing — the F2 chase view opens at, and End returns to, the original's 30 degrees
+    /// and zoom 3 rather than the port's 16 and 1.7 (shell.cfg [port] chase_framing_original, written only when on). No version step: a file
+    /// without the key gets the port's framing, which is what every earlier file meant. See docs/deviations.md.
+    /// </summary>
+    public bool OriginalChaseFraming { get; set; }
+    /// <summary>
     /// The port's own: the turrets turn as the 1997 CD build's, 1.5 rad/s times their health ratio, rather than the 1998 build's (GOG's
     /// and the Nitro Pack's) 1.7 times 0.75 + 0.25 of it (Play Options' Turrets; shell.cfg [port] turret_slew = 1997, written only then).
     /// Offline only: a network game's is the host's (<see cref="HostTurrets1997"/>).
@@ -1442,6 +1448,8 @@ public sealed class ShellSettings
         // no version step: absent, the port's own sizes (the top row at a half of the original's, the bottom row as the original drew it)
         s.HudTopRow = I76.Sim.Views.HudScale.Parse((int)c.GetValue("port", "hud_top_row", 0), I76.Sim.Views.HudScale.TopDefault);
         s.HudBottomRow = I76.Sim.Views.HudScale.Parse((int)c.GetValue("port", "hud_bottom_row", 0), I76.Sim.Views.HudScale.BottomDefault);
+        // no version step: absent, the chase view opens at the port's framing, as it did before the row existed
+        s.OriginalChaseFraming = (bool)c.GetValue("port", "chase_framing_original", false);
         s.BriefingWhileLoading = (bool)c.GetValue("port", "briefing_while_loading", true);
         s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
         // version 13 added Skip Intro Movies: older files have none, so it is off and the intro plays, as before
@@ -1541,6 +1549,7 @@ public sealed class ShellSettings
         // each row's own default is left out of the file; 0 is not a denominator, so a file without the key reads back the default
         if (HudTopRow != I76.Sim.Views.HudScale.TopDefault) c.SetValue("port", "hud_top_row", I76.Sim.Views.HudScale.Denominator(HudTopRow));
         if (HudBottomRow != I76.Sim.Views.HudScale.BottomDefault) c.SetValue("port", "hud_bottom_row", I76.Sim.Views.HudScale.Denominator(HudBottomRow));
+        if (OriginalChaseFraming) c.SetValue("port", "chase_framing_original", true);
         if (!BriefingWhileLoading) c.SetValue("port", "briefing_while_loading", false);
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
         if (SkipIntro) c.SetValue("port", "skip_intro", true);

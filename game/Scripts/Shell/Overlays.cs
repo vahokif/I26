@@ -222,7 +222,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private I76.Formats.Input.RumbleMode _savedRumble;
     private int _savedRumbleStrength;
     private bool _savedSteering;
-    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997, _savedSkipIntro;
+    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997, _savedSkipIntro, _savedChaseFraming;
     private int _savedRate, _savedDownloads, _savedHudTop, _savedHudBottom;
     /// <summary>The original's six check rows and their bits (Nitro's sheet has only Arcade Phys. and Unlim. Wiper Fluid).</summary>
     private static readonly (string Label, int Bit)[] Checks =
@@ -256,13 +256,16 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
         "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
-        "Turrets", "Keyboard Steering Assist", SkipIntroRow, HudTopPartRow, HudBottomPartRow,
+        "Turrets", "Keyboard Steering Assist", SkipIntroRow, HudTopPartRow, HudBottomPartRow, ChaseFramingRow,
     ];
     /// <summary>The port's Skip Intro Movies row (<see cref="ShellSettings.SkipIntro"/>) in the front end's and the mission menu's Play Options.</summary>
     public const string SkipIntroRow = "Skip Intro Movies";
     /// <summary>The port's two Chase HUD rows (<see cref="ShellSettings.HudTopRow"/> and <see cref="ShellSettings.HudBottomRow"/>): the size
     /// of each half of the external instruments over a chase view, stepped 1/4, 1/2, 1/1.</summary>
     public const string HudTopPartRow = "Chase HUD Top Part", HudBottomPartRow = "Chase HUD Bottom Part";
+    /// <summary>The port's Original Chase Framing row (<see cref="ShellSettings.OriginalChaseFraming"/>): the F2 chase view opens at, and End
+    /// returns to, the original's 30 degrees and zoom 3 rather than the port's 16 and 1.7 (docs/deviations.md).</summary>
+    public const string ChaseFramingRow = "Original Chase Framing";
 
     /// <summary>Every row of the list, in order: the original's check rows (Nitro's two), Difficulty, then the port's rows.</summary>
     public static string[] ListRows(bool nitro) =>
@@ -291,6 +294,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedSkipIntro = s.SkipIntro;
         _savedHudTop = s.HudTopRow;
         _savedHudBottom = s.HudBottomRow;
+        _savedChaseFraming = s.OriginalChaseFraming;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
 
@@ -355,6 +359,9 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         // its own edge so its panels stay as close together as they were. The cockpit's dash is always full size, and a network game draws each player's own choice.
         Step(PortRows[17], () => s.HudTopRow = NextHudRow(s.HudTopRow), () => HudRowName(s.HudTopRow));
         Step(PortRows[18], () => s.HudBottomRow = NextHudRow(s.HudBottomRow), () => HudRowName(s.HudBottomRow));
+        // Original Chase Framing (docs/deviations.md): the F2 view opens at, and End puts it back to, the original's 30 degrees and zoom 3
+        // instead of the port's 16 and 1.7. From the next mission here, and from the next End after a resume out of the mission menu.
+        Toggle(PortRows[19], () => s.OriginalChaseFraming, () => s.OriginalChaseFraming = !s.OriginalChaseFraming);
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
     }
@@ -397,7 +404,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     {
         var s = Shell.Settings;
         s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing; s.Turrets1997 = _savedTurrets1997; s.SkipIntro = _savedSkipIntro;
-        s.HudTopRow = _savedHudTop; s.HudBottomRow = _savedHudBottom;
+        s.HudTopRow = _savedHudTop; s.HudBottomRow = _savedHudBottom; s.OriginalChaseFraming = _savedChaseFraming;
         I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = _savedSteering;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored

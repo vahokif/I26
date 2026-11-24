@@ -753,6 +753,9 @@ public partial class Main : Node3D
         // Chase HUD Top / Bottom Part: the size each half of the 2D instruments is drawn at over a chase view (docs/playing.md);
         // the HUD asks for the fractions as it draws, and the cockpit's own dash stays full size
         _hudTop = s.HudTopRow; _hudBottom = s.HudBottomRow;
+        // Original Chase Framing: where the F2 view opens and where End puts it back (docs/deviations.md); the camera built for this
+        // mission reads it as it is made, and End reads it again, so a change in the mission menu takes effect from the next End
+        I76.Sim.Views.ChaseFraming.Original = s.OriginalChaseFraming;
         I76.Game.ForceFeedback.Mode = s.RumbleMode;
         I76.Game.ForceFeedback.Strength = s.RumbleStrength;
         I76.Game.ForceFeedback.Held = () => _menu is not null || _picture is not null || _ended || _loading;     // and nothing behind the loading card

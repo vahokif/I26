@@ -4,7 +4,7 @@ using I76.Sim.Views;
 namespace I76.Game.Sim;
 
 /// <summary>
-/// The modern look's motion blur (Graphic Detail's Motion Blur, on by default; the original had none): a CompositorEffect on
+/// The modern look's motion blur (Graphic Detail's Motion Blur, off by default; the original had none): a CompositorEffect on
 /// the main camera, after the transparent pass and before the tonemap, so the HUD, the 2D cockpit, the menus and the map,
 /// all drawn over the 3D view, are never blurred. The 1997 look and the Compatibility renderer have none.
 ///
@@ -37,7 +37,7 @@ namespace I76.Game.Sim;
 public partial class MotionBlur : Node
 {
     /// <summary>The setting, for the modern look: Graphic Detail's Motion Blur (or I76_MOTION_BLUR), set by Main.</summary>
-    public static bool Setting { get; set; } = true;
+    public static bool Setting { get; set; }
     /// <summary>The 1997 look is up: no blur, whatever the setting.</summary>
     public Func<bool>? Faithful { get; init; }
 
@@ -81,6 +81,7 @@ public partial class MotionBlur : Node
         Cut();
         if (RenderingServer.GetCurrentRenderingMethod() != "forward_plus" || RenderingServer.GetRenderingDevice() is null) { _failed = true; return; }
         _effect = new Effect();
+        _measuredTo = new Callable(this, MethodName.Measured);
         GetTree().NodeRemoved += Removed;
         RenderingServer.FramePreDraw += PreDraw;
     }
@@ -224,7 +225,7 @@ public partial class MotionBlur : Node
             Dispatch(rd, 1, [Ubuf(0), Tex(1, _tile), Img(2, _near), Sbuf(3)], (uint)(tiles.X + 7) / 8, (uint)(tiles.Y + 7) / 8);
             // the next two passes' sizes, none when the longest streak is under a pixel (standing still, crawling)
             Dispatch(rd, 4, [Ubuf(0), Sbuf(1)], 1, 1);
-            rd.BufferGetDataAsync(_gbuf, Measured, 0, 4);
+            rd.BufferGetDataAsync(_gbuf, _measuredTo, 0, 4);
             _motionOf = frame;
         }
         else if (frame - _motionOf > 3) return;   // the last motion worked out (see Removed), for up to three frames running
@@ -233,7 +234,14 @@ public partial class MotionBlur : Node
     }
 
     private static readonly byte[] Zero4 = new byte[4];
-    private static readonly Callable Measured = Callable.From<byte[]>(b => { if (b.Length >= 4) _measured = BitConverter.ToSingle(b, 0) * Scale; });
+    // The readback's answer goes to the node's method, not to a C# lambda. The engine answers a readback a frame or two later,
+    // and the last one asked for is still waiting when the program quits: the engine answers it while it closes the window,
+    // after .NET has shut down, and a lambda called then is a segfault on every exit. The node is freed with the scene tree,
+    // before that, and the engine drops an answer to a freed object.
+    private static Callable _measuredTo;
+
+    /// <summary>The readback of the frame's longest streak (work pixels).</summary>
+    public void Measured(byte[] b) { if (b.Length >= 4) _measured = BitConverter.ToSingle(b, 0) * Scale; }
 
     private static System.Numerics.Vector3 V(Vector3 v) => new(v.X, v.Y, v.Z);
 

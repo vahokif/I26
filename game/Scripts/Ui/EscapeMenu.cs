@@ -453,7 +453,7 @@ public sealed partial class EscapeMenu : Control
         Settings.SoftwareRenderer = false;
         Settings.PaletteGrade = false;
         Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On;
-        Settings.MotionBlur = true;
+        Settings.MotionBlur = false;
         Settings.Vegetation = 1;
         Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
         Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;

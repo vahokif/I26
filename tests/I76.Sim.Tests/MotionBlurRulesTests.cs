@@ -80,10 +80,10 @@ public class MotionBlurRulesTests
     public void ItRestsAfterEightStillFrames(int quiet, bool idle) => Assert.Equal(idle, MotionBlurRules.Idle(quiet, 8));
 
     [Theory]
-    [InlineData(null, true)]    // a file from before the key, or a new player: on
+    [InlineData(null, false)]   // a file without the key, or a new player: off
     [InlineData(true, true)]
     [InlineData(false, false)]
-    public void TheSettingIsOnUnlessTurnedOff(bool? stored, bool on) => Assert.Equal(on, MotionBlurRules.From(stored));
+    public void TheSettingIsOffUnlessTurnedOn(bool? stored, bool on) => Assert.Equal(on, MotionBlurRules.From(stored));
 
     [Fact]
     public void TheScriptCameraCountsItsCutsNotItsTravel()

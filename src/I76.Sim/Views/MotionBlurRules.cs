@@ -59,6 +59,6 @@ public static class MotionBlurRules
     /// </summary>
     public static bool Idle(int quiet, int after) => quiet >= after;
 
-    /// <summary>The cfg value: absent is on (the default), written only when off.</summary>
-    public static bool From(bool? stored) => stored ?? true;
+    /// <summary>The cfg value: absent is off (the default).</summary>
+    public static bool From(bool? stored) => stored ?? false;
 }

@@ -1224,8 +1224,8 @@ public sealed class ShellSettings
     public bool PaletteGrade { get; set; }
     /// <summary>The port's own: Graphic Detail's Crash Blur, the software renderer's double image on a big cockpit hit (<see cref="I76.Sim.Views.CrashBlurMode"/>: On by default; the original's blit in the 1997 look, a smooth one in the modern look).</summary>
     public int CrashBlur { get; set; }
-    /// <summary>The port's own: Graphic Detail's Motion Blur, the modern look's (Forward+ only; the 1997 look has none). On by default ([port] motion_blur, written when off).</summary>
-    public bool MotionBlur { get; set; } = true;
+    /// <summary>The port's own: Graphic Detail's Motion Blur, the modern look's (Forward+ only; the 1997 look has none). Off by default ([port] motion_blur).</summary>
+    public bool MotionBlur { get; set; }
     /// <summary>The port's own: the mouse orbits the chase view (Mouse Options' Mouse Camera; <see cref="I76.Sim.Views.MouseLook"/>: 0 Off, 1 Slow, 2 Normal, 3 Fast). Normal unless the player chose; a file without the key gets it.</summary>
     public int MouseCamera { get; set; } = I76.Sim.Views.MouseLook.Normal;
     /// <summary>The port's own: fine-grained mouse sensitivity scale (10% to 200% in 10% steps; shell.cfg [port] mouse_sensitivity; 1.0 unless chosen, migrated from mouse_camera when absent).</summary>
@@ -1503,7 +1503,7 @@ public sealed class ShellSettings
         if (SoftwareRenderer) c.SetValue("port", "software_renderer", true);
         if (PaletteGrade) c.SetValue("port", "palette_grade", true);
         if (CrashBlur != I76.Sim.Views.CrashBlurMode.On) c.SetValue("port", "crash_blur", I76.Sim.Views.CrashBlurMode.Word(CrashBlur));
-        if (!MotionBlur) c.SetValue("port", "motion_blur", false);
+        c.SetValue("port", "motion_blur", MotionBlur);
         c.SetValue("port", "mouse_camera", MouseCamera);
         c.SetValue("port", "mouse_sensitivity", I76.Sim.Views.MouseLook.ClampSensitivity(MouseSensitivity));
         if (MouseInvertY) c.SetValue("port", "mouse_invert_y", true);

@@ -264,7 +264,8 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     /// of each half of the external instruments over a chase view, stepped 1/4, 1/2, 1/1.</summary>
     public const string HudTopPartRow = "Chase HUD Top Part", HudBottomPartRow = "Chase HUD Bottom Part";
     /// <summary>The port's Original Chase Framing row (<see cref="ShellSettings.OriginalChaseFraming"/>): the F2 chase view opens at, and End
-    /// returns to, the original's 30 degrees and zoom 3 rather than the port's 16 and 1.7 (docs/deviations.md).</summary>
+    /// returns to, the original's 30 degrees and zoom 3 rather than the port's 16 and 1.7 (docs/deviations.md). The 1997 look opens there
+    /// whatever the row says.</summary>
     public const string ChaseFramingRow = "Original Chase Framing";
 
     /// <summary>Every row of the list, in order: the original's check rows (Nitro's two), Difficulty, then the port's rows.</summary>

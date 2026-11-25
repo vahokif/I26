@@ -331,7 +331,8 @@ public sealed partial class EscapeMenu : Control
         _play.Items.Add(Setting(Cycle, PlayOptionsScreen.HudBottomPartRow, 36, I76.Sim.Views.HudScale.Fractions.Length, I76.Sim.Views.HudScale.Names,
             s => s.HudBottomRow, (s, v) => s.HudBottomRow = v, live: false));
         // Original Chase Framing: the F2 view opens at, and End puts it back to, the original's 30 degrees and zoom 3 rather than the port's
-        // 16 and 1.7 (docs/deviations.md). The chase camera reads the choice at every End, so the resume that closes this menu is enough.
+        // 16 and 1.7 (docs/deviations.md), and the 1997 look opens there whatever is ticked. The chase camera reads the choice at every
+        // End, so the resume that closes this menu is enough.
         _play.Items.Add(new Item
         {
             Flags = Check, Label = PlayOptionsScreen.ChaseFramingRow, Pair = 37, N = 2,

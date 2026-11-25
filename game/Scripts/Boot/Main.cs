@@ -285,6 +285,9 @@ public partial class Main : Node3D
         I76.Formats.Audio.CompanionSounds.Locator = I76.Game.Boot.LaunchOptions.FindI76Install;
         _lookSaved = I76.Game.Shell.ShellSettings.Load().Look1997;
         _opt.Mode1997 |= _lookSaved;
+        // the chase view's opening framing is the one thing the look decides before a scene exists: the camera takes the framing as it
+        // is built, so the helper learns the look here, and again at every switch (SetMode1997Steps)
+        I76.Sim.Views.ChaseFraming.Mode1997 = _opt.Mode1997;
         if (_opt.Install is not null) I76.Game.Editor.EditorSession.Install = new GameInstall(_opt.Install);
         // I76_EDITOR=<mission>: the map editor on that mission (docs/dev-hooks.md); the shell's Map Editor entry does the same through EditorSession
         if (!I76.Game.Editor.EditorSession.EnvTaken && System.Environment.GetEnvironmentVariable("I76_EDITOR") is { Length: > 0 } editorMission)
@@ -754,7 +757,8 @@ public partial class Main : Node3D
         // the HUD asks for the fractions as it draws, and the cockpit's own dash stays full size
         _hudTop = s.HudTopRow; _hudBottom = s.HudBottomRow;
         // Original Chase Framing: where the F2 view opens and where End puts it back (docs/deviations.md); the camera built for this
-        // mission reads it as it is made, and End reads it again, so a change in the mission menu takes effect from the next End
+        // mission reads it as it is made, and End reads it again, so a change in the mission menu takes effect from the next End. The
+        // 1997 look opens at the original's framing whatever the row says, and it is the look that says so (its own step)
         I76.Sim.Views.ChaseFraming.Original = s.OriginalChaseFraming;
         I76.Game.ForceFeedback.Mode = s.RumbleMode;
         I76.Game.ForceFeedback.Strength = s.RumbleStrength;
@@ -2592,6 +2596,7 @@ public partial class Main : Node3D
         I76.Game.World.ObjectLight.Set("i76_mode_1997", on);
         I76.Game.World.CloudShadow.SetLook(on);   // the 1997 look has no sun for a cloud to step in front of
         I76.Game.World.DesertHaze.SetLook(on);    // and no air between its clip and its horizon panels
+        I76.Sim.Views.ChaseFraming.Mode1997 = on;  // and its chase view opens at the original's framing, whatever the row says
         _builder?.Terrain?.UseModern(!on);
         MissionBuilder.Trace("look: terrain");
         yield return null;

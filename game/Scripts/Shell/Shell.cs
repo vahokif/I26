@@ -1252,7 +1252,8 @@ public sealed class ShellSettings
     /// <summary>
     /// The port's own: Play Options' Original Chase Framing — the F2 chase view opens at, and End returns to, the original's 30 degrees
     /// and zoom 3 rather than the port's 16 and 1.7 (shell.cfg [port] chase_framing_original, written only when on). No version step: a file
-    /// without the key gets the port's framing, which is what every earlier file meant. See docs/deviations.md.
+    /// without the key gets the port's framing, which is what every earlier file meant. The 1997 look opens at the original's framing whatever
+    /// this holds. See docs/deviations.md.
     /// </summary>
     public bool OriginalChaseFraming { get; set; }
     /// <summary>

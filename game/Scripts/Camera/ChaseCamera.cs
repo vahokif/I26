@@ -20,7 +20,7 @@ namespace I76.Game.Camera;
 /// <item>the world camera rebuild starts pitch at 30°, yaw at 0; the zoom
 /// (track_distance, clamped 1..10) reads 3 in the original game. The port opens the view lower and nearer
 /// (16°, zoom 1.7) and End returns to those, not to the original's numbers — unless Play Options' Original Chase Framing
-/// row asks for the original's (ChaseFraming).</item>
+/// row asks for the original's, or the 1997 look is in play, which always asks for them (ChaseFraming).</item>
 /// </list>
 /// Keys (input.map): the arrows swing it (track_yaw_minus/plus,
 /// track_pitch_minus/plus; pitch 1°..90°), Page Up/Down zoom
@@ -57,7 +57,8 @@ public partial class ChaseCamera : Camera3D
     private float _wheel = MouseCamera.ZoomOf(ViewZoom.Kind.Chase);
 
     // the framing the view opens at and End goes back to: the port's 16 degrees and zoom 1.7, or the original's 30 and 3
-    // with Play Options' Original Chase Framing (ChaseFraming); read again at every End, so the row takes effect on resume
+    // with Play Options' Original Chase Framing or in the 1997 look (ChaseFraming); read again at every End, so either takes
+    // effect on resume
     // targets (pitch, yaw, zoom) and their eased values
     private float _pitchT, _yawT, _zoomT;
     private float _zoom;

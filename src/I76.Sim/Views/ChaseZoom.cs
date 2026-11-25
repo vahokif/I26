@@ -106,6 +106,15 @@ public sealed class ChaseOrbit
         MousePitch = MouseYaw = 0;
     }
 
+    /// <summary>
+    /// A frame with another view on screen: both offsets go (<see cref="Reset"/>), unless the view is only <paramref name="lent"/> to the
+    /// script's camera (a cut-scene, a jump's camera), when they are kept as they were, the return's wait with them, for its hand-back.
+    /// </summary>
+    public void Away(bool lent)
+    {
+        if (!lent) Reset();
+    }
+
     /// <summary>A frame's easing toward the keys' targets (<paramref name="pitchT"/> already clamped).</summary>
     public void Ease(float pitchT, float yawT, float dt)
     {

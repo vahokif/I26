@@ -63,15 +63,39 @@ public class ViewZoomResetTests
         Assert.True(reset);
     }
 
-    [Fact] public void TheHandBackFromACutSceneStillResets()
+    [Fact] public void TheHandBackFromACutSceneIsNoViewSwitch()
     {
-        // the cut-scene holds the camera: no view; the hand-back is a switch into the chase view
-        var (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Chase, null, overlaid: false, keepZoom: false);
-        Assert.Null(v);
+        // F2, then a jump's camera holds the view (no view of the player's on screen), then hands F2 back: nothing resets (#222)
+        var (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Chase, null, overlaid: false, keepZoom: false, held: true);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
         Assert.False(reset);
         (v, reset) = MouseCamera.TrackView(v, ViewZoom.Kind.Chase, overlaid: false, keepZoom: false);
         Assert.Equal(ViewZoom.Kind.Chase, v);
+        Assert.False(reset);
+        // a cut-scene that hands back another view than it took (the target view it cannot restore: the chase view) is a switch
+        (v, reset) = MouseCamera.TrackView(ViewZoom.Kind.Target, null, overlaid: false, keepZoom: false, held: true);
+        (v, reset) = MouseCamera.TrackView(v, ViewZoom.Kind.Chase, overlaid: false, keepZoom: false);
+        Assert.Equal(ViewZoom.Kind.Chase, v);
         Assert.True(reset);
+    }
+
+    [Fact] public void TheWheelZoomOutlastsAJumpCamera()
+    {
+        // the frames of a jump on T05 in F2, as Main tracks them: the wheel's zoom is the player's again after the jump's camera (#222)
+        MouseCamera.ResetAllZooms();
+        MouseCamera.WheelView = ViewZoom.Kind.Chase;
+        MouseCamera.Wheel(-4);
+        float zoomed = MouseCamera.ZoomOf(ViewZoom.Kind.Chase);
+        int epoch = MouseCamera.ZoomEpoch;
+        ViewZoom.Kind? v = ViewZoom.Kind.Chase;
+        foreach (var (now, held) in new (ViewZoom.Kind?, bool)[] { (ViewZoom.Kind.Chase, false), (null, true), (null, true), (ViewZoom.Kind.Chase, false) })
+        {
+            (v, bool reset) = MouseCamera.TrackView(v, now, overlaid: false, keepZoom: false, held);
+            if (reset) MouseCamera.ResetAllZooms();
+        }
+        Assert.Equal(zoomed, MouseCamera.ZoomOf(ViewZoom.Kind.Chase));
+        Assert.Equal(epoch, MouseCamera.ZoomEpoch);
+        MouseCamera.WheelView = null;
     }
 
     [Fact] public void SideMouseButtonsResolveToMouseDeviceAndNotJoystick()

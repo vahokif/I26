@@ -30,16 +30,17 @@ public static class MouseCamera
     /// <summary>Counts the resets, so the cameras drop their eased zoom (and pull-back and mouse offset) at once instead of easing from the old one.</summary>
     public static int ZoomEpoch { get; private set; }
     public static void ResetZoom(ViewZoom.Kind k) => Zooms[(int)k] = ViewZoom.Default;
-    /// <summary>Every view back at the original's framing, now (a mission start, a switch into a view, the hand-back from a cut-scene).</summary>
+    /// <summary>Every view back at the original's framing, now (a mission start, a switch into a view).</summary>
     public static void ResetAllZooms() { System.Array.Fill(Zooms, ViewZoom.Default); ZoomEpoch++; }
     /// <summary>
     /// The view the wheel's zoom belongs to after this frame, and whether every view starts over at the original's framing: a switch into a
-    /// view (or the hand-back from a cut-scene) resets them with View Zoom Reset on. While a menu, pause or picture is over the mission
-    /// (<paramref name="overlaid"/>) the remembered view stands, so closing it is no switch; a view changed meanwhile still counts once it closes.
+    /// view resets them with View Zoom Reset on. While a menu, pause or picture is over the mission (<paramref name="overlaid"/>), or the
+    /// script's camera holds the view (<paramref name="held"/>: a cut-scene, a jump's camera), the remembered view stands, so the view coming
+    /// back is no switch; a view changed meanwhile (or a cut-scene handing back another view) still counts once it is back.
     /// </summary>
-    public static (ViewZoom.Kind? View, bool Reset) TrackView(ViewZoom.Kind? remembered, ViewZoom.Kind? now, bool overlaid, bool keepZoom)
+    public static (ViewZoom.Kind? View, bool Reset) TrackView(ViewZoom.Kind? remembered, ViewZoom.Kind? now, bool overlaid, bool keepZoom, bool held = false)
     {
-        if (overlaid || now == remembered) return (remembered, false);
+        if (overlaid || held || now == remembered) return (remembered, false);
         return (now, now is not null && !keepZoom);
     }
     /// <summary>The view the wheel zooms now: an external view in a mission with no menu, pause or cut-scene up (null: the cockpit and the rest keep the wheel).</summary>

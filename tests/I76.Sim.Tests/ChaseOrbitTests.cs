@@ -89,4 +89,25 @@ public class ChaseOrbitTests
         for (int i = 0; i < 600; i++) { o.Move(0, 0, 0, 0, dt, true); o.Ease(0.5235988f, 0, dt); }
         Assert.Equal(0f, o.MouseYaw, 3);
     }
+
+    [Fact]
+    public void AViewLentToACutSceneComesBackTurnedAsItWasLeft()
+    {
+        const float dt = 1 / 30f;
+        var o = new ChaseOrbit { Pitch = 0.5235988f };
+        o.Move(0, 0, 1.2f, 0.3f, dt, true);
+        for (int i = 0; i < 20; i++) { o.Move(0, 0, 0, 0, dt, true); o.Ease(0.5235988f, 0, dt); }
+        var left = o.View;
+        // a jump's camera holds the view for 4 s (#222): the offsets stand, and so does the return's wait
+        for (int i = 0; i < 120; i++) { o.Away(lent: true); o.Ease(0.5235988f, 0, dt); }
+        Assert.Equal(left, o.View);
+        o.Move(0, 0, 0, 0, dt, true);
+        o.Ease(0.5235988f, 0, dt);
+        Assert.Equal(left.Yaw, o.View.Yaw, 4);
+        // another view chosen: the offsets go
+        o.Away(lent: false);
+        o.Ease(0.5235988f, 0, dt);
+        Assert.Equal(0.5235988f, o.View.Pitch, 4);
+        Assert.Equal(0f, o.MouseYaw);
+    }
 }

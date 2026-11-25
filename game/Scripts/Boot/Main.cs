@@ -1589,7 +1589,8 @@ public partial class Main : Node3D
             // the camera works relative to the floating origin: the terrain is asked at the world point and answered relative again
             Ground = (x, z) => world.Ground.BareHeight(x + _origin.X, z + _origin.Z) - _origin.Y,
             // the death orbit; in a network game the winner's too (the original's start-up: camera 0xfefe, mode 8)
-            Orbit = () => _car is { } c && ((c.Sim.Flags & I76.Sim.Vehicles.VehicleFlags.Dead) != 0 || _netWinOrbit) };
+            Orbit = () => _car is { } c && ((c.Sim.Flags & I76.Sim.Vehicles.VehicleFlags.Dead) != 0 || _netWinOrbit),
+            Lent = () => CameraHeld };
         AddChild(_chase);
         yield return null;
         _preset = new PresetCamera { Target = _car, Name = "Preset", LocalCentre = _chase.LocalCentre, Radius = _chase.Radius, Ground = _chase.Ground, Head = () => _pit?.HeadAngles ?? default };
@@ -2643,11 +2644,11 @@ public partial class Main : Node3D
     }
 
     private I76.Sim.Views.ViewZoom.Kind? _zoomView;
-    /// <summary>The wheel's zoom lasts as long as the view it was made in: a switch into a view (or the hand-back from a cut-scene) starts it at the original's framing; a menu or pause over the view is no switch.</summary>
+    /// <summary>The wheel's zoom lasts as long as the view it was made in: a switch into a view starts it at the original's framing; a menu or pause over the view is no switch, nor is a cut-scene (a jump's camera) handing back the view it took (#222).</summary>
     private void TrackViewForZoom(bool inMission, bool overlaid)
     {
         var now = inMission && !CameraHeld ? WheelViewNow() : null;
-        (_zoomView, bool reset) = MouseCamera.TrackView(_zoomView, now, overlaid, MouseCamera.KeepZoom);
+        (_zoomView, bool reset) = MouseCamera.TrackView(_zoomView, now, overlaid, MouseCamera.KeepZoom, CameraHeld);
         if (reset) MouseCamera.ResetAllZooms();
     }
 

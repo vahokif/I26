@@ -38,6 +38,8 @@ public partial class ChaseCamera : Camera3D
     public float Radius { get; set; } = 2.5f;
     /// <summary>The death orbit: true once the target is a wreck.</summary>
     public Func<bool>? Orbit { get; set; }
+    /// <summary>The script's camera holds the view (a cut-scene, a jump's camera): the view is only lent, and comes back turned as it was left.</summary>
+    public Func<bool>? Lent { get; set; }
     /// <summary>The bare terrain height under a point, for the camera's floor: game axes, both relative to the floating origin.</summary>
     public Func<float, float, float>? Ground { get; set; }
     /// <summary>
@@ -111,7 +113,7 @@ public partial class ChaseCamera : Camera3D
             var (my, mp) = MouseCamera.Take();
             _orbit.Move(ay * Mathf.DegToRad(StickYawRate) * dt, ap * Mathf.DegToRad(StickPitchRate) * dt, my, mp, dt, MouseCamera.ReturnBehind);
         }
-        else { if (!MouseCamera.CockpitActive) MouseCamera.Take(); _orbit.Reset(); }
+        else { if (!MouseCamera.CockpitActive) MouseCamera.Take(); _orbit.Away(Lent?.Invoke() == true); }
         if (mine && Controls.Down("track_distance_plus")) _zoomT += 2 * dt;
         if (mine && Controls.Down("track_distance_minus")) _zoomT -= 2 * dt;
         if (mine && Controls.Down("zoom_factor_reset")) { _yawT = 0; _pitchT = DefaultPitch; _zoomT = DefaultZoom; MouseCamera.ResetZoom(ViewZoom.Kind.Chase); _orbit.Reset(); }

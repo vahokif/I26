@@ -118,7 +118,7 @@ public partial class RocketSmoke : Node3D
         if (cam is null || live == 0) { _mm.VisibleInstanceCount = 0; SmokeLayer.Submit(this, _buf, 0, Tint); return; }
         var ct = cam.GlobalTransform;
         var org = Origin();
-        _sun ??= GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>().FirstOrDefault();
+        _sun ??= SceneSun.Of(this);
         var toSun = _sun is null ? new Vector3(0.3f, 0.8f, 0.5f) : _sun.GlobalTransform.Basis.Z;
         _mat.SetShaderParameter("sun_view", ct.Basis.Inverse() * toSun);
         int cnt = 0;

@@ -218,6 +218,24 @@ public partial class DamageSmoke : Node3D
 
     private static int KindFor(float h) => VehicleDamage.SmokeStage(h);
 
+    /// <summary>
+    /// The log's line for a car whose smoke changes colour: only with I76_SMOKE_LOG=1 (a print in play cost the frame of the first
+    /// hit that set a car smoking 62 ms on the editor binary).
+    /// </summary>
+    private void KindLine(CarNode car, float h, int kind)
+    {
+        if (KindLog) GD.Print($"damage smoke: {car.Name} at {car.GamePosition} health {h:0.00}, kind {kind} ({Kinds[kind]})");
+    }
+
+    private static readonly bool KindLog = System.Environment.GetEnvironmentVariable("I76_SMOKE_LOG") == "1";
+
+    /// <summary>A kind of car's emitters found ahead (the model assembled for its body's extent): the first puff of a kind did it, 50 ms.</summary>
+    public void Prepare(CarNode car)
+    {
+        EnginePoint(car);
+        RearZ(car);
+    }
+
     public override void _Process(double delta)
     {
         using var _view = Hitch.Time(Hitch.Phase.Views);
@@ -243,7 +261,7 @@ public partial class DamageSmoke : Node3D
                 if (!IsInstanceValid(car) || !car.IsInsideTree() || !car.IsVisibleInTree()) continue;
                 if (Combat_IsDead(v) || (Held ?? v.Health?.GaugeFraction() ?? 1f) is var h && h >= 0.75f) { _kindOf.Remove(car); continue; }
                 int kind = KindFor(h);
-                if (!_kindOf.TryGetValue(car, out int was) || was != kind) { _kindOf[car] = kind; GD.Print($"damage smoke: {car.Name} at {car.GamePosition} health {h:0.00}, kind {kind} ({Kinds[kind]})"); }
+                if (!_kindOf.TryGetValue(car, out int was) || was != kind) { _kindOf[car] = kind; KindLine(car, h, kind); }
                 int n;
                 if (modern) { double c = _carry.GetValueOrDefault(car) + dt * ModernRate; n = (int)c; _carry[car] = c - n; }
                 else n = 2;
@@ -278,7 +296,7 @@ public partial class DamageSmoke : Node3D
             if (!IsInstanceValid(car) || !car.IsInsideTree() || !car.IsVisibleInTree()) continue;
             if (Combat_IsDead(v) || (Held ?? v.Health?.GaugeFraction() ?? 1f) is var h && h >= 0.75f) { _kindOf.Remove(car); _lvl.Remove(car); _lastAt.Remove(car); continue; }
             int kind = KindFor(h);
-            if (!_kindOf.TryGetValue(car, out int was) || was != kind) { _kindOf[car] = kind; GD.Print($"damage smoke: {car.Name} at {car.GamePosition} health {h:0.00}, kind {kind} ({Kinds[kind]})"); }
+            if (!_kindOf.TryGetValue(car, out int was) || was != kind) { _kindOf[car] = kind; KindLine(car, h, kind); }
             var st = _lvl.TryGetValue(car, out var q) ? q : (kind, 0.0);
             st.Level = Mathf.MoveToward(st.Level, kind, (float)dt);   // a band to the next in about a second
             float L = st.Level;
@@ -444,7 +462,7 @@ public partial class DamageSmoke : Node3D
         if (cam is null) { HideBillows(); SmokeLayer.Submit(this, _layerBuf, 0, System.Numerics.Vector3.One); return; }
         var ct = cam.GlobalTransform;
         var org = Origin();
-        _sun ??= GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>().FirstOrDefault();
+        _sun ??= SceneSun.Of(this);
         var toSun = _sun is null ? new Vector3(0.3f, 0.8f, 0.5f) : _sun.GlobalTransform.Basis.Z;
         _matM.SetShaderParameter("sun_view", ct.Basis.Inverse() * toSun);
         int cnt = 0;

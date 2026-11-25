@@ -1255,6 +1255,7 @@ public partial class Main : Node3D
         // all of it at a spot far below the world, out of sight (the renderer makes a material's pipelines when its instance is made, seen
         // or not), and on stand-ins of its own: nothing of the game's is touched, nothing is left to take away but what was made
         var away = cam.GlobalPosition + Vector3.Down * 400f;
+        I76.Game.Sim.SceneSun.Of(this);   // the smoke's sun, found once (a walk of the whole tree) here rather than at the first puff
         if (_combatView is { } cv) foreach (var step in cv.WarmSteps(away)) yield return step;
         MissionBuilder.Trace("warm-up: blasts");
         yield return null;
@@ -1263,6 +1264,11 @@ public partial class Main : Node3D
         yield return null;
         _combatView?.WarmExplosions();
         MissionBuilder.Trace("warm-up: explosions");
+        yield return null;
+        if (_combatView is { } rv) foreach (var step in rv.WarmRoundsSteps(away)) yield return step;
+        // the plants' answer to a blast (leaves thrown, a bush set alight) in the modern look
+        if (!_mode1997) I76.Game.World.BrushImpacts.Warm(away);
+        MissionBuilder.Trace("warm-up: rounds");
         yield return null;
         // the death is rehearsed on a stand-in for the player's car (never in the sim's list, freed after)
         // so the real car is never burnt and restored
@@ -1275,10 +1281,29 @@ public partial class Main : Node3D
             stage.GlobalPosition = away;
             MissionBuilder.Trace("warm-up: a stand-in car");
             yield return null;
+            if (_damageView is { } dv) foreach (var step in dv.WarmLooksSteps(stage, wreck: false)) yield return step;
             _damageView?.Warm(stage);
             MissionBuilder.Trace("warm-up: its death");
             yield return null;
         }
+        // the other kinds of car on the field: a stand-in of each, damaged and burnt out (no fire) as its first hits and death would be
+        var others = new List<CarNode>();
+        if (_damageView is { } odv && _builder is { } ob)
+            foreach (var (osv, on) in _carNodes)
+            {
+                if (osv.IsHeli || on == _car || on.Definition is not { } odef || odef.Equals(_car?.Definition, StringComparison.OrdinalIgnoreCase)
+                    || others.Any(o => o.Definition.Equals(odef, StringComparison.OrdinalIgnoreCase)) || ob.CarParts.Get(odef, false) is not { } op) continue;
+                var kind = new CarNode { Name = "WarmStage" + others.Count, Definition = odef, Modern = !_mode1997 };
+                AddChild(kind);
+                kind.Init(osv, op.Body);
+                kind.GlobalPosition = away + Vector3.Right * 8f * (others.Count + 1);
+                others.Add(kind);
+                yield return null;
+                foreach (var step in odv.WarmLooksSteps(kind, wreck: true)) yield return step;
+                MissionBuilder.Trace($"warm-up: a stand-in {odef}");
+            }
+        // each kind of structure's destroyed look, and a piece of debris
+        if (_damageView is { } sdv) { foreach (var step in sdv.WarmStructuresSteps(away)) yield return step; MissionBuilder.Trace("warm-up: structures"); }
         // the views' own per-frame code (the cockpit's panels, the HUD, the shadows, the weeds, the combat and damage views) runs for these
         // frames too: its first run is the first frame of play, a 150 ms stall (the code compiled, the panels' textures made)
         var views = new List<Node>();
@@ -1286,7 +1311,7 @@ public partial class Main : Node3D
         {
             foreach (var c in n.GetChildren())
             {
-                if (c.GetType().Name is "Cockpit" or "Hud" or "TumbleweedNode" or "DropShadows" or "Vegetation" or "SkidMarks" or "GroundClutterView" or "CombatView" or "DamageView" or "DamageSmoke" or "SmokeLayer" or "WreckFire")
+                if (c.GetType().Name is "Cockpit" or "Hud" or "TumbleweedNode" or "DropShadows" or "Vegetation" or "SkidMarks" or "GroundClutterView" or "CombatView" or "DamageView" or "DamageSmoke" or "SmokeLayer" or "WreckFire" or "RocketSmoke")
                     views.Add(c);
                 if (c is not CarNode) Collect(c);
             }
@@ -1308,7 +1333,10 @@ public partial class Main : Node3D
         for (int i = 0; i < 4; i++) yield return NextFrame;
         for (int i = 0; i < views.Count; i++) if (IsInstanceValid(views[i])) views[i].ProcessMode = was[i];
         if (stage is not null) { _damageView?.EndWarm(stage); stage.QueueFree(); }
+        foreach (var kind in others) kind.QueueFree();
+        _damageView?.EndWarmStructures();
         _combatView?.EndWarm();
+        I76.Game.World.BrushImpacts.EndWarm();
         GetTree().Paused = paused;
         GD.Print($"effects warmed up in {(System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0} ms");
     }

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The first rocket, missile, mortar, cluster bomb, mine, Blox, oil or fire dropped, the first machine-gun burst, the first car of each kind hit or destroyed and the first building brought down stall the game less: their models, smoke trails, sounds and damaged, burnt-out and destroyed looks are made behind the loading card with the other effects, and the smoke no longer searches the whole scene for the sun at its first puff (#239).
+
 ## 0.13.0 (21 November 2026)
 
 Network games use protocol 26: 0.13.0 does not play with 0.12.1 or earlier, so everyone in a game needs 0.13.0.

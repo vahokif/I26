@@ -226,10 +226,12 @@ public partial class CombatView : Node3D
     /// oil plays XOS1_101..108 once at 6 a second and stays a full black pool; fire loops the burning
     /// row of its table (XFP1_201, 202, 203, ...: eight steps) at 6 a second; caltrops play MCALT101..108 once at 6 a second, the jacks spreading out (#104).
     /// </summary>
-    private StandardMaterial3D? SlickMaterial(Round r)
+    private StandardMaterial3D? SlickMaterial(Round r) => SlickMaterial(r.Kind, r.Age);
+
+    private StandardMaterial3D? SlickMaterial(uint kind, float age)
     {
-        int step = (int)(r.Age * 6f);
-        string name = r.Kind == 0x11 ? $"XFP1_20{step % 8 % 3 + 1}" : r.Kind == 0xe ? $"MCALT10{System.Math.Min(step, 7) + 1}" : $"XOS1_10{System.Math.Min(step, 7) + 1}";
+        int step = (int)(age * 6f);
+        string name = kind == 0x11 ? $"XFP1_20{step % 8 % 3 + 1}" : kind == 0xe ? $"MCALT10{System.Math.Min(step, 7) + 1}" : $"XOS1_10{System.Math.Min(step, 7) + 1}";
         if (_slickMaterials.TryGetValue(name, out var m)) return m;
         m = TextureByStem(name) is { } t
             ? new StandardMaterial3D
@@ -247,9 +249,11 @@ public partial class CombatView : Node3D
     /// camera-facing card and plays the XFS1_101 table's first row, XFS1_101..106,
     /// as a loop at six frames a second (1/6 s a frame, row 0, 6 frames, looping); both looks draw this.
     /// </summary>
-    private StandardMaterial3D? FireballMaterial(Round r)
+    private StandardMaterial3D? FireballMaterial(Round r) => FireballMaterial(r.Age);
+
+    private StandardMaterial3D? FireballMaterial(float age)
     {
-        string name = I76.Formats.Assembly.FireballCard.Frame(r.Age);
+        string name = I76.Formats.Assembly.FireballCard.Frame(age);
         if (_slickMaterials.TryGetValue(name, out var m)) return m;
         m = TextureByStem(name) is { } t
             ? new StandardMaterial3D
@@ -686,6 +690,10 @@ public partial class CombatView : Node3D
     /// </summary>
     public static EffectSprites.Look? PrepareImpacts(Combat combat, EffectSprites? sprites, Assets.AudioBank? audio)
     {
+        // each weapon's own sound as its shot plays it (a rocket's or a dropper's loop): the first Aim-Nein fired read and decoded its
+        // loop in the frame of the shot, 27 ms
+        foreach (var g in FieldWeapons(combat))
+            if (g.FireSound.Length > 0 && !g.FireSound.Equals("null", StringComparison.OrdinalIgnoreCase)) audio?.Get(g.FireSound, g.SoundMode == 1);
         var ords = combat.World.Vehicles.Select(v => v.Armory).OfType<Armory>().SelectMany(a => a.Weapons).Select(w => w.Def.Ordnance)
             .Append(Armory.HandgunDef(1).Ordnance).OfType<I76.Formats.Bwd2.OrdnanceDef>().DistinctBy(o => string.Join('|', o.ImpactXdf) + string.Join('|', o.ImpactWav));
         EffectSprites.Look? any = null;
@@ -697,6 +705,59 @@ public partial class CombatView : Node3D
         }
         return any;
     }
+
+    /// <summary>The weapons the field's cars carry (their hardpoints'; the handguns' rounds are bullets), each kind once.</summary>
+    private static IEnumerable<I76.Formats.Bwd2.GizmoDef> FieldWeapons(Combat combat) =>
+        combat.World.Vehicles.Select(v => v.Armory).OfType<Armory>().SelectMany(a => a.Weapons).Select(w => w.Def).DistinctBy(d => d.File, StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// The rounds' own looks, made behind the loading card as their first shots would make them, each drawn once at
+    /// <paramref name="at"/> (out of sight) so that its pipelines are made: the model of every weapon on the field whose round has
+    /// one (a mine, a Blox, a rocket, a mortar shell: its mesh, textures and materials; the first landmine dropped cost 31 ms,
+    /// most of it the material's shader), the rocket's body, the slicks' and the fireball's animated frames (the original's
+    /// textures), the cannon round's tube. <see cref="EndWarm"/> takes them away.
+    /// </summary>
+    public IEnumerable<object?> WarmRoundsSteps(Vector3 at)
+    {
+        var defs = FieldWeapons(Combat);
+        void Show(Mesh? mesh, Material? mat)
+        {
+            if (mesh is null) return;
+            var mi = new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Position = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            AddChild(mi);
+            _warmRounds.Add(mi);
+        }
+        foreach (var d in defs)
+        {
+            uint kind = d.Ordnance?.Kind ?? 0;
+            if (!(IsDropped(kind) || IsRocket(kind) || kind is 4 or 5 or 7 or 0x15 or 0x16) || OrdnanceMesh(d) is not { } m) continue;
+            Show(m, null);
+            yield return null;
+        }
+        Show(_box, _missile);
+        Show(_box, _tracer);
+        if (defs.Any(d => d.Ordnance?.Kind == 6) && ShellMaterial() is { } shell) Show(_shell, shell);
+        // the slicks' frames by their kind (oil, fire, caltrops), the 1997 look's flat quads and the modern look's fireball card
+        foreach (uint k in (uint[])[0xc, 0x11, 0xe, 0x15])
+        {
+            if (!defs.Any(d => d.Ordnance?.Kind == k)) continue;
+            for (int f = 0; f < 8; f++) Show(_quad ??= new QuadMesh(), k == 0x15 ? FireballMaterial((f + 0.5f) / 6f) : SlickMaterial(k, (f + 0.5f) / 6f));
+            yield return null;
+        }
+        // a rocket's trail of smoke (its first puff found the sun and made the mirror's copy of the trail in the frame of the first shot)
+        if (IsModern)
+        {
+            var g = Coords.ToGame(at) + Origin();
+            _smoke.Emit(_warmTrail, g, System.Numerics.Vector3.Zero);
+            _smoke.Emit(_warmTrail, g + new System.Numerics.Vector3(0, 0, 4), System.Numerics.Vector3.Zero);
+            _smoke.Release(_warmTrail);
+        }
+    }
+
+    private readonly object _warmTrail = new();
+
+    private readonly List<MeshInstance3D> _warmRounds = [];
+    private QuadMesh? _quad;
 
     /// <summary>The explosions' sprite looks (<see cref="WarmExplosions"/>), made in <paramref name="sprites"/>: on any thread while the view is not yet made.</summary>
     public static void PrepareExplosions(Combat Combat, EffectSprites? Sprites)
@@ -717,6 +778,9 @@ public partial class CombatView : Node3D
     {
         foreach (var sp in _warmSprites) sp.QueueFree();
         _warmSprites.Clear();
+        foreach (var mi in _warmRounds) mi.QueueFree();
+        _warmRounds.Clear();
+        _smoke?.Clear();   // the rehearsal's trail (no rocket is in the air behind the card)
         _warmFx?.QueueFree();
         _warmFx = null;
     }

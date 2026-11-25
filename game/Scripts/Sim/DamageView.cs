@@ -240,6 +240,62 @@ public partial class DamageView : Node3D
         }
     }
 
+    /// <summary>
+    /// A stand-in for a kind of car shown at each damage level and then burnt out, without its fire (the fire's materials are the
+    /// same for every car, rehearsed once by <see cref="WarmSteps"/>): the damaged zones' textures and the wreck's materials are made
+    /// as the kind's first hits and first death would make them. The first car of a kind other than the player's to die cost 15
+    /// pipelines and 38 ms in the damage view, its first hits up to 20 ms each.
+    /// </summary>
+    public IEnumerable<object?> WarmLooksSteps(CarNode car, bool wreck)
+    {
+        if (IsHeli(car)) yield break;
+        DamageSmoke.Current?.Prepare(car);
+        for (int level = 1; level <= 3; level++)
+        {
+            bool any = false;
+            for (int z = 0; z < 5; z++) any |= ShowZone(car, z, level);
+            if (any) Rebuild(car);
+            yield return null;
+        }
+        if (!wreck) yield break;
+        car.SetWrecked(true);
+        Rebuild(car);
+        yield return null;
+    }
+
+    /// <summary>
+    /// Each kind of structure on the field that can be destroyed, its destroyed look made once behind the loading card and drawn
+    /// at <paramref name="at"/> (out of sight) as its first destruction would make it (the wreck's textures, materials and pipelines),
+    /// and a piece of debris thrown: the first building a cluster bomb brought down cost 97 ms in the damage view.
+    /// <see cref="EndWarmStructures"/> takes them away.
+    /// </summary>
+    public IEnumerable<object?> WarmStructuresSteps(Vector3 at)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (o, p) in PlacementOf)
+        {
+            if (o.Destroyed || p.Definition is not { } def || !seen.Add(def) || seen.Count > 32) continue;
+            var m = o.Nodes.Count > 0 ? new ModelAssembler(Builder.Vfs) { DestroyedNode = _ => true }.Assemble(def) : new ModelAssembler(Builder.Vfs) { Destroyed = true }.Assemble(def);
+            if (m is not { Parts.Count: > 0 } || Builder.Meshes!.Build(m) is not { } mesh) continue;
+            var mi = new MeshInstance3D { Mesh = mesh, Position = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            AddChild(mi);
+            _warmStructures.Add(mi);
+            yield return null;
+        }
+        int before = _debris.Count;
+        Throw(Coords.ToGame(at) + Origin(), System.Numerics.Vector3.Zero);
+        for (int i = before; i < _debris.Count; i++) _warmStructures.Add(_debris[i].Body);
+        _debris.RemoveRange(before, _debris.Count - before);
+    }
+
+    private readonly List<Node3D> _warmStructures = [];
+
+    public void EndWarmStructures()
+    {
+        foreach (var n in _warmStructures) if (IsInstanceValid(n)) n.QueueFree();
+        _warmStructures.Clear();
+    }
+
     private MeshInstance3D? _warmChunk;
     private RigidBody3D? _warmDebris;
 

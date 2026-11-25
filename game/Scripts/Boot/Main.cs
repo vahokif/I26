@@ -158,6 +158,7 @@ public partial class Main : Node3D
         (_lastLaunch, _launch, _lastResult, _lastTrip, _lastMelee) = (_launch, null, I76.Game.Shell.MissionResult.Quit, null, null);
         _backToMenu = true;
         GetTree().Paused = false;
+        HoldGameSound(false);
         GetTree().ReloadCurrentScene();
     }
 
@@ -213,6 +214,7 @@ public partial class Main : Node3D
     public override async void _Ready()
     {
         I76.Game.Editor.SwitchTimer.Mark("scene ready");
+        HoldGameSound(false);   // (a scene left during a load behind the card)
         HeapTrim.Configure();
         GcStress.Install();
         MainThread.Mark();
@@ -448,6 +450,11 @@ public partial class Main : Node3D
             StartMissionMusic();   // its briefing played over the build
             return;
         }
+        // behind the card the game's own sounds are held silent (HoldGameSound) until the mission's first picture: one the load starts
+        // (a non-positional player plays at once, a positional one at the first frame let through) was heard behind the card and cut
+        // off by the effects warm-up's pause; from tick 0 the world itself is held still (FinishSteps), as under a briefing
+        _holdFromTick0 = loading is not null && HoldToFirstPicture;
+        if (_holdFromTick0) HoldGameSound(true);
         // the build is one long frame behind the loading card: timed as a phase, so its hitch line says what it was
         var load = Hitch.Time(Hitch.Phase.Load);
         try { LoadMission(); }
@@ -461,9 +468,10 @@ public partial class Main : Node3D
             GetTree().Paused = true;
             MissionBuilder.Trace("loading card: fade out");
             await loading.FadeOut();
-            GetTree().Paused = false;
             loading.QueueFree();
             MissionBuilder.Trace("loading card gone");
+            await GoAfterFirstPicture(hold: !MovieAfterLoad());
+            if (!IsInsideTree()) return;
         }
         _loading = false;
         if (_playtestNote is { } note && _opt.Install is not null) { AddChild(new CheckpointNotice { InstallDir = _opt.Install, Faithful = _mode1997, Text = note, Hold = 4.0, Name = "PlaytestNote" }); _playtestNote = null; }
@@ -545,7 +553,10 @@ public partial class Main : Node3D
                 bool held = GetTree().Paused;
                 GetTree().Paused = false;
                 _sim.FirstTick();
-                GetTree().Paused = held;
+                // behind the card too, as under a briefing: what tick 0 started (the opening CB line, the first sounds) and the ticks
+                // themselves wait, paused, for the mission's first picture (GoAfterFirstPicture)
+                GetTree().Paused = held || _holdFromTick0;
+                _holdFromTick0 = false;
             }
             UpdateScriptCamera();
         }
@@ -892,6 +903,7 @@ public partial class Main : Node3D
         Level(AudioMix.Sfx, AudioLevels.EffectDb(s.Audio[1]), s.Audio[1] < 2);
         Level(AudioMix.Voice, AudioLevels.EffectDb(s.Audio[2]), s.Audio[2] < 2);
         Level(AudioMix.Cues, AudioLevels.EffectDb(s.Audio[1]), s.Audio[1] < 2);   // the driver's cues at the SFX level
+        if (_soundHeld) HoldGameSound(true);   // a bus made during a load behind the card
     }
 
     private void EndMission(bool won)
@@ -1231,6 +1243,63 @@ public partial class Main : Node3D
             Inside = v => _car is { } c && c.Sim == v && c.CockpitCamera?.Current == true,
             SceneLight = Mathf.Clamp(_builder!.Light.Intensity * 1.5f, 0.25f, 1f) });
     }
+
+    /// <summary>
+    /// The game's sounds and ticks wait for the mission's first picture: the loading card gone, the tree is held still (the sounds
+    /// the load started paused with it) until the first frame with the world in it has been drawn, then goes, and the sim does not
+    /// count that frame's time as play. That frame is the costliest of the start (the view's first draw of the world, more so on the
+    /// run's first mission), and the sounds used to play over the black screen meanwhile. I76_HOLD_FIRST_PICTURE=0: as before.
+    /// </summary>
+    private async System.Threading.Tasks.Task GoAfterFirstPicture(bool hold = true)
+    {
+        if (hold && HoldToFirstPicture)
+        {
+            GetTree().Paused = true;
+            await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+            if (!IsInsideTree()) return;
+            _sim?.SkipFrameTime();
+        }
+        HoldGameSound(false);
+        GetTree().Paused = false;
+        MissionBuilder.Trace("mission going");
+    }
+
+    private bool _holdFromTick0;
+    private static bool _soundHeld;
+
+    /// <summary>
+    /// The game's own buses (SFX, Voice, Cues: not the music or a movie's) silenced while a mission loads behind the card, by a -80 dB
+    /// stage at the head of each (kept, switched off after); ApplyAudio puts it back on a bus made meanwhile.
+    /// </summary>
+    private static void HoldGameSound(bool on)
+    {
+        if (!on && !_soundHeld) return;
+        _soundHeld = on;
+        foreach (var name in new[] { AudioMix.Sfx, AudioMix.Voice, AudioMix.Cues })
+        {
+            int bus = AudioServer.GetBusIndex(name);
+            if (bus < 0) continue;
+            int at = -1;
+            for (int k = 0; k < AudioServer.GetBusEffectCount(bus) && at < 0; k++)
+                if (AudioServer.GetBusEffect(bus, k) is AudioEffectAmplify { ResourceName: "load_hold" }) at = k;
+            if (at < 0)
+            {
+                if (!on) continue;
+                AudioServer.AddBusEffect(bus, new AudioEffectAmplify { VolumeDb = -80, ResourceName = "load_hold" }, 0);
+                at = 0;
+            }
+            AudioServer.SetBusEffectEnabled(bus, at, on);
+        }
+    }
+
+    private static readonly bool HoldToFirstPicture = System.Environment.GetEnvironmentVariable("I76_HOLD_FIRST_PICTURE") != "0";
+
+    /// <summary>
+    /// The mission's briefing follows the card (a load behind it, as the 1997 look's start): the movie holds the game itself and covers
+    /// the world, whose first picture comes after it, so the world is not shown for a frame first.
+    /// </summary>
+    private bool MovieAfterLoad() => !_resumed && !_editorMode && _opt.Install is not null && _net is null && !_opt.SkipMovies
+        && _builder?.Settings is { Briefing.Length: > 0 } ws && MoviePlayer.Find(new GameInstall(_opt.Install), ws.Briefing) is not null;
 
     /// <summary>
     /// The first explosion, the first death and the first fire of a mission each cost the renderer a compile of their materials

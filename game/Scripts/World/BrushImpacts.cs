@@ -85,6 +85,35 @@ public partial class BrushImpacts : Node3D
     /// <summary>A fire burning within <paramref name="radius"/> of <paramref name="at"/> this frame: it sets a plant there alight at about <paramref name="perSecond"/> a second.</summary>
     public static void Heat(Vector3 at, float radius, float perSecond) => _current?.OnHeat(at, radius, perSecond);
 
+    /// <summary>
+    /// The effects' rehearsal behind the loading card (Main.WarmSteps): a burst of leaves, straw and twigs and a burning
+    /// plant's smoke and flames at <paramref name="at"/>, out of sight, so that their particle processes and draw passes are made
+    /// before the first blast among the plants; <see cref="EndWarm"/> takes them away.
+    /// </summary>
+    public static void Warm(Vector3 at) => _current?.OnWarm(at);
+    public static void EndWarm() => _current?.OnEndWarm();
+
+    private readonly List<GpuParticles3D> _warm = [];
+
+    private void OnWarm(Vector3 at)
+    {
+        if (_smokeProc is null || !Enabled) return;
+        int had = _bursts.Count;
+        Leaves(at, Vector3.Up, grass: false, 12, 0.3f, 3, force: true);
+        Leaves(at, Vector3.Up, grass: true, 12, 0.3f, 0, force: true);
+        for (int i = had; i < _bursts.Count; i++) _warm.Add(_bursts[i].P);
+        _bursts.RemoveRange(had, _bursts.Count - had);
+        _warm.Add(Emitter(_smokeProc, _smokeMesh, 26, 3.2, at, 0.5f));
+        _warm.Add(Emitter(_flameProc, _flameMesh, 48, 0.7, at, 0.5f));
+        foreach (var p in _warm) p.ProcessMode = ProcessModeEnum.Always;   // the tree is held still behind the card: these run
+    }
+
+    private void OnEndWarm()
+    {
+        foreach (var p in _warm) if (IsInstanceValid(p)) p.QueueFree();
+        _warm.Clear();
+    }
+
     private void OnRound(Vector3 hit, Vector3 dir, bool heavy)
     {
         if (!_on) return;

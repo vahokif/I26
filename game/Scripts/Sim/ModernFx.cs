@@ -459,6 +459,18 @@ public partial class ModernFx : Node3D
         FireBurst(at);
         yield return null;
         GunSmoke(at, Vector3.Up, 2f);
+        // a round's strike on a car and into the ground (their sparks' and dust's own meshes), a gun's flash and a round's streak
+        Strike(at, Vector3.Up, ground: false, heavy: true);
+        Strike(at, Vector3.Up, ground: true, heavy: true);
+        var flash = NewMuzzleFlash();
+        flash.Visible = true;
+        AddChild(flash);
+        flash.GlobalPosition = at;
+        SetMuzzleFlash(flash, 0.5f, 0.5f, 1f);
+        _expiring.Add((flash, _t + 10));
+        var streak = NewTracer();
+        SetTracer(streak, at, at + Vector3.Forward * 3f, new Color(1f, 0.68f, 0.25f), 0.16f, 2.2f);
+        _expiring.Add((streak, _t + 10));
         foreach (var sp in _sprites) { sp.Start = _t; sp.Life = 10; }   // the delayed ones too: every one is drawn
     }
 

@@ -85,6 +85,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_CAR_CONDITION` | capture | `N`: every car shows damage level N. |
 | `I76_CAR_DAMAGE` | capture | `L` (0..3): every car's zones shown at damage level L, shape and textures, as a hit leaves them (DamageView). |
 | `I76_SMOKE` | capture | `h` (0..1) holds every living car's health at h; `0` leaves the damage smoke out. |
+| `I76_SMOKE_LOG` | debug | `1`: a log line each time a car's damage smoke changes colour (its health and the band); off by default, as a print in play costs its frame. |
 | `I76_SMOKE_RATE` | capture | `k` scales the modern damage smoke's emission (3 for a thick plume to see through). |
 | `I76_SMOKE_LIGHT` | tuning | `k` scales how strongly the lamps light the modern smoke (0.2 by default; 0 for none). |
 | `I76_SMOKE_CAP` | tuning | `c` (0..1): the most opaque the modern smoke layer gets (0.65 by default; SmokeLayer). `I76_SMOKE_LAYER=0` leaves the layer out (every smoke draws itself, each puff capped); `I76_SMOKE_SCALE=N` draws it at 1/N size (2). `I76_SMOKE_DEPTH_VIEW=1` draws each puff of the layer as a square showing the scene's depth as the layer reads it, a cycle of hues for each doubling of the distance and red where the scene is nearer than the puff: the outlines of the cars and hills should show in the squares; a flat square means the layer gets no depth on that GPU or backend. |

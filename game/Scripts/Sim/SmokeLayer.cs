@@ -127,7 +127,7 @@ public partial class SmokeLayer : Node3D
         _hasPuffs = total > 0;
         RenderingServer.GlobalShaderParameterSet(SmokeCapName, _ready && total > 0 ? Cap : 0f);
         _quad.Visible = _ready && total > 0;
-        _sun ??= GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>().FirstOrDefault();
+        _sun ??= SceneSun.Of(this);
         var toSun = _sun is null ? new Vector3(0.3f, 0.8f, 0.5f) : _sun.GlobalTransform.Basis.Z;
         var cabHalf = World.CabClip.Half;
         var cabInv = new Projection(World.CabClip.Inv);
@@ -701,7 +701,7 @@ public sealed class MirrorDraw
         for (int j = 0; j < count; j++) Array.Copy(src, idx[j] * 16, _buf, j * 16, 16);
         SmokeLayer.Thin(_buf, count, cam);
         _mat.SetShaderParameter("scene_light", sceneLight);
-        _sun ??= _node.GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>().FirstOrDefault();
+        _sun ??= SceneSun.Of(_node);
         var toSun = _sun is null ? new Vector3(0.3f, 0.8f, 0.5f) : _sun.GlobalTransform.Basis.Z;
         _mat.SetShaderParameter("sun_view", ct.Basis.Inverse() * toSun);
         SmokeLayer.Lights(_mat);

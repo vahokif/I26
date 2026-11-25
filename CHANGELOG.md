@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The co-op host form's mission list shows every trip mission's number: a title too long for its row no longer drops its "7. " (missions 7, 13, 14, 15 and 17 showed none), and when one is too long the whole list is in the smaller handwriting, so all seventeen read the same way (#234).
+
 ## 0.13.0 (21 November 2026)
 
 Network games use protocol 26: 0.13.0 does not play with 0.12.1 or earlier, so everyone in a game needs 0.13.0.

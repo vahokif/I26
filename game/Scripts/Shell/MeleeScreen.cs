@@ -110,19 +110,34 @@ public sealed partial class MeleeScreen : ShellScreen
     }
 
     private int ListCount => Mode switch { 1 => MeleeData.Scenarios.Length, 7 or 8 => _rows.Count, _ => Arenas.Count };
-    /// <summary>
-    /// One row of the list. A co-op trip mission's title can be longer than the list is wide ("7. The Blood On The Highway"): the "7. " goes, then
-    /// the smaller handwriting (font 0x44), and only then is it cut.
-    /// </summary>
+    private const int ListW = 182;
+
+    /// <summary>One row of the list (<see cref="ListRowText"/>); the co-op list in one handwriting (<see cref="CoopListSmaller"/>).</summary>
     private void DrawListRow(int i, int x, int y)
     {
-        const int w = 182;
-        string t = ListName(i), bare = Coop && t.IndexOf(". ", StringComparison.Ordinal) is > 0 and var d && d <= 2 && char.IsDigit(t[0]) ? t[(d + 2)..] : t;
         var small = Shell.Db.Font(0x44);
-        if (_font.Measure(t) <= w) Frame.Text(_font, x, y, t);
-        else if (_font.Measure(bare) <= w) Frame.Text(_font, x, y, bare);
-        else if (small.Measure(t) <= w) Frame.Text(small, x, y + 2, t);
-        else Frame.Text(small, x, y + 2, AddressBookPopup.Fit(small, bare, w));
+        var (text, smaller) = ListRowText(ListName(i), _font.Measure, small.Measure, ListW, Coop && CoopListSmaller);
+        if (smaller) Frame.Text(small, x, y + 2, text);
+        else Frame.Text(_font, x, y, text);
+    }
+
+    /// <summary>
+    /// Whether the co-op list is drawn in the smaller handwriting: when any of its titles is wider than the list in the form's own ("7. The Blood
+    /// On The Highway"), every row is, so every trip mission reads "N. Title" alike (#234: the rows that dropped their "N. " for the room read as
+    /// missions without a number).
+    /// </summary>
+    private bool CoopListSmaller => _coopSmaller ??= CoopList.Any(m => _font.Measure(m.Name) > ListW);
+    private bool? _coopSmaller;
+
+    /// <summary>
+    /// A list row's words in <paramref name="w"/> pixels: as they are in the form's handwriting, else (or when <paramref name="smaller"/>) in the
+    /// smaller handwriting (font 0x44), cut at the end if even that is too wide. A trip mission's number leads its title and is never cut.
+    /// </summary>
+    public static (string Text, bool Smaller) ListRowText(string t, Func<string, int> measure, Func<string, int> smallMeasure, int w, bool smaller = false)
+    {
+        if (!smaller && measure(t) <= w) return (t, false);
+        while (t.Length > 0 && smallMeasure(t) > w) t = t[..^1];
+        return (t, true);
     }
 
     /// <summary>

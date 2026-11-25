@@ -6,7 +6,8 @@ namespace I76.Sim.Views;
 /// damage panel, the bottom row the compass, the speedometer, the tacho, the gear strip and the specials — and here either row
 /// can be drawn at a quarter, a half or full size. A row shrinks as a row: each panel keeps its place in it, so the panels come
 /// closer to one another as they get smaller instead of spreading out to the corners. The cockpit's own dash is never scaled (its panels are the car's
-/// interior), and neither is the CB handset. View only: nothing the simulation decides follows it.
+/// interior), and neither is the CB handset. The rows are the modern look's choice: the 1997 look draws the original's frame at the original's own
+/// sizes whatever is set (<see cref="ForLook"/>), as it has no cloud shadows and no haze. View only: nothing the simulation decides follows it.
 /// </summary>
 public static class HudScale
 {
@@ -27,6 +28,14 @@ public static class HudScale
 
     /// <summary>A choice's size as the whole number shell.cfg keeps: the denominator (4, 2 or 1).</summary>
     public static int Denominator(int choice) => (int)System.Math.Round(1 / Of(choice));
+
+    /// <summary>
+    /// The sizes the two rows are drawn at in a look. The 1997 look draws the instrument frame as the original laid it out — both rows at their own
+    /// size whatever Play Options say, as it has neither cloud shadows nor haze — and the modern look draws them at the chosen sizes. The choices
+    /// are only read, never changed: they keep what the player set and the modern look finds them again on the next F12.
+    /// </summary>
+    public static (float Top, float Bottom) ForLook(bool mode1997, int top, int bottom) =>
+        mode1997 ? (1f, 1f) : (Of(top), Of(bottom));
 
     /// <summary>The choice for a shell.cfg [port] value (the denominator); anything not offered is <paramref name="fallback"/>.</summary>
     public static int Parse(int denominator, int fallback)

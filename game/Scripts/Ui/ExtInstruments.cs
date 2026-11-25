@@ -15,7 +15,8 @@ namespace I76.Game.Ui;
 /// display; here the 640x480 frame is scaled with the window's height and
 /// centred, as the CB handset is, nearest-neighbour in both looks. Palette
 /// index 255 is transparent. Play Options' Chase HUD Top Part and Bottom Part draw either row of the external set smaller
-/// (I76.Sim.Views.HudScale); the 2D dash and the CB handset are always full size.
+/// (I76.Sim.Views.HudScale); the 2D dash and the CB handset are always full size, and so is the whole set in the 1997 look,
+/// whose frame is the original's own (HudScale.ForLook).
 ///
 /// The same panels are the cockpit's 2D dash (dash3d == 0, F1 twice): all nine
 /// (the mirror too, from its live view), the reticles, and none of

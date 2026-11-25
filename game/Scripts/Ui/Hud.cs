@@ -21,7 +21,7 @@ public partial class Hud : CanvasLayer
     /// <summary>Graphic Detail's Ext. Instrum. Disp.: the 2D panels drawn outside the cockpit.</summary>
     public Func<bool>? ExtInstruments { get; init; }
     /// <summary>Play Options' Chase HUD Top Part and Bottom Part: the size each row of the external panels is drawn at
-    /// (I76.Sim.Views.HudScale). The cockpit's own dash is full size whatever it says.</summary>
+    /// (I76.Sim.Views.HudScale). The cockpit's own dash is full size whatever it says, and so is the 1997 look's set (HudScale.ForLook).</summary>
     public Func<(float Top, float Bottom)>? ChaseScale { get; set; }
     /// <summary>The player's cockpit, whose panel textures the external instruments draw.</summary>
     public Func<I76.Game.Sim.Cockpit?>? Pit { get; set; }

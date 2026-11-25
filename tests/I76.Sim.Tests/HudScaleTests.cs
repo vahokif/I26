@@ -4,7 +4,7 @@ using Xunit;
 namespace I76.Sim.Tests;
 
 /// <summary>
-/// Play Options' Chase HUD Top / Bottom Part (docs/playing.md): the sizes offered, how a settings file keeps one, and how a
+/// Play Options' Chase HUD Top / Bottom Part (docs/playing.md): the sizes offered, how a settings file keeps one, what each look draws them at (HudScale.ForLook, docs/deviations.md), and how a
 /// panel of the 640x480 instrument frame shrinks about the frame's middle line and its own row's edge, so a row stays one row.
 /// The slots are ExtInstruments'.
 /// </summary>
@@ -24,6 +24,35 @@ public class HudScaleTests
 
     [Fact] public void TheTopRowDefaultsToHalfTheOriginal() => Assert.Equal(0.5f, HudScale.Of(HudScale.TopDefault));
     [Fact] public void TheBottomRowDefaultsToTheOriginalsOwnSize() => Assert.Equal(1f, HudScale.Of(HudScale.BottomDefault));
+
+    /// <summary>The 1997 look draws the instrument frame as the original laid it out — both rows at their own size whatever Play Options
+    /// chose, as it has neither cloud shadows nor haze (docs/deviations.md, "Chase instruments' size").</summary>
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 0)]
+    [InlineData(2, 1)]
+    [InlineData(1, 2)]
+    [InlineData(2, 2)]
+    public void The1997LookDrawsTheOriginalsOwnSizes(int top, int bottom)
+        => Assert.Equal((1f, 1f), HudScale.ForLook(true, top, bottom));
+
+    /// <summary>The modern look draws what was chosen, both rows of it.</summary>
+    [Theory]
+    [InlineData(0, 0, 0.25f, 0.25f)]
+    [InlineData(2, 0, 1f, 0.25f)]
+    [InlineData(1, 2, 0.5f, 1f)]
+    public void TheModernLookDrawsTheChosenSizes(int top, int bottom, float chosenTop, float chosenBottom)
+        => Assert.Equal((chosenTop, chosenBottom), HudScale.ForLook(false, top, bottom));
+
+    /// <summary>A look never changes the choice: the same choices read for the 1997 look and then for the modern one still give the sizes
+    /// that were set, which is what a F12 back finds.</summary>
+    [Fact]
+    public void The1997LookLeavesTheChoicesAlone()
+    {
+        int top = 1, bottom = 0;                                    // 1/2 over 1/4
+        Assert.Equal((1f, 1f), HudScale.ForLook(true, top, bottom));
+        Assert.Equal((0.5f, 0.25f), HudScale.ForLook(false, top, bottom));
+    }
 
     [Theory]
     [InlineData(0, 4, "1/4")]

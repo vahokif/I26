@@ -581,6 +581,17 @@ public sealed partial class MeleeClient : IDisposable
         _peer.Send(_w.Span, DeliveryMethod.ReliableOrdered);
     }
 
+    /// <summary>In the lobby, this player's new name (protocol 27): the server tells everyone in a new <see cref="LobbyState"/>, and a later join to the game (a host migration's) goes under it too. False when not sent.</summary>
+    public bool SendLobbyName(string name)
+    {
+        if (_peer is null || State != ClientState.InLobby || name.Trim().Length == 0) return false;
+        _w.Clear();
+        new LobbyName(name).Write(_w);
+        _peer.Send(_w.Span, DeliveryMethod.ReliableOrdered);
+        if (_request is { } q) _request = q with { Name = name };
+        return true;
+    }
+
     /// <summary>The lobby's host starts the mission (<paramref name="force"/>: though some are not ready).</summary>
     public void SendLobbyStart(bool force)
     {

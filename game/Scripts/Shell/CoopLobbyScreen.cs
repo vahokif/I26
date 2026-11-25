@@ -11,7 +11,8 @@ namespace I76.Game.Shell;
 /// a READY mark (the host's row says HOST), the box line above it and the car panel show the highlighted player's car, and the player's own row
 /// has the form's MAKE / MODEL, VARIANT and CONFIGURE CHASSIS to change theirs (a co-op list begins with "Mission's own car"). The left button
 /// is READY (NOT READY once marked), or START for the host (a confirmation when someone is not ready); CANCEL leaves. The parchment under the
-/// list holds the chat (Enter types a line, Enter sends it, Esc drops it). The host boots the highlighted player with Delete.
+/// list holds the chat (Enter types a line, Enter sends it, Esc drops it). The host boots the highlighted player with Delete. LOCAL DRIVER's
+/// RENAME edits the player's name in place, kept as the form keeps it, and sends it to the server, which tells everyone.
 /// Hosted in its own shell over the loading screen, as <see cref="ReconfigureScreen"/> is over the game; both looks use the form's art.
 /// </summary>
 public sealed class CoopLobbyScreen : ShellScreen
@@ -27,15 +28,18 @@ public sealed class CoopLobbyScreen : ShellScreen
     /// <summary>The host boots this player (by name).</summary>
     public required Action<string> Boot { get; init; }
     public required Action Quit { get; init; }
+    /// <summary>This player's new name to the server (<see cref="MsgType.LobbyName"/>); false when not sent. Null in a test.</summary>
+    public Func<string, bool>? Rename { get; init; }
     /// <summary>The model and variant to show for a car the lists do not have (the launch's model).</summary>
     public int FallbackModel { get; init; } = -1;
     public override bool EscapeOpensOptions => false;
 
-    // the join form's hotspots (MeleeScreen's table): the list's arrows and rows, MAKE / MODEL, VARIANT, CONFIGURE CHASSIS, JOIN GAME and CANCEL
+    // the join form's hotspots (MeleeScreen's table): the list's arrows and rows, MAKE / MODEL, VARIANT, CONFIGURE CHASSIS, JOIN GAME, CANCEL and
+    // LOCAL DRIVER's RENAME
     private static readonly Dictionary<int, (int X0, int X1, int Y0, int Y1)> Hot = new()
     {
         [1] = (9, 27, 128, 144), [2] = (9, 27, 250, 268), [0] = (31, 216, 150, 270),
-        [3] = (610, 621, 400, 415), [4] = (437, 449, 419, 434), [5] = (456, 616, 422, 435), [6] = (229, 369, 453, 471), [15] = (489, 630, 453, 471),
+        [3] = (610, 621, 400, 415), [4] = (437, 449, 419, 434), [5] = (456, 616, 422, 435), [6] = (229, 369, 453, 471), [15] = (489, 630, 453, 471), [14] = (173, 213, 46, 57),
     };
     private const int Row = 17;
     private ShellFont _font = null!;
@@ -58,6 +62,10 @@ public sealed class CoopLobbyScreen : ShellScreen
     private string _line = "";
     private string _notice = "";
     private bool _buttonBaked;
+    /// <summary>RENAME is editing the name (<see cref="_name"/>); the name sent and not yet in a lobby state from the server.</summary>
+    private bool _renaming;
+    private string _name = "";
+    private string? _renamedTo;
 
     public override void Enter()
     {
@@ -99,7 +107,7 @@ public sealed class CoopLobbyScreen : ShellScreen
         Frame.RestoreAll();
         if (s is null) return;
         BakeButton();
-        Frame.Text(_font, 12, 45, s.Me?.Name ?? "");
+        Frame.Text(_font, 12, 45, _renaming ? _name + "_" : _renamedTo ?? s.Me?.Name ?? "");
         string title = I76.Formats.Mission.MissionTitles.CoopTitle(Shell.Install, s.Mission);
         var sh = Shown;
         // the box line: the game, as the roster's top line shows the highlighted game
@@ -177,13 +185,13 @@ public sealed class CoopLobbyScreen : ShellScreen
                 l.Add(PadRegion.Of(Hot[0].X0, FirstRowY + Row * k, Hot[0].X1 - Hot[0].X0, Row, d => d == NavDir.Up && kk == 0 ? Scroll(-1) : d == NavDir.Down && kk == n - 1 ? Scroll(1) : false));
             }
             if (s?.Me is not null && Shown?.Id == s.You) foreach (int id in new[] { 3, 4, 5 }) l.Add(PadRegion.Of(Hot[id].X0, Hot[id].Y0, Hot[id].X1 - Hot[id].X0, Hot[id].Y1 - Hot[id].Y0));
-            foreach (int id in new[] { 6, 15 }) l.Add(PadRegion.Of(Hot[id].X0, Hot[id].Y0, Hot[id].X1 - Hot[id].X0, Hot[id].Y1 - Hot[id].Y0));
+            foreach (int id in new[] { 14, 6, 15 }) l.Add(PadRegion.Of(Hot[id].X0, Hot[id].Y0, Hot[id].X1 - Hot[id].X0, Hot[id].Y1 - Hot[id].Y0));
             return l;
         }
     }
 
-    public override bool TextEditing => _typing;
-    public override void StopEditing() { _typing = false; Draw(); }
+    public override bool TextEditing => _typing || _renaming;
+    public override void StopEditing() { _typing = false; _renaming = false; Draw(); }
 
     private bool Scroll(int by)
     {
@@ -204,6 +212,8 @@ public sealed class CoopLobbyScreen : ShellScreen
         {
             // the server's word is the car: what was asked for is given up (taken, it is the server's now; refused, Answer has said so)
             if (s is not null && _seen is not null && s.Me?.Car != _seen.Me?.Car) _asked = null;
+            // and the name: the server's answer to a new one is a new state
+            if (s is not null && _seen is not null) _renamedTo = null;
             _seen = s;
             if (s is not null && _own == (0, 1) && s.Me is { } me && ModelOf(me.Car) is { } mo) _own = mo;
             redraw = true;
@@ -211,6 +221,7 @@ public sealed class CoopLobbyScreen : ShellScreen
         while (TakeChat() is { } c) { AddChat($"{c.Name}: {c.Text}"); redraw = true; }
         if (s is null) { if (redraw) Draw(); return; }
         if (_typing) { redraw |= Typing(s); if (redraw) Draw(); return; }
+        if (_renaming) { redraw |= Renaming(); if (redraw) Draw(); return; }
         if (Shell.Keys.Contains(Key.Escape)) { Quit(); return; }
         if (Shell.Keys.Contains(Key.Enter) || Shell.Keys.Contains(Key.KpEnter)) { _typing = true; _line = ""; Draw(); return; }
         if (Shell.Keys.Contains(Key.Down)) { Select(s, 1); redraw = true; }
@@ -247,6 +258,23 @@ public sealed class CoopLobbyScreen : ShellScreen
         return changed;
     }
 
+    /// <summary>
+    /// RENAME's edit, as the form's (at most 24 characters): Enter or a click takes the name, Esc keeps the old one. A new name is kept as the
+    /// form keeps it (melee.cfg's driver, what the next game's form opens with) and goes to the server, which tells everyone.
+    /// </summary>
+    private bool Renaming()
+    {
+        string was = _name;
+        bool done = global::I76.Game.Shell.Typing.Edit(Shell, ref _name, 24);
+        if (!done) return _name != was;
+        _renaming = false;
+        string name = _name.Trim();
+        if (Shell.Keys.Contains(Key.Escape) || name.Length == 0 || name == (_renamedTo ?? Me?.Name)) return true;
+        MeleeSetup.SaveDriver(name);
+        if (Rename?.Invoke(name) == true) _renamedTo = name;
+        return true;
+    }
+
     private void Select(LobbyState s, int by)
     {
         int i = Math.Max(0, s.Members.Select((m, k) => (m, k)).FirstOrDefault(x => x.m.Id == Shown?.Id).k);
@@ -275,6 +303,7 @@ public sealed class CoopLobbyScreen : ShellScreen
                 Send(s.Me?.Ready != true, null, null);
                 return false;
             case 15: Quit(); return false;
+            case 14: _renaming = true; _name = _renamedTo ?? s.Me?.Name ?? ""; return true;
             case 3 or 4 or 5 when Shown?.Id != s.You: _notice = "Highlight yourself to pick a car."; return true;
             case 3: ModelPopup(); return false;
             case 4:

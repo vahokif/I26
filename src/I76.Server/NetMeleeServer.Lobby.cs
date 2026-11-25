@@ -76,13 +76,19 @@ public sealed partial class NetMeleeServer
 
     private void LobbyJoin(NetPeer peer, JoinRequest j)
     {
-        string name = new string(j.Name.Where(c => !char.IsControl(c)).ToArray()).Trim();
-        if (name.Length > Protocol.MaxName) name = name[..Protocol.MaxName];
+        string name = CleanName(j.Name);
         if (name.Length == 0) name = $"Player {_lobby.Count + 1}";
         int id = Enumerable.Range(0, 255).First(k => _lobby.All(m => m.Id != k));
         _lobby.Add(new LobbyPeer((byte)id, peer, j with { Name = name }));
         Log?.Invoke($"lobby: {name} comes in ({_lobby.Count} of {Options.MaxPlayers}), {j.Car}");
         SendLobby();
+    }
+
+    /// <summary>A player's name as the lobby takes it: no control characters, trimmed, at most <see cref="Protocol.MaxName"/>.</summary>
+    private static string CleanName(string name)
+    {
+        string n = new string(name.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        return n.Length > Protocol.MaxName ? n[..Protocol.MaxName].Trim() : n;
     }
 
     private void SendLobby()
@@ -147,6 +153,20 @@ public sealed partial class NetMeleeServer
                 // a new car takes the ready mark off: the others should see what they are waiting for
                 m.Request = m.Request with { Car = q.Car, Config = q.Config, Paint = q.Paint };
                 m.Ready = false;
+                SendLobby();
+                break;
+            }
+            case MsgType.LobbyName:
+            {
+                // the player's new name, cleaned as a join's; the seat the start deals takes it from the request
+                string name = CleanName(LobbyName.Read(ref r).Name), was = m.Request.Name;
+                if (name.Length > 0 && name != was && m.Chat.Allow(Now, out _))
+                {
+                    m.Request = m.Request with { Name = name };
+                    Log?.Invoke($"lobby: {was} is now {name}");
+                    LobbySay("Server", $"{was} is now {name}.");
+                }
+                // (the state again either way: the player's own screen shows the server's name)
                 SendLobby();
                 break;
             }

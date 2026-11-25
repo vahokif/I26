@@ -61,6 +61,13 @@ public sealed record LobbySet(bool Ready, string Car, byte[] Config, byte[]? Pai
     public static LobbySet Read(ref NetReader r) => new(r.Bool(), r.Str(), r.BlobU16(), r.BlobU16());
 }
 
+/// <summary>A lobby player's new name (protocol 27): the server cleans it as a join's and tells everyone.</summary>
+public sealed record LobbyName(string Name)
+{
+    public void Write(NetWriter w) { w.U8((byte)MsgType.LobbyName); w.Str(Name); }
+    public static LobbyName Read(ref NetReader r) => new(r.Str());
+}
+
 /// <summary>The lobby host starts the mission (protocol 20); <paramref name="Force"/> starts it though some are not ready.</summary>
 public sealed record LobbyStart(bool Force)
 {

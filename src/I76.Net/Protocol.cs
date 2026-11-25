@@ -13,7 +13,7 @@ namespace I76.Net;
 public static class Protocol
 {
     /// <summary>Bumped whenever a message's layout changes; a client of another version is turned away.</summary>
-    public const ushort Version = 26;
+    public const ushort Version = 27;
     /// <summary>The first thing in a join request, so that stray packets are refused before they are read.</summary>
     public const string Magic = "I76N";
     public const int DefaultPort = 7676;
@@ -141,6 +141,8 @@ public enum MsgType : byte
     VoiceMuted = 26,
     /// <summary>Client → server, reliable (protocol 20): the players this client does not want to hear on the CB (<see cref="VoiceIgnore"/>); the server stops relaying their voice to it.</summary>
     VoiceIgnore = 27,
+    /// <summary>Client → server, reliable (protocol 27): in the co-op lobby, the player's new name (<see cref="LobbyName"/>).</summary>
+    LobbyName = 28,
     // host migration (protocol 13, HostMigration.cs); numbered apart so that other new messages do not meet them
     /// <summary>Client → host, reliable: this client can take over as host, and its own addresses (<see cref="HostCandidate"/>).</summary>
     HostCandidate = 40,

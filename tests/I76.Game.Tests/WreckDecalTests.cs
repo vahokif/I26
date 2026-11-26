@@ -62,4 +62,22 @@ public class WreckDecalTests
         // nothing drawn at all (a wreck of no parts): every painted part goes
         Assert.True(GroundDecals.PaintedOut(bank, null, _ => true)("CB1_LOT1"));
     }
+
+    /// <summary>
+    /// A placement thrown whole (an intersection piece or a building placed as a Sign, a splash on it): its painted ground
+    /// faces go with it, so where it stood is bare ground, as the original draws it (the piece is just an object there).
+    /// Its lot is not the placement's (drawn with the ground) and stays.
+    /// </summary>
+    [InstallFact]
+    public void AThrownPlacementsPaintGoesButItsLot()
+    {
+        var piece = new ModelAssembler(TestInstall.Vfs).Assemble("idisect1.sdf")!;
+        float lowest = GroundDecals.LowestY(piece);
+        var painted = piece.Parts.Where(p => p.Mesh.Faces.Any(f => GroundDecals.IsGroundFace(p, f, lowest))).Select(p => p.NodeName).ToList();
+        Assert.NotEmpty(painted);
+        Assert.All(painted, n => Assert.True(GroundDecals.ThrownOut(piece)(n), n));
+        var bank = new ModelAssembler(TestInstall.Vfs).Assemble("bcbank1.sdf")!;
+        Assert.False(GroundDecals.ThrownOut(bank)("CB1_LOT1"));
+        Assert.True(GroundDecals.ThrownOut(bank)(bank.Parts.First(p => !bank.Lots.Contains(p.NodeName)).NodeName));
+    }
 }

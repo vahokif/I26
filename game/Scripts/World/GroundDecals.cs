@@ -61,6 +61,12 @@ public static class GroundDecals
     }
 
     /// <summary>
+    /// Of a placement thrown whole (a sign's slot): every part's painted ground faces go with it but its lots', which the
+    /// original keeps on the ground (they leave the placement at load).
+    /// </summary>
+    public static Func<string, bool> ThrownOut(AssembledModel intact) => part => !intact.Lots.Contains(part);
+
+    /// <summary>
     /// Whether a placement's ground faces are painted rather than drawn: scenery (not vehicles or road pieces), whatever its
     /// class id. The loader stands every placement on the terrain (MissionWorld.GroundedPosition). A drive-on structure (the Ramp
     /// and Bridge class ids) keeps its decks, which lie above its lowest point (no stock ramp or bridge has a ground face but

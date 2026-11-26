@@ -351,7 +351,8 @@ seen by everything built from the world. After an edit, `MapEditor` redraws what
 Not redrawn: the distant horizon ring (`HorizonTerrain`: it is made from the map once, so an edit at the map's very edge is not in it)
 and the ground past the map's tiles (`OutsideGround`, `OutsideTerrain`: made from the map's edge when it loads, so it follows an edit there
 from the next playtest or reload, which the simulation drives on too),
-the grass tint map (`SwardMap`, the whole map, once), the ground faces painted from scenery (`GroundDecals`), rolling tumbleweeds'
+the grass tint map (`SwardMap`, the whole map, once), the ground faces painted from scenery (`GroundDecals`; the editor's view paints them
+whole, where a mission draws what of them stands clear of the ground level, `GroundSplit`), rolling tumbleweeds'
 cached points. A reload (a playtest, opening a map) makes all of them again.
 
 Cost, at 1920x1080 on an integrated GPU (`I76_EDITOR_SCRIPT` strokes on T01, the main thread's frame time while painting): a 60 m brush

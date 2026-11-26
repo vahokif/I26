@@ -101,11 +101,13 @@ public sealed class MissionBuilder(AssetVfs vfs)
 
     /// <summary>
     /// A destroyed placement's painted ground faces of the parts <paramref name="gone"/> names (GroundDecals.PaintedOut): left
-    /// out of the road layer from now on (their texture none, so the chunk index stays). The world rectangle (x0, z0, x1, z1)
+    /// out of the road layer from now on (their texture none, so the chunk index stays), and their parts drawn level hidden. The world rectangle (x0, z0, x1, z1)
     /// to paint again, or null when none of its faces was painted.
     /// </summary>
     public System.Numerics.Vector4? Unpaint(I76.Formats.Assembly.Placement p, Func<string, bool> gone)
     {
+        // what of them stood clear of the ground, drawn as a mesh (GroundSplit), goes with them
+        Scenery?.HideRaised(p, gone);
         if (RoadPieceTris is not { } tris || RoadPieceOwners is not { } owners) return null;
         var area = new System.Numerics.Vector4(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
         for (int i = 0; i < tris.Count && i < owners.Count; i++)
@@ -142,10 +144,11 @@ public sealed class MissionBuilder(AssetVfs vfs)
 
     /// <summary>
     /// The faces <see cref="RoadPieceTops"/> paints, without their textures: each painted face facing up, of each road-piece placement and
-    /// grounded scenery (GroundDecals.PaintedFaces, honouring <paramref name="groundList"/>), its corners placed in the game frame's XZ.
+    /// grounded scenery (GroundDecals.PaintedFaces, honouring <paramref name="groundList"/>), its corners placed in the game frame's XZ
+    /// (<c>W</c>) and in the game frame (<c>At</c>: where the placement stands them).
     /// </summary>
     public static IEnumerable<(I76.Formats.Assembly.Placement P, bool Decals, I76.Formats.Assembly.AssembledModel Model, I76.Formats.Assembly.ModelPart Part,
-        I76.Formats.Geo.GeoFace Face, System.Numerics.Vector2[] W)> PaintedTops(I76.Formats.Assembly.MissionWorld world, I76.Formats.Assembly.ModelAssembler asm, bool groundList)
+        I76.Formats.Geo.GeoFace Face, System.Numerics.Vector2[] W, System.Numerics.Vector3[] At)> PaintedTops(I76.Formats.Assembly.MissionWorld world, I76.Formats.Assembly.ModelAssembler asm, bool groundList)
     {
         var lowestOf = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         float Lowest(I76.Formats.Assembly.Placement p, I76.Formats.Assembly.AssembledModel m) =>
@@ -159,8 +162,28 @@ public sealed class MissionBuilder(AssetVfs vfs)
             {
                 var n = place.Rotate(part.ToModel.Rotate(new System.Numerics.Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z)));
                 if (n.LengthSquared() < 0.5f || -n.Y / n.Length() < 0.6f) continue;   // outward is -plane: only tops
-                var w = f.Vertices.Select(v => place.Apply(part.ToModel.Apply(part.Mesh.Vertices[v.Index]))).Select(v => new System.Numerics.Vector2(v.X, v.Z)).ToArray();
-                yield return (p, decals, model, part, f, w);
+                var at = f.Vertices.Select(v => place.Apply(part.ToModel.Apply(part.Mesh.Vertices[v.Index]))).ToArray();
+                yield return (p, decals, model, part, f, at.Select(v => new System.Numerics.Vector2(v.X, v.Z)).ToArray(), at);
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="PaintedTops"/> triangle by triangle (each face's fan from its first corner), with what of each is painted and what drawn
+    /// level as a mesh: cut along the ground (GroundSplit) when <paramref name="split"/>, else all painted.
+    /// </summary>
+    public static IEnumerable<(I76.Formats.Assembly.Placement P, bool Decals, I76.Formats.Assembly.AssembledModel Model, I76.Formats.Assembly.ModelPart Part,
+        I76.Formats.Geo.GeoFace Face, List<GroundSplit.Corner[]> Painted, List<GroundSplit.Corner[]> Raised)> SplitTops(I76.Formats.Assembly.MissionWorld world,
+        I76.Formats.Assembly.ModelAssembler asm, bool groundList, bool split)
+    {
+        var height = GroundSplit.Heights(world);
+        foreach (var (p, decals, model, part, f, _, at) in PaintedTops(world, asm, groundList))
+        {
+            var c = f.Vertices.Select((v, i) => new GroundSplit.Corner(at[i], new(v.U, v.V))).ToArray();
+            for (int k = 1; k + 1 < c.Length; k++)
+            {
+                var (low, high) = split ? GroundSplit.Split(c[0], c[k], c[k + 1], height) : ([[c[0], c[k], c[k + 1]]], []);
+                yield return (p, decals, model, part, f, low, high);
             }
         }
     }
@@ -173,10 +196,13 @@ public sealed class MissionBuilder(AssetVfs vfs)
     /// drew these over the terrain; painted in, nothing has to win a depth
     /// fight. A stock texture with a slip repaired (TextureRepairs) is the repaired copy; the returned dictionary holds the file's
     /// own (the 1997 look's), keyed by the texture's number in the texture list. On a map that draws no ground list
-    /// (<paramref name="groundList"/> false: no road data) the road pieces and every lot are left out.
+    /// (<paramref name="groundList"/> false: no road data) the road pieces and every lot are left out. With <paramref name="raised"/>
+    /// each face is cut along the ground (GroundSplit): what of it stands clear of the ground is added there, to be drawn as a mesh,
+    /// level, and only the rest painted; without (the map editor's own view) every face is painted whole.
     /// </summary>
     private static (List<RoadRaster.FlatTri>, List<RoadRaster.Tex?>, List<(I76.Formats.Assembly.Placement, string)?>, Dictionary<int, RoadRaster.Tex?>) RoadPieceTops(I76.Formats.Assembly.MissionWorld world,
-        I76.Formats.Assembly.ModelAssembler asm, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures, bool groundList, List<string>? members = null)
+        I76.Formats.Assembly.ModelAssembler asm, I76.Formats.Assembly.TextureResolver resolver, Assets.TextureFactory textures, bool groundList, List<string>? members = null,
+        List<RaisedFace>? raised = null)
     {
         var tris = new List<RoadRaster.FlatTri>();
         var owners = new List<(I76.Formats.Assembly.Placement, string)?>();
@@ -188,24 +214,31 @@ public sealed class MissionBuilder(AssetVfs vfs)
             if (!texIndex.TryGetValue(key, out int i)) { texIndex[key] = i = texList.Count; texList.Add(make()); members?.Add(key); }
             return i;
         }
-        foreach (var (p, decals, model, part, f, w) in PaintedTops(world, asm, groundList))
+        I76.Formats.Geo.GeoFace? last = null;
+        int ti = -1;
+        foreach (var (p, decals, model, part, f, low, high) in SplitTops(world, asm, groundList, raised is not null))
         {
-            int ti;
-            if (f.Texture.Length > 0 && f.Unk_0x20 != 0 && resolver.ResolveFace(f.Texture, model.ObjectCode, model.TmtNames, vtfMaps: model.VtfMaps) is { } member)
+            if (!ReferenceEquals(f, last))
             {
-                ti = Tex(member, () => textures.GetRepairedRgba(member) ?? textures.GetRgba(member));
-                if (textures.GetRepairedRgba(member) is not null && !original.ContainsKey(ti)) original[ti] = textures.GetRgba(member);
+                last = f;
+                if (f.Texture.Length > 0 && f.Unk_0x20 != 0 && resolver.ResolveFace(f.Texture, model.ObjectCode, model.TmtNames, vtfMaps: model.VtfMaps) is { } member)
+                {
+                    ti = Tex(member, () => textures.GetRepairedRgba(member) ?? textures.GetRgba(member));
+                    if (textures.GetRepairedRgba(member) is not null && !original.ContainsKey(ti)) original[ti] = textures.GetRgba(member);
+                }
+                else
+                    ti = Tex($"#{f.R:x2}{f.G:x2}{f.B:x2}", () => new RoadRaster.Tex(1, 1, [f.R, f.G, f.B, 255]));
             }
-            else
-                ti = Tex($"#{f.R:x2}{f.G:x2}{f.B:x2}", () => new RoadRaster.Tex(1, 1, [f.R, f.G, f.B, 255]));
-            var uv = f.Vertices.Select(v => new System.Numerics.Vector2(v.U, v.V)).ToArray();
-            for (int k = 1; k + 1 < w.Length; k++)
-            {
-                var min = System.Numerics.Vector2.Min(System.Numerics.Vector2.Min(w[0], w[k]), w[k + 1]);
-                var max = System.Numerics.Vector2.Max(System.Numerics.Vector2.Max(w[0], w[k]), w[k + 1]);
-                tris.Add(new RoadRaster.FlatTri(w[0], w[k], w[k + 1], uv[0], uv[k], uv[k + 1], ti, min, max));
-                owners.Add(decals ? (p, part.NodeName) : null);
-            }
+            foreach (var q in low)
+                for (int j = 1; j + 1 < q.Length; j++)
+                {
+                    System.Numerics.Vector2 a = new(q[0].P.X, q[0].P.Z), b = new(q[j].P.X, q[j].P.Z), c = new(q[j + 1].P.X, q[j + 1].P.Z);
+                    var min = System.Numerics.Vector2.Min(System.Numerics.Vector2.Min(a, b), c);
+                    var max = System.Numerics.Vector2.Max(System.Numerics.Vector2.Max(a, b), c);
+                    tris.Add(new RoadRaster.FlatTri(a, b, c, q[0].Uv, q[j].Uv, q[j + 1].Uv, ti, min, max));
+                    owners.Add(decals ? (p, part.NodeName) : null);
+                }
+            foreach (var q in high) raised!.Add(new RaisedFace(p, model, part, f, q));
         }
         return (tris, texList, owners, original);
     }
@@ -663,7 +696,9 @@ public sealed class MissionBuilder(AssetVfs vfs)
         // road-piece objects (ODEF types 0x50–0x5f, the intersections): their tops painted over the roads,
         // their textures numbered after the road set's
         var pieceMembers = new List<string>();
-        var (pieceTris, pieceTex, pieceOwners, pieceOriginal) = RoadPieceTops(world, asm, resolver, textures, GroundListDrawn, pieceMembers);
+        // what of them stands clear of the ground is drawn as a mesh, level (GroundSplit); the map editor's own view paints them whole
+        var raised = I76.Game.Editor.EditorSession.Active && !I76.Game.Editor.EditorSession.Playtest ? null : new List<RaisedFace>();
+        var (pieceTris, pieceTex, pieceOwners, pieceOriginal) = RoadPieceTops(world, asm, resolver, textures, GroundListDrawn, pieceMembers, raised);
         for (int i = 0; i < pieceTex.Count; i++) roadTex[roadNames.Length + i] = pieceTex[i];
         // the 1997 look's: a stock texture's slip as the file has it (TextureRepairs), the modern look's repaired; the map editor
         // paints the repaired copy in both looks (RoadPainter)
@@ -885,6 +920,7 @@ public sealed class MissionBuilder(AssetVfs vfs)
         Scenery = new ScenerySpawner { Name = "Placements", Night = !Light.IsDay, GroundListDrawn = GroundListDrawn };
         Stage("scenery spawn");
         Scenery.Spawn(world, asm, Meshes, SkipVehicles);
+        if (raised is { Count: > 0 }) Scenery.AddRaised(raised, Meshes);
         root.AddChild(Scenery);
         Stage("done");
         return root;

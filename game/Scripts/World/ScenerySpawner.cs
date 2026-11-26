@@ -162,6 +162,47 @@ public partial class ScenerySpawner : Node3D
         look.QueueFree();
     }
 
+    // ---- painted faces that stand clear of the ground, drawn level (GroundSplit) ----
+
+    /// <summary>Each placement's faces drawn level where they stand clear of the ground: a mesh per part, which goes when that part's paint does.</summary>
+    private readonly Dictionary<Placement, List<(string Part, MeshInstance3D Node)>> _raised = [];
+
+    /// <summary>
+    /// Draws the pieces of painted faces that stand clear of the ground (MissionBuilder cut them: GroundSplit) as meshes at their
+    /// placements, in both looks. They stay when the placement is destroyed, as its paint does, until <see cref="HideRaised"/>.
+    /// </summary>
+    public void AddRaised(IEnumerable<RaisedFace> faces, MeshBuilder builder)
+    {
+        if (_world is null) return;
+        foreach (var g in faces.GroupBy(f => f.P))
+        {
+            var p = g.Key;
+            var model = GroundSplit.Model(p, _world, g);
+            var xf = Coords.ToGodot(p.Object.Rotation, _world.GroundedPosition(p));
+            foreach (var part in model.Parts)
+            {
+                if (builder.Build(model, include: x => ReferenceEquals(x, part)) is not { } mesh) continue;
+                var mi = new MeshInstance3D { Mesh = mesh, Transform = xf, Name = p.Object.Name + "_raised" };
+                // the 1997 look's drop shadows leave them out, as they leave out the paint and the original's ground list
+                mi.AddToGroup(NoDropShadow);
+                AddChild(mi);
+                if (!_raised.TryGetValue(p, out var l)) _raised[p] = l = [];
+                l.Add((part.NodeName, mi));
+            }
+        }
+    }
+
+    /// <summary>A placement's parts drawn level (<see cref="AddRaised"/>) whose paint goes (<paramref name="gone"/>) go too.</summary>
+    public void HideRaised(Placement p, Func<string, bool> gone)
+    {
+        if (!_raised.TryGetValue(p, out var l)) return;
+        foreach (var (part, node) in l)
+            if (gone(part)) node.Visible = false;
+    }
+
+    /// <summary>How many placements have faces drawn level (<see cref="AddRaised"/>).</summary>
+    public int RaisedCount => _raised.Count;
+
     // ---- the map editor: placements shown, hidden and moved while it runs (game/Scripts/Editor/Objects) ----
 
     private ModelAssembler? _asm;

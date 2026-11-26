@@ -565,7 +565,7 @@ public sealed class GraphicsScreen : OverlayScreen
                 break;
             case GraphicsRow.Look1997:
                 string[] modes = ["Off", "3D Card", "Software"];
-                Row(line, "1997 Mode (next mission)", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
+                Row(line, "1997 Mode", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
                 {
                     int m = ((!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1) + 1) % 3;
                     st.Look1997 = m != 0; st.SoftwareRenderer = m == 2;
@@ -601,7 +601,7 @@ public sealed class GraphicsScreen : OverlayScreen
             // the world, car and cockpit texture pack's (only when one is installed; from the next mission or garage visit)
             case GraphicsRow.HdTextures:
                 if (!I76.Game.Assets.HdTextures.Installed) return false;
-                Row(line, "HD Textures (next mission)", () => st.HdTextures ? "On" : "Off", () => ApplyTextures(!st.HdTextures));
+                Row(line, "HD Textures", () => st.HdTextures ? "On" : "Off", () => ApplyTextures(!st.HdTextures));
                 break;
             // the modern look's plants (docs/modern-vegetation.md)
             case GraphicsRow.Vegetation:

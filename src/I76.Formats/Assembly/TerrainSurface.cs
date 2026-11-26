@@ -24,7 +24,8 @@ namespace I76.Formats.Assembly;
 /// lean back from the reached ground at their foot) and are pushed along its normal by a fractal relief, strongest
 /// on steep ground, with ledge-like bands. How far they may move grows with
 /// their height above (or below) the nearest held ground, so a wall still
-/// meets the ground where the cars meet it.</item>
+/// meets the ground where the cars meet it; the lean too moves a point no further,
+/// so a wall of any height keeps its top.</item>
 /// </list>
 /// </summary>
 public sealed class TerrainSurface : ITerrainSurface
@@ -768,7 +769,7 @@ public sealed class TerrainSurface : ITerrainSurface
                 if (_hold[Idx(sx, sz)] && Open2(sx, sz)) near = Math.Min(near, Math.Abs(b - H(sx, sz)));
         double allow = near == double.MaxValue ? MaxFree : Math.Min(MaxFree, Tolerance + Give * Math.Max(0, near - Clear));
         double sb = Smooth(_hb, fx, fz);
-        double y = Lean(b + allow * Math.Tanh((sb - b) / allow), fx, fz, px, pz);
+        double y = Lean(b + allow * Math.Tanh((sb - b) / allow), fx, fz, px, pz, b - allow);
         // the softened surface's normal (game frame), and how steep it is
         const double e = 0.25;
         double gx = (Smooth(_hb, fx + e, fz) - Smooth(_hb, fx - e, fz)) / (2 * e * Spacing);
@@ -789,7 +790,7 @@ public sealed class TerrainSurface : ITerrainSurface
     /// Leans a point back under ground no car reaches: no higher than the cone over the drivable ground at the foot, wandering by a few
     /// metres once well above it; unchanged where drivable ground stands above it (a rim a car drives up to).
     /// </summary>
-    private double Lean(double y, double fx, double fz, double px, double pz)
+    private double Lean(double y, double fx, double fz, double px, double pz, double least = double.NegativeInfinity)
     {
         double lean = 1 - Bilerp(_under, fx, fz);
         if (lean > 0)
@@ -799,6 +800,10 @@ public sealed class TerrainSurface : ITerrainSurface
             {
                 cone += 4 * SmoothStep(2, 12, cone - Bilerp(_coneBase, fx, fz)) * (0.6 + Noise.Fbm(px / 26, 0.5, pz / 26, 3));
                 y += (SoftMin(y, cone, 1.5) - y) * lean;
+                // but no lower than its freedom (least): the cone rises 20 m a sample, so a wall taller than that over too little
+                // ground behind it (a custom map's 100-400 m wall, a narrow tower, a map's boundary wall seen from outside) lost its
+                // top; it now stands as tall as the simulation's, its rim rounded by at most the freedom
+                if (y < least + 1.5) y = -SoftMin(-y, -least, 1.5);
             }
         }
         return y;

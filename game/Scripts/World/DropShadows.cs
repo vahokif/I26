@@ -274,7 +274,8 @@ public partial class DropShadows : Node3D
             var index = arrays[(int)Mesh.ArrayType.Index].As<int[]>();
             int tris = (index is { Length: > 0 } ? index.Length : verts.Length) / 3;
             // each triangle cut small, and each corner given its own point on the ground; a triangle whose corners fall either side of a cliff's rim
-            // would hang across the gap as a sheet (the shadow floating under Seminole's bridge), so one whose sides do not follow the ground is left out
+            // would hang across the gap as a sheet (the shadow floating under Seminole's bridge, a ramp's on Rift's rim), so one whose sides do not
+            // follow the ground is left out (ShadowDrape.Drape)
             var pv = new List<Vector3>(); var pn = new List<Vector3>(); var pc = new List<float>();
             for (int t = 0; t < tris; t++)
             {
@@ -282,15 +283,7 @@ public partial class DropShadows : Node3D
                 Vector3 Nrm(int k) => norms is { Length: > 0 } ? norms[k] : Vector3.Up;
                 foreach (var tri in ShadowDrape.Split((N(verts[i0]), N(Nrm(i0))), (N(verts[i1]), N(Nrm(i1))), (N(verts[i2]), N(Nrm(i2))), ShadowDrape.MaxEdge))
                 {
-                    var hits = new (System.Numerics.Vector3 P, float H)[3];
-                    for (int k = 0; k < 3; k++) hits[k] = ShadowDrape.Of(N(xf * V(tri[k].P)), N(l), GroundN);
-                    bool ok = true;
-                    for (int k = 0; k < 3 && ok; k++)
-                    {
-                        var (a0, b0) = (hits[k], hits[(k + 1) % 3]);
-                        if (a0.H > 0 && b0.H > 0 && System.Numerics.Vector3.Distance(a0.P, b0.P) > 1f) ok = ShadowDrape.Connected(a0.P, b0.P, GroundN);
-                    }
-                    if (!ok) continue;
+                    if (ShadowDrape.Drape(N(xf * V(tri[0].P)), N(xf * V(tri[1].P)), N(xf * V(tri[2].P)), N(l), GroundN) is not { } hits) continue;
                     for (int k = 0; k < 3; k++) { pv.Add(V(tri[k].P)); pn.Add(V(tri[k].N)); pc.Add(hits[k].P.X); pc.Add(hits[k].P.Y); pc.Add(hits[k].P.Z); pc.Add(hits[k].H); }
                 }
             }

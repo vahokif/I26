@@ -856,6 +856,8 @@ public partial class Shell : CanvasLayer
             if (kind == "overlay" && arg == "controls") Overlay(new ControlsScreen());
             if (kind == "overlay" && arg == "mouse") Overlay(new MouseOptionsScreen());
             if (kind == "overlay" && arg == "graphics") Overlay(new GraphicsScreen());
+            // Graphic Detail's pages by name ("display", "world", "car", "effects")
+            if (kind == "overlay" && GraphicsPages.PageNamed(arg) is int gpage and > 0) Overlay(new GraphicsScreen { Page = gpage });
             if (kind == "overlay" && arg == "play") Overlay(new PlayOptionsScreen());
             if (kind == "overlay" && arg == "audio") Overlay(new AudioScreen());
             if (kind == "type") _typed.Append(arg);

@@ -479,131 +479,187 @@ public sealed class AudioScreen : OverlayScreen
     }
 }
 
-/// <summary>Graphic Detail, overlay 5: record 9, the sixteen-byte graphics block.</summary>
-public sealed class GraphicsScreen : ScrollingOverlayScreen
+/// <summary>
+/// Graphic Detail, overlay 5: record 9, the sixteen-byte graphics block. The sheet keeps the original's rows the port honours, in the
+/// original's order, and under a blank line the entries for the port's pages (<see cref="GraphicsPages"/>); a page is the same sheet
+/// with its name on the first line, its rows under it and a Back (Esc goes back too), each row on its own ruled line
+/// (<see cref="GraphicsLayout"/>). Reset puts the page's rows back (the sheet's: the default profile, as the original's); Done and
+/// Cancel, on any page, save or restore every page from the snapshot taken when Graphic Detail was opened.
+/// </summary>
+public sealed class GraphicsScreen : OverlayScreen
 {
     protected override int Record => 9;
-    private byte[] _saved = [];
-    private bool _savedHd, _savedLook, _savedSoftware, _savedGrade;
-    private int _savedBlur;
-    private int _savedVeg, _savedDraw, _savedMaxFps;
-    private I76.Game.Boot.RendererChoice _savedRenderer;
-    private string _savedRes = "";
-    private int _savedScale, _savedFov;
-    private bool _savedVSync, _savedLog, _saved3D, _savedInteriors, _savedHdTex;
-    // only the settings this port honours: the original's draw distance and most detail levels of the 1997 renderer are gone (the
-    // resolution is the port's window size)
-    private static readonly (string Label, int Byte, string[] Values)[] Rows =
-    [
-        ("Monitor Brightness", 0xc, ["0.00", "1.00", "2.00", "3.00", "4.00", "5.00", "6.00", "7.00", "8.00", "9.00", "10.00"]),
-        ("Ext. Instrum. Disp", 0xe, ["Off", "On"]),
-        ("Rear Mirror", 0xd, ["Off", "Low", "High"]),
-        // the modern look's cost (Main.ApplyModernQuality); the first two are the original's own rows and bytes
-        ("Shadow Detail", 0x6, ["Off", "Low", "High"]),
-        ("Terrain Detail", 0x2, ["Low", "High"]),
-        ("Anti-Aliasing", 0x8, I76.Game.Boot.RenderScale.AntiAliasing),   // the original's byte, the port's MSAA: Off, 2x, 4x and 8x
-    ];
+    /// <summary><see cref="GraphicsPages.Sheet"/>, or the page shown.</summary>
+    public int Page { get; init; }
+    /// <summary>The settings as Graphic Detail was opened, which Cancel restores on any page: taken on the sheet, handed on to a page and back.</summary>
+    public ShellSettings? Snapshot { get; init; }
+    private ShellSettings _saved = null!;
 
-    private void Apply(bool on) { Shell.Settings.HdMenuArt = on; HdAssets.Enabled = on; }
-    private void ApplyTextures(bool on) { Shell.Settings.HdTextures = on; I76.Game.Assets.HdTextures.Enabled = on; }
+    private static int LineY(int line) => GraphicsLayout.LineY(line);
 
-    // every row, the original's six and then the port's own, one to a ruled line in one list over the sheet's fourteen lines
-    // (the original's first, from its first line at 118, on the original's 23 px line)
-    private const int ListY = 118, Shown = 14;
-    protected override int MarkX => 386;    // in the gap before the value column
-    private int _slot;
-
-    /// <summary>The next row of the list: its label and its value (a click on the value is <paramref name="click"/>).</summary>
-    private void Row(string label, Func<string> value, Action click)
+    /// <summary>One row on a line: its label and its value (a click on the value is <paramref name="click"/>); a label longer than its column pushes its value along.</summary>
+    private void Row(int line, string label, Func<string> value, Action click)
     {
-        Listed(Add(200, ListY, label, null), _slot);
-        Listed(Add(397, ListY, value, click), _slot);
-        _slot++;
+        Add(200, LineY(line), label, null);
+        Add(Math.Max(397, 200 + Label.Measure(label) + 16), LineY(line), value, click);
     }
 
     protected override void Build()
     {
-        var g = Shell.Settings.Graphics;
-        (List.Top, List.Shown) = (ListY, Shown);
-        _slot = 0;
-        _saved = (byte[])g.Clone();
-        _savedHd = Shell.Settings.HdMenuArt;
-        _savedHdTex = Shell.Settings.HdTextures;
-        _savedLook = Shell.Settings.Look1997;
-        _savedSoftware = Shell.Settings.SoftwareRenderer;
-        _savedGrade = Shell.Settings.PaletteGrade;
-        _savedBlur = Shell.Settings.CrashBlur;
-        _savedVeg = Shell.Settings.Vegetation;
-        _savedDraw = Shell.Settings.DrawDistance;
-        _savedMaxFps = Shell.Settings.MaxFps;
-        _savedVSync = Shell.Settings.VSync;
-        _savedLog = Shell.Settings.LogFile;
-        _savedRenderer = Shell.Settings.Renderer;
-        _saved3D = Shell.Settings.Garage3D;
-        _savedInteriors = Shell.Settings.CarInteriors;
-        _savedRes = Shell.Settings.Resolution;
-        _savedScale = Shell.Settings.RenderScale;
-        _savedFov = Shell.Settings.FieldOfView;
-        foreach (var (label, b, values) in Rows)
-            Row(label, () => values[Math.Min(g[b], values.Length - 1)], () => g[b] = (byte)((g[b] + 1) % values.Length));
-        var st = Shell.Settings;
-        // the port's own rows, first the window's size: Desktop (fullscreen, as the game starts) or a window of that size, applied at once
-        Row("Resolution", () => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(st.Resolution)), () =>
+        _saved = Snapshot ?? GraphicsPages.CopyAll(Shell.Settings, new ShellSettings());
+        var place = GraphicsLayout.Shell(Page);
+        int line = place.First;
+        if (Page != GraphicsPages.Sheet) Add(200, LineY(GraphicsPages.HeadingLine), GraphicsPages.Names[Page], null);
+        foreach (var r in GraphicsPages.Rows[Page]) if (PageRow(r, line)) line++;
+        for (int k = 0; k < place.Entries.Length; k++)
         {
-            var (dw, dh) = I76.Game.Boot.WindowApplier.Desktop;
-            var n = I76.Game.Boot.WindowSizes.Next(I76.Game.Boot.WindowSizes.Parse(st.Resolution), dw, dh);
-            st.Resolution = n is { } z ? I76.Game.Boot.WindowSizes.Format(z.W, z.H) : "";
-            I76.Game.Boot.WindowApplier.Apply(st);
-        });
-        // the 3D view supersampled at 100, 150 or 200 % of the window, live (the HUD and menus are not scaled)
-        Row("Render Scale", () => I76.Game.Boot.RenderScale.Names[Math.Clamp(st.RenderScale, 0, I76.Game.Boot.RenderScale.Names.Length - 1)], () => { st.RenderScale = (st.RenderScale + 1) % I76.Game.Boot.RenderScale.Names.Length; I76.Game.Boot.RenderScale.Apply(st); });
-        // the main 3D views' field of view, degrees across a 4:3 view (the original's is 90); the mirror and binoculars keep their own, live
-        Row("Field of View", () => I76.Sim.Views.ViewFov.Names[Math.Clamp(st.FieldOfView, 0, I76.Sim.Views.ViewFov.Names.Length - 1)], () => { st.FieldOfView = (st.FieldOfView + 1) % I76.Sim.Views.ViewFov.Names.Length; I76.Sim.Views.ViewFov.Apply(st.FieldOfView); });
-        // the menu art pack's (only when one is installed), with the pack's name beside it
-        if (HdAssets.Installed)
-        {
-            Row("HD Menu Art", () => st.HdMenuArt ? "On" : "Off", () => Apply(!st.HdMenuArt));
-            Listed(Add(318, ListY + 3, () => HdAssets.Label ?? "", null, Small), _slot - 1, 3);
+            int page = GraphicsPages.FirstPage + k;
+            Add(200, LineY(place.Entries[k]), () => GraphicsPages.Names[page] + "...", () => Shell.Overlay(new GraphicsScreen { Page = page, Snapshot = _saved }), w: 262, h: 18);
         }
-        // the world, car and cockpit texture pack's (only when one is installed; from the next mission or garage visit). No pack name
-        // beside it: the label fills the line
-        if (I76.Game.Assets.HdTextures.Installed) Row("HD Textures", () => st.HdTextures ? "On" : "Off", () => ApplyTextures(!st.HdTextures));
-        // the 1997 look: off, the original's 3D card or its software renderer (the shell keeps the look it started in; a change shows
-        // from the next start or mission), with the modern look's palette grade (SoftwareLook) after it
-        string[] modes = ["Off", "3D Card", "Software"];
-        Row("1997 Mode", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
-        {
-            int m = ((!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1) + 1) % 3;
-            st.Look1997 = m != 0; st.SoftwareRenderer = m == 2;
-        });
-        Row("Palette Grade", () => st.PaletteGrade ? "On" : "Off", () => st.PaletteGrade = !st.PaletteGrade);
-        // the software renderer's double image on a big cockpit hit: Auto, Off, On
-        Row("Crash Blur", () => I76.Sim.Views.CrashBlurMode.Names[Math.Clamp(st.CrashBlur, 0, 1)], () => st.CrashBlur = 1 - Math.Clamp(st.CrashBlur, 0, 1));
-        // the modern look's plants (docs/modern-vegetation.md)
-        string[] veg = ["Off", "Low", "High"];
-        Row("Vegetation", () => veg[Math.Clamp(st.Vegetation, 0, 2)], () => st.Vegetation = (st.Vegetation + 1) % 3);
-        // how far the world is drawn, in either look
-        Row("Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
-        // the frame rate limiter and vsync: drawing only, the simulation keeps the Play Options rate; both live (the engine's, so the shell shows it too)
-        Row("Max FPS", () => I76.Sim.Views.FrameLimit.Names[Math.Clamp(st.MaxFps, 0, I76.Sim.Views.FrameLimit.Names.Length - 1)], () => { st.MaxFps = (st.MaxFps + 1) % I76.Sim.Views.FrameLimit.Names.Length; I76.Game.FrameLimiter.Apply(st); });
-        Row("VSync", () => st.VSync ? "On" : "Off", () => { st.VSync = !st.VSync; I76.Game.FrameLimiter.Apply(st); });
-        // the log file: Godot reads it only at start, so a change shows from the next start (docs/dev-hooks.md: --log forces it for a run)
-        Row("Log (restart)", () => st.LogFile ? "On" : "Off", () => st.LogFile = !st.LogFile);
-        // CONFIGURE CHASSIS as the 3D garage (on) or the original's 2D form (off)
-        Row("3D Garage", () => st.Garage3D ? "On" : "Off", () => st.Garage3D = !st.Garage3D);
-        // the modern look's cabin and driver behind a car's windows (off: plain reflective glass), live
-        Row("Car Interiors", () => st.CarInteriors ? "On" : "Off", () => { st.CarInteriors = !st.CarInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(st.CarInteriors); });
-        // the renderer: Auto, Vulkan, D3D12 (Windows only) or OpenGL, read by Godot at start (an unavailable choice falls back there)
-        Row("Renderer (restart)", () => I76.Game.Boot.StartupSettings.RowText(st.Renderer, I76.Game.Boot.StartupSettings.D3D12Offered, RenderingServer.GetCurrentRenderingDriverName()), () =>
-        {
-            var all = I76.Game.Boot.StartupSettings.D3D12Offered ? new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.D3D12, I76.Game.Boot.RendererChoice.OpenGL }
-                : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };
-            st.Renderer = all[(Math.Max(0, Array.IndexOf(all, st.Renderer)) + 1) % all.Length];
-        });
-        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = 0; I76.Sim.Views.ViewFov.Apply(0); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); ApplyTextures(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
-        Add(350, 438, "Done", () => { Shell.Settings.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); ApplyTextures(_savedHdTex); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = _savedFov; I76.Sim.Views.ViewFov.Apply(_savedFov); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
+        if (Page != GraphicsPages.Sheet) Add(246, GraphicsLayout.ButtonY, "Back", Back, Small);
+        Add(288, GraphicsLayout.ButtonY, "Reset", Reset, Small);
+        Add(350, GraphicsLayout.ButtonY, "Done", Done, Small);
+        Add(402, GraphicsLayout.ButtonY, "Cancel", Cancel, Small);
     }
+
+    /// <summary>A row of the graphics block: the byte's value word, a click the next.</summary>
+    private void ByteRow(int line, string label, int at, string[] values)
+    {
+        var g = Shell.Settings.Graphics;
+        Row(line, label, () => values[Math.Min(g[at], values.Length - 1)], () => g[at] = (byte)((g[at] + 1) % values.Length));
+    }
+
+    /// <summary>A row on a line; false for a row not shown (a pack's row with no pack).</summary>
+    private bool PageRow(GraphicsRow r, int line)
+    {
+        var st = Shell.Settings;
+        switch (r)
+        {
+            // the original's first row, the port's window: Desktop (fullscreen, as the game starts) or a window of that size, applied at once
+            case GraphicsRow.Resolution:
+                Row(line, "Resolution", () => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(st.Resolution)), () =>
+                {
+                    var (dw, dh) = I76.Game.Boot.WindowApplier.Desktop;
+                    var n = I76.Game.Boot.WindowSizes.Next(I76.Game.Boot.WindowSizes.Parse(st.Resolution), dw, dh);
+                    st.Resolution = n is { } z ? I76.Game.Boot.WindowSizes.Format(z.W, z.H) : "";
+                    I76.Game.Boot.WindowApplier.Apply(st);
+                });
+                break;
+            case GraphicsRow.MonitorBrightness: ByteRow(line, "Monitor Brightness", 0xc, ["0.00", "1.00", "2.00", "3.00", "4.00", "5.00", "6.00", "7.00", "8.00", "9.00", "10.00"]); break;
+            // how far the world is drawn, in either look: the original's Visibility Range's place
+            case GraphicsRow.DrawDistance:
+                Row(line, "Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
+                break;
+            // the modern look's cost (Main.ApplyModernQuality); the original's own rows and bytes
+            case GraphicsRow.TerrainDetail: ByteRow(line, "Terrain Detail", 0x2, ["Low", "High"]); break;
+            case GraphicsRow.ShadowDetail: ByteRow(line, "Shadow Detail", 0x6, ["Off", "Low", "High"]); break;
+            case GraphicsRow.ExtInstruments: ByteRow(line, "Ext. Instrum. Disp", 0xe, ["Off", "On"]); break;
+            case GraphicsRow.RearMirror: ByteRow(line, "Rear Mirror", 0xd, ["Off", "Low", "High"]); break;
+            // the 1997 look: off, the original's 3D card or its software renderer (the shell keeps the look it started in; a change shows
+            // from the next start or mission)
+            case GraphicsRow.Look1997:
+                string[] modes = ["Off", "3D Card", "Software"];
+                Row(line, "1997 Mode", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
+                {
+                    int m = ((!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1) + 1) % 3;
+                    st.Look1997 = m != 0; st.SoftwareRenderer = m == 2;
+                });
+                break;
+            case GraphicsRow.AntiAliasing: ByteRow(line, "Anti-Aliasing", 0x8, I76.Game.Boot.RenderScale.AntiAliasing); break;   // the original's byte, the port's MSAA: Off, 2x, 4x and 8x
+            // the 3D view supersampled at 100, 150 or 200 % of the window, live (the HUD and menus are not scaled)
+            case GraphicsRow.RenderScale:
+                Row(line, "Render Scale", () => I76.Game.Boot.RenderScale.Names[Math.Clamp(st.RenderScale, 0, I76.Game.Boot.RenderScale.Names.Length - 1)], () => { st.RenderScale = (st.RenderScale + 1) % I76.Game.Boot.RenderScale.Names.Length; I76.Game.Boot.RenderScale.Apply(st); });
+                break;
+            // the frame rate limiter and vsync: drawing only, the simulation keeps the Play Options rate; both live
+            case GraphicsRow.VSync: Row(line, "VSync", () => st.VSync ? "On" : "Off", () => { st.VSync = !st.VSync; I76.Game.FrameLimiter.Apply(st); }); break;
+            case GraphicsRow.MaxFps:
+                Row(line, "Max FPS", () => I76.Sim.Views.FrameLimit.Names[Math.Clamp(st.MaxFps, 0, I76.Sim.Views.FrameLimit.Names.Length - 1)], () => { st.MaxFps = (st.MaxFps + 1) % I76.Sim.Views.FrameLimit.Names.Length; I76.Game.FrameLimiter.Apply(st); });
+                break;
+            // the renderer: Auto, Vulkan, D3D12 (Windows only) or OpenGL, read by Godot at start (an unavailable choice falls back there)
+            case GraphicsRow.Renderer:
+                Row(line, "Renderer (restart)", () => I76.Game.Boot.StartupSettings.RowText(st.Renderer, I76.Game.Boot.StartupSettings.D3D12Offered, RenderingServer.GetCurrentRenderingDriverName()), () =>
+                {
+                    var all = I76.Game.Boot.StartupSettings.D3D12Offered ? new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.D3D12, I76.Game.Boot.RendererChoice.OpenGL }
+                        : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };
+                    st.Renderer = all[(Math.Max(0, Array.IndexOf(all, st.Renderer)) + 1) % all.Length];
+                });
+                break;
+            // the log file: Godot reads it only at start, so a change shows from the next start (docs/dev-hooks.md: --log forces it for a run)
+            case GraphicsRow.LogFile: Row(line, "Log (restart)", () => st.LogFile ? "On" : "Off", () => st.LogFile = !st.LogFile); break;
+            // the menu art pack's (only when one is installed), with the pack's name beside it
+            case GraphicsRow.HdMenuArt:
+                if (!HdAssets.Installed) return false;
+                Row(line, "HD Menu Art", () => st.HdMenuArt ? "On" : "Off", () => ApplyMenuArt(!st.HdMenuArt));
+                Add(318, LineY(line) + 3, () => HdAssets.Label ?? "", null, Small);
+                break;
+            // the world, car and cockpit texture pack's (only when one is installed; from the next mission or garage visit)
+            case GraphicsRow.HdTextures:
+                if (!I76.Game.Assets.HdTextures.Installed) return false;
+                Row(line, "HD Textures", () => st.HdTextures ? "On" : "Off", () => ApplyTextures(!st.HdTextures));
+                break;
+            // the modern look's plants (docs/modern-vegetation.md)
+            case GraphicsRow.Vegetation:
+                string[] veg = ["Off", "Low", "High"];
+                Row(line, "Vegetation", () => veg[Math.Clamp(st.Vegetation, 0, 2)], () => st.Vegetation = (st.Vegetation + 1) % 3);
+                break;
+            // the main 3D views' field of view, degrees across a 4:3 view (the original's is 90); the mirror and binoculars keep their own, live
+            case GraphicsRow.FieldOfView:
+                Row(line, "Field of View", () => I76.Sim.Views.ViewFov.Names[Math.Clamp(st.FieldOfView, 0, I76.Sim.Views.ViewFov.Names.Length - 1)], () => { st.FieldOfView = (st.FieldOfView + 1) % I76.Sim.Views.ViewFov.Names.Length; I76.Sim.Views.ViewFov.Apply(st.FieldOfView); });
+                break;
+            // the modern look's cabin and driver behind a car's windows (off: plain reflective glass), live
+            case GraphicsRow.CarInteriors:
+                Row(line, "Car Interiors", () => st.CarInteriors ? "On" : "Off", () => { st.CarInteriors = !st.CarInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(st.CarInteriors); });
+                break;
+            // CONFIGURE CHASSIS as the 3D garage (on) or the original's 2D form (off)
+            case GraphicsRow.Garage3D: Row(line, "3D Garage", () => st.Garage3D ? "On" : "Off", () => st.Garage3D = !st.Garage3D); break;
+            // the modern look's palette grade (SoftwareLook)
+            case GraphicsRow.PaletteGrade: Row(line, "Palette Grade", () => st.PaletteGrade ? "On" : "Off", () => st.PaletteGrade = !st.PaletteGrade); break;
+            // the software renderer's double image on a big cockpit hit
+            case GraphicsRow.CrashBlur:
+                Row(line, "Crash Blur", () => I76.Sim.Views.CrashBlurMode.Names[Math.Clamp(st.CrashBlur, 0, 1)], () => st.CrashBlur = 1 - Math.Clamp(st.CrashBlur, 0, 1));
+                break;
+        }
+        return true;
+    }
+
+    private void ApplyMenuArt(bool on) { Shell.Settings.HdMenuArt = on; HdAssets.Enabled = on; }
+    private void ApplyTextures(bool on) { Shell.Settings.HdTextures = on; I76.Game.Assets.HdTextures.Enabled = on; }
+
+    /// <summary>A page's live rows applied after Reset or Cancel put them back (a click applies its own); the graphics block's bytes apply in a mission.</summary>
+    private void Apply(int page)
+    {
+        var st = Shell.Settings;
+        foreach (var r in GraphicsPages.Rows[page])
+            switch (r)
+            {
+                case GraphicsRow.Resolution: I76.Game.Boot.WindowApplier.Apply(st); break;
+                case GraphicsRow.VSync or GraphicsRow.MaxFps: I76.Game.FrameLimiter.Apply(st); break;
+                case GraphicsRow.RenderScale: I76.Game.Boot.RenderScale.Apply(st); break;
+                case GraphicsRow.FieldOfView: I76.Sim.Views.ViewFov.Apply(st.FieldOfView); break;
+                case GraphicsRow.HdMenuArt: HdAssets.Enabled = st.HdMenuArt; break;
+                case GraphicsRow.HdTextures: I76.Game.Assets.HdTextures.Enabled = st.HdTextures; break;
+                case GraphicsRow.CarInteriors: I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(st.CarInteriors); break;
+            }
+    }
+
+    private void Reset()
+    {
+        GraphicsPages.Reset(Shell.Settings, Page);
+        Apply(Page);
+    }
+
+    private void Back() => Shell.Overlay(new GraphicsScreen { Snapshot = _saved });
+
+    private void Done() { Shell.Settings.Save(); Shell.Overlay(new OptionsScreen()); }
+
+    private void Cancel()
+    {
+        GraphicsPages.CopyAll(_saved, Shell.Settings);
+        for (int p = 0; p < GraphicsPages.Names.Length; p++) Apply(p);
+        Shell.Overlay(new OptionsScreen());
+    }
+
+    protected override void Escape() { if (Page == GraphicsPages.Sheet) base.Escape(); else Back(); }
 }
 
 /// <summary>Exit Game, overlay 2: record 8, the only quit confirmation.</summary>

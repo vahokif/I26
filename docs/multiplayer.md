@@ -391,7 +391,7 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
   it), through the planner (`PlanPath`: the road route where the car and the point are on one road, else the A*). The tracker counts in a 30 m sphere and
   a racing bot's AI moves on at 25 m across the ground (`Entity.NavReach`; the AI's own 40 would turn it for the next checkpoint before it was in
   this one); a bot that is still a point ahead of the tracker for 2.5 s (a checkpoint well above or below the car) is sent back for the one it missed. It fires at whatever is ahead and near, as
-  a human may (weapons are as free in a race as in combat). A new order starts at its first point (the AI's racer scan, would otherwise pick the nearest).
+  a human may (weapons are as free in a race as in combat), and with its rear guns and droppers at a car close behind (`MeleeGame.Shoot`, below). A new order starts at its first point (the AI's racer scan, would otherwise pick the nearest).
   A bot that comes back at a spawn point (behind check1 on every stock arena) wants the checkpoint it wanted, as a human does (the count goes on
   through a respawn, as in the original), and drives the course to it from the start (`MeleeGame.LeadIn`, `RaceTracker.FromStart`): check1,
   check2 ... in order (passed, not counted) up to that one, the finish after the last numbered one when the finish is the one wanted (after a
@@ -425,7 +425,14 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
 - *A bot that is stuck gives itself up*: 40 s barely moving, or in a race 90 s without a checkpoint, and it blows itself up (SELF_DESTRUCT: a death, no
   kill) and comes back at a spawn point; the next such life drives with the test on if the last was without.
 - *Team play holds fire*: `ScriptHost.HoldFire` (`MeleeGame.FriendInLine`): no shot while a teammate is nearer than the target on the line (11 m) or going to be in half a
-  second, or beyond it within 8 m and 150 m, or within 12 m of the target. `HoldWeapon`: no bot lays mines or blox (they would be driven over by its own side and itself).
+  second, or beyond it within 8 m and 150 m, or within 12 m of the target.
+- *On the way somewhere a bot shoots what it passes* (`MeleeGame.Shoot`: the race, a regen pad, capture the flag): the nearest enemy within reach ahead (in a race 45 m and
+  26 degrees of the nose) with every weapon, the nearest within that reach and 37 degrees of straight back with its rear-facing weapons (a rear gun, a turret turned round),
+  and the nearest behind it at all with its droppers, each weapon judged by the AI's own fire decision by its own facing (the original's AI asks every
+  mounted weapon; a dropper drops when the car behind is about to drive over its spot, `Combat.AiDrop`). The radar keeps the target ahead when there is one.
+  An attacking bot's droppers go through the same decision against its target, as the original's computer drivers' do.
+- *Droppers are held* (`HoldWeapon`, `MeleeGame.BotHoldsWeapon`): none in the game's first 10 s (the start grid's bunch), none under 10 m/s (a bot in a pinch would lay them
+  on itself), none while a teammate is within 100 m of it (ahead or behind: in an arena the cars circle and come back over a drop), and the last quarter of a full load kept. (Before #199 no bot laid any.)
   Over 15 game minutes of six Hard bots on m02 two teams: about 2100 hits on the other side, one on a teammate.
 
 **Over the network** the protocol is unchanged (13): a bot is a car whose `CarInfo.Owner` is a slot, a row of the scoreboard with an alive flag and

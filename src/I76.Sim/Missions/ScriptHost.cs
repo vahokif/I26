@@ -149,13 +149,15 @@ public sealed partial class ScriptHost : IFsmHost
     /// <summary>
     /// Every weapon tries the target through the fire decision; the radar holds it for the turrets.
     /// The target is any object the order names: a structure too (T01's diner, T02's school, T08's warehouse).
+    /// The port's bots also try a second target with some of their weapons alone (<paramref name="only"/>: a rear gun at a car
+    /// behind), the radar left on the first when <paramref name="radar"/> is false.
     /// </summary>
-    public void FireAt(Entity e, Entity target)
+    public void FireAt(Entity e, Entity target, Func<Weapons.Weapon, bool>? only = null, bool radar = true)
     {
         if (Combat is not { } c || e.Vehicle is not { } v) return;
         if (HoldFire?.Invoke(e, target) == true) return;
         // The AI's radar-target update: an AI radar holds the order's target, but an emplacement's holds the player (Emplacements.Frame)
-        if (!v.IsEmplacement)
+        if (radar && !v.IsEmplacement)
         {
             c.RadarTarget[v] = target.Vehicle;
             if (target.Vehicle is null && target.Static is { Vehicle: null } st) c.StructureTarget[v] = st;
@@ -165,12 +167,12 @@ public sealed partial class ScriptHost : IFsmHost
         if (target.Vehicle is { } tv)
         {
             foreach (var w in a.Weapons)
-                if (w.Hp > 0 && w.Ammo > 0 && HoldWeapon?.Invoke(e, w) != true && c.AiShouldFire(v, tv, w, e.Ai.FireSkill, e.Ai.FireAccuracy)) w.Trigger = true;
+                if (w.Hp > 0 && w.Ammo > 0 && only?.Invoke(w) != false && HoldWeapon?.Invoke(e, w) != true && c.AiShouldFire(v, tv, w, e.Ai.FireSkill, e.Ai.FireAccuracy)) w.Trigger = true;
         }
         else if (target.Static is { Vehicle: null } s)
         {
             foreach (var w in a.Weapons)
-                if (w.Hp > 0 && w.Ammo > 0 && c.AiShouldFire(v, s, target.Position, target.Rot.Forward, w, e.Ai.FireSkill, e.Ai.FireAccuracy)) w.Trigger = true;
+                if (w.Hp > 0 && w.Ammo > 0 && only?.Invoke(w) != false && c.AiShouldFire(v, s, target.Position, target.Rot.Forward, w, e.Ai.FireSkill, e.Ai.FireAccuracy)) w.Trigger = true;
         }
     }
 
@@ -179,7 +181,7 @@ public sealed partial class ScriptHost : IFsmHost
     /// (<see cref="MeleeGame"/>); the original's AI only tests its own weapon's line. Null in every other game.
     /// </summary>
     public Func<Entity, Entity, bool>? HoldFire { get; set; }
-    /// <summary>The port's own: a weapon an AI car does not fire at a car (a network melee's bots do not lay mines or blox).</summary>
+    /// <summary>The port's own: a weapon an AI car does not fire at a car (a network melee's bots hold their droppers by the limits of MeleeGame.BotHoldsWeapon).</summary>
     public Func<Entity, Weapons.Weapon, bool>? HoldWeapon { get; set; }
 
     /// <summary>The mission's roads, for the road war and the flee tactics.</summary>

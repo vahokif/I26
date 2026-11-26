@@ -78,7 +78,7 @@ internal sealed class BotBrain
 /// <list type="bullet">
 /// <item>Combat: attack the nearest enemy, any other car in a free for all, another team's (or the AI fill's) in team play.</item>
 /// <item>Race: the checkpoints in order, lap after lap, as the Race order does (the planner finds the way between them),
-/// shooting what is ahead and near, as a person may.</item>
+/// shooting what is ahead and near, as a person may, and with rear guns and droppers what is close behind.</item>
 /// <item>Capture the flag: a team's bots take roles; raiders take an enemy flag from its stand and bring it to their own,
 /// defenders stay about their stand and meet whoever comes, escorts go with the carrier; whoever is free hunts a carrier of
 /// their team's flag.</item>
@@ -122,8 +122,35 @@ public sealed partial class MeleeGame
         return false;
     }
 
-    /// <summary>A bot lays no mines or blox (a dropper): the AI drops them where they hurt its own side and itself as much as the car it is after.</summary>
-    private bool BotHoldsWeapon(Entity shooter, Weapons.Weapon w) => w.Def.Class == 6 && _botCars.Contains(shooter.Vehicle!);
+    /// <summary>
+    /// A bot's droppers (mines, oil, blox, fire, caltrops; class 6) go through the AI's own drop decision, the original's (a target about
+    /// to drive over the bot's spot, Combat.AiDrop), with the port's limits on top: none in the first <see cref="DropGridSeconds"/> of
+    /// the game (the start grid's bunch), none under <see cref="DropMinSpeed"/> (a bot in a pinch or backing out lays them on itself),
+    /// none while a teammate is within <see cref="DropTeamRange"/> of it (in an arena the cars circle: a drop with a teammate near, ahead or
+    /// behind, is driven over by its own side soon after), and the last quarter of a full load kept for a later chase. The original's
+    /// mission AI has no teammates to spare.
+    /// </summary>
+    private bool BotHoldsWeapon(Entity shooter, Weapons.Weapon w)
+    {
+        if (w.Def.Class != 6 || shooter.Vehicle is not { } v || !_botCars.Contains(v)) return false;
+        if (Host.Now < DropGridSeconds || v.Speed < DropMinSpeed) return true;
+        if (w.Ammo * 4 <= (int)w.Def.Ammo) return true;
+        return TeammateNear(shooter);
+    }
+
+    /// <summary>Whether a teammate (a seat, bot or human, on the shooter's side in team play) is within <see cref="DropTeamRange"/> of the shooter on the ground.</summary>
+    private bool TeammateNear(Entity shooter)
+    {
+        if (!Rules.TeamPlay) return false;
+        foreach (var q in Players)
+        {
+            if (q.Entity == shooter || q.Team != shooter.Team || !Alive(q)) continue;
+            if (Dist2(q.Entity, shooter) < DropTeamRange * DropTeamRange) return true;
+        }
+        return false;
+    }
+
+    internal const float DropGridSeconds = 10f, DropMinSpeed = 10f, DropTeamRange = 100f;
 
     /// <summary>The AI tier of a bot's skill setting: the original's setSkill index, 1 the best driver and shot, 5 the worst (the AI block's default).</summary>
     public static int SkillTier(BotSkill skill) => skill switch { BotSkill.Easy => 4, BotSkill.Hard => 1, _ => 3 };
@@ -276,12 +303,40 @@ public sealed partial class MeleeGame
     }
 
     /// <summary>
-    /// A bot on its way somewhere shoots what it passes: the nearest enemy within <paramref name="range"/> that is ahead (the AI's fire
-    /// decision, the one an attack order ends in, then judges the aim, as it does a teammate in the line).
+    /// A bot on its way somewhere shoots what it passes: the nearest enemy within <paramref name="range"/> that is ahead, then with its
+    /// rear-facing weapons the nearest within that range behind it (within <see cref="RearCone"/> of straight back), and with its droppers
+    /// the nearest behind it at all. Each weapon is judged against its target by the AI's fire decision, by its own facing (the
+    /// original's AI asks every mounted weapon), as an attack order's is, and held for a teammate in the line
+    /// (<see cref="FriendInLine"/>) or, a dropper, by <see cref="BotHoldsWeapon"/>. The radar keeps the target ahead when there is one.
     /// </summary>
-    private void Shoot(MeleePlayer p, float range, float cone = 0.5f)
+    internal void Shoot(MeleePlayer p, float range, float cone = 0.5f)
     {
         var fwd = p.Car.Rot.Forward;
+        var ahead = NearestInArc(p, fwd, range, cone);
+        if (ahead is not null) Host.FireAt(p.Entity, ahead);
+        if (p.Car.Armory is not { } a) return;
+        bool rear = false, drop = false;
+        foreach (var w in a.Weapons)
+        {
+            if (w.Hp <= 0 || w.Ammo <= 0) continue;
+            if (w.Def.Class == 6) drop = true;
+            else if (FacesBack(w)) rear = true;
+        }
+        if (rear && NearestInArc(p, -fwd, range, RearCone) is { } behind && behind != ahead)
+            Host.FireAt(p.Entity, behind, w => w.Def.Class != 6 && FacesBack(w), radar: ahead is null);
+        if (drop && NearestInArc(p, -fwd, range, 0f) is { } chaser && chaser != ahead)
+            Host.FireAt(p.Entity, chaser, w => w.Def.Class == 6, radar: false);
+    }
+
+    /// <summary>A weapon whose muzzle points behind the car (a rear gun, or a turret turned round).</summary>
+    private static bool FacesBack(Weapons.Weapon w) => w.MuzzleRot.Forward.Z < 0;
+
+    /// <summary>How far off straight back a pursuer may be for a bot's rear guns to try it (cos 37 degrees).</summary>
+    internal const float RearCone = 0.8f;
+
+    /// <summary>The nearest enemy within <paramref name="range"/> on the ground whose bearing is within acos <paramref name="cone"/> of <paramref name="dir"/>.</summary>
+    private Entity? NearestInArc(MeleePlayer p, Vector3 dir, float range, float cone)
+    {
         var at = p.Entity.Position;
         Entity? best = null; float bd = range * range;
         foreach (var o in Enemies(p))
@@ -289,10 +344,10 @@ public sealed partial class MeleeGame
             var d = o.Position - at;
             float d2 = d.X * d.X + d.Z * d.Z;
             if (d2 >= bd || d2 < 1f) continue;
-            if (Vector3.Dot(Vector3.Normalize(d), fwd) < cone) continue;
+            if (Vector3.Dot(Vector3.Normalize(d), dir) < cone) continue;
             bd = d2; best = o;
         }
-        if (best is not null) Host.FireAt(p.Entity, best);
+        return best;
     }
 
     // ---- going ----
@@ -463,7 +518,8 @@ public sealed partial class MeleeGame
             e.Depth = -1;
         }
         Order(p, PlanRace, null, b.Path, PathSpeed(p));
-        // a racer shoots what is in its way, as a person may: close, and in front (a shot at a car off to the side costs the turn)
+        // a racer shoots what is in its way, as a person may: close, and in front (a shot at a car off to the side costs the turn);
+        // a rear gun or a dropper at a car on its tail
         Shoot(p, 45f, 0.9f);
     }
 

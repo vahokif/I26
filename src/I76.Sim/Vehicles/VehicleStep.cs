@@ -553,7 +553,7 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
     /// The per-frame object pass for this car against the static world
     /// (mesh class): XZ boxes,
     /// a swept-sphere test, then the four mid-height box corners as rays
-    /// against the polygons. Of one object, the first node in its tree's walk
+    /// against the polygons (box parts box against box, sphere parts by <see cref="SphereWalk"/>). Of one object, the first node in its tree's walk
     /// that is touched gives the contact (<see cref="Collision.StaticObject.WalkRank"/>);
     /// of several objects, the earliest. An object whose contact is a ramp's or
     /// bridge's node (its own type 11-13) with
@@ -582,16 +582,10 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
             if (!o.Solid) continue;
             if (o.SignPlacement)
             {
-                // a sign: each part's sphere against the car's box, now and at the end of the frame; no response, it is knocked off
-                foreach (var sp in o.Spheres.Count > 0 ? o.Spheres : [new Collision.NodeSphere(o.Centre, o.SphereRadius)])
-                {
-                    float reach = r + sp.Radius + v.Speed * dtFrame;
-                    if ((new Vector2(sp.Centre.X - c.X, sp.Centre.Z - c.Z)).LengthSquared() > reach * reach) continue;
-                    if (!SphereHitsBox(v, sp.Centre, sp.Radius, dtFrame)) continue;
-                    ObjectHits.Add((v, o.Name, o.Type, Vector3.UnitY, v.Speed));
-                    Damage?.StaticContact(v, o, new Contact { Hit = true, Other = o });
-                    break;
-                }
+                // a sign: its parts met as any sphere part's (SphereWalk); no response, it is knocked off
+                if (SphereWalk(v, o, o.Spheres.Count > 0 ? o.Spheres : [new Collision.NodeSphere(o.Centre, o.SphereRadius)], c, r, dtFrame, false) is null) continue;
+                ObjectHits.Add((v, o.Name, o.Type, Vector3.UnitY, v.Speed));
+                Damage?.StaticContact(v, o, new Contact { Hit = true, Other = o });
                 continue;
             }
             // another model moves this car: of the rest, only a structure's sign nodes, which that model leaves out
@@ -615,15 +609,10 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
                     mine = hit with { Other = o, Node = b.Node };
                 }
             }
-            foreach (var sp in o.Spheres)
+            if (o.Spheres.Count > 0 && SphereWalk(v, o, o.Spheres, c, r, dtFrame, signsOnly) is var (sh, sn) && Sooner(sn, sh.T))
             {
-                if (signsOnly && !o.SignNode(sp.Node) || o.Unfelt(sp.Node)) continue;
-                if (!SweptSphere(c, v.Vel, sp.Centre, r + sp.Radius, dtFrame)) continue;
-                if (SphereContact(v, sp.Centre, sp.Radius, dtFrame) is { } hit && Sooner(sp.Node, hit.T))
-                {
-                    first = hit.T; firstRank = o.WalkRank(sp.Node);
-                    mine = hit with { Other = o, Node = sp.Node };
-                }
+                first = sh.T; firstRank = o.WalkRank(sn);
+                mine = sh with { Other = o, Node = sn };
             }
             var polys = signsOnly ? o.Polys.FindAll(q => o.SignNode(q.Node)) : o.Polys.Exists(q => o.Unfelt(q.Node)) ? o.Polys.FindAll(q => !o.Unfelt(q.Node)) : o.Polys;
             // each mesh node's pre-test: a sphere about the node's origin (its 'A' geometry, once destroyed, may lie
@@ -746,41 +735,43 @@ public sealed class VehicleStep(IGround ground, CrtRand rand)
         return (tEnter, n);
     }
 
-    /// <summary>A sphere against the car's COLP box (x0..x3, y1..y3, z0..z3) at the start and the end of the frame's motion.</summary>
-    private static bool SphereHitsBox(Vehicle v, Vector3 centre, float radius, float dt)
+    /// <summary>
+    /// The object's class-0x4000 / 0x5000 parts in the order its tree is walked, the first one met giving the contact.
+    /// Each part the pre-test reaches (a sphere of its unscaled radius about its origin) grows the car's box by its own
+    /// scaled radius, and the growth stays for the parts after it: the walk keeps one copy of the car's box for the
+    /// whole object.
+    /// </summary>
+    private static (Contact Hit, int Node)? SphereWalk(Vehicle v, Collision.StaticObject o, List<Collision.NodeSphere> parts, Vector3 c, float r, float dt, bool signsOnly)
     {
-        var min = new Vector3(v.BoxX[0], v.BoxY[1], v.BoxZ[0]); var max = new Vector3(v.BoxX[3], v.BoxY[3], v.BoxZ[3]);
-        var p0 = v.Pos.ToVector3();
-        for (int k = 0; k <= 2; k++)
+        if (parts.Count > 1) parts = [.. parts.OrderBy(sp => o.WalkRank(sp.Node))];
+        float grow = 0;
+        foreach (var sp in parts)
         {
-            var local = v.Rot.ToLocal(centre - (p0 + v.Vel * (dt * k / 2f)));
-            var q = Vector3.Clamp(local, min, max);
-            if ((q - local).LengthSquared() < radius * radius) return true;
+            if (signsOnly && !o.SignNode(sp.Node) || o.Unfelt(sp.Node)) continue;
+            if (!SweptSphere(c, v.Vel, sp.Origin, r + sp.Reach, dt)) continue;
+            grow += sp.Radius;
+            if (GrownBoxContact(v, sp.Centre, grow, dt) is { } hit) return (hit, sp.Node);
         }
-        return false;
+        return null;
     }
 
     /// <summary>
-    /// A class-0x4000 / 0x5000 node's sphere against the car's box, sampled as <see cref="SphereHitsBox"/> (now, half
-    /// way, the end of the frame): the first sample that touches gives the record, its point the box's nearest to the
-    /// centre, its normal from the centre toward it.
+    /// A class-0x4000 / 0x5000 part against the car: not a sphere. Its centre is a point, and the car's box (x0..x3,
+    /// y1..y3, z0..z3) is grown on every side by <paramref name="grow"/>; the point, moving against the car's own
+    /// velocity (the car's spin left out), must enter that box within the frame, through one of its faces. So the wall
+    /// is the car's own outline grown, turning with the car, not the part's; it reaches as far below and above the car
+    /// as to its sides; and a point already inside is no contact: a car that turns round it, or starts inside, meets
+    /// nothing until it has left the box. The record's point is the entered face's normal in the car's frame, its
+    /// normal that face's, turned to the world and reversed, so the response pushes the car straight back off that
+    /// face with no turn.
     /// </summary>
-    private static Contact? SphereContact(Vehicle v, Vector3 centre, float radius, float dt)
+    private static Contact? GrownBoxContact(Vehicle v, Vector3 point, float grow, float dt)
     {
-        var min = new Vector3(v.BoxX[0], v.BoxY[1], v.BoxZ[0]); var max = new Vector3(v.BoxX[3], v.BoxY[3], v.BoxZ[3]);
-        var p0 = v.Pos.ToVector3();
-        for (int k = 0; k <= 2; k++)
-        {
-            float t = dt * k / 2f;
-            var local = v.Rot.ToLocal(centre - (p0 + v.Vel * t));
-            var q = Vector3.Clamp(local, min, max);
-            if ((q - local).LengthSquared() >= radius * radius) continue;
-            var away = v.Rot.ToWorld(q - local);
-            if (away.LengthSquared() < 1e-8f) away = p0 + v.Vel * t - centre;
-            var n = away.LengthSquared() > 1e-8f ? Vector3.Normalize(away) : Vector3.UnitY;
-            return new Contact { Hit = true, T = t, C = q, RelVel = -(v.Vel + v.Rot.ToWorld(Vector3.Cross(q, v.AngVel))), N = n };
-        }
-        return null;
+        var min = new Vector3(v.BoxX[0] - grow, v.BoxY[1] - grow, v.BoxZ[0] - grow);
+        var max = new Vector3(v.BoxX[3] + grow, v.BoxY[3] + grow, v.BoxZ[3] + grow);
+        var lp = v.Rot.ToLocal(point - v.Pos.ToVector3());
+        if (SlabRay(lp, -v.Rot.ToLocal(v.Vel), min, max, dt) is not { } h) return null;
+        return new Contact { Hit = true, T = h.T, C = h.N, RelVel = -v.Vel, N = -v.Rot.ToWorld(h.N) };
     }
 
     /// <summary>For a moving sphere against a static one.</summary>

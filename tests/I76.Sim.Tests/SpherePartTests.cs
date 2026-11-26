@@ -12,8 +12,9 @@ using Xunit;
 namespace I76.Sim.Tests;
 
 /// <summary>
-/// A part whose SGEO flags select a sphere (0x4000: its SGEO radius x 1.0; 0x5000: x 0.75) collides as that sphere, as
-/// the original's scenery tree does: the stock ones are ajplane1's fuselages (the Nitro Pack's P18) and the CTF flag
+/// A part whose SGEO flags select a sphere (0x4000: its SGEO radius x 1.0; 0x5000: x 0.75) collides by that radius, as
+/// the original's scenery tree does (a round meets the sphere; a car meets its centre with its own box grown by the
+/// radius, SignClassPieceTests): the stock ones are ajplane1's fuselages (the Nitro Pack's P18) and the CTF flag
 /// bases, which the car's collide slot ignores (part type 0x5b, like the flag's pole, 0x5a) and which stay without one.
 /// </summary>
 public class SpherePartTests

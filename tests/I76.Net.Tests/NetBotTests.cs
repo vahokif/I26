@@ -191,7 +191,9 @@ public class NetBotTests(ITestOutputHelper output)
             var vp = game.Players.FirstOrDefault(x => x.Car == victim);
             var ap = attacker is Vehicle a ? game.Players.FirstOrDefault(x => x.Car == a) : null;
             if (vp is null || ap is null || vp == ap) return;
-            if (vp.Team == ap.Team) friendlyKills++; else enemyKills++;
+            // a wreck's blast is not a shot: a teammate caught in it is no teamkill
+            if (vp.Team == ap.Team) { if (!DamageModel.IsDead(ap.Car)) friendlyKills++; }
+            else enemyKills++;
         };
         Play(host, 600);
         output.WriteLine($"m05: {enemyHits} hits on the other team, {friendlyShots} on teammates, {enemyKills} kills, {friendlyKills} teamkills; " +

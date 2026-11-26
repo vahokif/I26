@@ -311,7 +311,7 @@ public sealed partial class StaticObject
     private NodeSphere Moved(NodeSphere b)
     {
         var d = ShiftOf(b.Node);
-        return d == Vector3.Zero ? b : b with { Centre = b.Centre + d };
+        return d == Vector3.Zero ? b : b with { Centre = b.Centre + d, Origin = b.Origin + d };
     }
 
     /// <summary>
@@ -485,11 +485,20 @@ public sealed record NodeBox(Rows Rot, Vector3 Origin, Vector3 Min, Vector3 Max,
     public int Node { get; init; } = -1;
 }
 
-/// <summary>A class-0x4000 (radius x 1) or 0x5000 (x 0.75) node's collider: its SGEO sphere, placed in the world.</summary>
+/// <summary>
+/// A class-0x4000 (radius x 1) or 0x5000 (x 0.75) node's collider: its SGEO sphere, placed in the world. Rounds meet it
+/// as a sphere; a car meets its centre as a point against the car's own box grown by <see cref="Radius"/>.
+/// </summary>
 public sealed record NodeSphere(Vector3 Centre, float Radius)
 {
     /// <summary>The structure node it belongs to, or -1 for the root.</summary>
     public int Node { get; init; } = -1;
+    /// <summary>The node's own origin in the world (its centre when not given): a car's pre-test is about it.</summary>
+    public Vector3 Origin { get => _origin ?? Centre; init => _origin = value; }
+    private readonly Vector3? _origin;
+    /// <summary>The SGEO radius before the class's scale (<see cref="Radius"/> when not given): the car's pre-test reach.</summary>
+    public float Reach { get => _reach >= 0 ? _reach : Radius; init => _reach = value; }
+    private readonly float _reach = -1;
 }
 
 /// <summary>
@@ -593,7 +602,7 @@ public sealed class StaticWorld
                 // one per part
                 var (sc, sr) = nodeSphere?.Invoke(part.NodeName) ?? BoundSphere(g.Vertices);
                 var sw = place.Apply(part.ToModel.Apply(sc));
-                o.Spheres.Add(new NodeSphere(sw, sr * (cls == 0x4000 ? 1f : 0.75f)) { Node = node });
+                o.Spheres.Add(new NodeSphere(sw, sr * (cls == 0x4000 ? 1f : 0.75f)) { Node = node, Origin = place.Apply(part.ToModel.Apply(Vector3.Zero)), Reach = sr });
                 // a breakable's bounds stay its vertices' (the spawn spacing's sphere)
                 if (!sign) { all.Add(sw - new Vector3(sr)); all.Add(sw + new Vector3(sr)); }
                 continue;

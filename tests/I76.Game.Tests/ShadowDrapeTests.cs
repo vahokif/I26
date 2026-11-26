@@ -98,6 +98,113 @@ public class ShadowDrapeTests(ITestOutputHelper log)
         Assert.True(ShadowDrape.Connected(new(0, 0, 0), new(20, 10, 0), hill), "up a steady slope");
     }
 
+    // a rift like Rift's (N05): plateaus at 70 m, a floor at 0 between x = 5 and x = 30, the walls 5 m across
+    private static float Rift(float x, float _) => x <= 0 || x >= 35 ? 70f : x < 5 ? 70f - 14f * x : x > 30 ? 14f * (x - 30) : 0f;
+    private static readonly Vector3 EveningSun = new(0.9396926f, 0.34202015f, 0);   // Lighting.ForHour(18), N05's: the rays run toward -x
+
+    /// <summary>
+    /// A ramp's face rising from its foot on the east rim: the light passes over the rim and the face's shadow falls on the far wall, 40 m
+    /// away and 10 m down. Drawn from the foot (just under the ground, so its edge was not tested) to the far wall, it hung across the
+    /// canyon as a dark sheet (#245); it is left out. The same face on level ground is kept.
+    /// </summary>
+    [Fact]
+    public void ARampsFootOnARimHangsNoSheetAcrossTheCanyon()
+    {
+        Vector3 foot = new(40, 69.9f, 0), top1 = new(40, 74, 1), top2 = new(40, 74, -1);
+        var far = ShadowDrape.Of(top1, EveningSun, Rift);
+        Assert.True(far.Point.X < 5, $"the top's shadow lands at x {far.Point.X:0.0}, not on the far wall");
+        Assert.True(ShadowDrape.Of(foot, EveningSun, Rift).Height < 0, "the foot is not under the ground");
+        Assert.Null(ShadowDrape.Drape(foot, top1, top2, EveningSun, Rift));
+        Assert.NotNull(ShadowDrape.Drape(foot, top1, top2, EveningSun, (_, _) => 70f));
+        // both tops alone land side by side on the wall: kept
+        Assert.NotNull(ShadowDrape.Drape(top1, top2, new Vector3(40, 74.5f, 0), EveningSun, Rift));
+    }
+
+    /// <summary>
+    /// A face coming out of a wall (N05's bunkers, dug into the canyon's side) has its buried corner under the plateau, 20 m below its
+    /// surface: its shadow starts where the face leaves the wall, on the floor, and is kept.
+    /// </summary>
+    [Fact]
+    public void AFaceOutOfAWallKeepsItsShadowOnTheFloor()
+    {
+        static float Dug(float x, float _) => x <= 0 ? 25f : x < 1 ? 25f - 25f * x : 0f;
+        var toLight = new Vector3(-EveningSun.X, EveningSun.Y, 0);   // the rays run away from the wall, toward +x
+        Vector3 inWall = new(-3, 2, 0), out1 = new(3, 4, 1), out2 = new(3, 4, -1);
+        Assert.True(ShadowDrape.Of(inWall, toLight, Dug).Height < -20);
+        Assert.NotNull(ShadowDrape.Drape(inWall, out1, out2, toLight, Dug));
+    }
+
+    /// <summary>
+    /// A corner whose ray meets no ground within <see cref="ShadowDrape.Ray"/> falls back to a point at the height of the ground under it:
+    /// over a flat canyon floor that is the floor (kept); a bridge's end on the rim at a low sun put it at the rim's height in the air over
+    /// the canyon (T15's bridge, 46 m up), and the triangle is left out.
+    /// </summary>
+    [Fact]
+    public void AFallbackPointInTheAirIsLeftOut()
+    {
+        var lowSun = Vector3.Normalize(new Vector3(0.966f, 0.259f, 0));
+        static float Rim(float x, float _) => x >= 0 ? 50f : x > -2 ? 50f + 25f * x : 0f;
+        // a sliver, as T15's were: its points less than a metre apart, so no edge of it is long enough to test
+        Vector3 a = new(10, 60, 0), b = new(10, 60, 0.5f), c = new(10, 60.2f, 0);
+        var fallback = ShadowDrape.Of(a, lowSun, Rim);
+        Assert.True(fallback.Point.X < -2 && fallback.Point.Y > 40, $"the fallback lands at {fallback.Point}: not in the air over the canyon");
+        Assert.Null(ShadowDrape.Drape(a, b, c, lowSun, Rim));
+        // a deck 60 m over a flat floor: the same fallback lies on the floor
+        Assert.NotNull(ShadowDrape.Drape(a, b, c, lowSun, (_, _) => 0f));
+    }
+
+    /// <summary>
+    /// The ramps on Rift's rims (N05, aaramp3) at its evening sun, cut and draped as DropShadows does: every point of their shadows that the
+    /// shaders draw lies on the terrain. The east ramp's foot on the rim hung its shadow 67 m above the canyon's floor (#245).
+    /// </summary>
+    [InstallFact]
+    public void RiftsRampsShadowsLieOnTheGround()
+    {
+        if (Environment.GetEnvironmentVariable("I76_NITRO_INSTALL") is not { Length: > 0 } nd || !Directory.Exists(nd)) return;
+        var install = new I76.Formats.Vfs.GameInstall(nd);
+        var vfs = new I76.Formats.Vfs.AssetVfs(install);
+        var asm = new ModelAssembler(vfs);
+        var w = new MissionWorld(vfs, asm, install.FindMission("n05")!);
+        Func<float, float, float> ground = (x, z) => (float)w.BilinearHeight(x, z);
+        var light = I76.Formats.Mission.Lighting.ForHour(I76.Formats.Mission.WorldSettings.Read(w.Mission)!.Hour).Direction;
+        var ramps = w.Placements.Where(p => p.Definition is not null && p.Definition.StartsWith("aaramp3", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.Equal(2, ramps.Count);
+        foreach (var p in ramps)
+        {
+            var model = asm.Assemble(p.Definition!)!;
+            var place = Affine.FromEngine(p.Object.Rotation, w.GroundedPosition(p));
+            int drawn = 0; float worst = 0;
+            foreach (var part in model.Parts)
+                foreach (var f in part.Mesh.Faces)
+                    for (int k = 1; k + 1 < f.Vertices.Length; k++)
+                    {
+                        (Vector3, Vector3) C(int i)
+                        {
+                            var v = f.Vertices[i];
+                            var n = (uint)v.NormalIndex < part.Mesh.Normals.Length ? part.Mesh.Normals[v.NormalIndex] : new Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z);
+                            return (place.Apply(part.ToModel.Apply(part.Mesh.Vertices[v.Index])), Vector3.Normalize(place.Rotate(-part.ToModel.Rotate(n))));
+                        }
+                        foreach (var t in ShadowDrape.Split(C(0), C(k + 1), C(k), ShadowDrape.MaxEdge))
+                        {
+                            if (ShadowDrape.Drape(t[0].P, t[1].P, t[2].P, light, ground) is not { } hits) continue;
+                            // the shaders' points across the triangle: drawn where the height is above the clip and the face is turned to the light
+                            for (int a = 0; a <= 4; a++)
+                                for (int b = 0; a + b <= 4; b++)
+                                {
+                                    float u = a / 4f, v = b / 4f, s = 1 - u - v;
+                                    if (hits[0].H * s + hits[1].H * u + hits[2].H * v < 0.05f || Vector3.Dot(t[0].N * s + t[1].N * u + t[2].N * v, light) < 0) continue;
+                                    var q = hits[0].P * s + hits[1].P * u + hits[2].P * v;
+                                    drawn++;
+                                    worst = MathF.Max(worst, q.Y - ground(q.X, q.Z));
+                                }
+                        }
+                    }
+            log.WriteLine($"{p.Definition} at {p.Object.Position.X:0},{p.Object.Position.Z:0}: {drawn} points drawn, the highest {worst:0.00} m above the terrain");
+            Assert.True(drawn > 1000, "the ramp casts next to nothing");
+            Assert.True(worst < 2f, $"a point of the ramp's shadow hangs {worst:0.0} m above the terrain");
+        }
+    }
+
     [Fact]
     public void SplitCutsEveryEdgeShortAndKeepsTheArea()
     {

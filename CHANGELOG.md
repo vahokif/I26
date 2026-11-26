@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- A ramp or bridge standing at a cliff's edge no longer hangs a dark sheet of shadow in the air across the drop: Rift's ramps in the Nitro Pack (#245), and ramps and bridges on other canyon edges in both games. Its shadow lies on the ground on either side, as the sun would put it. The modern look showed the sheet from far off; the 1997 look showed the same sheet up close.
+
 ## 0.13.0 (21 November 2026)
 
 Network games use protocol 26: 0.13.0 does not play with 0.12.1 or earlier, so everyone in a game needs 0.13.0.

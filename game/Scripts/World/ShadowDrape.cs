@@ -50,17 +50,24 @@ public static class ShadowDrape
     /// <summary>Where the ray along the light from a point at <paramref name="w"/> meets the terrain, and the point's height above the terrain under it (negative: it lies under the ground and casts nothing).</summary>
     public static (Vector3 Point, float Height) Of(Vector3 w, Vector3 toLight, Func<float, float, float> ground)
     {
+        var (point, height, _) = Cast(w, toLight, ground);
+        return (point, height);
+    }
+
+    /// <summary><see cref="Of"/>, and whether the ray met the terrain within <see cref="Ray"/> (else the point is the fallback's).</summary>
+    private static (Vector3 Point, float Height, bool Met) Cast(Vector3 w, Vector3 toLight, Func<float, float, float> ground)
+    {
         float h = w.Y - ground(w.X, w.Z);
-        if (h <= 0) return (w, h);
+        if (h <= 0) return (w, h, true);
         float prev = h;
         for (float t = 1f; t <= Ray; t += 1f)
         {
             var q = w - toLight * t;
             float above = q.Y - ground(q.X, q.Z);
-            if (above <= 0) return (w - toLight * (t - 1f + prev / (prev - above)), h);
+            if (above <= 0) return (w - toLight * (t - 1f + prev / (prev - above)), h, true);
             prev = above;
         }
-        return (w - toLight * (h / MathF.Max(toLight.Y, 0.05f)), h);   // over a drop deeper than the ray: down to the ground under it
+        return (w - toLight * (h / MathF.Max(toLight.Y, 0.05f)), h, false);   // over a drop deeper than the ray: down to the ground under it
     }
 
     /// <summary>The longest edge a drawn shadow triangle keeps (<see cref="Split"/>), metres.</summary>
@@ -93,9 +100,44 @@ public static class ShadowDrape
     }
 
     /// <summary>
+    /// The shadow points (<see cref="Of"/>) of a triangle's three corners, or null when what is drawn of it would hang across a drop: each edge,
+    /// over the part of it that is drawn, must keep to the ground (<see cref="Connected"/>) where its ends are more than a metre apart. A corner
+    /// under the ground casts nothing; the shaders clip the triangle where the corners' heights, taken straight across it, reach the ground, so an
+    /// edge from it is drawn from that point on. Testing only edges between corners above the ground let a ramp's foot on a cliff's rim (Rift,
+    /// N05) hang its face's shadow from the rim across the canyon to the far wall, a dark sheet in the air. A corner whose ray meets no ground
+    /// within <see cref="Ray"/> keeps its fallback point only where that point lies on the ground (<see cref="FallbackOff"/>: a deck over a flat
+    /// canyon floor); beside a drop it is in the air, at the height of the ground under the corner (a bridge's end on a canyon's rim at a low
+    /// sun, T15 and M09).
+    /// </summary>
+    /// <summary>How far off the ground a corner's fallback point may lie (<see cref="Drape"/>), metres.</summary>
+    public const float FallbackOff = 2.5f;
+
+    public static (Vector3 P, float H)[]? Drape(Vector3 a, Vector3 b, Vector3 c, Vector3 toLight, Func<float, float, float> ground)
+    {
+        var hits = new (Vector3 P, float H)[3];
+        int i = 0;
+        foreach (var corner in (ReadOnlySpan<Vector3>)[a, b, c])
+        {
+            var (p, h, met) = Cast(corner, toLight, ground);
+            if (!met && MathF.Abs(p.Y - ground(p.X, p.Z)) > FallbackOff) return null;
+            hits[i++] = (p, h);
+        }
+        for (int k = 0; k < 3; k++)
+        {
+            var (p, q) = (hits[k], hits[(k + 1) % 3]);
+            if (p.H <= 0 && q.H <= 0) continue;   // all under the ground: clipped whole
+            // the drawn part: from where a buried end's height reaches the ground
+            var from = p.H > 0 ? p.P : Vector3.Lerp(p.P, q.P, -p.H / (q.H - p.H));
+            var to = q.H > 0 ? q.P : Vector3.Lerp(q.P, p.P, -q.H / (p.H - q.H));
+            if (Vector3.Distance(from, to) > 1f && !Connected(from, to, ground)) return null;
+        }
+        return hits;
+    }
+
+    /// <summary>
     /// Whether the ground between two shadow points keeps to the straight line joining them (to a tolerance that grows with the span): a triangle
     /// whose corners fall either side of a cliff's rim, one on the plateau and one on the floor below, would otherwise hang as a dark sheet in the air
-    /// across the canyon (the shadows that floated under Seminole's bridge, #86). Points under the ground (<paramref name="a"/> or <paramref name="b"/> with no height) are not tested.
+    /// across the canyon (the shadows that floated under Seminole's bridge, #86).
     /// </summary>
     public static bool Connected(Vector3 a, Vector3 b, Func<float, float, float> ground)
     {

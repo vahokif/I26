@@ -480,11 +480,12 @@ public sealed class AudioScreen : OverlayScreen
 }
 
 /// <summary>
-/// Graphic Detail, overlay 5: record 9, the sixteen-byte graphics block. The sheet keeps the original's rows the port honours, in the
-/// original's order, and under a blank line the entries for the port's pages (<see cref="GraphicsPages"/>); a page is the same sheet
+/// Graphic Detail, overlay 5: record 9, the sixteen-byte graphics block. The original has one sheet of rows; here the sheet holds
+/// only the entries for the pages (<see cref="GraphicsPages"/>), each row, the original's too, on its page; a page is the same sheet
 /// with its name on the first line, its rows under it and a Back (Esc goes back too), each row on its own ruled line
-/// (<see cref="GraphicsLayout"/>). Reset puts the page's rows back (the sheet's: the default profile, as the original's); Done and
-/// Cancel, on any page, save or restore every page from the snapshot taken when Graphic Detail was opened.
+/// (<see cref="GraphicsLayout"/>). Reset on a page puts its rows back; on the sheet every page's (the original's rows and the block
+/// to the default profile, as the original's Reset); Done and Cancel, on any page, save or restore every page from the snapshot taken
+/// when Graphic Detail was opened.
 /// </summary>
 public sealed class GraphicsScreen : OverlayScreen
 {
@@ -645,7 +646,8 @@ public sealed class GraphicsScreen : OverlayScreen
     private void Reset()
     {
         GraphicsPages.Reset(Shell.Settings, Page);
-        Apply(Page);
+        // the sheet's Reset is every page's
+        for (int p = 0; p < GraphicsPages.Names.Length; p++) if (Page == GraphicsPages.Sheet || p == Page) Apply(p);
     }
 
     private void Back() => Shell.Overlay(new GraphicsScreen { Snapshot = _saved });

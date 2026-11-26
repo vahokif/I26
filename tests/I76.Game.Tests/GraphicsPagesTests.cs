@@ -4,9 +4,10 @@ using Xunit;
 namespace I76.Game.Tests;
 
 /// <summary>
-/// Graphic Detail's pages (GraphicsPages, GraphicsLayout): the sheet is the original's rows in the original's order, every port row is
-/// on one page, every page fits the sheet's and the pad's lines without scrolling and never on a button, Reset puts back a page's
-/// own rows and no other's (the start-up rows kept), and the snapshot Cancel restores from carries every row. Without the engine.
+/// Graphic Detail's pages (GraphicsPages, GraphicsLayout): the sheet holds only the pages' entries, every row (the original's too) is
+/// on one page, the original's leading their pages in its order, every page fits the sheet's and the pad's lines without scrolling
+/// and never on a button, Reset puts back a page's own rows and no other's (the sheet's every page's; the start-up rows kept), and
+/// the snapshot Cancel restores from carries every row. Without the engine.
 /// </summary>
 public class GraphicsPagesTests
 {
@@ -58,56 +59,71 @@ public class GraphicsPagesTests
         foreach (var r in AllRows) Assert.Equal(1, GraphicsPages.Rows.Count(p => p.Contains(r)));
     }
 
-    /// <summary>The original's grxdet1.map in order, without the 1997 renderer's own detail rows: Screen Resolution (the port's window), Monitor Brightness, Visibility Range (Draw Distance), Terrain Detail, Shadow Detail, Ext. Instrum. Disp., Rear Mirror.</summary>
+    /// <summary>
+    /// The original's grxdet1.map in order, without the 1997 renderer's own detail rows: Screen Resolution (the port's window), Monitor
+    /// Brightness, Visibility Range (Draw Distance), Terrain Detail, Shadow Detail, Ext. Instrum. Disp., Rear Mirror. The sheet has no
+    /// rows: each of the original's leads its page in the original's order (but for Field of View, first on Car &amp; Cockpit).
+    /// </summary>
     [Fact]
-    public void TheSheetIsTheOriginalsRowsInTheirOrder()
+    public void TheSheetHasOnlyTheEntriesAndTheOriginalsRowsLeadTheirPages()
     {
+        Assert.Empty(GraphicsPages.Rows[GraphicsPages.Sheet]);
         Assert.Equal([GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.DrawDistance, GraphicsRow.TerrainDetail, GraphicsRow.ShadowDetail, GraphicsRow.ExtInstruments, GraphicsRow.RearMirror],
-            GraphicsPages.Rows[GraphicsPages.Sheet]);
-        Assert.Equal(GraphicsPages.OriginalRows, GraphicsPages.Rows[GraphicsPages.Sheet].Length);
+            GraphicsPages.Original);
+        Assert.Equal([GraphicsPages.Display, GraphicsPages.Display, GraphicsPages.World, GraphicsPages.World, GraphicsPages.World, GraphicsPages.CarCockpit, GraphicsPages.CarCockpit],
+            GraphicsPages.Original.Select(GraphicsPages.PageOf));
+        for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
+        {
+            var mine = GraphicsPages.Rows[p].Where(GraphicsPages.Original.Contains).ToArray();
+            Assert.Equal(GraphicsPages.Original.Where(mine.Contains), mine);
+            Assert.Equal(mine, GraphicsPages.Rows[p].Skip(p == GraphicsPages.CarCockpit ? 1 : 0).Take(mine.Length));
+        }
         Assert.Equal(["Graphic Detail", "Display", "World", "Car & Cockpit", "Effects"], GraphicsPages.Names);
         Assert.Equal(GraphicsPages.CarCockpit, GraphicsPages.PageNamed("car"));
         Assert.Equal(-1, GraphicsPages.PageNamed("look"));
     }
 
-    /// <summary>The shell's sheet: the seven rows, a blank line, the four entries, all inside the fourteen lines; every page's rows from line 1 inside them.</summary>
+    [Fact]
+    public void ThePagesRows()
+    {
+        Assert.Equal([GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.Look1997, GraphicsRow.AntiAliasing, GraphicsRow.RenderScale, GraphicsRow.VSync, GraphicsRow.MaxFps, GraphicsRow.Renderer, GraphicsRow.LogFile, GraphicsRow.HdMenuArt],
+            GraphicsPages.Rows[GraphicsPages.Display]);
+        Assert.Equal([GraphicsRow.DrawDistance, GraphicsRow.TerrainDetail, GraphicsRow.ShadowDetail, GraphicsRow.HdTextures, GraphicsRow.Vegetation],
+            GraphicsPages.Rows[GraphicsPages.World]);
+        Assert.Equal([GraphicsRow.FieldOfView, GraphicsRow.ExtInstruments, GraphicsRow.RearMirror, GraphicsRow.CarInteriors, GraphicsRow.Garage3D],
+            GraphicsPages.Rows[GraphicsPages.CarCockpit]);
+        Assert.Equal([GraphicsRow.PaletteGrade, GraphicsRow.CrashBlur], GraphicsPages.Rows[GraphicsPages.Effects]);
+    }
+
+    /// <summary>The shell's sheet: the four entries on its first lines (where the original's first rows were); every page's rows from line 1 inside the fourteen lines.</summary>
     [Fact]
     public void TheShellsLinesHoldEveryPage()
     {
         var sheet = GraphicsLayout.Shell(GraphicsPages.Sheet);
-        Assert.True(sheet.Fits(GraphicsPages.Rows[GraphicsPages.Sheet].Length));
-        Assert.Equal([8, 9, 10, 11], sheet.Entries);
-        var used = Enumerable.Range(0, GraphicsPages.Rows[GraphicsPages.Sheet].Length).Select(sheet.LineOf).Concat(sheet.Entries).ToList();
-        Assert.Equal(used.Count, used.Distinct().Count());
-        Assert.All(used, l => Assert.InRange(l, 0, GraphicsPages.Lines - 1));
+        Assert.Equal(0, GraphicsPages.FirstEntryLine);
+        Assert.Equal([0, 1, 2, 3], sheet.Entries);
         Assert.True(GraphicsLayout.LineY(GraphicsPages.Lines - 1) + GraphicsLayout.LineH - 2 <= GraphicsLayout.ButtonY);
         for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
         {
             var page = GraphicsLayout.Shell(p);
             Assert.True(page.Fits(GraphicsPages.Rows[p].Length), GraphicsPages.Names[p]);
             Assert.Equal(GraphicsPages.FirstRowLine, page.LineOf(0));
-            Assert.NotEqual(GraphicsPages.HeadingLine, page.LineOf(0));
+            Assert.InRange(page.LineOf(GraphicsPages.Rows[p].Length - 1), GraphicsPages.FirstRowLine, GraphicsPages.Lines - 1);
         }
     }
 
-    /// <summary>The pad: every page's rows on pad rows 1 to 14, never on a button's pair (15 to 17), the sheet's entries on rows of their own under a blank row.</summary>
-    [Theory]
-    [InlineData(5)]
-    [InlineData(6)]
-    [InlineData(7)]
-    public void ThePadsRowsSitOnTheirOwnRows(int sheetRows)
+    /// <summary>The pad: the sheet's entries on rows 1 to 4; every page's rows on pad rows 1 to 14, never on a button's pair (15 to 17).</summary>
+    [Fact]
+    public void ThePadsRowsSitOnTheirOwnRows()
     {
-        var sheet = GraphicsLayout.Pad(GraphicsPages.Sheet, sheetRows);
-        Assert.True(sheet.Fits(sheetRows));
-        var used = Enumerable.Range(0, sheetRows).Select(sheet.LineOf).Concat(sheet.Entries).ToList();
-        Assert.Equal(used.Count, used.Distinct().Count());
-        Assert.Equal(sheetRows + 2, sheet.Entries[0]);
-        foreach (int r in used) { Assert.InRange(r, 1, GraphicsLayout.PadRows); Assert.DoesNotContain(r, GraphicsLayout.PadButtons); }
+        var sheet = GraphicsLayout.Pad(GraphicsPages.Sheet, 0);
+        Assert.Equal([1, 2, 3, 4], sheet.Entries);
+        foreach (int r in sheet.Entries) Assert.DoesNotContain(r, GraphicsLayout.PadButtons);
         for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
         {
             var page = GraphicsLayout.Pad(p, GraphicsPages.Rows[p].Length);
             Assert.True(page.Fits(GraphicsPages.Rows[p].Length));
-            Assert.All(Enumerable.Range(0, GraphicsPages.Rows[p].Length).Select(page.LineOf), r => Assert.DoesNotContain(r, GraphicsLayout.PadButtons));
+            Assert.All(Enumerable.Range(0, GraphicsPages.Rows[p].Length).Select(page.LineOf), r => { Assert.InRange(r, 1, GraphicsLayout.PadRows); Assert.DoesNotContain(r, GraphicsLayout.PadButtons); });
         }
     }
 
@@ -124,21 +140,57 @@ public class GraphicsPagesTests
         var d = GraphicsPages.Defaults();
         foreach (var r in AllRows)
         {
-            bool reset = GraphicsPages.PageOf(r) == page && !GraphicsPages.KeptOnReset.Contains(r);
+            bool reset = (page == GraphicsPages.Sheet || GraphicsPages.PageOf(r) == page) && !GraphicsPages.KeptOnReset.Contains(r);
             Assert.Equal(Read(r, reset ? d : Changed()), Read(r, s));
         }
     }
 
-    /// <summary>The sheet's Reset is the original's: the graphics block back to the default profile, the bytes no row shows too, but Anti-Aliasing's, which is Display's.</summary>
+    /// <summary>The sheet's Reset is every page's: the graphics block back to the default profile (the bytes no row shows too), every row to its default but the start-up rows. A page's Reset leaves the bytes no row shows alone.</summary>
     [Fact]
-    public void TheSheetsResetIsTheDefaultProfile()
+    public void TheSheetsResetIsTheDefaultProfileAndEveryPage()
     {
         var s = Changed();
-        GraphicsPages.Reset(s, GraphicsPages.Sheet);
-        for (int i = 0; i < 16; i++) Assert.Equal(i == 0x8 ? Changed().Graphics[i] : ShellSettings.DefaultGraphics[i], s.Graphics[i]);
         GraphicsPages.Reset(s, GraphicsPages.Display);
+        Assert.Equal(ShellSettings.DefaultGraphics[0x8], s.Graphics[0x8]);
+        Assert.Equal(Changed().Graphics[0x0], s.Graphics[0x0]);
+        Assert.Equal(Changed().Graphics[0x2], s.Graphics[0x2]);   // World's
+        GraphicsPages.Reset(s, GraphicsPages.Sheet);
         Assert.Equal(ShellSettings.DefaultGraphics, s.Graphics);
+        Assert.Equal("", s.Resolution);
+        Assert.Equal(I76.Game.Boot.RendererChoice.OpenGL, s.Renderer);
         Assert.Equal(I76.Sim.Views.CrashBlurMode.On, GraphicsPages.Defaults().CrashBlur);
+    }
+
+    /// <summary>Every byte of the graphics block is one row's or the sheet's: Copy and Reset touch each from one page.</summary>
+    [Fact]
+    public void EachBlockByteHasOneOwner()
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            var from = new ShellSettings();
+            from.Graphics[i] ^= 0x5a;
+            int owners = 0;
+            for (int p = 0; p < GraphicsPages.Names.Length; p++)
+            {
+                var to = new ShellSettings();
+                GraphicsPages.Copy(p, from, to);
+                if (to.Graphics[i] == from.Graphics[i]) owners++;
+            }
+            Assert.True(owners == 1, $"byte {i:x} copied by {owners} pages");
+        }
+    }
+
+    /// <summary>The in-game pad's sheet Reset: every pad's offered rows and the bytes no row shows, not a row the pad leaves out (its Cancel could not put it back).</summary>
+    [Fact]
+    public void ThePadsSheetResetLeavesRowsItDoesNotOfferAlone()
+    {
+        var s = Changed();
+        var offered = AllRows.Where(r => r is not (GraphicsRow.Garage3D or GraphicsRow.HdMenuArt)).ToArray();
+        GraphicsPages.Reset(s, GraphicsPages.Sheet, offered);
+        Assert.Equal(ShellSettings.DefaultGraphics, s.Graphics);
+        Assert.False(s.Garage3D);
+        Assert.False(s.HdMenuArt);
+        Assert.Equal("", s.Resolution);
     }
 
     [Fact]

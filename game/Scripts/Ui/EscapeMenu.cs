@@ -338,28 +338,27 @@ public sealed partial class EscapeMenu : Control
             Action("I'm a swinger", 13, () => Switch(_play)),
         ];
 
-        // Graphic Detail: the original's rows the port honours, in its order, then under a blank row an entry for each page of the port's
-        // own rows, a pad of its own on the same art with the page's name as its title (GraphicsPages: the shell's sheet has the same
-        // pages). Each pad's Done, Cancel and Reset are its own rows', as the original's pads.
-        int sheetRow = 1;
-        List<GraphicsRow> sheetOffered = [];
+        // Graphic Detail: an entry for each page (GraphicsPages: the original's rows on the pages they belong to, as the shell's sheet),
+        // each a pad of its own on the same art with the page's name as its title. Each page's Done, Cancel and Reset are its own rows',
+        // as the original's pads; the sheet's Reset is every page's, and its Done and Cancel keep or undo it.
         _graphics.Items = [];
-        foreach (var r in GraphicsPages.Rows[GraphicsPages.Sheet]) if (PadRow(r) is { } it) { it.Pair = sheetRow++; _graphics.Items.Add(it); sheetOffered.Add(r); }
-        var sheetPlace = GraphicsLayout.Pad(GraphicsPages.Sheet, sheetRow - 1);
+        var sheetPlace = GraphicsLayout.Pad(GraphicsPages.Sheet, 0);
+        List<GraphicsRow> allOffered = [];
         for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
         {
             var page = new Screen { Key = $"graphics{p}", Art = "grxdet1", Title = GraphicsPages.Names[p], Parent = _graphics };
             int row = 1, pg = p;
             List<GraphicsRow> offered = [];
             foreach (var r in GraphicsPages.Rows[p]) if (PadRow(r) is { } it) { it.Pair = row++; page.Items.Add(it); offered.Add(r); }
+            allOffered.AddRange(offered);
             // Reset puts back the pad's own rows only: Cancel could not restore a row the pad does not show
-            page.Items.Add(new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) { GraphicsPages.Reset(Settings, pg, offered); Live?.Invoke(Settings); Switch(page); } } });
+            page.Items.Add(new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) { GraphicsPages.Reset(Settings, pg, offered); if (offered.Contains(GraphicsRow.Resolution)) I76.Game.Boot.WindowApplier.Apply(Settings); Live?.Invoke(Settings); Switch(page); } } });
             page.Items.Add(DoneButton());
             page.Items.Add(CancelButton());
             _graphicsPages.Add(page);
             _graphics.Items.Add(Action(GraphicsPages.Names[p] + "...", sheetPlace.Entries[p - GraphicsPages.FirstPage], () => Switch(page)));
         }
-        _graphics.Items.Add(new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) { GraphicsPages.Reset(Settings, GraphicsPages.Sheet, sheetOffered); I76.Game.Boot.WindowApplier.Apply(Settings); Live?.Invoke(Settings); Switch(_graphics); } } });
+        _graphics.Items.Add(new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) { GraphicsPages.Reset(Settings, GraphicsPages.Sheet, allOffered); I76.Game.Boot.WindowApplier.Apply(Settings); Live?.Invoke(Settings); Switch(_graphics); } } });
         _graphics.Items.Add(DoneButton());
         _graphics.Items.Add(CancelButton());
 
@@ -525,7 +524,7 @@ public sealed partial class EscapeMenu : Control
     /// <summary>MenuDone: msg 8 to every item but the buttons, then the parent — or the cheater warning from Play Options with a cheat on.</summary>
     private void Done()
     {
-        foreach (var it in _screen.Items) if (it.Type != Button) it.Cb?.Invoke(it, 8);
+        foreach (var it in Committed()) if (it.Type != Button) it.Cb?.Invoke(it, 8);
         if (_screen == _play && (Settings.PlayOptions & 0x1c) != 0) { Switch(_cheater); return; }
         Switch(_screen.Parent);
     }
@@ -533,9 +532,15 @@ public sealed partial class EscapeMenu : Control
     /// <summary>MenuCancel: msg 9 to every item but the buttons, then the parent.</summary>
     private void Cancel()
     {
-        foreach (var it in _screen.Items) if (it.Type != Button) it.Cb?.Invoke(it, 9);
+        foreach (var it in Committed()) if (it.Type != Button) it.Cb?.Invoke(it, 9);
         Switch(_screen.Parent);
     }
+
+    /// <summary>
+    /// The items a pad's Done and Cancel commit or restore: its own; Graphic Detail's sheet, which has no rows of its own but whose Reset
+    /// is every page's, its pages' too (a page's Done has already committed its rows, so the sheet's Cancel undoes only what is newer).
+    /// </summary>
+    private IEnumerable<Item> Committed() => _screen == _graphics ? _graphics.Items.Concat(_graphicsPages.SelectMany(p => p.Items)) : _screen.Items;
 
     private bool _closed;
 

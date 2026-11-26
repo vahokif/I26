@@ -37,6 +37,28 @@ public static class CloudNoise
         });
     }
 
+    /// <summary>
+    /// A volume shrunk by <paramref name="factor"/> on each axis, each texel the mean of the block it covers: the shape noise
+    /// for far clouds, its finest billows (under a pixel there, and sparkling) averaged away.
+    /// </summary>
+    public static byte[] Shrink(byte[] v, int n, int factor)
+    {
+        int m = n / factor;
+        var o = new byte[m * m * m];
+        for (int z = 0; z < m; z++)
+            for (int y = 0; y < m; y++)
+                for (int x = 0; x < m; x++)
+                {
+                    int sum = 0;
+                    for (int k = 0; k < factor; k++)
+                        for (int j = 0; j < factor; j++)
+                            for (int i = 0; i < factor; i++)
+                                sum += v[((z * factor + k) * n + y * factor + j) * n + x * factor + i];
+                    o[(z * m + y) * m + x] = (byte)((sum + factor * factor * factor / 2) / (factor * factor * factor));
+                }
+        return o;
+    }
+
     /// <summary>The erosion noise, <see cref="DetailSize"/>³ bytes: a Worley FBM, its edges eaten into the shape's.</summary>
     public static byte[] Detail(int size = DetailSize)
     {
@@ -171,7 +193,7 @@ public static class CloudNoise
                 float t = Math.Clamp((l - lo) / MathF.Max(hi - lo, 1e-4f), 0f, 1f);
                 cover[y * w + x] = t * t * (3f - 2f * t);
             }
-        var soft = Blur(cover, w, h, w / 110f);
+        var soft = Blur(cover, w, h, w / 48f);
         var wide = Blur(cover, w, h, w / 16f);
         var outp = new byte[w * h * 2];
         for (int i = 0; i < w * h; i++)

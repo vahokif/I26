@@ -13,7 +13,7 @@ public partial class Main
 {
     private ShaderMaterial? _modernSkyMat;
     private ImageTexture? _cloudCover;
-    private static Texture3D? _cloudShape, _cloudDetail;
+    private static Texture3D? _cloudShape, _cloudShapeFar, _cloudDetail;
     private static System.Threading.Tasks.Task<(byte[] Shape, byte[] Detail)>? _cloudNoise;
 
     private static readonly string FlatSkyPath = "res://Shaders/sky_modern.gdshader", VolumetricSkyPath = "res://Shaders/sky_volumetric.gdshader",
@@ -62,11 +62,12 @@ public partial class Main
     private bool PrepareVolumetric(ShaderMaterial m)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        if (_cloudShape is null || _cloudDetail is null)
+        if (_cloudShape is null || _cloudShapeFar is null || _cloudDetail is null)
         {
             StartCloudNoise();
             var (shape, detail) = _cloudNoise!.GetAwaiter().GetResult();
             _cloudShape = Volume(shape, CloudNoise.ShapeSize);
+            _cloudShapeFar = Volume(CloudNoise.Shrink(shape, CloudNoise.ShapeSize, 4), CloudNoise.ShapeSize / 4);
             _cloudDetail = Volume(detail, CloudNoise.DetailSize);
         }
         if (_cloudCover is null)
@@ -79,10 +80,29 @@ public partial class Main
             _cloudCover = ImageTexture.CreateFromImage(Image.CreateFromData(img.GetWidth(), img.GetHeight(), false, Image.Format.Rg8, cover));
         }
         m.SetShaderParameter("cover_map", _cloudCover);
+        // a layer fixed in the world: its floor 1.5 km over the map's average ground (one height for the map, as the horizon's)
+        if (_builder?.World is { } world) m.SetShaderParameter("cloud_floor", (float)world.AverageGroundHeight() + 1500f);
+        m.SetShaderParameter("world_origin", new Vector3(_origin.X, _origin.Y, _origin.Z));
+        // the wind: as fast as the dome's texture scrolls, 1500 m a repeat (its 6000 radius, the texture 4 times across the half),
+        // and its way (the texture's offset grows on both axes: the clouds go toward -x, -z)
+        float scroll = m.GetShaderParameter("scroll_per_second").VariantType == Variant.Type.Float ? m.GetShaderParameter("scroll_per_second").AsSingle() : 0.02997f;
+        m.SetShaderParameter("wind", new Vector2(-scroll * 1500f, -scroll * 1500f));
+        m.SetShaderParameter("vol_haze", 0.03f);   // the march hazes far clouds itself
         m.SetShaderParameter("shape_noise", _cloudShape);
+        m.SetShaderParameter("shape_noise_far", _cloudShapeFar);
         m.SetShaderParameter("detail_noise", _cloudDetail);
         GD.Print($"sky: volumetric inputs in {clock.ElapsedMilliseconds} ms");
         return true;
+    }
+
+    private double _cloudClock;
+
+    /// <summary>The wind's clock: the mission's own time (its sim ticks, every player's the same), or the frames' before a session runs.</summary>
+    private void UpdateClouds(double delta)
+    {
+        if (_modernSkyMat is not { } m || m.Shader.ResourcePath == FlatSkyPath) return;
+        _cloudClock = I76.Game.Sim.SimClock.Ticks is not null ? (I76.Game.Sim.SimClock.Now + (_sim?.Alpha ?? 0f)) * (double)I76.Game.Sim.SimClock.Tick : _cloudClock + delta;
+        m.SetShaderParameter("cloud_time", (float)_cloudClock);
     }
 
     private static ImageTexture3D Volume(byte[] data, int n)

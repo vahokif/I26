@@ -2352,6 +2352,7 @@ public partial class Main : Node3D
         _worldRoot.Position = -Coords.ToGodot(gameOrigin);
         I76.Game.Sim.MotionBlur.Cut();   // everything moved at once: no frame to blend from
         _sky1997?.SetShaderParameter("origin_y", gameOrigin.Y);   // the horizon ring sinks with the eye's game height
+        _modernSkyMat?.SetShaderParameter("world_origin", new Vector3(gameOrigin.X, gameOrigin.Y, gameOrigin.Z));   // the volumetric clouds stand in the world
     }
 
     /// <summary>The 1997 look's sky (sky_dome.gdshader).</summary>
@@ -3402,6 +3403,7 @@ public partial class Main : Node3D
         ActiveCamera.Far = I76.Formats.Imaging.DrawDistance.CameraFar(DrawDistanceNow);
         if (_pit is not null) _pit.MirrorFar = ActiveCamera.Far;   // the rear-view mirror draws as far as the view (not the binoculars' zoomed far)
         UpdateSoftwareBand();   // MainSoftware.cs
+        UpdateClouds(delta);   // MainClouds.cs
         if (_pit?.Binoculars == true && ActiveCamera == _car?.CockpitCamera) ActiveCamera.Far = System.Math.Min(ActiveCamera.Far * 8, 100000f);   // Far = zoom * far, zoom 8
         bool free = ActiveCamera == _cam;   // the fly camera (--cam): the origin follows it, not the car, or a far view loses depth precision
         if (_car is not null && !free && _car.Position.Length() > RebaseDistance)
@@ -3428,7 +3430,11 @@ public partial class Main : Node3D
             if (fa.Length == 6) _cam.Fov = fa[5];
             _car?.SetCockpit(false);
             if (!_cam.Current) _cam.MakeCurrent();
-            Rebase(new System.Numerics.Vector3(fa[0], fa[1], fa[2]));
+            // I76_FREECAM_VEL=vx,vy,vz (game units a second) moves it on the mission's clock: a capture of the camera travelling
+            var held = new System.Numerics.Vector3(fa[0], fa[1], fa[2]);
+            if (System.Environment.GetEnvironmentVariable("I76_FREECAM_VEL") is { } fv && fv.Split(',').Select(t => float.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray() is { Length: 3 } va)
+                held += new System.Numerics.Vector3(va[0], va[1], va[2]) * (I76.Game.Sim.SimClock.Now * I76.Game.Sim.SimClock.Tick);
+            Rebase(held);
             _cam.Position = Vector3.Zero;
             _cam.SetYawPitch(fa[3], fa[4]);
         }

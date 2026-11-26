@@ -67,6 +67,19 @@ public class CloudNoiseTests
     }
 
     [Fact]
+    public void TheFarShapeIsTheBlockMean()
+    {
+        // a 4^3 volume, x and y as written, shrunk by 2: each texel the mean of its 2^3 block
+        var v = new byte[64];
+        for (int i = 0; i < 64; i++) v[i] = (byte)(i * 4);
+        var s = CloudNoise.Shrink(v, 4, 2);
+        Assert.Equal(8, s.Length);
+        // the first block: x 0-1, y 0-1, z 0-1 → indices 0,1,4,5,16,17,20,21, times 4, mean 42
+        Assert.Equal(42, s[0]);
+        Assert.Equal(s[0] + 8, s[1]);   // one block along x: two texels on
+    }
+
+    [Fact]
     public void TheCoverFollowsTheSkyTexturesBrightness()
     {
         const int n = 32;

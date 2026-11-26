@@ -321,28 +321,32 @@ public sealed partial class Combat
         v.Flags |= VehicleFlags.NoGripOnLowSurface | (VehicleFlags)0x80000000;
     }
 
-    /// <summary>For a short segment: the earliest collider it crosses (vehicles, then structures).</summary>
-    private (object Victim, Vector3 At, int Node)? Probe(Round r, Vector3 p0, Vector3 d)
+    /// <summary>
+    /// For a drop's or a mine's probe: what it meets. The moving colliders (the cars) are searched before the structures
+    /// and the first one met wins, however near a structure is: a car over a slick lying 0.1 mm under a road piece's plane
+    /// (whose box the probe enters first) is still oiled. Among the cars, or among the structures, the earliest.
+    /// </summary>
+    private (object Victim, Vector3 At, int Node, Vector3 N)? Probe(Round r, Vector3 p0, Vector3 d)
     {
-        float best = 2f; object? victim = null; int node = -1;
+        float best = 2f; object? victim = null; int node = -1; Vector3 normal = default;
         foreach (var v in World.Vehicles)
         {
             if (v.Wreck || v.IsEmplacement || (v == r.Shooter && ShooterExcluded(r))) continue;
-            if (SegmentVsVehicle(v, p0, d) is { } h && h.T < best) { best = h.T; victim = v; }
+            if (SegmentVsVehicle(v, p0, d) is { } h && h.T < best) { best = h.T; victim = v; normal = h.N; }
         }
-        if (World.Ground is IHasStatics hs)
+        if (victim is null && World.Ground is IHasStatics hs)
             foreach (var o in hs.World.Objects)
             {
                 if (!o.Solid || (o.Vehicle is { } ov && ov == r.Shooter && ShooterExcluded(r))) continue;
                 float reach = MathF.Max(o.Radius, o.SphereRadius);
                 if ((p0 - o.Centre).LengthSquared() > (reach + 1f) * (reach + 1f)) continue;
                 var (t, poly) = StaticWorld.RayMesh(o.Polys, p0, d, 1f);
-                if (poly is not null && t < best) { best = t; victim = o; node = poly.Node; }
-                if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; node = bh.Box.Node; }
-                if (o.SignPlacement && RaySign(o, p0, d) is { } sh && sh.T < best) { best = sh.T; victim = o; node = -1; }
-                else if (o.Type == 4 && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sp && sp.T < best) { best = sp.T; victim = o; node = sp.Sphere.Node; }
+                if (poly is not null && t < best) { best = t; victim = o; node = poly.Node; normal = poly.N; }
+                if (StaticWorld.RayBoxes(o.Boxes, p0, d, 1f) is { } bh && bh.T < best) { best = bh.T; victim = o; node = bh.Box.Node; normal = bh.N; }
+                if (o.SignPlacement && RaySign(o, p0, d) is { } sh && sh.T < best) { best = sh.T; victim = o; node = -1; normal = sh.N; }
+                else if (o.Type == 4 && StaticWorld.RaySpheres(o.Spheres, p0, d, 1f) is { } sp && sp.T < best) { best = sp.T; victim = o; node = sp.Sphere.Node; normal = sp.N; }
             }
-        return victim is null ? null : (victim, p0 + d * best, victim is StaticObject ? node : -1);
+        return victim is null ? null : (victim, p0 + d * best, victim is StaticObject ? node : -1, normal);
     }
 
     /// <summary>For one probe hit: the packet (oil's is empty) and the impact pair by what was hit.</summary>
@@ -351,6 +355,7 @@ public sealed partial class Combat
         if (_cosmetic) return;
         if (victim is not null && Damage is { } sink && r.Ord.Mask != 0) sink.Apply(victim, RoundPacket(r), Local(victim, at), node);
         int cls = ImpactClass(victim, node);
+        if (cls < 0) return;   // no pair for its type (a road piece's 0x50 node): no effect, no sound
         var fx = r.Ord.ImpactXdf[cls];
         Events.Add(new Impact(fx, r.Ord.ImpactWav[cls], at, victim, r.Kind, at, default, dir));
         if (fx.Length > 0 && !fx.Equals("null", StringComparison.OrdinalIgnoreCase) && effects(fx) is { } e)

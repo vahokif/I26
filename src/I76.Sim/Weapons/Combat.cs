@@ -1208,9 +1208,12 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
     /// <summary>
     /// Mines (0xf) and Blox (0x10): they fall and bounce off the
     /// ground (v' = 0.25·v − 0.5·(v·n)·n at a corner contact) until slower than
-    /// 1, then lie flat on it; every frame a 1 m upward probe looks for a car
-    /// (not the dropper for its first 2 s). A car that finds one takes the
-    /// round's packet and effect and is thrown; the mine is gone.
+    /// 1, then lie flat on it; the ground is the one cars drive on, a ramp's or a bridge's deck included. Every frame a 1 m
+    /// upward probe looks for what is over it, a car first (not the dropper for its first 2 s), then a structure. Whatever
+    /// it meets takes the round's packet and its impact by type, and the mine is gone; a car is thrown as well. A
+    /// structure's box entered from below sets it off at once: a road piece whose plane stands 1 mm over its origin (the
+    /// 10 m pieces, the runway) placed as a structure, over flat ground; one with no impact pair (a 0x50 piece) takes it
+    /// with no effect at all.
     /// The original sweeps each corner in 5 m steps and tumbles the body; here
     /// the corners are tested at the frame's end and the pose stays level.
     /// </summary>
@@ -1228,11 +1231,11 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             foreach (var c in MineCorners)
             {
                 var w = r.Pos + r.Rot.ToWorld(c);
-                deepest = MathF.Max(deepest, World.Ground.BareHeight(w.X, w.Z) - w.Y);
+                deepest = MathF.Max(deepest, World.Ground.Query(w.X, w.Y, w.Z).Height - w.Y);
             }
             if (deepest > 0)
             {
-                var n = World.Ground.BareNormal(r.Pos.X, r.Pos.Z);
+                var n = World.Ground.Query(r.Pos.X, r.Pos.Y, r.Pos.Z).Normal;
                 r.Pos.Y += deepest;
                 r.Vel = r.Vel * 0.25f - n * (0.5f * Vector3.Dot(r.Vel, n));
             }
@@ -1242,8 +1245,8 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             // at rest: on the ground, flat to it, heading kept
             r.Settled = true;
             r.Vel = Vector3.Zero;
-            r.Pos.Y = World.Ground.BareHeight(r.Pos.X, r.Pos.Z);
-            var n = World.Ground.BareNormal(r.Pos.X, r.Pos.Z);
+            var (h, n) = World.Ground.Query(r.Pos.X, r.Pos.Y, r.Pos.Z);
+            r.Pos.Y = h;
             var f = r.Rot.Forward;
             f -= n * Vector3.Dot(f, n);
             if (f.LengthSquared() < 1e-6f) f = Vector3.Cross(Vector3.UnitX, n);
@@ -1252,18 +1255,15 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         }
         r.Travelled += Vector3.Distance(r.PrevPos, r.Pos);
         var up = Vector3.UnitY;
-        foreach (var v in World.Vehicles)
+        if (Probe(r, r.Pos, up) is not { } hit) return false;
+        OnHit(r, hit.Victim, hit.At, hit.N, up, hit.Node);
+        if (_cosmetic) return true;
+        if (hit.Victim is Vehicle v)
         {
-            if (v.Wreck || v.IsEmplacement || (v == r.Shooter && r.Age <= 2f)) continue;
-            if (SegmentVsVehicle(v, r.Pos, up) is not { } h) continue;
-            var at = r.Pos + up * h.T;
-            OnHit(r, v, at, h.N, up);
-            if (_cosmetic) return true;
-            if (r.Kind == 0xf) Throw(v, at, 1f, 2f, 0.75f);
-            else Throw(v, at, 0.5f, 0.5f, 0.5f);
-            return true;
+            if (r.Kind == 0xf) Throw(v, hit.At, 1f, 2f, 0.75f);
+            else Throw(v, hit.At, 0.5f, 0.5f, 0.5f);
         }
-        return false;
+        return true;
     }
 
     /// <summary>The spin a mine gives by which quarter of the car it went off under (local x, z).</summary>
@@ -1550,17 +1550,23 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         return null;
     }
 
-    /// <summary>The impact pair by what was hit: terrain; vehicles (1, 4, 8, 9); classes 2/0xc; 3/0xb; a structure by the node's own type.</summary>
+    /// <summary>
+    /// The impact pair by what was hit, a structure by the struck node's own type (the root's for a hit on the root): 0 the
+    /// terrain, 1 a vehicle (types 1, 4, 8, 9), 2 for 2 / 0xc, 3 for 3 / 0xb. −1: a type with no pair (a road piece's 0x50-0x53,
+    /// a bridge deck's 0xd, a gate's 7 / 10, a tunnel's inside 0x5c, a CTF flag's 0x5a / 0x5b, 0): the round is spent where it
+    /// met it, with no effect, no sound and no splash.
+    /// </summary>
     private static int ImpactClass(object? victim, int node = -1) => victim switch
     {
         null => 0,
         Vehicle => 1,
         StaticObject { Vehicle: not null } => 1,
-        StaticObject o when node >= 0 && node < o.Nodes.Count => o.Nodes[node].Type switch { 2 or 0xc => 2, 3 or 0xb => 3, _ => 1 },
-        StaticObject { Type: 2 or 0xc } => 2,
-        StaticObject { Type: 3 or 0xb } => 3,
-        _ => 1,
+        StaticObject o => ImpactClassOf(o.TypeAt(node)),
+        _ => -1,
     };
+
+    /// <inheritdoc cref="ImpactClass"/>
+    public static int ImpactClassOf(uint type) => type switch { 1 or 4 or 8 or 9 => 1, 2 or 0xc => 2, 3 or 0xb => 3, _ => -1 };
 
     private float PlayerMult(Round r) => r.Kind == 0x12 ? 1f : DifficultyFactor(r.Shooter);
 
@@ -1584,14 +1590,17 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             for (int i = 0; i < r.Count; i++)
                 sink.Apply(victim, RoundPacket(r), Local(victim, at), node);
         int cls = ImpactClass(victim, node);
-        var fx = r.Ord.ImpactXdf[cls];
-        // the bullet step (kinds 1, 6, 0x12, 0x15) places its impact 2 m back along the path
-        var place = r.Kind is 1 or 6 or 0x12 or 0x15 ? at - dir * 2f : at;
-        Events.Add(new Impact(fx, r.Ord.ImpactWav[cls], place, victim, r.Kind, at, n, dir));
-        if (fx.Length > 0 && !fx.Equals("null", StringComparison.OrdinalIgnoreCase) && effects(fx) is { } e)
+        if (cls >= 0)
         {
-            Events.Add(new Explosion(e, place));
-            if (e.SplashDamage != 0) Splash(place, e.SplashRadius, e.SplashDamage, r.Shooter);
+            var fx = r.Ord.ImpactXdf[cls];
+            // the bullet step (kinds 1, 6, 0x12, 0x15) places its impact 2 m back along the path
+            var place = r.Kind is 1 or 6 or 0x12 or 0x15 ? at - dir * 2f : at;
+            Events.Add(new Impact(fx, r.Ord.ImpactWav[cls], place, victim, r.Kind, at, n, dir));
+            if (fx.Length > 0 && !fx.Equals("null", StringComparison.OrdinalIgnoreCase) && effects(fx) is { } e)
+            {
+                Events.Add(new Explosion(e, place));
+                if (e.SplashDamage != 0) Splash(place, e.SplashRadius, e.SplashDamage, r.Shooter);
+            }
         }
         // A cluster bomb's landing schedules its bomblets after its own impact
         if (r.Kind == 5 && !bomblet) ScheduleBomblets(r, at);

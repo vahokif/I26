@@ -57,6 +57,7 @@ uniform float sky_lum = 0.15;
 uniform float cloud_lum = 0.8;
 uniform float detail = 0.35;      // how much the noise reshapes the texture's clouds
 uniform float light_strength = 1.0;
+uniform float vol_haze = 0.12;    // the volumetric clouds' haze toward the horizon (the flat clouds' is 0.12)
 
 // a lattice point's random level, without a sine: sin of the large arguments the finer octaves reach (dot products in the
 // hundreds of thousands) loses its precision on the GPU and neighbouring points came out alike, which left the noise flat over
@@ -92,7 +93,16 @@ float density(vec2 uv, int octaves) {
 	return clamp(base + (n - 0.5) * detail * 1.6 + (e - 0.5) * detail * 1.4 * edge, 0.0, 1.0);
 }
 
-vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
+// the engine's dome projection: where a direction (game frame) meets the dome, relative to the eye
+vec2 dome_xz(vec3 g) {
+	float b = g.y * drop;
+	float t = -b + sqrt(b * b - (drop * drop - radius * radius));
+	return (t * g).xz;
+}
+
+// vol: when use_vol, the volumetric clouds already marched for this direction (sky_volumetric.gdshaderinc): their light in
+// rgb, what they let through in a; they take the place of the flat cloud layer (the high faint layer stays behind them)
+vec3 modern_sky_with(vec3 eyedir, float time, bool cubemap, bool use_vol, vec4 vol) {
 	vec3 d = normalize(eyedir);
 	vec3 g = vec3(d.x, d.y, -d.z);    // Godot -> game: mirror Z
 	vec3 s = normalize(sprite_dir);
@@ -106,7 +116,15 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 
 	// what reaches the eye from the sun or moon through the clouds and the haze, added once the sky is done
 	float transmit = 1.0;
-	if (g.y > 0.0) {
+	if (use_vol) {
+		// the clouds' own light (the high layer's with it) over the sky behind
+		col = col * vol.a + vol.rgb;
+		// clouds thin into the haze near the horizon, as the flat ones do
+		if (g.y > 0.0) col = mix(I76_COL(horizon_color), col, smoothstep(0.0, vol_haze, g.y));
+		transmit = vol.a;
+		// a cloud in front of the sun glows round it (forward scattering), brightest where it is thin
+		if (procedural_sun) col += vec3(1.0, 0.95, 0.85) * (pow(sun, 300.0) * 1.6 + pow(sun, 40.0) * 0.25) * (1.0 - vol.a) * vol.a * 2.0 * light_strength;
+	} else if (g.y > 0.0) {
 		// the engine's dome projection
 		float b = g.y * drop;
 		float t = -b + sqrt(b * b - (drop * drop - radius * radius));
@@ -222,3 +240,5 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 	}
 	return col;
 }
+
+vec3 modern_sky(vec3 eyedir, float time, bool cubemap) { return modern_sky_with(eyedir, time, cubemap, false, vec4(0.0, 0.0, 0.0, 1.0)); }

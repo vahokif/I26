@@ -255,6 +255,7 @@ public partial class Main : Node3D
         WindowApplier.Apply(first, atStart: true);   // Resolution: a saved window size
         RenderScale.Apply(first);   // Render Scale: the 3D view's scale
         I76.Sim.Views.ViewFov.Apply(first.FieldOfView);
+        if (VolumetricSupported && CloudsMode(first) == I76.Formats.Imaging.CloudNoise.Volumetric) StartCloudNoise();   // MainClouds.cs: ready before the first sky
         if (ShaderSmoke.Requested) { SetProcess(false); AddChild(new ShaderSmoke()); return; }
         SwitchProbe.Install(GetTree());
         // --from-installer: the game data out of a GOG offline installer first, then this scene again on it
@@ -1914,6 +1915,7 @@ public partial class Main : Node3D
     private IEnumerable<object?> ApplySkySteps()
     {
         if (_builder?.SkyTexture is not { } tex) yield break;
+        if (VolumetricSupported && CloudsMode(I76.Game.Shell.ShellSettings.Load()) == I76.Formats.Imaging.CloudNoise.Volumetric) StartCloudNoise();   // MainClouds.cs
         var mat = _sky1997 = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sky_dome.gdshader") };
         mat.SetShaderParameter("clouds", tex);
         mat.SetShaderParameter("far_clip", Far1997);
@@ -1967,7 +1969,8 @@ public partial class Main : Node3D
     /// </summary>
     private ShaderMaterial ModernSky(ShaderMaterial dome, I76.Formats.Mission.LightPreset light)
     {
-        var m = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sky_modern.gdshader") };
+        var m = _modernSkyMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sky_modern.gdshader") };
+        _cloudCover = null;   // the mission's own (MainClouds.cs)
         foreach (var p in new[] { "clouds", "horizon", "has_horizon", "sprite", "has_sprite", "sprite_dir", "sprite_radius" })
             m.SetShaderParameter(p, dome.GetShaderParameter(p));
         // a texture pack's sky, horizon and sprite where it has them (the dome, the 1997 look's, keeps the originals)

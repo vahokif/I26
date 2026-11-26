@@ -1,0 +1,89 @@
+using System.Linq;
+using I76.Formats.Imaging;
+using Xunit;
+
+namespace I76.Formats.Tests;
+
+/// <summary>Graphic Detail's Clouds (the modern sky's volumetric clouds): the setting, the tiling noise and the cover map.</summary>
+public class CloudNoiseTests
+{
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("flat")]
+    [InlineData("puffy")]
+    public void AMissingOrUnknownWordIsFlat(string? word) => Assert.Equal(CloudNoise.Flat, CloudNoise.Parse(word));
+
+    [Theory]
+    [InlineData("volumetric")]
+    [InlineData(" Volumetric ")]
+    public void VolumetricIsReadInAnyCase(string word) => Assert.Equal(CloudNoise.Volumetric, CloudNoise.Parse(word));
+
+    [Theory]
+    [InlineData(CloudNoise.Flat)]
+    [InlineData(CloudNoise.Volumetric)]
+    public void AChosenValueRoundTrips(int mode) => Assert.Equal(mode, CloudNoise.Parse(CloudNoise.Word(mode)));
+
+    // the noise repeats across the unit cube on every axis, so the textures tile without a seam
+    [Theory]
+    [InlineData(0.13f, 0.71f, 0.42f)]
+    [InlineData(0.98f, 0.02f, 0.5f)]
+    public void WorleyTiles(float x, float y, float z)
+    {
+        foreach (int cells in new[] { 2, 4, 16 })
+        {
+            var w = new CloudNoise.WorleyGrid(cells);
+            float v = w.At(x, y, z);
+            Assert.Equal(v, w.At(x + 1f, y, z), 3);
+            Assert.Equal(v, w.At(x, y - 1f, z), 3);
+            Assert.Equal(v, w.At(x, y, z + 1f), 3);
+        }
+    }
+
+    [Theory]
+    [InlineData(0.13f, 0.71f, 0.42f)]
+    [InlineData(0.98f, 0.02f, 0.5f)]
+    public void PerlinTiles(float x, float y, float z)
+    {
+        float v = CloudNoise.PerlinFbm(x, y, z, 4, 4);
+        Assert.Equal(v, CloudNoise.PerlinFbm(x + 1f, y, z, 4, 4), 3);
+        Assert.Equal(v, CloudNoise.PerlinFbm(x, y + 1f, z, 4, 4), 3);
+        Assert.Equal(v, CloudNoise.PerlinFbm(x, y, z - 1f, 4, 4), 3);
+    }
+
+    [Fact]
+    public void TheVolumesSpanTheirRange()
+    {
+        var shape = CloudNoise.Shape(16);
+        var detail = CloudNoise.Detail(8);
+        Assert.Equal(16 * 16 * 16, shape.Length);
+        Assert.Equal(8 * 8 * 8, detail.Length);
+        // neither flat nor saturated: lumps with clear air between them
+        // stretched over the bytes: lumps with clear air between them, not bunched at one end
+        Assert.Equal(0, shape.Min());
+        Assert.Equal(255, shape.Max());
+        Assert.InRange(shape.Average(b => (double)b), 96, 224);
+        Assert.InRange(detail.Average(b => (double)b), 64, 192);
+    }
+
+    [Fact]
+    public void TheCoverFollowsTheSkyTexturesBrightness()
+    {
+        const int n = 32;
+        // the left half open sky (dark blue), the right half cloud (white)
+        var rgb = new byte[n * n * 3];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                int i = (y * n + x) * 3;
+                (rgb[i], rgb[i + 1], rgb[i + 2]) = x < n / 2 ? ((byte)40, (byte)70, (byte)150) : ((byte)255, (byte)255, (byte)255);
+            }
+        var cover = CloudNoise.Cover(rgb, n, n, skyLum: 0.06f, cloudLum: 0.9f);
+        Assert.Equal(n * n * 2, cover.Length);
+        // two bytes a texel: the softened cover, then the wide one; both about clear in the open sky's middle and whole in the cloud's
+        Assert.True(cover[(5 * n + n / 4) * 2] < 16);
+        Assert.Equal(255, cover[(5 * n + 3 * n / 4) * 2]);
+        Assert.True(cover[(5 * n + n / 4) * 2 + 1] < 64);
+        Assert.True(cover[(5 * n + 3 * n / 4) * 2 + 1] > 192);
+    }
+}

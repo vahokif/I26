@@ -76,8 +76,11 @@ public partial class Main
             img = (Image)img.Duplicate();
             if (img.IsCompressed()) img.Decompress();
             img.Convert(Image.Format.Rgb8);
-            var cover = CloudNoise.Cover(img.GetData(), img.GetWidth(), img.GetHeight(), m.GetShaderParameter("sky_lum").AsSingle(), m.GetShaderParameter("cloud_lum").AsSingle());
-            _cloudCover = ImageTexture.CreateFromImage(Image.CreateFromData(img.GetWidth(), img.GetHeight(), false, Image.Format.Rg8, cover));
+            var cover = CloudNoise.Cover(img.GetData(), img.GetWidth(), img.GetHeight(), m.GetShaderParameter("sky_lum").AsSingle(), m.GetShaderParameter("cloud_lum").AsSingle(), 4);
+            const int up = 4;
+            var half = new byte[cover.Length * 2];
+            for (int i = 0; i < cover.Length; i++) BitConverter.TryWriteBytes(half.AsSpan(i * 2), (System.Half)cover[i]);
+            _cloudCover = ImageTexture.CreateFromImage(Image.CreateFromData(img.GetWidth() * up, img.GetHeight() * up, false, Image.Format.Rgh, half));
         }
         m.SetShaderParameter("cover_map", _cloudCover);
         // a layer fixed in the world: its floor 1.5 km over the map's average ground (one height for the map, as the horizon's)

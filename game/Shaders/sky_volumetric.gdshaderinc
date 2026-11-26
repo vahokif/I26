@@ -15,7 +15,7 @@
 uniform sampler2D cover_map : filter_linear, repeat_enable;   // cloud cover 0..1 in the layout of `clouds`: R softened a little, G blurred wide (CloudNoise.Cover)
 uniform sampler3D shape_noise : filter_linear, repeat_enable;        // 128^3 Perlin-Worley
 uniform sampler3D shape_noise_far : filter_linear, repeat_enable;    // the same shrunk to 32^3, for far clouds (CloudNoise.Shrink)
-uniform sampler3D detail_noise : filter_linear, repeat_enable;       // 32^3 Worley
+uniform sampler3D detail_noise : filter_linear, repeat_enable;       // 64^3 Worley
 uniform vec3 world_origin;              // game coordinates of Godot's origin (Main.Rebase)
 uniform float cloud_time = 0.0;         // the mission's seconds (Main), the wind's clock
 uniform float cloud_floor = 1500.0;     // game height of the layer's floor: the map's average ground + 1.5 km
@@ -23,8 +23,8 @@ uniform float cloud_depth = 1500.0;     // its thickness
 uniform float planet_radius = 6371000.0;
 uniform vec2 wind = vec2(-45.0, -45.0); // m/s over game x, z: the dome's texture scroll at its 1500 m a repeat
 uniform float cover_tile = 8000.0;      // metres a repeat of the sky texture
-uniform float shape_tile = 1800.0;      // metres a tile of the shape noise
-uniform float detail_tile = 450.0;
+uniform float shape_tile = 1800.0;      // metres a tile of the shape noise (128^3: 14 m a texel, its finest cells 112 m)
+uniform float detail_tile = 450.0;     // 64^3: 7 m a texel
 uniform float max_distance = 60000.0;
 uniform float far_detail = 8000.0;     // the fine noise gone by this distance, the shape's finest billows with it
 uniform float haze_distance = 22000.0;  // far clouds fade into the horizon's colour over about this
@@ -34,7 +34,8 @@ uniform float sun_gain = 0.9;
 uniform float cover_reach = 0.75;     // the texture's cover at which the clouds are whole (the flat sky's noise spreads them about as far)
 uniform float ambient_gain = 1.0;
 uniform int steps = 40;             // coarse strides across the layer
-uniform float fine_step = 0.4;       // in cloud, steps of this share of a stride
+uniform float fine_step = 0.3;       // in cloud, steps of this share of a stride
+uniform float edge_band = 0.15;      // how far past the noise's range the threshold's easing reaches (a softer edge)
 
 // height over the layer's floor of a point at p from the eye at e (game frame), the floor falling d^2/2R with the distance d
 float floor_height(vec3 e, vec3 p) { return e.y + p.y - cloud_floor + dot(p.xz, p.xz) / (2.0 * planet_radius); }
@@ -58,7 +59,7 @@ float cover_at(vec3 e, vec3 p, out float hf, out vec3 q, out float wide) {
 	// carried by the wind: the cover and the noise together
 	vec2 w = e.xz + p.xz - wind * cloud_time;
 	vec2 uv = w / cover_tile;
-	q = vec3(w.x, hf * cloud_depth * 0.5, w.y);   // the noise's lumps half again as tall as wide
+	q = vec3(w.x, hf * cloud_depth * 0.8, w.y);   // the noise's lumps a little taller than wide
 	// the cover blurred wide: the clouds' height follows it, so they narrow as they rise and their tops round over
 	vec2 c2 = textureLod(cover_map, uv, 0.0).rg;
 	wide = c2.g;
@@ -66,6 +67,7 @@ float cover_at(vec3 e, vec3 p, out float hf, out vec3 q, out float wide) {
 }
 
 float remap01(float v, float lo, float hi) { return clamp((v - lo) / max(hi - lo, 1e-4), 0.0, 1.0); }
+float soft01(float x) { return x * x * (3.0 - 2.0 * x); }
 
 // density 0..1 from the cover and the noise; erode adds the fine noise, less of it for far (0 near .. 1 far): its billows
 // would be under a pixel there and only sparkle
@@ -77,12 +79,14 @@ float shape_density(float cov, float wide, float hf, vec3 q, bool erode, float f
 	vec3 sq = q / shape_tile;
 	float n = far >= 1.0 ? textureLod(shape_noise_far, sq, 0.0).r
 		: far <= 0.0 ? textureLod(shape_noise, sq, 0.0).r : mix(textureLod(shape_noise, sq, 0.0).r, textureLod(shape_noise_far, sq, 0.0).r, far);
-	float d = remap01(n, 1.0 - base, 1.0) * base;
+	// the noise over the cover's threshold, eased in: a linear ramp leaves a crease at the threshold, and through the
+	// noise's trilinear lattice that crease drew the lattice's facets on every cloud
+	float d = soft01(remap01(n, 1.0 - base, 1.0 + edge_band)) * base;
 	if (erode && d > 0.0 && far < 1.0) {
 		float dn = textureLod(detail_noise, q / detail_tile, 0.0).r;
 		// wispy at the bottom, billowing toward the top
 		float m = mix(dn, 1.0 - dn, clamp(hf * 4.0, 0.0, 1.0));
-		d = remap01(d, m * erosion * (1.0 - far), 1.0);
+		d = soft01(remap01(d, m * erosion * (1.0 - far), 1.0));
 	}
 	return d;
 }

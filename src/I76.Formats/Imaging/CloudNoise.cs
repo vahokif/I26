@@ -17,22 +17,23 @@ public static class CloudNoise
     public static int Parse(string? word) => word?.Trim().ToLowerInvariant() == "volumetric" ? Volumetric : Flat;
     public static string Word(int mode) => mode == Volumetric ? "volumetric" : "flat";
 
-    public const int ShapeSize = 128, DetailSize = 32;
+    public const int ShapeSize = 128, DetailSize = 64;
 
     /// <summary>
     /// The shape noise, <see cref="ShapeSize"/>³ bytes (x fastest, then y, then z), tiling on every axis: billowy Perlin
     /// noise remapped by Worley noise (Perlin-Worley), then remapped again by a Worley FBM a step finer, so the cells read as
-    /// round lumps with Perlin's spread between them.
+    /// round lumps with Perlin's spread between them. Its finest cells are 8 texels across: anything finer is a texel or
+    /// two, and sampled linearly it shows the lattice as facets (the erosion noise adds the fine detail).
     /// </summary>
     public static byte[] Shape(int size = ShapeSize)
     {
-        var w = new[] { 4, 8, 16, 32, 64 }.Select(c => new WorleyGrid(c)).ToArray();
+        var w = new[] { 4, 8, 16 }.Select(c => new WorleyGrid(c)).ToArray();
         return Volume(size, (x, y, z) =>
         {
-            float perlin = MathF.Abs(PerlinFbm(x, y, z, 4, 4) * 2f - 1f);   // billows
-            float w4 = w[0].At(x, y, z), w8 = w[1].At(x, y, z), w16 = w[2].At(x, y, z), w32 = w[3].At(x, y, z), w64 = w[4].At(x, y, z);
+            float perlin = MathF.Abs(PerlinFbm(x, y, z, 4, 3) * 2f - 1f);   // billows
+            float w4 = w[0].At(x, y, z), w8 = w[1].At(x, y, z), w16 = w[2].At(x, y, z);
             float pw = Remap(1f - perlin, 0f, 1f, w4 * 0.625f + w8 * 0.25f + w16 * 0.125f, 1f);   // Perlin-Worley: Perlin with Worley's cells as its floor
-            float low = (w8 * 0.625f + w16 * 0.25f + w32 * 0.125f) * 0.625f + (w16 * 0.625f + w32 * 0.25f + w64 * 0.125f) * 0.375f;
+            float low = w8 * 0.7f + w16 * 0.3f;
             return Remap(pw, low - 1f, 1f, 0f, 1f);
         });
     }
@@ -59,7 +60,7 @@ public static class CloudNoise
         return o;
     }
 
-    /// <summary>The erosion noise, <see cref="DetailSize"/>³ bytes: a Worley FBM, its edges eaten into the shape's.</summary>
+    /// <summary>The erosion noise, <see cref="DetailSize"/>³ bytes: a Worley FBM, its edges eaten into the shape's; its finest cells 8 texels across.</summary>
     public static byte[] Detail(int size = DetailSize)
     {
         var w = new[] { 2, 4, 8 }.Select(c => new WorleyGrid(c)).ToArray();
@@ -173,10 +174,12 @@ public static class CloudNoise
     /// The cover map from the sky texture (RGB bytes, sRGB, <paramref name="w"/> × <paramref name="h"/>, tiling): its linear
     /// brightness ramped from the open sky's to the clouds' as the flat sky ramps it (sky_modern.gdshaderinc's density,
     /// <paramref name="skyLum"/> and <paramref name="cloudLum"/> from MissionBuilder's SkyPalette, after the same small blur),
-    /// two bytes a texel: the cover softened a little (the clouds stand on it; the texture's finest streaks, the same all the
-    /// way up, would stripe their sides) and blurred wide (their height follows it, so they narrow as they rise).
+    /// two values a texel: the cover softened a little (the clouds stand on it; the texture's finest streaks, the same all the
+    /// way up, would stripe their sides) and blurred wide (their height follows it, so they narrow as they rise). Enlarged
+    /// <paramref name="scale"/> times each way by a cubic B-spline: the stock skies are 128 texels, 62 m each laid over the
+    /// world, and sampled linearly their creases showed as facets in the clouds.
     /// </summary>
-    public static byte[] Cover(ReadOnlySpan<byte> rgb, int w, int h, float skyLum, float cloudLum)
+    public static float[] Cover(ReadOnlySpan<byte> rgb, int w, int h, float skyLum, float cloudLum, int scale = 4)
     {
         var lum = new float[w * h];
         for (int i = 0; i < w * h; i++)
@@ -195,13 +198,48 @@ public static class CloudNoise
             }
         var soft = Blur(cover, w, h, w / 48f);
         var wide = Blur(cover, w, h, w / 16f);
-        var outp = new byte[w * h * 2];
-        for (int i = 0; i < w * h; i++)
-        {
-            outp[i * 2] = (byte)MathF.Round(Math.Clamp(soft[i], 0f, 1f) * 255f);
-            outp[i * 2 + 1] = (byte)MathF.Round(Math.Clamp(wide[i], 0f, 1f) * 255f);
-        }
+        var a = Enlarge(soft, w, h, scale);
+        var b = Enlarge(wide, w, h, scale);
+        var outp = new float[a.Length * 2];
+        for (int i = 0; i < a.Length; i++) { outp[i * 2] = Math.Clamp(a[i], 0f, 1f); outp[i * 2 + 1] = Math.Clamp(b[i], 0f, 1f); }
         return outp;
+    }
+
+    /// <summary>A tiling image enlarged <paramref name="scale"/> times each way by a cubic B-spline through its texels' centres.</summary>
+    public static float[] Enlarge(float[] src, int w, int h, int scale)
+    {
+        int W = w * scale, H = h * scale;
+        var dst = new float[W * H];
+        Span<float> wx = stackalloc float[4], wy = stackalloc float[4];
+        for (int y = 0; y < H; y++)
+        {
+            float fy = (y + 0.5f) / scale - 0.5f;
+            int iy = (int)MathF.Floor(fy);
+            Weights(fy - iy, wy);
+            for (int x = 0; x < W; x++)
+            {
+                float fx = (x + 0.5f) / scale - 0.5f;
+                int ix = (int)MathF.Floor(fx);
+                Weights(fx - ix, wx);
+                float s = 0f;
+                for (int j = 0; j < 4; j++)
+                {
+                    int row = Wrap(iy - 1 + j, h) * w;
+                    for (int i = 0; i < 4; i++) s += src[row + Wrap(ix - 1 + i, w)] * wx[i] * wy[j];
+                }
+                dst[y * W + x] = s;
+            }
+        }
+        return dst;
+
+        static void Weights(float t, Span<float> k)
+        {
+            float t2 = t * t, t3 = t2 * t;
+            k[0] = (1f - 3f * t + 3f * t2 - t3) / 6f;
+            k[1] = (4f - 6f * t2 + 3f * t3) / 6f;
+            k[2] = (1f + 3f * t + 3f * t2 - 3f * t3) / 6f;
+            k[3] = t3 / 6f;
+        }
     }
 
     /// <summary>A Gaussian blur of a tiling image, <paramref name="sigma"/> in texels.</summary>

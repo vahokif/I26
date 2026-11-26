@@ -91,12 +91,24 @@ public class CloudNoiseTests
                 int i = (y * n + x) * 3;
                 (rgb[i], rgb[i + 1], rgb[i + 2]) = x < n / 2 ? ((byte)40, (byte)70, (byte)150) : ((byte)255, (byte)255, (byte)255);
             }
-        var cover = CloudNoise.Cover(rgb, n, n, skyLum: 0.06f, cloudLum: 0.9f);
-        Assert.Equal(n * n * 2, cover.Length);
-        // two bytes a texel: the softened cover, then the wide one; both about clear in the open sky's middle and whole in the cloud's
-        Assert.True(cover[(5 * n + n / 4) * 2] < 16);
-        Assert.Equal(255, cover[(5 * n + 3 * n / 4) * 2]);
-        Assert.True(cover[(5 * n + n / 4) * 2 + 1] < 64);
-        Assert.True(cover[(5 * n + 3 * n / 4) * 2 + 1] > 192);
+        var cover = CloudNoise.Cover(rgb, n, n, skyLum: 0.06f, cloudLum: 0.9f, scale: 2);
+        int m = n * 2;
+        Assert.Equal(m * m * 2, cover.Length);
+        // two values a texel, enlarged twice: the softened cover, then the wide one; both about clear in the open sky's middle and whole in the cloud's
+        Assert.True(cover[(10 * m + m / 4) * 2] < 0.06f);
+        Assert.True(cover[(10 * m + 3 * m / 4) * 2] > 0.98f);
+        Assert.True(cover[(10 * m + m / 4) * 2 + 1] < 0.25f);
+        Assert.True(cover[(10 * m + 3 * m / 4) * 2 + 1] > 0.75f);
+    }
+
+    [Fact]
+    public void EnlargingKeepsAFlatImageFlatAndItsMean()
+    {
+        var flat = Enumerable.Repeat(0.4f, 16).ToArray();
+        Assert.All(CloudNoise.Enlarge(flat, 4, 4, 3), v => Assert.Equal(0.4f, v, 4));
+        // a tiling image keeps its mean (the B-spline's weights sum to one and it wraps)
+        var spot = new float[64];
+        spot[27] = 1f;
+        Assert.Equal(spot.Average(), CloudNoise.Enlarge(spot, 8, 8, 4).Average(), 4);
     }
 }

@@ -104,6 +104,19 @@ map whose terrain file is missing is still listed, as in the original, but choos
 with a note naming the file. Interstate '82 maps (`.msa`)
 are for another game and are not listed.
 
+**Graphic Detail.** The main menu's sheet (Options) and the Esc menu's pad. The original has one sheet of rows; here the sheet holds **1997 Mode** (the switch between the two looks, which decides which pages' rows apply), **Quality** (below) and, under a blank line, four entries, each a page, with every other row, the original's too, on the page it belongs to and the original's rows first in the original's order: **Display...** (Resolution, Monitor Brightness, Anti-Aliasing, Render Scale, VSync, Max FPS, Renderer, Log, HD Menu Art), **World...** (Draw Distance, Terrain Detail, Shadow Detail, HD Textures, Vegetation), **Car & Cockpit...** (Field of View, Ext. Instrum. Disp., Rear Mirror, Car Interiors, 3D Garage) and **Effects...** (Palette Grade, Crash Blur). A page closes with Back (or Esc); Done and Cancel on any page keep or undo everything changed since Graphic Detail was opened. Reset on a page puts back that page's rows; Reset on the sheet puts back 1997 Mode and every page's (the original's rows and the rest of the graphics block to the original's default profile, as its Reset did, and the port's rows to their defaults; Renderer and Log kept). The Esc menu's pad has the same pages as pads of their own, with the rows a mission can take. Every row has its own line and nothing scrolls. A row that needs the game restarted says so after its name, `(restart)`: Renderer and Log, the only two. Every other row applies at once or, for what only a mission draws, in the next mission (1997 Mode and HD Textures; on the Esc menu's pad 1997 Mode applies on resuming).
+
+**Quality.** The sheet's second row is a preset over the costly rows, as many games put an overall quality setting at the top of their graphics settings. Choosing **Original**, **Balanced**, **High** or **Ultra** sets the rows below as stepping each by hand would, at once; when they match none of the four it reads **Custom**, and a click from there goes to Original. Nothing of its own is saved (it is read back from the rows), so the sheet's Reset shows Balanced. Original is the original game's look in the modern renderer, Balanced a first start's defaults, High and Ultra steps up for a strong graphics card. The window and monitor rows, Field of View, VSync, Max FPS, 1997 Mode and the rows that are taste or start-up choices are not in it.
+
+| Row | Original | Balanced (the defaults) | High | Ultra |
+|---|---|---|---|---|
+| Render Scale | 100% | 100% | 150% | 200% |
+| Anti-Aliasing | Off | 4x | 4x | 4x |
+| Shadow Detail | Low | Low | High | High |
+| Terrain Detail | Low | Low | High | High |
+| Draw Distance | Original | Far | Far | Far |
+| Vegetation | Off | Low | High | High |
+
 **Resolution.** Graphic Detail's **Resolution** row steps through Desktop (the game's borderless fullscreen at the desktop's size, as it starts) and the common window sizes that fit the screen; a size is a centred window, applied at once with no restart, and is kept for the next start. Alt+Enter still toggles fullscreen. A `--windowed`, `--fullscreen` or `--resolution` on the command line decides that start. Exclusive fullscreen is not offered.
 
 **Field of view.** Graphic Detail's **Field of View** row (Original, 80, 100, 110) sets how wide the main 3D views look, in degrees across a 4:3 view (the original's is 90, and a wider window shows more to the sides at any choice); it applies at once to the outside views and the cockpit's view (the 2D dash's gunsight moves with it, so it stays on the gun line). The binoculars, the mirror, the radar and the cut-scenes keep their own framing.

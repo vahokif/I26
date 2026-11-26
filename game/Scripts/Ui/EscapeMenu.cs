@@ -48,6 +48,8 @@ public sealed partial class EscapeMenu : Control
         public Screen? Parent;
         public bool EscIgnored;
         public required string Art;
+        /// <summary>A pad of its own on another pad's art (Graphic Detail's pages): its title printed over the art's (null keeps the art's).</summary>
+        public string? Title;
         public List<Item> Items = [];
         public int Order;
         /// <summary>The scrolling rows' first pad row, how many show at once (the pad's fourteen ruled rows), and how far they are scrolled (in rows).</summary>
@@ -336,46 +338,32 @@ public sealed partial class EscapeMenu : Control
             Action("I'm a swinger", 13, () => Switch(_play)),
         ];
 
-        // Graphic Detail: only the settings this port honours (visibility and the 1997 renderer's detail levels are gone; the resolution is the port's window size),
-        // every row in one list that scrolls over the pad's rows, the original's first; Reset, Done and Cancel stay put
-        Item G(int flags, string label, int row, int n, string[]? names, int at) =>
-            Scrolling(row, flags, label, n, names, s => s.Graphics[at], (s, v) => s.Graphics[at] = (byte)v, apply: () => Live?.Invoke(Settings));
-        string[] offOn = ["Off", "On"], offLowHigh = ["Off", "Low", "High"];
-        // Resolution's choices: the desktop (""), the window sizes that fit it, and a saved size from another screen
-        var (dw, dh) = I76.Game.Boot.WindowApplier.Desktop;
-        var sizes = I76.Game.Boot.WindowSizes.Offered(dw, dh).Select(z => I76.Game.Boot.WindowSizes.Format(z.W, z.H)).Prepend("").ToList();
-        if (!sizes.Contains(Settings.Resolution)) sizes.Add(Settings.Resolution);
-        _graphics.Items = [
-            G(Numeric | Min1 | WrapAround | OneIsNumber, "Monitor Brightness", 1, 11, null, 0xc),
-            G(Cycle, "Ext. Instrum. Disp.", 2, 2, offOn, 0xe),
-            G(Cycle, "Rear Mirror", 3, 3, offLowHigh, 0xd),
-            G(Cycle, "Shadow Detail", 4, 3, offLowHigh, 0x6),
-            G(Cycle, "Terrain Detail", 5, 2, ["Low", "High"], 0x2),
-            G(Cycle, "Anti-Aliasing", 6, I76.Game.Boot.RenderScale.AntiAliasing.Length, I76.Game.Boot.RenderScale.AntiAliasing, 0x8),   // the shell's list, 8x too
-            // the port's own, from row 7: the window's size, Desktop (fullscreen, as the game starts) or a window of that size, applied at once
-            Scrolling(7, Cycle, "Resolution", sizes.Count, [.. sizes.Select(r => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(r)))],
-                s => Math.Max(0, sizes.IndexOf(s.Resolution)), (s, v) => s.Resolution = sizes[v], apply: () => I76.Game.Boot.WindowApplier.Apply(Settings)),
-            // the 3D view supersampled at 100, 150 or 200 % of the window, live
-            Scrolling(8, Cycle, "Render Scale", I76.Game.Boot.RenderScale.Names.Length, I76.Game.Boot.RenderScale.Names, s => Math.Clamp(s.RenderScale, 0, I76.Game.Boot.RenderScale.Names.Length - 1), (s, v) => s.RenderScale = v, apply: () => Live?.Invoke(Settings)),
-            // the main 3D views' field of view (the original's 90 across 4:3, or 80, 100, 110), live
-            Scrolling(9, Cycle, "Field of View", I76.Sim.Views.ViewFov.Names.Length, I76.Sim.Views.ViewFov.Names, s => Math.Clamp(s.FieldOfView, 0, I76.Sim.Views.ViewFov.Names.Length - 1), (s, v) => s.FieldOfView = v, apply: () => Live?.Invoke(Settings)),
-            // the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
-            Scrolling(10, Cycle, "1997 Mode", 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false),
-            // the modern look's palette grade (SoftwareLook), live
-            Scrolling(11, Cycle, "Palette Grade", 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: () => Live?.Invoke(Settings)),
-            // the software renderer's double image on a big cockpit hit (the original's in the 1997 look, smooth in the modern look), live
-            Scrolling(12, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
-            // the modern look's plants
-            Scrolling(13, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
-            // and how far the world is drawn (either look), live
-            Scrolling(14, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
-            // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(15, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(16, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
-            new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
-            DoneButton(),
-            CancelButton(),
-        ];
+        // Graphic Detail: an entry for each page (GraphicsPages: the original's rows on the pages they belong to, as the shell's sheet),
+        // each a pad of its own on the same art with the page's name as its title. Each page's Done, Cancel and Reset are its own rows',
+        // as the original's pads; the sheet's Reset is every page's, and its Done and Cancel keep or undo it.
+        _graphics.Items = [];
+        // the sheet's own rows, 1997 Mode (applied on resume) and Quality, over a blank row and the entries
+        int sheetRow = 1;
+        List<GraphicsRow> allOffered = [];
+        foreach (var r in GraphicsPages.Rows[GraphicsPages.Sheet]) if (PadRow(r) is { } it) { it.Pair = sheetRow++; _graphics.Items.Add(it); allOffered.Add(r); }
+        var sheetPlace = GraphicsLayout.Pad(GraphicsPages.Sheet, sheetRow - 1);
+        for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
+        {
+            var page = new Screen { Key = $"graphics{p}", Art = "grxdet1", Title = GraphicsPages.Names[p], Parent = _graphics };
+            int row = 1, pg = p;
+            List<GraphicsRow> offered = [];
+            foreach (var r in GraphicsPages.Rows[p]) if (PadRow(r) is { } it) { it.Pair = row++; page.Items.Add(it); offered.Add(r); }
+            allOffered.AddRange(offered);
+            // Reset puts back the pad's own rows only: Cancel could not restore a row the pad does not show
+            page.Items.Add(new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) { GraphicsPages.Reset(Settings, pg, offered); if (offered.Contains(GraphicsRow.Resolution)) I76.Game.Boot.WindowApplier.Apply(Settings); Live?.Invoke(Settings); Switch(page); } } });
+            page.Items.Add(DoneButton());
+            page.Items.Add(CancelButton());
+            _graphicsPages.Add(page);
+            _graphics.Items.Add(Action(GraphicsPages.Names[p] + "...", sheetPlace.Entries[p - GraphicsPages.FirstPage], () => Switch(page)));
+        }
+        _graphics.Items.Add(new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) { GraphicsPages.Reset(Settings, GraphicsPages.Sheet, allOffered); I76.Game.Boot.WindowApplier.Apply(Settings); Live?.Invoke(Settings); Switch(_graphics); } } });
+        _graphics.Items.Add(DoneButton());
+        _graphics.Items.Add(CancelButton());
 
         Item Level(string label, int row, int n, int at, bool live) =>
             Setting(Slider | Min1, label, row, n, null, s => Math.Clamp((int)s.Audio[at], 1, n - 1), (s, v) => s.Audio[at] = (byte)v, live,
@@ -436,27 +424,76 @@ public sealed partial class EscapeMenu : Control
             if (no != _orderMission) { _orderMission = no; _orderBase = new Random().Next(0x8000) % 992 + (no + 900) * 1000; }
             Screen?[] order = [_main, null, _abort, _play, _graphics, _audio, _exit];
             for (int k = 0; k < order.Length; k++) if (order[k] is { } sc) sc.Order = _orderBase + k;
+            foreach (var page in _graphicsPages) page.Order = _graphics.Order;
         }
     }
 
-    /// <summary>Reset: the default profile, then the pad again (msg 6 reloads every value).</summary>
-    private void ResetGraphics()
+    /// <summary>Graphic Detail's pages (GraphicsPages): pads under <see cref="_graphics"/>, each the port's rows of one page that a mission can take.</summary>
+    private readonly List<Screen> _graphicsPages = [];
+
+    /// <summary>A Graphic Detail row on the pad (its pair set by the caller); null for a row the pad does not offer (the start-up rows, the packs', the garage's).</summary>
+    private Item? PadRow(GraphicsRow r)
     {
-        Array.Copy(ShellSettings.DefaultGraphics, Settings.Graphics, 16);
-        Settings.Resolution = "";
-        I76.Game.Boot.WindowApplier.Apply(Settings);
-        Settings.RenderScale = 0;
-        Settings.FieldOfView = 0;
-        Settings.Look1997 = false;
-        Settings.SoftwareRenderer = false;
-        Settings.PaletteGrade = false;
-        Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On;
-        Settings.Vegetation = 1;
-        Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
-        Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;
-        Settings.VSync = true;
-        Live?.Invoke(Settings);
-        Switch(_graphics);
+        string[] offOn = ["Off", "On"], offLowHigh = ["Off", "Low", "High"];
+        Action live = () => Live?.Invoke(Settings);
+        Item G(int flags, string label, int n, string[]? names, int at) =>
+            Setting(flags, label, 0, n, names, s => s.Graphics[at], (s, v) => s.Graphics[at] = (byte)v, apply: live);
+        switch (r)
+        {
+            // the port's window: the desktop (""), the window sizes that fit it, and a saved size from another screen
+            case GraphicsRow.Resolution:
+                var (dw, dh) = I76.Game.Boot.WindowApplier.Desktop;
+                var sizes = I76.Game.Boot.WindowSizes.Offered(dw, dh).Select(z => I76.Game.Boot.WindowSizes.Format(z.W, z.H)).Prepend("").ToList();
+                if (!sizes.Contains(Settings.Resolution)) sizes.Add(Settings.Resolution);
+                return Setting(Cycle, "Resolution", 0, sizes.Count, [.. sizes.Select(x => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(x)))],
+                    s => Math.Max(0, sizes.IndexOf(s.Resolution)), (s, v) => s.Resolution = sizes[v], apply: () => I76.Game.Boot.WindowApplier.Apply(Settings));
+            // the port's preset over the costly rows (QualityPreset): its word read back from the rows, a step sets every row of the next
+            // column, live; Done and Cancel commit or restore its rows
+            case GraphicsRow.Quality:
+                string[] custom = [.. QualityPreset.Names.Select(_ => QualityPreset.Custom)];
+                return new Item
+                {
+                    Flags = Cycle, Label = QualityPreset.Label, N = QualityPreset.Names.Length, Names = QualityPreset.Names,
+                    Cb = (it, m) =>
+                    {
+                        switch (m)
+                        {
+                            case 7: QualityPreset.Apply(Settings, it.Value); live(); break;
+                            case 8: QualityPreset.Copy(Settings, _snap); break;
+                            case 9: QualityPreset.Copy(_snap, Settings); live(); break;
+                        }
+                        // Custom shows on every step's place, the step from it going to Original
+                        int c = QualityPreset.Match(Settings);
+                        it.Value = c < 0 ? QualityPreset.Names.Length - 1 : c;
+                        it.Names = c < 0 ? custom : QualityPreset.Names;
+                    },
+                };
+            case GraphicsRow.MonitorBrightness: return G(Numeric | Min1 | WrapAround | OneIsNumber, "Monitor Brightness", 11, null, 0xc);
+            // how far the world is drawn (either look), live
+            case GraphicsRow.DrawDistance: return Setting(Cycle, "Draw Distance", 0, 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: live);
+            case GraphicsRow.TerrainDetail: return G(Cycle, "Terrain Detail", 2, ["Low", "High"], 0x2);
+            case GraphicsRow.ShadowDetail: return G(Cycle, "Shadow Detail", 3, offLowHigh, 0x6);
+            case GraphicsRow.ExtInstruments: return G(Cycle, "Ext. Instrum. Disp.", 2, offOn, 0xe);
+            case GraphicsRow.RearMirror: return G(Cycle, "Rear Mirror", 3, offLowHigh, 0xd);
+            // the 1997 look, off, the original's 3D card or its software renderer, applied on resume (as F2)
+            case GraphicsRow.Look1997: return Setting(Cycle, "1997 Mode", 0, 3, ["Off", "3D Card", "Software"], s => !s.Look1997 ? 0 : s.SoftwareRenderer ? 2 : 1, (s, v) => { s.Look1997 = v != 0; s.SoftwareRenderer = v == 2; }, live: false);
+            case GraphicsRow.AntiAliasing: return G(Cycle, "Anti-Aliasing", I76.Game.Boot.RenderScale.AntiAliasing.Length, I76.Game.Boot.RenderScale.AntiAliasing, 0x8);   // the shell's list, 8x too
+            // the 3D view supersampled at 100, 150 or 200 % of the window, live
+            case GraphicsRow.RenderScale: return Setting(Cycle, "Render Scale", 0, I76.Game.Boot.RenderScale.Names.Length, I76.Game.Boot.RenderScale.Names, s => Math.Clamp(s.RenderScale, 0, I76.Game.Boot.RenderScale.Names.Length - 1), (s, v) => s.RenderScale = v, apply: live);
+            // the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
+            case GraphicsRow.VSync: return Setting(Cycle, "VSync", 0, 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: live);
+            case GraphicsRow.MaxFps: return Setting(Cycle, "Max FPS", 0, I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: live);
+            // the modern look's plants, live
+            case GraphicsRow.Vegetation: return Setting(Cycle, "Vegetation", 0, 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: live);
+            // the main 3D views' field of view (the original's 90 across 4:3, or 80, 100, 110), live
+            case GraphicsRow.FieldOfView: return Setting(Cycle, "Field of View", 0, I76.Sim.Views.ViewFov.Names.Length, I76.Sim.Views.ViewFov.Names, s => Math.Clamp(s.FieldOfView, 0, I76.Sim.Views.ViewFov.Names.Length - 1), (s, v) => s.FieldOfView = v, apply: live);
+            // the modern look's palette grade (SoftwareLook), live
+            case GraphicsRow.PaletteGrade: return Setting(Cycle, "Palette Grade", 0, 2, offOn, s => s.PaletteGrade ? 1 : 0, (s, v) => s.PaletteGrade = v != 0, apply: live);
+            // the software renderer's double image on a big cockpit hit (the original's in the 1997 look, smooth in the modern look), live
+            case GraphicsRow.CrashBlur: return Setting(Cycle, "Crash Blur", 0, 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: live);
+            // Renderer, Log, HD Menu Art, HD Textures, Car Interiors, 3D Garage: the shell's alone
+            default: return null;
+        }
     }
 
     /// <summary>Save Bookmark: once written, the line says so and is no longer chosen (a second press would only save the same checkpoint again).</summary>
@@ -511,7 +548,9 @@ public sealed partial class EscapeMenu : Control
     /// <summary>MenuDone: msg 8 to every item but the buttons, then the parent — or the cheater warning from Play Options with a cheat on.</summary>
     private void Done()
     {
-        foreach (var it in _screen.Items) if (it.Type != Button) it.Cb?.Invoke(it, 8);
+        // the sheet's Done commits its pages' rows too: each read back first (the sheet's Reset or Quality may have set them since the page was shown)
+        if (_screen == _graphics) foreach (var it in _graphicsPages.SelectMany(p => p.Items)) if (it.Type != Button) it.Cb?.Invoke(it, 6);
+        foreach (var it in Committed()) if (it.Type != Button) it.Cb?.Invoke(it, 8);
         if (_screen == _play && (Settings.PlayOptions & 0x1c) != 0) { Switch(_cheater); return; }
         Switch(_screen.Parent);
     }
@@ -519,9 +558,15 @@ public sealed partial class EscapeMenu : Control
     /// <summary>MenuCancel: msg 9 to every item but the buttons, then the parent.</summary>
     private void Cancel()
     {
-        foreach (var it in _screen.Items) if (it.Type != Button) it.Cb?.Invoke(it, 9);
+        foreach (var it in Committed()) if (it.Type != Button) it.Cb?.Invoke(it, 9);
         Switch(_screen.Parent);
     }
+
+    /// <summary>
+    /// The items a pad's Done and Cancel commit or restore: its own; Graphic Detail's sheet, which has no rows of its own but whose Reset
+    /// is every page's, its pages' too (a page's Done has already committed its rows, so the sheet's Cancel undoes only what is newer).
+    /// </summary>
+    private IEnumerable<Item> Committed() => _screen == _graphics ? _graphics.Items.Concat(_graphicsPages.SelectMany(p => p.Items)) : _screen.Items;
 
     private bool _closed;
 
@@ -894,8 +939,25 @@ public sealed partial class EscapeMenu : Control
         if (hd is { } h) DrawTextureRectRegion(h.Tex, new Rect2(At(0, 0), new Vector2(PadW, PadH) * _s), h.Src);
         else if (Art(_screen.Art) is { } bg) DrawTextureRect(bg, new Rect2(At(0, 0), new Vector2(PadW, PadH) * _s), false);
         if (_screen.Order > 0) Print(_arial, 16, 226, 60, $"{_screen.Order / 1000:00000}-{_screen.Order % 1000:000}");
+        if (_screen.Title is { } title) DrawTitle(title);
         for (int i = 0; i < _screen.Items.Count; i++) DrawItem(_screen.Items[i], i == _screen.Selected);
         DrawScrollMark();
+    }
+
+    /// <summary>
+    /// A title over the art's own, right of the cup: the header's paper (sampled above SPANNER'S CAFE) laid over the old one, the
+    /// new one in Arial Bold, centred, in the header's grey.
+    /// </summary>
+    private void DrawTitle(string title)
+    {
+        var paper = Color.Color8(232, 222, 190);
+        if (Indices(_screen.Art) is { } px && px.Stride * 4 + 140 < px.Indices.Length) { var (r, g, b) = Palette[px.Indices[3 * px.Stride + 140]]; paper = Color.Color8(r, g, b); }
+        const float x0 = 72, x1 = 293, y0 = 23, y1 = 55;
+        DrawRect(new Rect2(At(x0, y0), new Vector2(x1 - x0, y1 - y0) * _s), paper);
+        int size = Size(_arial, 30);
+        float w = _arial.GetStringSize(title, HorizontalAlignment.Left, -1, size).X;
+        var at = At((x0 + x1) / 2, y0 + 1) + new Vector2(-w / 2, _arial.GetAscent(size));
+        DrawString(_arial, at, title, HorizontalAlignment.Left, -1, size, Color.Color8(64, 64, 64));
     }
 
     /// <summary>The scrolling list: a thin track before the value column with a thumb, and an arrow at an end where there is more.</summary>

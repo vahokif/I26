@@ -342,8 +342,11 @@ public sealed partial class EscapeMenu : Control
         // each a pad of its own on the same art with the page's name as its title. Each page's Done, Cancel and Reset are its own rows',
         // as the original's pads; the sheet's Reset is every page's, and its Done and Cancel keep or undo it.
         _graphics.Items = [];
-        var sheetPlace = GraphicsLayout.Pad(GraphicsPages.Sheet, 0);
+        // the sheet's own rows, 1997 Mode (applied on resume) and Quality, over a blank row and the entries
+        int sheetRow = 1;
         List<GraphicsRow> allOffered = [];
+        foreach (var r in GraphicsPages.Rows[GraphicsPages.Sheet]) if (PadRow(r) is { } it) { it.Pair = sheetRow++; _graphics.Items.Add(it); allOffered.Add(r); }
+        var sheetPlace = GraphicsLayout.Pad(GraphicsPages.Sheet, sheetRow - 1);
         for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
         {
             var page = new Screen { Key = $"graphics{p}", Art = "grxdet1", Title = GraphicsPages.Names[p], Parent = _graphics };
@@ -444,6 +447,27 @@ public sealed partial class EscapeMenu : Control
                 if (!sizes.Contains(Settings.Resolution)) sizes.Add(Settings.Resolution);
                 return Setting(Cycle, "Resolution", 0, sizes.Count, [.. sizes.Select(x => I76.Game.Boot.WindowSizes.Label(I76.Game.Boot.WindowSizes.Parse(x)))],
                     s => Math.Max(0, sizes.IndexOf(s.Resolution)), (s, v) => s.Resolution = sizes[v], apply: () => I76.Game.Boot.WindowApplier.Apply(Settings));
+            // the port's preset over the costly rows (QualityPreset): its word read back from the rows, a step sets every row of the next
+            // column, live; Done and Cancel commit or restore its rows
+            case GraphicsRow.Quality:
+                string[] custom = [.. QualityPreset.Names.Select(_ => QualityPreset.Custom)];
+                return new Item
+                {
+                    Flags = Cycle, Label = QualityPreset.Label, N = QualityPreset.Names.Length, Names = QualityPreset.Names,
+                    Cb = (it, m) =>
+                    {
+                        switch (m)
+                        {
+                            case 7: QualityPreset.Apply(Settings, it.Value); live(); break;
+                            case 8: QualityPreset.Copy(Settings, _snap); break;
+                            case 9: QualityPreset.Copy(_snap, Settings); live(); break;
+                        }
+                        // Custom shows on every step's place, the step from it going to Original
+                        int c = QualityPreset.Match(Settings);
+                        it.Value = c < 0 ? QualityPreset.Names.Length - 1 : c;
+                        it.Names = c < 0 ? custom : QualityPreset.Names;
+                    },
+                };
             case GraphicsRow.MonitorBrightness: return G(Numeric | Min1 | WrapAround | OneIsNumber, "Monitor Brightness", 11, null, 0xc);
             // how far the world is drawn (either look), live
             case GraphicsRow.DrawDistance: return Setting(Cycle, "Draw Distance", 0, 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: live);
@@ -524,6 +548,8 @@ public sealed partial class EscapeMenu : Control
     /// <summary>MenuDone: msg 8 to every item but the buttons, then the parent — or the cheater warning from Play Options with a cheat on.</summary>
     private void Done()
     {
+        // the sheet's Done commits its pages' rows too: each read back first (the sheet's Reset or Quality may have set them since the page was shown)
+        if (_screen == _graphics) foreach (var it in _graphicsPages.SelectMany(p => p.Items)) if (it.Type != Button) it.Cb?.Invoke(it, 6);
         foreach (var it in Committed()) if (it.Type != Button) it.Cb?.Invoke(it, 8);
         if (_screen == _play && (Settings.PlayOptions & 0x1c) != 0) { Switch(_cheater); return; }
         Switch(_screen.Parent);

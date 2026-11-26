@@ -8,6 +8,8 @@ public enum GraphicsRow
     HdTextures, Vegetation,
     FieldOfView, CarInteriors, Garage3D,
     PaletteGrade, CrashBlur,
+    /// <summary>The preset over the costly rows (QualityPreset): nothing of its own, read back from the rows.</summary>
+    Quality,
 }
 
 /// <summary>
@@ -16,7 +18,9 @@ public enum GraphicsRow
 /// Resolution is the port's window and Visibility Range its Draw Distance). Here the sheet holds only an entry for each page, and
 /// every row, the original's too, is on the page it belongs to, by what it changes: Display (the window, the look and the frame),
 /// World (how far and in what detail the world is drawn, its textures and plants), Car &amp; Cockpit (the view, the instruments, the
-/// mirror, the cars, the garage) and Effects (the modern look's grade and effects). The original's rows lead their pages in the
+/// mirror, the cars, the garage) and Effects (the modern look's grade and effects). The sheet keeps two rows over the entries: 1997
+/// Mode, the switch between the two looks, which decides which pages' rows apply, and Quality, a preset over the costly rows
+/// (<see cref="QualityPreset"/>). The original's rows lead their pages in the
 /// original's order (Field of View, the most used, first on Car &amp; Cockpit). A page is the same sheet with its name on the first
 /// line, its rows and a Back; every page fits the sheet without scrolling (<see cref="GraphicsLayout"/>). The shell's sheet and the
 /// in-game pad build from this table, so a row sits on the same page in both; Reset, Cancel and the snapshot taken when Graphic
@@ -29,11 +33,11 @@ public static class GraphicsPages
     /// <summary>The first of the pages (the sheet's first entry).</summary>
     public const int FirstPage = Display;
     public static readonly string[] Names = ["Graphic Detail", "Display", "World", "Car & Cockpit", "Effects"];
-    /// <summary>Each page's rows in order, the most used first and related rows together; the sheet has none, only the pages' entries.</summary>
+    /// <summary>Each page's rows in order, the most used first and related rows together; the sheet's, 1997 Mode and Quality, over the pages' entries.</summary>
     public static readonly GraphicsRow[][] Rows =
     [
-        [],
-        [GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.Look1997, GraphicsRow.AntiAliasing, GraphicsRow.RenderScale, GraphicsRow.VSync, GraphicsRow.MaxFps, GraphicsRow.Renderer, GraphicsRow.LogFile, GraphicsRow.HdMenuArt],
+        [GraphicsRow.Look1997, GraphicsRow.Quality],
+        [GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.AntiAliasing, GraphicsRow.RenderScale, GraphicsRow.VSync, GraphicsRow.MaxFps, GraphicsRow.Renderer, GraphicsRow.LogFile, GraphicsRow.HdMenuArt],
         [GraphicsRow.DrawDistance, GraphicsRow.TerrainDetail, GraphicsRow.ShadowDetail, GraphicsRow.HdTextures, GraphicsRow.Vegetation],
         [GraphicsRow.FieldOfView, GraphicsRow.ExtInstruments, GraphicsRow.RearMirror, GraphicsRow.CarInteriors, GraphicsRow.Garage3D],
         [GraphicsRow.PaletteGrade, GraphicsRow.CrashBlur],
@@ -57,7 +61,7 @@ public static class GraphicsPages
 
     /// <summary>The sheet's lines: fourteen, 23 px apart from y 118 on the shell's sheet, the pad's rows 1 to 14.</summary>
     public const int Lines = 14;
-    /// <summary>The sheet's first page entry: its line (0-based), the sheet's first (the sheet has no rows of its own).</summary>
+    /// <summary>The sheet's first page entry: its line (0-based), under a blank line under the sheet's rows.</summary>
     public static int FirstEntryLine => Rows[Sheet].Length == 0 ? 0 : Rows[Sheet].Length + 1;
     /// <summary>A page on the shell's sheet: its name on the first line, its rows from the next; the pad prints the name over the art's title and starts its rows on row 1.</summary>
     public const int HeadingLine = 0, FirstRowLine = 1;
@@ -142,6 +146,8 @@ public static class GraphicsPages
             case GraphicsRow.Garage3D: t.Garage3D = f.Garage3D; break;
             case GraphicsRow.PaletteGrade: t.PaletteGrade = f.PaletteGrade; break;
             case GraphicsRow.CrashBlur: t.CrashBlur = f.CrashBlur; break;
+            // derived from its rows, each copied by its own page (QualityPreset.Copy copies them for the pad's row)
+            case GraphicsRow.Quality: break;
         }
     }
 }

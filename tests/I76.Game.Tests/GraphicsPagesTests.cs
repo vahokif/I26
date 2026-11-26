@@ -35,6 +35,7 @@ public class GraphicsPagesTests
         GraphicsRow.Garage3D => s.Garage3D,
         GraphicsRow.PaletteGrade => s.PaletteGrade,
         GraphicsRow.CrashBlur => s.CrashBlur,
+        GraphicsRow.Quality => null,   // derived from the rows (QualityPreset)
         _ => throw new ArgumentOutOfRangeException(nameof(r)),
     };
 
@@ -65,9 +66,9 @@ public class GraphicsPagesTests
     /// rows: each of the original's leads its page in the original's order (but for Field of View, first on Car &amp; Cockpit).
     /// </summary>
     [Fact]
-    public void TheSheetHasOnlyTheEntriesAndTheOriginalsRowsLeadTheirPages()
+    public void TheSheetHas1997ModeAndQualityAndTheOriginalsRowsLeadTheirPages()
     {
-        Assert.Empty(GraphicsPages.Rows[GraphicsPages.Sheet]);
+        Assert.Equal([GraphicsRow.Look1997, GraphicsRow.Quality], GraphicsPages.Rows[GraphicsPages.Sheet]);
         Assert.Equal([GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.DrawDistance, GraphicsRow.TerrainDetail, GraphicsRow.ShadowDetail, GraphicsRow.ExtInstruments, GraphicsRow.RearMirror],
             GraphicsPages.Original);
         Assert.Equal([GraphicsPages.Display, GraphicsPages.Display, GraphicsPages.World, GraphicsPages.World, GraphicsPages.World, GraphicsPages.CarCockpit, GraphicsPages.CarCockpit],
@@ -86,7 +87,7 @@ public class GraphicsPagesTests
     [Fact]
     public void ThePagesRows()
     {
-        Assert.Equal([GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.Look1997, GraphicsRow.AntiAliasing, GraphicsRow.RenderScale, GraphicsRow.VSync, GraphicsRow.MaxFps, GraphicsRow.Renderer, GraphicsRow.LogFile, GraphicsRow.HdMenuArt],
+        Assert.Equal([GraphicsRow.Resolution, GraphicsRow.MonitorBrightness, GraphicsRow.AntiAliasing, GraphicsRow.RenderScale, GraphicsRow.VSync, GraphicsRow.MaxFps, GraphicsRow.Renderer, GraphicsRow.LogFile, GraphicsRow.HdMenuArt],
             GraphicsPages.Rows[GraphicsPages.Display]);
         Assert.Equal([GraphicsRow.DrawDistance, GraphicsRow.TerrainDetail, GraphicsRow.ShadowDetail, GraphicsRow.HdTextures, GraphicsRow.Vegetation],
             GraphicsPages.Rows[GraphicsPages.World]);
@@ -95,13 +96,14 @@ public class GraphicsPagesTests
         Assert.Equal([GraphicsRow.PaletteGrade, GraphicsRow.CrashBlur], GraphicsPages.Rows[GraphicsPages.Effects]);
     }
 
-    /// <summary>The shell's sheet: the four entries on its first lines (where the original's first rows were); every page's rows from line 1 inside the fourteen lines.</summary>
+    /// <summary>The shell's sheet: 1997 Mode and Quality on its first lines, a blank line, the four entries; every page's rows from line 1 inside the fourteen lines.</summary>
     [Fact]
     public void TheShellsLinesHoldEveryPage()
     {
         var sheet = GraphicsLayout.Shell(GraphicsPages.Sheet);
-        Assert.Equal(0, GraphicsPages.FirstEntryLine);
-        Assert.Equal([0, 1, 2, 3], sheet.Entries);
+        Assert.Equal(3, GraphicsPages.FirstEntryLine);
+        Assert.True(sheet.Fits(GraphicsPages.Rows[GraphicsPages.Sheet].Length));
+        Assert.Equal([3, 4, 5, 6], sheet.Entries);
         Assert.True(GraphicsLayout.LineY(GraphicsPages.Lines - 1) + GraphicsLayout.LineH - 2 <= GraphicsLayout.ButtonY);
         for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
         {
@@ -112,12 +114,12 @@ public class GraphicsPagesTests
         }
     }
 
-    /// <summary>The pad: the sheet's entries on rows 1 to 4; every page's rows on pad rows 1 to 14, never on a button's pair (15 to 17).</summary>
+    /// <summary>The pad: the sheet's two rows on rows 1 and 2, its entries on rows 4 to 7; every page's rows on pad rows 1 to 14, never on a button's pair (15 to 17).</summary>
     [Fact]
     public void ThePadsRowsSitOnTheirOwnRows()
     {
-        var sheet = GraphicsLayout.Pad(GraphicsPages.Sheet, 0);
-        Assert.Equal([1, 2, 3, 4], sheet.Entries);
+        var sheet = GraphicsLayout.Pad(GraphicsPages.Sheet, 2);
+        Assert.Equal([4, 5, 6, 7], sheet.Entries);
         foreach (int r in sheet.Entries) Assert.DoesNotContain(r, GraphicsLayout.PadButtons);
         for (int p = GraphicsPages.FirstPage; p < GraphicsPages.Names.Length; p++)
         {

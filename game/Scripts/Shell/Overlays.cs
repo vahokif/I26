@@ -558,9 +558,14 @@ public sealed class GraphicsScreen : OverlayScreen
             case GraphicsRow.RearMirror: ByteRow(line, "Rear Mirror", 0xd, ["Off", "Low", "High"]); break;
             // the 1997 look: off, the original's 3D card or its software renderer (the shell keeps the look it started in; a change shows
             // from the next start or mission)
+            // the port's preset over the costly rows (QualityPreset): its word read back from them, a click the next column, each row
+            // set and applied as its own click would
+            case GraphicsRow.Quality:
+                Row(line, QualityPreset.Label, () => QualityPreset.Word(st), () => { QualityPreset.Step(st); Apply(QualityPreset.Rows); });
+                break;
             case GraphicsRow.Look1997:
                 string[] modes = ["Off", "3D Card", "Software"];
-                Row(line, "1997 Mode", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
+                Row(line, "1997 Mode (next mission)", () => modes[!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1], () =>
                 {
                     int m = ((!st.Look1997 ? 0 : st.SoftwareRenderer ? 2 : 1) + 1) % 3;
                     st.Look1997 = m != 0; st.SoftwareRenderer = m == 2;
@@ -596,7 +601,7 @@ public sealed class GraphicsScreen : OverlayScreen
             // the world, car and cockpit texture pack's (only when one is installed; from the next mission or garage visit)
             case GraphicsRow.HdTextures:
                 if (!I76.Game.Assets.HdTextures.Installed) return false;
-                Row(line, "HD Textures", () => st.HdTextures ? "On" : "Off", () => ApplyTextures(!st.HdTextures));
+                Row(line, "HD Textures (next mission)", () => st.HdTextures ? "On" : "Off", () => ApplyTextures(!st.HdTextures));
                 break;
             // the modern look's plants (docs/modern-vegetation.md)
             case GraphicsRow.Vegetation:
@@ -627,10 +632,13 @@ public sealed class GraphicsScreen : OverlayScreen
     private void ApplyTextures(bool on) { Shell.Settings.HdTextures = on; I76.Game.Assets.HdTextures.Enabled = on; }
 
     /// <summary>A page's live rows applied after Reset or Cancel put them back (a click applies its own); the graphics block's bytes apply in a mission.</summary>
-    private void Apply(int page)
+    private void Apply(int page) => Apply(GraphicsPages.Rows[page]);
+
+    /// <summary>Rows' live parts applied after something other than their own click set them (Reset, Cancel, the Quality preset).</summary>
+    private void Apply(IEnumerable<GraphicsRow> rows)
     {
         var st = Shell.Settings;
-        foreach (var r in GraphicsPages.Rows[page])
+        foreach (var r in rows)
             switch (r)
             {
                 case GraphicsRow.Resolution: I76.Game.Boot.WindowApplier.Apply(st); break;

@@ -4,12 +4,12 @@ using Xunit;
 
 namespace I76.Game.Tests;
 
-/// <summary>Graphic Detail's Clouds: Flat (as before the setting existed) for a new player and for a settings file without [port] clouds.</summary>
+/// <summary>Graphic Detail's Clouds: Volumetric for a new player and for a settings file without [port] clouds; Flat only when chosen.</summary>
 public class CloudsSettingTests
 {
     [Fact]
-    public void ANewPlayerHasTheFlatClouds() => Assert.Equal(CloudNoise.Flat, new ShellSettings().Clouds);
+    public void ANewPlayerHasTheVolumetricClouds() => Assert.Equal(CloudNoise.Volumetric, new ShellSettings().Clouds);
 
     [Fact]
-    public void AFileWithoutTheKeyHasTheFlatClouds() => Assert.Equal(CloudNoise.Flat, CloudNoise.Parse(null));
+    public void AFileWithoutTheKeyHasTheVolumetricClouds() => Assert.Equal(CloudNoise.Volumetric, CloudNoise.Parse(null));
 }

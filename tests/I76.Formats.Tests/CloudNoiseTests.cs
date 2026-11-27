@@ -10,14 +10,14 @@ public class CloudNoiseTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("flat")]
+    [InlineData("volumetric")]
     [InlineData("puffy")]
-    public void AMissingOrUnknownWordIsFlat(string? word) => Assert.Equal(CloudNoise.Flat, CloudNoise.Parse(word));
+    public void AMissingOrUnknownWordIsVolumetric(string? word) => Assert.Equal(CloudNoise.Volumetric, CloudNoise.Parse(word));
 
     [Theory]
-    [InlineData("volumetric")]
-    [InlineData(" Volumetric ")]
-    public void VolumetricIsReadInAnyCase(string word) => Assert.Equal(CloudNoise.Volumetric, CloudNoise.Parse(word));
+    [InlineData("flat")]
+    [InlineData(" Flat ")]
+    public void FlatIsReadInAnyCase(string word) => Assert.Equal(CloudNoise.Flat, CloudNoise.Parse(word));
 
     [Theory]
     [InlineData(CloudNoise.Flat)]

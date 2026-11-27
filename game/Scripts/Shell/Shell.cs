@@ -1226,8 +1226,8 @@ public sealed class ShellSettings
     public int CrashBlur { get; set; }
     /// <summary>The port's own: Graphic Detail's Motion Blur, the modern look's (Forward+ only; the 1997 look has none). Off by default ([port] motion_blur).</summary>
     public bool MotionBlur { get; set; }
-    /// <summary>The port's own: Graphic Detail's Clouds, the modern look's sky (<see cref="I76.Formats.Imaging.CloudNoise"/>: Flat, the default, or Volumetric; Forward+ and Mobile only, the 1997 look keeps its dome). [port] clouds, written when not Flat.</summary>
-    public int Clouds { get; set; }
+    /// <summary>The port's own: Graphic Detail's Clouds, the modern look's sky (<see cref="I76.Formats.Imaging.CloudNoise"/>: Volumetric, the default, or Flat; Volumetric on Forward+ and Mobile only, the Compatibility renderer draws Flat and the 1997 look keeps its dome). [port] clouds, always written; a file without it gets Volumetric.</summary>
+    public int Clouds { get; set; } = I76.Formats.Imaging.CloudNoise.Volumetric;
     /// <summary>The port's own: the mouse orbits the chase view (Mouse Options' Mouse Camera; <see cref="I76.Sim.Views.MouseLook"/>: 0 Off, 1 Slow, 2 Normal, 3 Fast). Normal unless the player chose; a file without the key gets it.</summary>
     public int MouseCamera { get; set; } = I76.Sim.Views.MouseLook.Normal;
     /// <summary>The port's own: fine-grained mouse sensitivity scale (10% to 200% in 10% steps; shell.cfg [port] mouse_sensitivity; 1.0 unless chosen, migrated from mouse_camera when absent).</summary>
@@ -1508,7 +1508,7 @@ public sealed class ShellSettings
         if (PaletteGrade) c.SetValue("port", "palette_grade", true);
         if (CrashBlur != I76.Sim.Views.CrashBlurMode.On) c.SetValue("port", "crash_blur", I76.Sim.Views.CrashBlurMode.Word(CrashBlur));
         c.SetValue("port", "motion_blur", MotionBlur);
-        if (Clouds != I76.Formats.Imaging.CloudNoise.Flat) c.SetValue("port", "clouds", I76.Formats.Imaging.CloudNoise.Word(Clouds));
+        c.SetValue("port", "clouds", I76.Formats.Imaging.CloudNoise.Word(Clouds));
         c.SetValue("port", "mouse_camera", MouseCamera);
         c.SetValue("port", "mouse_sensitivity", I76.Sim.Views.MouseLook.ClampSensitivity(MouseSensitivity));
         if (MouseInvertY) c.SetValue("port", "mouse_invert_y", true);

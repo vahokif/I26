@@ -13,8 +13,8 @@ public static class CloudNoise
     public const int Flat = 0, Volumetric = 1;
     public static readonly string[] Names = ["Flat", "Volumetric"];
 
-    /// <summary>A stored word as a setting: "volumetric" (any case) is Volumetric; anything else, or nothing, Flat, the default.</summary>
-    public static int Parse(string? word) => word?.Trim().ToLowerInvariant() == "volumetric" ? Volumetric : Flat;
+    /// <summary>A stored word as a setting: "flat" (any case) is Flat; anything else, or nothing, Volumetric, the default.</summary>
+    public static int Parse(string? word) => word?.Trim().ToLowerInvariant() == "flat" ? Flat : Volumetric;
     public static string Word(int mode) => mode == Volumetric ? "volumetric" : "flat";
 
     public const int ShapeSize = 128, DetailSize = 64;

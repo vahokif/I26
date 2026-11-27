@@ -78,7 +78,8 @@ public partial class Main
             img.Convert(Image.Format.Rgb8);
             float detail = m.GetShaderParameter("detail").VariantType == Variant.Type.Float ? m.GetShaderParameter("detail").AsSingle() : 0.35f;
             int up = Math.Clamp(1024 / Math.Max(img.GetWidth(), img.GetHeight()), 2, 8);   // about a thousand texels a repeat
-            var cover = CloudNoise.Cover(img.GetData(), img.GetWidth(), img.GetHeight(), m.GetShaderParameter("sky_lum").AsSingle(), m.GetShaderParameter("cloud_lum").AsSingle(), detail, up);
+            Vector3 sr = m.GetShaderParameter("sky_ref").AsVector3(), cr = m.GetShaderParameter("cloud_ref").AsVector3();
+            var cover = CloudNoise.Cover(img.GetData(), img.GetWidth(), img.GetHeight(), new(sr.X, sr.Y, sr.Z), new(cr.X, cr.Y, cr.Z), detail, up);
             var half = new byte[cover.Length * 2];
             for (int i = 0; i < cover.Length; i++) BitConverter.TryWriteBytes(half.AsSpan(i * 2), (System.Half)cover[i]);
             var coverImg = Image.CreateFromData(img.GetWidth() * up, img.GetHeight() * up, false, Image.Format.Rh, half);

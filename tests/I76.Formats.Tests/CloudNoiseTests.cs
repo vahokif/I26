@@ -79,6 +79,9 @@ public class CloudNoiseTests
         Assert.Equal(s[0] + 8, s[1]);   // one block along x: two texels on
     }
 
+    // the half-sky image's colours, linear: (40, 70, 150) and white
+    private static readonly System.Numerics.Vector3 Blue = new(0.0212f, 0.0612f, 0.3050f), White = System.Numerics.Vector3.One;
+
     private static byte[] HalfSkyHalfCloud(int n)
     {
         // the left half open sky (dark blue), the right half cloud (white)
@@ -93,22 +96,22 @@ public class CloudNoiseTests
     }
 
     [Fact]
-    public void TheCoverFollowsTheSkyTexturesBrightness()
+    public void TheCoverFollowsTheSkyTexturesColours()
     {
         const int n = 32;
         // without the noise: one value a texel, enlarged twice, about clear in the open sky's middle and whole in the cloud's
-        var cover = CloudNoise.Cover(HalfSkyHalfCloud(n), n, n, skyLum: 0.06f, cloudLum: 0.9f, detail: 0f, scale: 2);
+        var cover = CloudNoise.Cover(HalfSkyHalfCloud(n), n, n, sky: Blue, cloud: White, detail: 0f, scale: 2);
         int m = n * 2;
         Assert.Equal(m * m, cover.Length);
         Assert.True(cover[10 * m + m / 4] < 0.06f);
-        Assert.True(cover[10 * m + 3 * m / 4] > 0.98f);
+        Assert.True(cover[10 * m + 3 * m / 4] > 0.95f);
     }
 
     [Fact]
     public void TheFlatSkysNoiseReshapesTheCoverAndLeavesTheOpenSkyMostlyClear()
     {
         const int n = 32, m = n * 4;
-        var cover = CloudNoise.Cover(HalfSkyHalfCloud(n), n, n, skyLum: 0.06f, cloudLum: 0.9f, detail: 0.35f, scale: 4);
+        var cover = CloudNoise.Cover(HalfSkyHalfCloud(n), n, n, sky: Blue, cloud: White, detail: 0.35f, scale: 4);
         Assert.All(cover, v => Assert.InRange(v, 0f, 1f));
         // the open sky's middle: the large lumps raise it a little in places (as the flat sky's do), never to a whole cloud
         var open = Enumerable.Range(0, m).Select(y => cover[y * m + m / 4]).ToArray();

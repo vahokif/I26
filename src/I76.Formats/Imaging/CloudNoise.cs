@@ -173,29 +173,26 @@ public static class CloudNoise
     /// <summary>
     /// The cover map from the sky texture (RGB bytes, sRGB, <paramref name="w"/> × <paramref name="h"/>, tiling): the flat
     /// sky's own cloud density laid out over one repeat of the texture (sky_modern.gdshaderinc's density), so the volumetric
-    /// clouds take its shapes, wisps and frayed edges. The texture's linear brightness after the same small blur, ramped from
-    /// the open sky's to the clouds' (<paramref name="skyLum"/> and <paramref name="cloudLum"/> from MissionBuilder's
-    /// SkyPalette), enlarged <paramref name="scale"/> times each way by a cubic B-spline (the stock skies' 128 texels sampled
+    /// clouds take its shapes, wisps and frayed edges. The texture's linear colour after the same small blur, its place
+    /// between the open sky's colour and the clouds' (<paramref name="sky"/> and <paramref name="cloud"/>, linear, from
+    /// <see cref="SkyColours.Measure"/>) ramped (<see cref="SkyColours.Cover"/>), enlarged <paramref name="scale"/> times each way by a cubic B-spline (the stock skies' 128 texels sampled
     /// linearly left creases that showed as facets in the clouds), then moved by the same large lumps and eaten at its edges by
     /// the same fine, warped noise as the flat sky's, <paramref name="detail"/> its strength (the flat sky's detail): value
     /// noise on the flat sky's lattices (5 and 17 cells a repeat), made to tile with the texture. One value a texel, 0..1.
     /// </summary>
-    public static float[] Cover(ReadOnlySpan<byte> rgb, int w, int h, float skyLum, float cloudLum, float detail = 0.35f, int scale = 8)
+    public static float[] Cover(ReadOnlySpan<byte> rgb, int w, int h, System.Numerics.Vector3 sky, System.Numerics.Vector3 cloud, float detail = 0.35f, int scale = 8)
     {
-        var lum = new float[w * h];
-        for (int i = 0; i < w * h; i++)
-            lum[i] = 0.299f * ToLinear(rgb[i * 3]) + 0.587f * ToLinear(rgb[i * 3 + 1]) + 0.114f * ToLinear(rgb[i * 3 + 2]);
-        float span = cloudLum - skyLum, lo = skyLum - span * 0.1f, hi = cloudLum + span * 0.15f;
+        var lin = new System.Numerics.Vector3[w * h];
+        for (int i = 0; i < w * h; i++) lin[i] = new(ToLinear(rgb[i * 3]), ToLinear(rgb[i * 3 + 1]), ToLinear(rgb[i * 3 + 2]));
         // the flat sky's blur is 0.006 of the texture each way: about a texel and a half on the stock 256 skies
         int r = Math.Max(1, (int)MathF.Round(0.006f * w));
         var cover = new float[w * h];
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
             {
-                float L(int dx, int dy) => lum[Wrap(y + dy, h) * w + Wrap(x + dx, w)];
-                float l = L(0, 0) * 0.4f + (L(r, 0) + L(-r, 0) + L(0, r) + L(0, -r)) * 0.15f;
-                float t = Math.Clamp((l - lo) / MathF.Max(hi - lo, 1e-4f), 0f, 1f);
-                cover[y * w + x] = t * t * (3f - 2f * t);
+                System.Numerics.Vector3 L(int dx, int dy) => lin[Wrap(y + dy, h) * w + Wrap(x + dx, w)];
+                var c = L(0, 0) * 0.4f + (L(r, 0) + L(-r, 0) + L(0, r) + L(0, -r)) * 0.15f;
+                cover[y * w + x] = SkyColours.Cover(c, sky, cloud);
             }
         var b = Enlarge(cover, w, h, scale);
         int W = w * scale, H = h * scale;

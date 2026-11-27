@@ -73,7 +73,8 @@ vec2 wind_dir() { return dot(wind, wind) > 1e-6 ? normalize(wind) : vec2(-0.7071
 // cloud cover at a point p from the eye at e (game frame), its height in the layer (0 floor .. 1 roof) and the noise's place.
 // The noise's space is stretched a little along the wind (more combed the clouds), and the cover is looked up a little off the point: pushed
 // about by a coarse noise (frayed, fibrous edges) and carried downwind with height (the layer sheared, as cirrus is)
-float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q, out float broad) {
+// (cuv: where that is in the sky texture, whose texels the cover was drawn from)
+float cover_at_uv(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q, out float broad, out vec2 cuv) {
 	hf = floor_height(e, p) / cloud_depth;
 	// carried by the wind: the cover and the noise together
 	vec2 w = e.xz + p.xz - wind * cloud_time;
@@ -94,10 +95,15 @@ float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q
 		uv += push * (2.0 * warp);
 	}
 	uv /= cover_tile;
+	cuv = uv;
 	// the cover a few mip levels coarser: the clouds' depth follows it (the fine cover's wisps as the depth of every cloud's
 	// floor and roof made them corrugated, and seen slanting each fold was a bright line)
 	broad = textureLod(cover_map, uv, lod + 2.5).r;
 	return textureLod(cover_map, uv, lod).r;
+}
+float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q, out float broad) {
+	vec2 cuv;
+	return cover_at_uv(e, p, lod, push_it, hf, q, broad, cuv);
 }
 
 // density from the cover and the noise: the cover moved a little more by 3D lumps and frayed by fibres (as the flat sky reshapes
@@ -242,15 +248,13 @@ vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
 	float tm = v.r * max_distance;
 	if (tr < 0.999 && tm > 0.0) {
 		float cs = dot(d, s);
-		vec3 shade_col = I76_COL(cloud_shade) * 0.9, lit_col = I76_COL(cloud_color) * 1.08, core_col = I76_COL(cloud_shade) * 0.8;
-		vec3 rim_col = (procedural_moon ? vec3(0.75, 0.82, 1.0) : vec3(1.0, 0.92, 0.78)) * pow(max(cs, 0.0), 10.0) * rim * light_strength;
 		float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
 		vec3 p = g * tm;
 		float span = pix * tm / sqrt(max(abs(g.y), 0.03));
 		float far = smoothstep(fine_reach.x, fine_reach.y, span) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, span);
 		float lod = log2(max(span / cover_texel, 1.0)) - 0.5;
-		float hf, broad, n; vec3 q;
-		float c = flat_cover(cover_at(e, p, lod, true, hf, q, broad), q, true, far, n);
+		float hf, broad, n; vec3 q; vec2 cuv;
+		float c = flat_cover(cover_at_uv(e, p, lod, true, hf, q, broad, cuv), q, true, far, n);
 		// toward the light, as the flat sky looks: the cloud at a few points further out toward the sun (whatever their
 		// height), the first with the fine noise
 		float acc = 0.0;
@@ -260,14 +264,19 @@ vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
 		}
 		float lit = exp(-acc * shadow);
 		float core = smoothstep(0.2, 0.95, c);
-		vec3 lum = mix(shade_col, lit_col, lit);
-		lum = mix(lum, core_col, core * core * 0.35) + rim_col * (1.0 - core);
+		// the texture's own colour there, softened as the cover is (over at least what a pixel spans)
+		vec3 tex = sky_texel(cuv, max(0.006, span / cover_tile));
+		vec3 lum = cloud_light(tex, lit, core, cs, false);
 		// far off, the haze between: the cloud's light gives way to the horizon's colour
 		lum = mix(I76_COL(horizon_color), lum, exp(-tm / haze_distance));
 		// drawn over the sky as the flat sky draws its clouds: their cover is what they stop of the light over 0.92 (the flat
 		// sky lets 8% of the sun through a whole cloud but paints the cloud over the sky entirely)
 		tr = 1.0 - min((1.0 - tr) / 0.92, 1.0);
 		scat = lum * (1.0 - tr);
+		// between them, the texture's own sky (sky_modern's flat clouds do the same), a veil over the gradient
+		float k = cloud_albedo * sky_own * tr * exp(-tm / haze_distance);
+		scat += k * tex;
+		tr *= 1.0 - k;
 	}
 	// behind them, the flat sky's fainter high layer (sky_modern), here a sheet fixed in the world 8 km up, drifting slower
 	if (g.y > 0.0) {

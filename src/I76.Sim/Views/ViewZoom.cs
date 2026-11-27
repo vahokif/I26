@@ -1,3 +1,5 @@
+using I76.Formats;
+
 namespace I76.Sim.Views;
 
 /// <summary>
@@ -37,8 +39,8 @@ public static class ViewZoom
     public static float Clamp(Kind k, float f) => float.IsFinite(f) ? System.Math.Clamp(f, Min(k), Max(k)) : Default;
 
     /// <summary>The factor after a wheel turn of <paramref name="notches"/> (positive: up, nearer).</summary>
-    public static float Notch(Kind k, float f, float notches) => Clamp(k, f * MathF.Pow(Step, -notches));
+    public static float Notch(Kind k, float f, float notches) => Clamp(k, f * DetMath.Pow(Step, -notches));
 
     /// <summary>The F6 lens' vertical field in degrees: the original's 120 across a 4:3 view, its half-field tangent scaled by <paramref name="f"/>.</summary>
-    public static float BumperFov(float f) => MathF.Atan(MathF.Tan(60f * MathF.PI / 180f) * 0.75f * f) * 2f * 180f / MathF.PI;
+    public static float BumperFov(float f) => DetMath.Atan(DetMath.Tan(60f * MathF.PI / 180f) * 0.75f * f) * 2f * 180f / MathF.PI;
 }

@@ -1,6 +1,7 @@
 using System.Numerics;
 using I76.Sim.Ai;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -365,9 +366,9 @@ public sealed partial class Ptable
         var prev = p0 + n;
         var dd = prev - A;
         float D = dd.Length();
-        if (look < D) { h = MathF.Atan2(dd.X, dd.Z); return true; }
+        if (look < D) { h = DetMath.Atan2(dd.X, dd.Z); return true; }
         s = R.Seg!; i = R.Idx;
-        if (!RoadNetwork.NextPoint(ref s, R.Dir, ref i)) { h = MathF.Atan2(dd.X, dd.Z); return false; }
+        if (!RoadNetwork.NextPoint(ref s, R.Dir, ref i)) { h = DetMath.Atan2(dd.X, dd.Z); return false; }
         float rem = look - D;
         while (true)
         {
@@ -377,14 +378,14 @@ public sealed partial class Ptable
             if (rem <= L)
             {
                 var t = q + qd * (L > 0 ? rem / L : 0);
-                h = MathF.Atan2(t.X - A.X, t.Z - A.Z);
+                h = DetMath.Atan2(t.X - A.X, t.Z - A.Z);
                 return true;
             }
             prev = q;
             if (!RoadNetwork.NextPoint(ref s, R.Dir, ref i)) break;
             rem -= L;
         }
-        h = MathF.Atan2(A.X, A.Z);
+        h = DetMath.Atan2(A.X, A.Z);
         return false;
     }
 
@@ -563,7 +564,7 @@ public sealed partial class Ptable
             time = System.Math.Clamp(ClosestTime(P, va, AimPointOf(t), vt), 0.01f, 5f);
             delta = Predict(t, time) - P;
         }
-        float hh = MathF.Atan2(delta.X, delta.Z), r = MathF.Max(delta.Length() - 20f, 0);
+        float hh = DetMath.Atan2(delta.X, delta.Z), r = MathF.Max(delta.Length() - 20f, 0);
         Steer(a, hh);
         bool straight = MathF.Abs(v.Steer) < 0.4f;
         // #42: at a standstill the original's steering for its drivers writes 0 whatever the heading error, so the wheel reads
@@ -599,7 +600,7 @@ public sealed partial class Ptable
     private void Shadow(Entity a, Entity t, float h, float d)
     {
         var w = ShadowVelocity(a, t);
-        float hh = MathF.Abs(w.X) >= 1e-4f || MathF.Abs(w.Z) >= 1e-4f ? MathF.Atan2(w.X, w.Z) : h;
+        float hh = MathF.Abs(w.X) >= 1e-4f || MathF.Abs(w.Z) >= 1e-4f ? DetMath.Atan2(w.X, w.Z) : h;
         Steer(a, hh);
         float tSpd = Motion(t).Speed;
         if (tSpd >= 1f)

@@ -1,3 +1,4 @@
+using I76.Formats;
 using System.Numerics;
 using I76.Sim.Damage;
 using I76.Sim.Math;
@@ -230,7 +231,7 @@ public sealed class OwnCarPredictor
         var d = new Vector3((float)(beforePos.X - Pos.X), (float)(beforePos.Y - Pos.Y), (float)(beforePos.Z - Pos.Z));
         var qb = ToQuat(beforeRot);
         var qa = ToQuat(Rot);
-        float angle = 2 * MathF.Acos(Math.Clamp(MathF.Abs(Quaternion.Dot(qb, qa)), 0f, 1f));
+        float angle = 2 * DetMath.Acos(Math.Clamp(MathF.Abs(Quaternion.Dot(qb, qa)), 0f, 1f));
         LastCorrection = wasReady ? d.Length() : 0;
         if (!wasReady || gen != car.NetGeneration || d.Length() > SnapDistance || angle > SnapRadians)
         {

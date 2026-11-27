@@ -3,6 +3,7 @@ using I76.Sim.Collision;
 using I76.Sim.Rng;
 using I76.Sim.Terrain;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim;
 
@@ -252,7 +253,7 @@ public sealed partial class SimWorld(IGround ground, CrtRand rand)
             best = hit.T;
             var n = q.Rot.ToWorld(hit.N);
             o = (new Contact { Hit = true, Other = q, OtherMass = q.P.Mass, OtherVel = q.Vel, T = hit.T, C = lp, RelVel = q.Vel - pvw, N = n },
-                 new Contact { Hit = true, Other = p, OtherMass = p.P.Mass, OtherVel = p.Vel, T = hit.T, C = ql + rv * hit.T, RelVel = pvw - q.Vel, N = -n });
+                 new Contact { Hit = true, Other = p, OtherMass = p.P.Mass, OtherVel = p.Vel, T = hit.T, C = ql + rv * hit.T, RelVel = pvw - q.Vel, N = DetMath.Neg(n) });
         }
         return o;
     }

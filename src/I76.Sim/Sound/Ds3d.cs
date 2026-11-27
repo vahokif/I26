@@ -1,4 +1,5 @@
 using System.Numerics;
+using I76.Formats;
 
 namespace I76.Sim.Sound;
 
@@ -43,7 +44,7 @@ public static class Ds3d
 
     /// <summary><see cref="Gain"/> in decibels: 0 near, −6 dB per doubling, held from the max distance on.</summary>
     public static float AttenuationDb(float distance, float min = MinDistance) =>
-        20f * MathF.Log10(Gain(distance, min));
+        20f * DetMath.Log10(Gain(distance, min));
 
     /// <summary>
     /// A voice on the player's own car in the cockpit views (the hud flag: F1, the binoculars, the gun

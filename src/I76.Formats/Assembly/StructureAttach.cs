@@ -40,7 +40,7 @@ public static class StructureAttach
         double mx = verts.Average(v => (double)v.X), mz = verts.Average(v => (double)v.Z);
         double sxx = 0, szz = 0, sxz = 0;
         foreach (var v in verts) { double dx = v.X - mx, dz = v.Z - mz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
-        double ang = 0.5 * Math.Atan2(2 * sxz, sxx - szz);
+        double ang = 0.5 * DetMath.Atan2(2 * sxz, sxx - szz);
         // a ramp that is wider than it is long (the 2 m wood ramp: 20 across, 15 up) has its principal axis across the slope: the way it
         // runs is the way it climbs, so a clearly tilted surface takes the horizontal gradient of its best-fit plane instead
         double my = verts.Average(v => (double)v.Y), sxy = 0, szy = 0;
@@ -49,9 +49,9 @@ public static class StructureAttach
         if (Math.Abs(det) > 1e-9)
         {
             double gx = (sxy * szz - szy * sxz) / det, gz = (szy * sxx - sxy * sxz) / det;
-            if (Math.Sqrt(gx * gx + gz * gz) >= FlatSlope) ang = Math.Atan2(gz, gx);
+            if (Math.Sqrt(gx * gx + gz * gz) >= FlatSlope) ang = DetMath.Atan2(gz, gx);
         }
-        var axis = new Vector2((float)Math.Cos(ang), (float)Math.Sin(ang));
+        var axis = new Vector2((float)DetMath.Cos(ang), (float)DetMath.Sin(ang));
         // a structure that is square-ish has no principal axis; snap near-axis-aligned ones to the world axis they lie on
         if (Math.Abs(axis.X) > 0.9995f) axis = new Vector2(Math.Sign(axis.X), 0);
         else if (Math.Abs(axis.Y) > 0.9995f) axis = new Vector2(0, Math.Sign(axis.Y));
@@ -71,7 +71,7 @@ public static class StructureAttach
             // the surface's height at the end edge's middle: the highest of the end vertices (the deck's top face, not a skirt below it)
             float y = edge.Max(v => v.Y);
             var xz = axis * t + side * sc;
-            return new Attach(new Vector3(xz.X, y, xz.Y), high ? axis : -axis, s1 - s0, false);
+            return new Attach(new Vector3(xz.X, y, xz.Y), high ? axis : DetMath.Neg(axis), s1 - s0, false);
         }
         var a = End(t0, false);
         var b = End(t1, true);

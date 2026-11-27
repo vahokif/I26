@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Collision;
+using I76.Formats;
 
 namespace I76.Sim.Terrain;
 
@@ -52,7 +53,7 @@ public static class PlaytestSpawn
         for (int i = -1; i < 8; i++)
         {
             double x = hx, z = hz;
-            if (i >= 0) { double a = i * System.Math.PI / 4; x += System.Math.Cos(a) * CarReach; z += System.Math.Sin(a) * CarReach; }
+            if (i >= 0) { double a = i * System.Math.PI / 4; x += DetMath.Cos(a) * CarReach; z += DetMath.Sin(a) * CarReach; }
             if (!onMap(x, z)) return SpawnPlan.Fail("the cursor is at the map's edge");
             bool onStructure = ground.Query(x, hy, z).Height > ground.BareHeight(x, z) + 0.5f;   // a deck carries the car over water or a cliff
             if (!onStructure && ground.Impassable(x, z)) return SpawnPlan.Fail("the ground there is impassable (water or a cliff)");

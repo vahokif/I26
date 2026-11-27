@@ -67,6 +67,11 @@ Every `I76_*` hook is listed in [docs/dev-hooks.md](docs/dev-hooks.md). Check a 
 - **The sim is deterministic.** No wall clock, `Random` without the sim's seed, or Godot calls in `src/I76.Sim`. Where
   clients need new state it also goes into the net snapshot; any wire change bumps the protocol version
   (`src/I76.Net/Protocol.cs`).
+  - **The same game on every machine.** Code that feeds sim state (`src/I76.Sim`, `src/I76.Server`, the bots and prediction in
+    `src/I76.Net`) takes its sin/cos/atan2/exp/log/pow, `Quaternion.CreateFromAxisAngle`, vector negation, vector
+    `Min`/`Max`/`Clamp` and `Vector2.Dot` from `DetMath` (src/I76.Formats), never from `Math`/`MathF`/System.Numerics: those are the
+    platform's C library or processor and differ in the last bit or a zero's sign between Windows, macOS and Linux.
+    `PortableMathGuardTests` (tests/I76.Net.Tests) fails on any other call; its allow-list names the drawing/audio code that may.
 - **New sim state must be serialized** — the snapshot guard test enforces it ([docs/savestate.md](docs/savestate.md)):
   save it in its class's `Save`/`Load` or mark it structural, derived or transient with the reason, and bump
   `SnapshotHeader.CurrentVersion`. `StateHash` is the snapshot's hash and follows by itself.

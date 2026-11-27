@@ -34,5 +34,13 @@
   recorded trace. `SimSession.Tick(inputs)` is that step for play: one
   `CarInput` per human-driven car, everything else from inside the sim
   (docs/multiplayer.md); `SimDriver` is its Godot host.
+- **The same game on every machine.** The sim's floats are IEEE arithmetic and `DetMath` (src/I76.Formats/DetMath.cs: msun/musl
+  kernels for sin, cos, tan, atan, atan2, asin, acos, exp, log, log10, pow in plain C#, and the vector negation, Min, Max, Clamp,
+  Vector2.Dot and FromAxisAngle whose signs of zero System.Numerics leaves to the processor), so the same inputs give the same
+  state, bit for bit, on Windows x64, macOS Arm64 and Linux: a host migration's replay, an input trace, a recorded StateHash and
+  the own-motion confirmation hold across platforms. Drawing, sound and
+  the editor keep `MathF`. `PortableMathGuardTests` scans the sim's, the server's and the network code's IL for the
+  platform's maths. Not guarded: a float-to-int conversion of a NaN or an out-of-range value (x64 gives int.MinValue, Arm64
+  saturates): keep conversions of clamped values only.
 - **Randomness.** One `CrtRand` (the MSVC LCG) stream is shared the way the
   original shares `rand()`. In oracle mode it replays the values from a trace.

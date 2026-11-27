@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Weapons;
 
@@ -22,7 +23,7 @@ public static class RadarScope
     /// <summary>The ZRADB frame (0..29) of a locked radar: the original takes atan2(x, z) of the target in car-local terms, adds 2π if negative, scales by 30/2π, truncates and wraps at 30.</summary>
     public static int LockedFrame(float x, float z)
     {
-        float a = (MathF.Abs(x) < 1e-5f && MathF.Abs(z) < 1e-5f) ? 0f : MathF.Atan2(x, z);
+        float a = (MathF.Abs(x) < 1e-5f && MathF.Abs(z) < 1e-5f) ? 0f : DetMath.Atan2(x, z);
         if (a < 0) a += MathF.Tau;
         int f = (int)(a * 4.7746487f);
         return f >= 30 ? f - 30 : f < 0 ? f + 30 : f;
@@ -49,7 +50,7 @@ public static class RadarScope
         float a0 = prev * step, a1 = cur * step;
         if (a0 > MathF.PI) a0 -= MathF.Tau;
         if (a1 > MathF.PI) a1 -= MathF.Tau;
-        float ang = MathF.Abs(x) < 1e-5f && MathF.Abs(z) < 1e-5f ? 0f : MathF.Atan2(x, z);
+        float ang = MathF.Abs(x) < 1e-5f && MathF.Abs(z) < 1e-5f ? 0f : DetMath.Atan2(x, z);
         return ang >= a0 && ang <= a1;
     }
 

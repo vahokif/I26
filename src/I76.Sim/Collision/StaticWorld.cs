@@ -2,6 +2,7 @@ using System.Numerics;
 using I76.Formats.Assembly;
 using I76.Sim.Terrain;
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Collision;
 
@@ -287,7 +288,7 @@ public sealed partial class StaticObject
         }
         else if (pts.Count > 0)
         {
-            var min = pts.Aggregate(Vector3.Min); var max = pts.Aggregate(Vector3.Max);
+            var min = pts.Aggregate(DetMath.Min); var max = pts.Aggregate(DetMath.Max);
             Centre = (min + max) * 0.5f;
             Radius = pts.Max(q => new Vector2(q.X - Centre.X, q.Z - Centre.Z).Length());
             BoundRadius = pts.Max(q => Vector3.Distance(q, Centre));
@@ -581,12 +582,12 @@ public sealed class StaticWorld
                                 Vector3.Normalize(place.Rotate(part.ToModel.Rotate(Vector3.UnitZ))));
             bool deck = type == 0xc && nodeType?.Invoke(part.NodeName) == 0xd;
             if (deck && o.Deck is null)
-                o.Deck = new NodeFrame(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(Vector3.Min), g.Vertices.Aggregate(Vector3.Max));
+                o.Deck = new NodeFrame(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(DetMath.Min), g.Vertices.Aggregate(DetMath.Max));
             int node = nodeIndex?.Invoke(part.NodeName) ?? -1;
             if (node >= 0 && nodeBase is not null)
             {
                 // The four bottom corners of the node's bounds box, averaged in the world
-                var lo = g.Vertices.Aggregate(Vector3.Min); var hi = g.Vertices.Aggregate(Vector3.Max);
+                var lo = g.Vertices.Aggregate(DetMath.Min); var hi = g.Vertices.Aggregate(DetMath.Max);
                 nodeBase(node, place.Apply(part.ToModel.Apply(new Vector3((lo.X + hi.X) * 0.5f, lo.Y, (lo.Z + hi.Z) * 0.5f))));
             }
             uint cls = nodeClass?.Invoke(part.NodeName) ?? 0;
@@ -610,12 +611,12 @@ public sealed class StaticWorld
             if (cls == 0x2000 && !sign)
             {
                 var rot = Frame();
-                var bmin = g.Vertices.Aggregate(Vector3.Min); var bmax = g.Vertices.Aggregate(Vector3.Max);
+                var bmin = g.Vertices.Aggregate(DetMath.Min); var bmax = g.Vertices.Aggregate(DetMath.Max);
                 o.Boxes.Add(new NodeBox(rot, place.Apply(part.ToModel.Apply(Vector3.Zero)), bmin, bmax, g.Vertices.Max(v => v.Length())) { Node = node, Reach = Reach(g.Vertices) });
                 continue;   // a box is solid only, a structure's too (aaramp5's rails): the original walks polygon meshes alone
             }
             if (cls == 0x3000)
-                o.MeshBounds.Add(new NodeBox(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(Vector3.Min), g.Vertices.Aggregate(Vector3.Max), g.Vertices.Max(v => v.Length())) { Node = node, Reach = Reach(g.Vertices) });
+                o.MeshBounds.Add(new NodeBox(Frame(), place.Apply(part.ToModel.Apply(Vector3.Zero)), g.Vertices.Aggregate(DetMath.Min), g.Vertices.Aggregate(DetMath.Max), g.Vertices.Max(v => v.Length())) { Node = node, Reach = Reach(g.Vertices) });
             // A bridge's surfaces are its deck nodes' only (not its trusses and spans); only a mesh part's faces are walkable
             bool drive = cls == 0x3000 && o.IsStructure && (type != 0xc || nodeType is null || deck);
             var mine = new List<Poly>();
@@ -625,11 +626,11 @@ public sealed class StaticWorld
                 if (f.Vertices.Length < 3) continue;
                 var pts = f.Vertices.Select(fv => (uint)fv.Index < world.Length ? world[fv.Index] : world[0]).ToArray();
                 // the plane from the polygon itself, outward (GEO winds and points normals inward)
-                var n = -Vector3.Normalize(Vector3.Cross(pts[1] - pts[0], pts[2] - pts[0]));
+                var n = DetMath.Neg(Vector3.Normalize(Vector3.Cross(pts[1] - pts[0], pts[2] - pts[0])));
                 if (float.IsNaN(n.X)) continue;
                 var fn = new Vector3(f.Plane.X, f.Plane.Y, f.Plane.Z);
                 var fw = place.Rotate(part.ToModel.Rotate(fn));
-                if (fw.LengthSquared() > 0.5f) n = -Vector3.Normalize(fw);   // n = −(R·faceNormal)
+                if (fw.LengthSquared() > 0.5f) n = DetMath.Neg(Vector3.Normalize(fw));   // n = −(R·faceNormal)
                 var poly = new Poly(n, -Vector3.Dot(n, pts[0]), pts) { Node = node };
                 if (cls == 0x3000) o.Polys.Add(poly);
                 if (drive && n.Y > 0.4f) mine.Add(poly);
@@ -640,7 +641,7 @@ public sealed class StaticWorld
         // StaticObject.OrderSurfaces puts them in the walk's once the structure's nodes are known)
         for (int k = surfaces.Count - 1; k >= 0; k--) o.Surfaces.AddRange(surfaces[k]);
         if (all.Count == 0) return null;
-        var min = all.Aggregate(Vector3.Min); var max = all.Aggregate(Vector3.Max);
+        var min = all.Aggregate(DetMath.Min); var max = all.Aggregate(DetMath.Max);
         o.Centre = (min + max) * 0.5f;
         // type 4: 0.75 × the whole object's bounding radius, for the spawn spacing (its parts collide by their own spheres)
         o.BoundRadius = all.Max(p => Vector3.Distance(p, o.Centre));
@@ -652,13 +653,13 @@ public sealed class StaticWorld
     /// <summary>The farthest vertex from the middle of the vertices' bounds.</summary>
     private static float Reach(Vector3[] v)
     {
-        var c = (v.Aggregate(Vector3.Min) + v.Aggregate(Vector3.Max)) * 0.5f;
+        var c = (v.Aggregate(DetMath.Min) + v.Aggregate(DetMath.Max)) * 0.5f;
         return v.Max(p => Vector3.Distance(p, c));
     }
 
     private static (Vector3, float) BoundSphere(Vector3[] v)
     {
-        var c = (v.Aggregate(Vector3.Min) + v.Aggregate(Vector3.Max)) * 0.5f;
+        var c = (v.Aggregate(DetMath.Min) + v.Aggregate(DetMath.Max)) * 0.5f;
         return (c, v.Max(p => Vector3.Distance(p, c)));
     }
 
@@ -695,9 +696,9 @@ public sealed class StaticWorld
             o.Polys.Add(poly);
             if (o.IsStructure && n.Y > 0.4f) o.Surfaces.Add(poly);
         }
-        Face(-Vector3.UnitX, 0, 2, 6, 4); Face(Vector3.UnitX, 1, 3, 7, 5);
-        Face(-Vector3.UnitY, 0, 1, 5, 4); Face(Vector3.UnitY, 2, 3, 7, 6);
-        Face(-Vector3.UnitZ, 0, 1, 3, 2); Face(Vector3.UnitZ, 4, 5, 7, 6);
+        Face(DetMath.Neg(Vector3.UnitX), 0, 2, 6, 4); Face(Vector3.UnitX, 1, 3, 7, 5);
+        Face(DetMath.Neg(Vector3.UnitY), 0, 1, 5, 4); Face(Vector3.UnitY, 2, 3, 7, 6);
+        Face(DetMath.Neg(Vector3.UnitZ), 0, 1, 3, 2); Face(Vector3.UnitZ, 4, 5, 7, 6);
         Objects.Add(o);
         return o;
     }

@@ -5,6 +5,7 @@ using I76.Sim.Collision;
 using I76.Sim.Math;
 using I76.Sim.Rng;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Weapons;
 
@@ -497,9 +498,9 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         if (!_arcs.TryGetValue(me, out var a)) _arcs[me] = a = new Vehicle?[4];
         var hg = me.Armory?.Handguns;
         a[0] = ArcPick(me, me.Rot.Forward);
-        a[1] = me.Armory?.Weapons.Any(w => w.MountKind == 2) == true ? ArcPick(me, -me.Rot.Forward) : null;
+        a[1] = me.Armory?.Weapons.Any(w => w.MountKind == 2) == true ? ArcPick(me, DetMath.Neg(me.Rot.Forward)) : null;
         a[2] = hg?[0] is not null && !me.Arms.Idle(1) ? ArcPick(me, me.Rot.Right) : null;
-        a[3] = hg?[1] is not null && !me.Arms.Idle(2) ? ArcPick(me, -me.Rot.Right) : null;
+        a[3] = hg?[1] is not null && !me.Arms.Idle(2) ? ArcPick(me, DetMath.Neg(me.Rot.Right)) : null;
     }
 
     /// <summary>
@@ -650,7 +651,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
             if (Rand.Next() % 1000 + Rand.Next() % 1000 > p3 * 3500) return false;
             var sp = shooter.Pos.ToVector3();
             var sf = shooter.Rot.Forward;
-            var sv = (Vector3.Dot(sf, f) > 0 ? sf : -sf) * 500f;
+            var sv = (Vector3.Dot(sf, f) > 0 ? sf : DetMath.Neg(sf)) * 500f;
             var rv = tvel - sv;
             float rr = rv.LengthSquared();
             float t = rr < 0.01f ? 1e7f : Vector3.Dot(sp - tpos, rv) / rr;
@@ -745,7 +746,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 if (o.SignPlacement) { if (SegmentNear(a, d, o.Centre, o.SphereRadius + 3f)) return true; }
                 else if (o.Polys.Count > 0)
                 {
-                    var lo = o.Polys.SelectMany(q => q.V).Aggregate(Vector3.Min); var hi = o.Polys.SelectMany(q => q.V).Aggregate(Vector3.Max);
+                    var lo = o.Polys.SelectMany(q => q.V).Aggregate(DetMath.Min); var hi = o.Polys.SelectMany(q => q.V).Aggregate(DetMath.Max);
                     if (SegmentInBox(a, d, new NodeBox(Rows.Identity, Vector3.Zero, lo, hi, 0), 3f)) return true;
                 }
             }
@@ -821,9 +822,9 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 var local = w.BaseRot.ToLocal(v.Rot.ToLocal(aim));
                 float len = local.Length();
                 if (len < 1e-3f) continue;
-                yaw = MathF.Atan2(local.X, local.Z);
+                yaw = DetMath.Atan2(local.X, local.Z);
                 float sp = local.Y / len;
-                pitch = MathF.Asin(System.Math.Clamp(sp, -1f, 1f));
+                pitch = DetMath.Asin(System.Math.Clamp(sp, -1f, 1f));
                 // a turret hung upside down under a body (the Phantom's belly mount) keeps below the body's own level: no aiming up through the hull
                 if (w.BaseRot.Up.Y < -0.5f) pitch = MathF.Max(pitch, 0f);
             }
@@ -837,7 +838,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 float ep = pitch - w.AimPitch;
                 // the step is kept only while the barrel's up-row z (the sine of its pitch) stays under 0.95: about 71.8°
                 float np = w.AimPitch + System.Math.Clamp(ep, -slew, slew);
-                if (MathF.Abs(MathF.Sin(np)) < 0.95f) w.AimPitch = np;
+                if (MathF.Abs(DetMath.Sin(np)) < 0.95f) w.AimPitch = np;
                 w.OnTarget = MathF.Abs(ey) < 0.0349f && MathF.Abs(ep) < 0.0349f;
             }
             else w.OnTarget = MathF.Abs(ey) < 0.0349f;
@@ -894,7 +895,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
                 : AimPointOf(t)) - muzzle;
             float len = d.Length(), fl = f.Length();
             if (len < 1e-4f || fl < 1e-4f) continue;
-            float want = System.Math.Clamp(MathF.Asin(System.Math.Clamp(d.Y / len, -1f, 1f)) - MathF.Asin(System.Math.Clamp(f.Y / fl, -1f, 1f)), -0.17453292f, 0.17453292f);
+            float want = System.Math.Clamp(DetMath.Asin(System.Math.Clamp(d.Y / len, -1f, 1f)) - DetMath.Asin(System.Math.Clamp(f.Y / fl, -1f, 1f)), -0.17453292f, 0.17453292f);
             w.GunPitchWant = want;
             float diff = want - w.GunPitch;
             w.GunPitch = kOk && MathF.Abs(diff) >= 0.005f ? w.GunPitch + diff * k : want;
@@ -1425,7 +1426,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
         float turn = 0.75f * sin;
         float cap = r.Travelled < 15 ? 0.0523359f : r.Travelled < 150 ? 0.25881904f : r.Travelled > 150 ? 0.34202015f : float.MaxValue;
         turn = MathF.Min(turn, cap);
-        var q = Quaternion.CreateFromAxisAngle(axis / sin, turn);
+        var q = DetMath.FromAxisAngle(axis / sin, turn);
         r.Rot = new Rows(Vector3.Transform(r.Rot.Right, q), Vector3.Transform(r.Rot.Up, q), Vector3.Transform(f, q));
     }
 
@@ -1647,7 +1648,7 @@ public sealed partial class Combat(SimWorld world, Func<string, EffectDef?> effe
     {
         var d = at - centre;
         var n = d.X * d.X >= 1e-8f || d.Y * d.Y >= 1e-8f || d.Z * d.Z >= 1e-8f ? Vector3.Normalize(d) : Vector3.UnitZ;
-        return -n * radius;
+        return DetMath.Neg(n) * radius;
     }
 
     public void Splash(Vector3 at, float radius, float damage, object? attacker)

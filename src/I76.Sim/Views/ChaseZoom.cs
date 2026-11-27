@@ -1,3 +1,5 @@
+using I76.Formats;
+
 namespace I76.Sim.Views;
 
 /// <summary>
@@ -14,13 +16,13 @@ public static class ChaseZoom
     public static float Clamp(float scale) => float.IsFinite(scale) ? System.Math.Clamp(scale, Min, Max) : Default;
 
     /// <summary>The factor after a wheel turn of <paramref name="notches"/> (positive: up, nearer).</summary>
-    public static float Notch(float scale, float notches) => Clamp(scale * MathF.Pow(Step, -notches));
+    public static float Notch(float scale, float notches) => Clamp(scale * DetMath.Pow(Step, -notches));
 
     /// <summary>Eases <paramref name="cur"/> to <paramref name="want"/> over a frame, evenly in the ratio (so a zoom out and in feel alike).</summary>
     public static float Ease(float cur, float want, float dt, float rate = 9f)
     {
-        float k = 1f - MathF.Exp(-rate * dt);
-        return cur * MathF.Pow(want / cur, k);
+        float k = 1f - DetMath.Exp(-rate * dt);
+        return cur * DetMath.Pow(want / cur, k);
     }
 
 }
@@ -50,7 +52,7 @@ public sealed class MouseOrbitOffset
         if (!returnBehind || _idle < IdleSeconds) return;
         // the short way round
         Yaw -= MathF.Round(Yaw / MathF.Tau) * MathF.Tau;
-        float k = 1f - MathF.Exp(-ReturnRate * dt);
+        float k = 1f - DetMath.Exp(-ReturnRate * dt);
         Yaw -= Yaw * k;
         Pitch -= Pitch * k;
         if (MathF.Abs(Yaw) < 1e-4f) Yaw = 0;

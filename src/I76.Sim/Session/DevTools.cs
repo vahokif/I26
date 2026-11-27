@@ -4,6 +4,7 @@ using I76.Sim.Damage;
 using I76.Sim.Math;
 using I76.Sim.Vehicles;
 using I76.Sim.Weapons;
+using I76.Formats;
 
 namespace I76.Sim.Session;
 
@@ -48,7 +49,7 @@ public static class DevTools
     }
 
     /// <summary>The heading (degrees from +Z toward +X) of a direction in the ground plane.</summary>
-    public static float HeadingOf(Vector3 d) => d.X * d.X + d.Z * d.Z < 1e-12f ? 0 : MathF.Atan2(d.X, d.Z) * 180f / MathF.PI;
+    public static float HeadingOf(Vector3 d) => d.X * d.X + d.Z * d.Z < 1e-12f ? 0 : DetMath.Atan2(d.X, d.Z) * 180f / MathF.PI;
 
     /// <summary>
     /// The car to (x, z), facing <paramref name="heading"/>, on the bare terrain there, upright and at rest: the placement of
@@ -59,7 +60,7 @@ public static class DevTools
     {
         if (!Allowed(s) || !UprightReset.Can(v) || !double.IsFinite(x) || !double.IsFinite(z) || !float.IsFinite(heading)) return false;
         float yaw = heading * MathF.PI / 180f;
-        var f = new Vector3(MathF.Sin(yaw), 0, MathF.Cos(yaw));
+        var f = new Vector3(DetMath.Sin(yaw), 0, DetMath.Cos(yaw));
         v.Pos = new Double3(x, s.World.Ground.BareHeight(x, z), z);
         v.Rot = new Rows(Vector3.Cross(Vector3.UnitY, f), Vector3.UnitY, f);
         UprightReset.Apply(s.World, v);
@@ -201,6 +202,6 @@ public static class DevTools
         if (other is null) return null;
         var fwd = new Vector3(to.Rot.Forward.X, 0, to.Rot.Forward.Z);
         fwd = fwd.LengthSquared() > 1e-6f ? Vector3.Normalize(fwd) : Vector3.UnitZ;
-        return Teleport(s, other, at.X + fwd.X * ahead, at.Z + fwd.Z * ahead, HeadingOf(-fwd)) ? other : null;
+        return Teleport(s, other, at.X + fwd.X * ahead, at.Z + fwd.Z * ahead, HeadingOf(DetMath.Neg(fwd))) ? other : null;
     }
 }

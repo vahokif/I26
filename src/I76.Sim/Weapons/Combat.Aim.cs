@@ -3,6 +3,7 @@ using I76.Formats.Bwd2;
 using I76.Sim.Collision;
 using I76.Sim.Math;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Weapons;
 
@@ -36,7 +37,7 @@ public sealed partial class Combat
         float life = def.Life == 0 ? 5f : def.Life;
         float v0 = def.Kind is 0xf or 0x10 or 0x13 ? 5f : def.Speed, vT = ord.TerminalSpeed;
         float c = def.Kind == 2 ? 0.5f : 1f;
-        return MathF.Max(0, vT * life + (v0 - vT) * (1 - MathF.Exp(-c * life)) / c);
+        return MathF.Max(0, vT * life + (v0 - vT) * (1 - DetMath.Exp(-c * life)) / c);
     }
 
     /// <summary>

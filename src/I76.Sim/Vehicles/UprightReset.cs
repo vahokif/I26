@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Vehicles;
 
@@ -30,7 +31,7 @@ public static class UprightReset
         if (fwd.LengthSquared() < 0.04f)
         {
             var lean = new Vector3(v.Rot.Up.X, 0, v.Rot.Up.Z);
-            if (lean.LengthSquared() > 1e-6f) fwd = v.Rot.Forward.Y > 0 ? -lean : lean;
+            if (lean.LengthSquared() > 1e-6f) fwd = v.Rot.Forward.Y > 0 ? DetMath.Neg(lean) : lean;
             else fwd = new Vector3(v.Rot.Right.Z, 0, -v.Rot.Right.X);
             if (fwd.LengthSquared() < 1e-6f) fwd = Vector3.UnitZ;
         }

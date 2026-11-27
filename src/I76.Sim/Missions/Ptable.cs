@@ -4,6 +4,7 @@ using I76.Sim.Ai;
 using I76.Sim.Collision;
 using I76.Sim.Fsm;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -251,7 +252,7 @@ public sealed partial class Ptable
     // ---- geometry (GetCachedObjectGeometry and the pair cache) ----
 
     private static Vector3 Pos(Entity e) => e.Position;
-    private static float Heading(Vector3 d) => MathF.Atan2(d.X, d.Z);
+    private static float Heading(Vector3 d) => DetMath.Atan2(d.X, d.Z);
     /// <summary>hdg(o): atan2 of forward × gear.</summary>
     private static float Hdg(Entity e) => e.Vehicle is { } v ? AiDriver.Heading(v) : Heading(e.Rot.Forward);
     /// <summary>brg(a, b): the bearing from a to b.</summary>
@@ -409,7 +410,7 @@ public sealed partial class Ptable
     {
         var u = new Vector2(b.X - a.X, b.Z - a.Z); var w = new Vector2(p.X - a.X, p.Z - a.Z);
         if (u.LengthSquared() < 1e-4f || w.LengthSquared() < 1e-4f) return 1f;
-        return Vector2.Dot(Vector2.Normalize(u), Vector2.Normalize(w));
+        return DetMath.Dot(Vector2.Normalize(u), Vector2.Normalize(w));
     }
 
     /// <summary>Along the waypoints; within 40 of the nav point (Entity.NavReach), on to the next; the last one sets Arrived. Nothing once the planned path's end is reached.</summary>

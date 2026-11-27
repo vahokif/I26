@@ -7,6 +7,7 @@ using I76.Sim.Math;
 using I76.Sim.Rng;
 using I76.Sim.Terrain;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -59,7 +60,7 @@ public sealed partial class MissionSetup
         float Radius(int from, int to)
         {
             var pts = world.Skip(from).Take(to - from + 1).SelectMany(v => v).ToList();
-            var c = (pts.Aggregate(System.Numerics.Vector3.Min) + pts.Aggregate(System.Numerics.Vector3.Max)) * 0.5f;
+            var c = (pts.Aggregate(DetMath.Min) + pts.Aggregate(DetMath.Max)) * 0.5f;
             return pts.Max(q => System.Numerics.Vector3.Distance(q, c));
         }
         int start = 0;
@@ -597,7 +598,7 @@ public sealed partial class MissionSetup
                 // type 8 skips: the box is set to the model's bounds, for its centre and radius (brackets, the aim point)
                 if (asm.Assemble(gunDef) is { } gm && gm.Parts.SelectMany(x => x.Mesh.Vertices.Select(x.ToModel.Apply)).ToList() is { Count: > 0 } pts)
                 {
-                    var lo = pts.Aggregate(System.Numerics.Vector3.Min); var hi = pts.Aggregate(System.Numerics.Vector3.Max);
+                    var lo = pts.Aggregate(DetMath.Min); var hi = pts.Aggregate(DetMath.Max);
                     v.BoxX = [lo.X, lo.X, hi.X, hi.X]; v.BoxY = [lo.Y, lo.Y, hi.Y, hi.Y]; v.BoxZ = [lo.Z, lo.Z, hi.Z, hi.Z];
                 }
                 if (staticOf.TryGetValue(p, out var so))

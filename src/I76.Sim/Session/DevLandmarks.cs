@@ -2,6 +2,7 @@ using System.Numerics;
 using I76.Formats.Mission;
 using I76.Sim.Collision;
 using I76.Sim.Terrain;
+using I76.Formats;
 
 namespace I76.Sim.Session;
 
@@ -97,7 +98,7 @@ public static class DevLandmarks
         const double d = 10;
         float gx = t.Height(x + d, z) - t.Height(x - d, z), gz = t.Height(x, z + d) - t.Height(x, z - d);
         var g = new Vector3(gx, 0, gz);
-        return g.LengthSquared() < 1e-6f ? 0 : DevTools.HeadingOf(downhill ? -g : g);
+        return g.LengthSquared() < 1e-6f ? 0 : DevTools.HeadingOf(downhill ? DetMath.Neg(g) : g);
     }
 
     /// <summary>The samples of a box over the map's tiles (5 units apart): their heights, which are reached, and which of those are open.</summary>
@@ -202,7 +203,7 @@ public static class DevLandmarks
                 dist[c] = v;
             }
         int clear = (int)(Clearance / 5 * 3);
-        float maxGrad = MathF.Tan(MaxSlope * MathF.PI / 180f) * 20f * 10f;   // raw units over the 20 units between i - 2 and i + 2
+        float maxGrad = DetMath.Tan(MaxSlope * MathF.PI / 180f) * 20f * 10f;   // raw units over the 20 units between i - 2 and i + 2
         var open = new bool[n];
         for (int k = 2; k < d - 2; k++)
             for (int i = 2; i < w - 2; i++)

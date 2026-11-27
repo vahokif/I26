@@ -1,6 +1,7 @@
 using System.Numerics;
 using I76.Sim.Terrain;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Ai;
 
@@ -47,7 +48,7 @@ public static class AiDriver
     public static float Heading(Vehicle v)
     {
         var f = v.Rot.Forward * v.Gear;
-        return f.X == 0 && f.Z == 0 ? 0 : MathF.Atan2(f.X, f.Z);
+        return f.X == 0 && f.Z == 0 ? 0 : DetMath.Atan2(f.X, f.Z);
     }
 
     /// <summary>The original's angle difference: b − a wrapped to ±π.</summary>
@@ -62,7 +63,7 @@ public static class AiDriver
     public static float HeadingTo(Vehicle v, Vector3 target)
     {
         var p = v.Pos.ToVector3();
-        return MathF.Atan2(target.X - p.X, target.Z - p.Z);
+        return DetMath.Atan2(target.X - p.X, target.Z - p.Z);
     }
 
     private static float MaxLat(Vehicle v, IGround g, out float sumGrip)
@@ -170,7 +171,7 @@ public static class AiDriver
         float err = MathF.Abs(AngleDelta(Heading(v), HeadingTo(v, target)));
         if (err > 0.05f && v.P.YawRateLimit > 0)
         {
-            float need = dist / (2f * MathF.Sin(MathF.Min(err, MathF.PI / 2)));
+            float need = dist / (2f * DetMath.Sin(MathF.Min(err, MathF.PI / 2)));
             want = MathF.Min(want, MathF.Max(5f, 0.5f * v.P.YawRateLimit * need));
         }
         Throttle(v, ai, g, want, frameDelta, traction);

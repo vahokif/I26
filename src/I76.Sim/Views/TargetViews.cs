@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Views;
 
@@ -48,7 +49,7 @@ public static class TargetViews
             float theta = MathF.Min((inv - TiltStart) * TiltRate, TiltMax);
             // a rotation by -theta about (nz, 0, -nx)/h, concatenated after the look matrix: the axis is up x n, so n tilts down and
             // the offset (-7.5 n) swings up
-            var q = Quaternion.CreateFromAxisAngle(new Vector3(n.Z / h, 0, -n.X / h), theta);
+            var q = DetMath.FromAxisAngle(new Vector3(n.Z / h, 0, -n.X / h), theta);
             fwd = Vector3.Transform(n, q);
             off = Vector3.Transform(off, q);
         }
@@ -70,7 +71,7 @@ public static class TargetViews
     /// </summary>
     public static (Vector3 Eye, Vector3 Forward, Vector3 Up) Projectile(Vector3 pos, Rows rot, float boom = 1f)
     {
-        float s = MathF.Sin(ProjectilePitch), c = MathF.Cos(ProjectilePitch);
+        float s = DetMath.Sin(ProjectilePitch), c = DetMath.Cos(ProjectilePitch);
         var eye = pos + rot.ToWorld(new Vector3(0, ProjectileBack * boom * s, -ProjectileBack * boom * c));
         var r = Rows.Concat(Rows.AboutX(ProjectilePitch), rot);
         return (eye, r.Forward, r.Up);

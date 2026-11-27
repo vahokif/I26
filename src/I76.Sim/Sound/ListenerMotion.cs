@@ -1,4 +1,5 @@
 using System.Numerics;
+using I76.Formats;
 
 namespace I76.Sim.Sound;
 
@@ -51,6 +52,6 @@ public sealed class ListenerMotion
         if (!_haveVel) { _haveVel = true; _held = false; return Velocity = raw; }
         if ((raw - Velocity).Length() > MaxAcceleration * dt && !_held) { _held = true; return Velocity; }
         _held = false;
-        return Velocity += (raw - Velocity) * (1f - MathF.Exp(-dt / Smoothing));
+        return Velocity += (raw - Velocity) * (1f - DetMath.Exp(-dt / Smoothing));
     }
 }

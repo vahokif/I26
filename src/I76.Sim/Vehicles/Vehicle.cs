@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Vehicles;
 
@@ -51,7 +52,7 @@ public sealed class Wheel
         TravelMax = 0.25f * Rest;
         TravelMin = -0.25f * Rest;
         double r = 0.7, w = 2 * System.Math.PI / 15.0;
-        A1 = -2 * r * System.Math.Cos(w);
+        A1 = -2 * r * DetMath.Cos(w);
         A2 = r * r;
         B0 = 1 + A1 + A2;
     }

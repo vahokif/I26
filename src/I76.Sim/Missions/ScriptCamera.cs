@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -186,8 +187,8 @@ public sealed partial class ScriptCamera
             float hl = MathF.Sqrt(f.X * f.X + f.Z * f.Z);
             if (hl > 1e-6f)
             {
-                float el = MathF.Atan2(f.Y, hl) - pitch;
-                f = new Vector3(f.X / hl * MathF.Cos(el), MathF.Sin(el), f.Z / hl * MathF.Cos(el));
+                float el = DetMath.Atan2(f.Y, hl) - pitch;
+                f = new Vector3(f.X / hl * DetMath.Cos(el), DetMath.Sin(el), f.Z / hl * DetMath.Cos(el));
             }
         }
         var eye = Clamp(a + new Vector3(0, h, 0) - f * dist);

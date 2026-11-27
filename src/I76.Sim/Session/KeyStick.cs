@@ -1,3 +1,5 @@
+using I76.Formats;
+
 namespace I76.Sim.Session;
 
 /// <summary>
@@ -78,7 +80,7 @@ public sealed class KeyStick(KeyStick.Assist? tuning = null)
         float pull = v.FrontLeft.Blown == v.FrontRight.Blown ? 0 : v.FrontLeft.Blown ? 0.3f : -0.3f;
         bool sliding = (v.Flags & I76.Sim.Vehicles.VehicleFlags.Sliding) != 0;
         if (fwd * fwd + left * left < 1f) return new(fwd, 0, blend, pull, sliding, perLock);
-        float slip = MathF.Atan2(left, MathF.Abs(fwd));
+        float slip = DetMath.Atan2(left, MathF.Abs(fwd));
         return new(fwd, fwd < 0 ? -slip : slip, blend, pull, sliding, perLock);
     }
 
@@ -144,7 +146,7 @@ public sealed class KeyStick(KeyStick.Assist? tuning = null)
         bool brake = _a.Handbrake && input.Has(CarButtons.EBrake);
         _brakePress = _a.Handbrake && (brake ? key != 0 : _brakePress && samePress);
         bool spin = brake || _brakePress;
-        _eased += (key - _eased) * (1 - MathF.Exp(-dt / MathF.Max(key != 0 ? _a.SteerTau : _a.CentreTau, 1e-4f)));
+        _eased += (key - _eased) * (1 - DetMath.Exp(-dt / MathF.Max(key != 0 ? _a.SteerTau : _a.CentreTau, 1e-4f)));
         if (key == 0 && MathF.Abs(_eased) < 1e-3f) _eased = 0;
         float slip = _a.CsSlidingOnly && !m.Sliding ? 0 : m.Slip;
         float cs = spin ? 0 : System.Math.Clamp(slip * _a.CsGain, -_a.CsLimit, _a.CsLimit);

@@ -1,4 +1,5 @@
 using I76.Sim.Math;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -226,7 +227,7 @@ public sealed class CtfGame
         if (!Closest(car.Vel, at + b.Origin - c, r + b.Radius, dt)) return false;
         var min = new System.Numerics.Vector3(car.BoxX[0], car.BoxY[1], car.BoxZ[0]) - new System.Numerics.Vector3(b.Grow);
         var max = new System.Numerics.Vector3(car.BoxX[3], car.BoxY[3], car.BoxZ[3]) + new System.Numerics.Vector3(b.Grow);
-        return Enters(car.Rot.ToLocal(at + b.Centre), car.Rot.ToLocal(-car.Vel), min, max, dt);
+        return Enters(car.Rot.ToLocal(at + b.Centre), car.Rot.ToLocal(DetMath.Neg(car.Vel)), min, max, dt);
     }
 
     /// <summary>A sphere moving at <paramref name="v"/> and a static point <paramref name="d0"/> away: within <paramref name="reach"/> at their closest over the frame. Nothing moving, no contact.</summary>

@@ -1,4 +1,5 @@
 using System.Numerics;
+using I76.Formats;
 
 namespace I76.Sim.Math;
 
@@ -42,21 +43,21 @@ public struct Rows
     /// <summary>Rotation about local Y, as the engine builds it (m00=c, m02=-s, m20=s, m22=c).</summary>
     public static Rows AboutY(float angle)
     {
-        float s = MathF.Sin(angle), c = MathF.Cos(angle);
+        var (s, c) = DetMath.SinCos(angle);
         return new(new(c, 0, -s), Vector3.UnitY, new(s, 0, c));
     }
 
     /// <summary>Rotation about local X (the pitch part): up (0, c, s), forward (0, −s, c).</summary>
     public static Rows AboutX(float a)
     {
-        float s = MathF.Sin(a), c = MathF.Cos(a);
+        var (s, c) = DetMath.SinCos(a);
         return new(Vector3.UnitX, new(0, c, s), new(0, -s, c));
     }
 
     /// <summary>Rotation about local Z (the roll part): right (c, s, 0), up (−s, c, 0).</summary>
     public static Rows AboutZ(float a)
     {
-        float s = MathF.Sin(a), c = MathF.Cos(a);
+        var (s, c) = DetMath.SinCos(a);
         return new(new(c, s, 0), new(-s, c, 0), Vector3.UnitZ);
     }
 

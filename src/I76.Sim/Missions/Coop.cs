@@ -1,5 +1,6 @@
 using I76.Sim.Math;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -223,7 +224,7 @@ public sealed partial class ScriptHost
         float speed = ground.Length();
         if (speed < RollingMinSpeed || heading.LengthSquared() < 1e-6f) return null;
         heading = System.Numerics.Vector3.Normalize(heading);
-        if (System.Numerics.Vector3.Dot(ground / speed, heading) < MathF.Cos(RollingMaxSlip * MathF.PI / 180)) return null;
+        if (System.Numerics.Vector3.Dot(ground / speed, heading) < DetMath.Cos(RollingMaxSlip * MathF.PI / 180)) return null;
         return (heading * speed, speed);
     }
 

@@ -1,3 +1,5 @@
+using I76.Formats;
+
 namespace I76.Sim.Views;
 
 /// <summary>
@@ -25,9 +27,9 @@ public static class ViewFov
     /// <summary>A vertical field of view (degrees) made for the original's 90 across 4:3, scaled to the choice: the tangent of the half angle times tan(across / 2).</summary>
     public static float Vertical(float originalVertical, int choice)
     {
-        double k = System.Math.Tan(Across[System.Math.Clamp(choice, 0, Across.Length - 1)] * System.Math.PI / 360);
-        double half = System.Math.Tan(originalVertical * System.Math.PI / 360) * k;
-        return (float)(System.Math.Atan(half) * 360 / System.Math.PI);
+        double k = DetMath.Tan(Across[System.Math.Clamp(choice, 0, Across.Length - 1)] * System.Math.PI / 360);
+        double half = DetMath.Tan(originalVertical * System.Math.PI / 360) * k;
+        return (float)(DetMath.Atan(half) * 360 / System.Math.PI);
     }
 
     /// <summary>The main views' vertical field of view in force.</summary>
@@ -40,7 +42,7 @@ public static class ViewFov
     /// </summary>
     public static (float X, float Y) ScreenPoint(float x, float y, float vertical)
     {
-        double r = System.Math.Tan(OriginalVertical * System.Math.PI / 360) / System.Math.Tan(vertical * System.Math.PI / 360);
+        double r = DetMath.Tan(OriginalVertical * System.Math.PI / 360) / DetMath.Tan(vertical * System.Math.PI / 360);
         return ((float)(320 + (x - 320) * r), (float)(240 + (y - 240) * r));
     }
 }

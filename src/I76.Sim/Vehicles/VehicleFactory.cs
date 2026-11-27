@@ -44,7 +44,7 @@ public static class VehicleFactory
         if (new I76.Formats.Assembly.ModelAssembler(vfs).Assemble(vcfName) is not { } m) return null;
         var pts = m.Parts.SelectMany(p => p.Mesh.Vertices.Select(p.ToModel.Apply)).ToList();
         if (pts.Count == 0) return null;
-        var c = (pts.Aggregate(Vector3.Min) + pts.Aggregate(Vector3.Max)) * 0.5f;
+        var c = (pts.Aggregate(DetMath.Min) + pts.Aggregate(DetMath.Max)) * 0.5f;
         return (c, pts.Max(x => Vector3.Distance(x, c)));
     }
 

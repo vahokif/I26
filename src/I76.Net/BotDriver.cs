@@ -1,6 +1,7 @@
 using System.Numerics;
 using I76.Sim.Session;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Net;
 
@@ -117,7 +118,7 @@ public sealed class BotDriver(bool roams, int seed)
     private CarInput Toward(CarState me, Vector3 at, int t, bool fire)
     {
         var local = me.Rot.ToLocal(at - me.Pos.ToVector3());
-        float angle = MathF.Atan2(local.X, local.Z);
+        float angle = DetMath.Atan2(local.X, local.Z);
         var i = new CarInput { Buttons = CarButtons.Analog, Throttle = 26000, Steer = (short)(Math.Clamp(-angle / (0.6f + me.Speed * 0.02f), -1f, 1f) * 32000) };   // gentler as it goes faster, or it weaves
         if (fire && MathF.Abs(angle) < 0.35f) i.Buttons |= CarButtons.Fire;
         // stuck against something (2 s hardly moving): back off a moment

@@ -1,5 +1,6 @@
 using System.Numerics;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Ai;
 
@@ -32,6 +33,6 @@ public static class TargetPredictor
         float r = v.Speed / MathF.Abs(w);
         float a = t * side * w - side * (MathF.PI / 2);
         var centre = p + new Vector3(v.Rot.Right.X, 0, v.Rot.Right.Z) * (side * r);
-        return centre + v.Rot.ToWorld(new Vector3(MathF.Sin(a) * r, 0, MathF.Cos(a) * r));
+        return centre + v.Rot.ToWorld(new Vector3(DetMath.Sin(a) * r, 0, DetMath.Cos(a) * r));
     }
 }

@@ -1,6 +1,7 @@
 using System.Numerics;
 using I76.Sim.Math;
 using I76.Sim.Terrain;
+using I76.Formats;
 
 namespace I76.Sim.Vehicles;
 
@@ -141,7 +142,7 @@ public static class HeliStep
                 if (fa > 0 || isPlayer) a = fa * fwdH + sa * rightH;
                 else if (speed > -fa) a = sa * rightH + fa / speed * vel;
                 else if (speed > 1) a = sa * rightH - vel;
-                else if (speed > 0) a = -vel;
+                else if (speed > 0) a = DetMath.Neg(vel);
                 else { vel = Vector3.Zero; vel0 = Vector3.Zero; speed = 0; }
                 if (speed > 1) a += -Drag * speed * vel;
                 p += (vel + 0.5f * a * dt) * dt;
@@ -218,7 +219,7 @@ public static class HeliStep
         else { e1 = t - heading; e2 = e1 - TwoPi; }
         float e = MathF.Abs(e1) <= MathF.Abs(e2) ? e1 : e2;
         float dt = MathF.Max(frameDelta, ControlFrame);
-        float s = (v.Speed + v.Throttle * dt * Thrust) * dt * MathF.Sin(-e * 0.15f) / (dt * dt * Thrust);
+        float s = (v.Speed + v.Throttle * dt * Thrust) * dt * DetMath.Sin(-e * 0.15f) / (dt * dt * Thrust);
         if (s < -1f) s = -0.999f;
         else if (s > 1f) s = 0.999f;
         v.Steer = s;

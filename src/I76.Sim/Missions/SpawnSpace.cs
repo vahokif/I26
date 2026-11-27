@@ -1,5 +1,6 @@
 using I76.Sim.Math;
 using I76.Sim.Vehicles;
+using I76.Formats;
 
 namespace I76.Sim.Missions;
 
@@ -196,7 +197,7 @@ internal static class SpawnSpace
     {
         var ab = b - a;
         float l2 = ab.LengthSquared();
-        float t = l2 < 1e-9f ? 0 : System.Math.Clamp(System.Numerics.Vector2.Dot(p - a, ab) / l2, 0f, 1f);
+        float t = l2 < 1e-9f ? 0 : System.Math.Clamp(DetMath.Dot(p - a, ab) / l2, 0f, 1f);
         return System.Numerics.Vector2.Distance(p, a + ab * t);
     }
 

@@ -1,5 +1,6 @@
 using System;
 using I76.Formats.Input;
+using I76.Formats;
 
 namespace I76.Sim.Views;
 
@@ -102,7 +103,7 @@ public sealed class MouseCockpitOffset
         if (!autoReturn) return;
         Idle += dt;
         if (Idle < ReturnDelay) return;
-        float k = MathF.Pow(0.5f, dt / ReturnHalfLife);
+        float k = DetMath.Pow(0.5f, dt / ReturnHalfLife);
         Yaw *= k;
         Pitch *= k;
         if (MathF.Abs(Yaw) < 1e-4f) Yaw = 0f;

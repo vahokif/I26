@@ -333,7 +333,7 @@ public sealed class OutsideGround
         float near = SmoothStep(250, 1800, t);
         float hills = 35 * Fbm(x / 700, z / 700, 4) * near;
         float far = SmoothStep(3000, 12000, r);
-        float ranges = far > 0 ? _meanRef * 0.55f * (r / RefRadius) * DetMath.Pow(Ridged(x / 3200 + 7.3f, z / 3200 - 1.9f, 5), 2.2f) * far : 0;
+        float ranges = far > 0 ? _meanRef * 0.55f * (r / RefRadius) * DetMath.Pow(MathF.Max(Ridged(x / 3200 + 7.3f, z / 3200 - 1.9f, 5), 0f), 2.2f) * far : 0;
         float bg = hills + ranges;
         // the mountains (steep: cliffs, mesa walls) only past the gentle rise, the ground between from the plain's end
         best *= SmoothStep(Gentle, Gentle + 1000, t);

@@ -53,8 +53,8 @@ uniform vec3 zenith_color : source_color = vec3(0.25, 0.42, 0.75);
 uniform vec3 horizon_color : source_color = vec3(0.7, 0.75, 0.8);
 uniform vec3 cloud_color : source_color = vec3(1.0);
 uniform vec3 cloud_shade : source_color = vec3(0.55, 0.58, 0.65);
-uniform float sky_lum = 0.15;
-uniform float cloud_lum = 0.8;
+uniform vec3 sky_ref = vec3(0.05, 0.12, 0.45);   // the open sky's colour and the clouds' (linear): a texel's cloudiness is its place
+uniform vec3 cloud_ref = vec3(0.8);               // between them (SkyColours.Measure), so clouds darker than the sky are clouds
 uniform float detail = 0.35;      // how much the noise reshapes the texture's clouds
 uniform float light_strength = 1.0;
 uniform float vol_haze = 0.12;    // the volumetric clouds' haze toward the horizon (the flat clouds' is 0.12)
@@ -84,8 +84,8 @@ float density(vec2 uv, int octaves) {
 	const float r = 0.006;
 	vec3 c = i76_sky_tex(texture(clouds, uv)).rgb * 0.4 + (i76_sky_tex(texture(clouds, uv + vec2(r, 0))).rgb + i76_sky_tex(texture(clouds, uv - vec2(r, 0))).rgb
 		+ i76_sky_tex(texture(clouds, uv + vec2(0, r))).rgb + i76_sky_tex(texture(clouds, uv - vec2(0, r))).rgb) * 0.15;
-	float span = cloud_lum - sky_lum;
-	float base = smoothstep(sky_lum - span * 0.1, cloud_lum + span * 0.15, dot(c, vec3(0.299, 0.587, 0.114)));
+	vec3 axis = cloud_ref - sky_ref;
+	float base = smoothstep(-0.1, 1.15, dot(c - sky_ref, axis) / max(dot(axis, axis), 1e-6));
 	// billows: large lumps inside, fine erosion at the edges
 	float n = fbm(uv * 5.0, octaves);
 	float e = fbm(uv * 17.0 + n, octaves > 1 ? octaves - 1 : 1);

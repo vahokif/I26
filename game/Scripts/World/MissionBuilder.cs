@@ -140,7 +140,8 @@ public sealed class MissionBuilder(AssetVfs vfs)
     public SkyPalette? Palette { get; private set; }
     /// <summary>The mission's .act.</summary>
     public Palette? ActPalette { get; private set; }
-    public sealed record SkyPalette(Color Sky, Color Cloud, Color Shade, float SkyLum, float CloudLum);
+    /// <summary>The sky texture's colours (sRGB) and the ends of its sky-to-cloud colour line (linear): SkyColours.Measure.</summary>
+    public sealed record SkyPalette(Color Sky, Color Cloud, Color Shade, System.Numerics.Vector3 SkyRef, System.Numerics.Vector3 CloudRef);
 
     /// <summary>
     /// The faces <see cref="RoadPieceTops"/> paints, without their textures: each painted face facing up, of each road-piece placement and
@@ -399,33 +400,28 @@ public sealed class MissionBuilder(AssetVfs vfs)
     }
 
     /// <summary>
-    /// Sorts the texture's pixels by brightness: the darkest third is the open
-    /// sky, the brightest sixth the clouds, the band between their shade.
-    /// Luminances are linear, as the shader samples a source_color texture.
+    /// The texture's open sky, clouds and the shade between, told apart by colour (SkyColours.Measure: the bluer of the
+    /// pixels' two groups is the sky, so clouds darker than the sky, a sunset's rust-red under its blue, are clouds).
+    /// Linear, as the shader samples a source_color texture.
     /// </summary>
     private static SkyPalette MeasureSky(Image img)
     {
         img = (Image)img.Duplicate();
         if (img.IsCompressed()) img.Decompress();
         img.Resize(64, 64, Image.Interpolation.Bilinear);
-        var px = new List<(float L, Color C)>();
+        var px = new float[64 * 64 * 3];
         for (int y = 0; y < 64; y++)
             for (int x = 0; x < 64; x++)
             {
                 var c = img.GetPixel(x, y).SrgbToLinear();
-                px.Add((0.299f * c.R + 0.587f * c.G + 0.114f * c.B, c));
+                int i = (y * 64 + x) * 3;
+                px[i] = c.R; px[i + 1] = c.G; px[i + 2] = c.B;
             }
-        px.Sort((a, b) => a.L.CompareTo(b.L));
-        (float L, Color C) Mean(double from, double to)
-        {
-            int a = (int)(px.Count * from), b = System.Math.Max(a + 1, (int)(px.Count * to));
-            float l = 0, r = 0, g = 0, bl = 0;
-            for (int i = a; i < b; i++) { l += px[i].L; r += px[i].C.R; g += px[i].C.G; bl += px[i].C.B; }
-            int n = b - a;
-            return (l / n, new Color(r / n, g / n, bl / n).LinearToSrgb());
-        }
-        var sky = Mean(0, 0.33); var cloud = Mean(0.84, 1); var shade = Mean(0.5, 0.7);
-        return new SkyPalette(sky.C, cloud.C, shade.C, sky.L, MathF.Max(cloud.L, sky.L + 0.05f));
+        var m = I76.Formats.Imaging.SkyColours.Measure(px);
+        static Color Srgb(System.Numerics.Vector3 v) => new Color(v.X, v.Y, v.Z).LinearToSrgb();
+        var pal = new SkyPalette(Srgb(m.Sky), Srgb(m.Cloud), Srgb(m.Shade), m.Sky, m.CloudEnd);
+        GD.Print($"sky: palette sky #{pal.Sky.ToHtml(false)} cloud #{pal.Cloud.ToHtml(false)} shade #{pal.Shade.ToHtml(false)}");
+        return pal;
     }
     public I76.Formats.Mission.WorldSettings? Settings { get; private set; }
     public I76.Formats.Mission.LightPreset Light { get; private set; } = I76.Formats.Mission.Lighting.ForHour(12);

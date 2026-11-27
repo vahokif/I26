@@ -1980,15 +1980,18 @@ public partial class Main : Node3D
         if (_builder?.Palette is { } pal)
         {
             // by day the haze and the clouds are lifted toward white; a night sky keeps the texture's own dark blues (the original's
-            // night is navy with violet clouds, and the lift greyed it)
+            // night is navy with violet clouds, and the lift greyed it). Only pale clouds brighter than the sky are lifted, and
+            // the less the more coloured they are: a sunset's rust-red clouds, darker than its blue, stay rust-red, a
+            // blue-grey sky's slate clouds stay slate, and orange-pink ones do not turn peach-white
             bool day = light.IsDay;
+            float lift = pal.Cloud.Luminance > pal.Sky.Luminance ? 0.4f * (1f - pal.Cloud.S) : 0f;
             m.SetShaderParameter("zenith_color", day ? pal.Sky.Darkened(0.12f) : pal.Sky);
             m.SetShaderParameter("horizon_color", day ? pal.Sky.Lerp(_builder.SkyAverage, 0.6f).Lerp(Colors.White, 0.25f) : pal.Sky.Lerp(_builder.SkyAverage, 0.5f));
-            m.SetShaderParameter("cloud_color", day ? pal.Cloud.Lerp(Colors.White, 0.4f) : pal.Cloud);
+            m.SetShaderParameter("cloud_color", day ? pal.Cloud.Lerp(Colors.White, lift) : pal.Cloud);
             m.SetShaderParameter("sky_gain", day ? 1f : NightSkyGain);
             m.SetShaderParameter("cloud_shade", day ? pal.Shade.Lerp(pal.Sky, 0.35f).Darkened(0.1f) : pal.Shade.Lerp(pal.Cloud, 0.5f));
-            m.SetShaderParameter("sky_lum", pal.SkyLum);
-            m.SetShaderParameter("cloud_lum", pal.CloudLum);
+            m.SetShaderParameter("sky_ref", new Vector3(pal.SkyRef.X, pal.SkyRef.Y, pal.SkyRef.Z));
+            m.SetShaderParameter("cloud_ref", new Vector3(pal.CloudRef.X, pal.CloudRef.Y, pal.CloudRef.Z));
         }
         m.SetShaderParameter("light_strength", light.IsDay ? light.Intensity : 0.3f);
         // by day a drawn sun in place of the sprite; by night a drawn moon (NASA's map of it) in place of the mission's moon sprite

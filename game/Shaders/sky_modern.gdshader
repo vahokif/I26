@@ -1,6 +1,7 @@
 // The modern sky: the mission's own sky texture as the cloud field, made
-// volumetric-looking. Its brightness becomes cloud density (sky_lum ->
-// cloud_lum, measured from the texture), projected the way the engine's dome
+// volumetric-looking. Its colour's place between the open sky's and the
+// clouds' (sky_ref -> cloud_ref, measured from the texture) becomes cloud
+// density, projected the way the engine's dome
 // projects it (radius 6000, centred 5400 below the eye, the
 // texture repeating 4 times across it, scrolled), so the clouds sit where the
 // original's do. Procedural noise breaks the edges into billows, a sample

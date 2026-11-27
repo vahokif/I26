@@ -31,10 +31,11 @@ uniform float max_distance = 60000.0;
 uniform vec2 fine_reach = vec2(15.0, 60.0);   // the fine noise fades out, and the shape's finest billows with it, as a pixel grows from x to y metres on the layer
 uniform float haze_distance = 12000.0;  // far clouds fade into the horizon's colour over about this
 uniform float extinction = 0.008;     // per metre at density 1
+uniform float slant_thin = 0.6;      // 0: Beer's law along the view; 1: a cloud as opaque at any angle as straight up
 uniform float shadow = 3.0;          // the light's path toward the sun as many times denser (the flat sky's clouds shade their cores as deeply)
-uniform float sun_gain = 0.9;
+uniform float sun_gain = 0.65;
 uniform float lumps = 0.2;           // how far the shape noise moves the cover (the flat sky's detail 0.35 x 1.6)
-uniform float fray = 0.5;            // how far the fine noise frays them (most at the edges)
+uniform float fray = 0.8;            // how far the fine noise frays them (most at the edges)
 uniform float stretch = 3.0;         // the noise's features this many times longer along the wind
 uniform float fibre_stretch = 8.0;   // the fine noise's, longer still
 uniform float warp = 250.0;          // metres the coarse noise pushes the cover about
@@ -103,8 +104,8 @@ float shape_density(float cov, float hf, vec3 q, bool erode, float far) {
 		v += (dn - 0.5) * fray * (0.35 + 0.65 * edge) * (1.0 - far);
 	}
 	if (v <= 0.02) return 0.0;
-	// the flat sky's cover
-	float c = smoothstep(0.03, 0.75, v);
+	// the flat sky's cover, eased in a little more at the edges (seen slanting, a sheet's edge would read as a crisp rim)
+	float c = pow(smoothstep(0.02, 0.8, v), 1.5);
 	// a thin sheet, a little thicker where the cloud is denser, its middle wandering with the noise
 	float mid = 0.5 + (n - 0.5) * 0.3;
 	float thick = mix(0.4, 1.0, c);
@@ -144,6 +145,9 @@ vec4 march(vec3 eyedir, vec3 cam) {
 	// a texel of the cover in metres
 	float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
 
+	// a slanting path crosses the sheet's whole depth sideways: thinned toward the flat sky's look, where a cloud lets through
+	// as much low down as overhead (otherwise low clouds turn solid to their very edges, rounded and smooth)
+	float slant = pow(clamp(abs(g.y), 0.02, 1.0), slant_thin);
 	float cs = dot(d, s);
 	// two lobes: forward (the silver lining) and a little back
 	float ph = mix(hg(cs, 0.6), hg(cs, -0.25), 0.3);
@@ -177,7 +181,7 @@ vec4 march(vec3 eyedir, vec3 cam) {
 			od += shape_density(lc, lhf, lq, j == 0, far) * ls;
 			ls *= 2.2;
 		}
-		float sig = extinction * den;
+		float sig = extinction * den * slant;
 		// three scattering octaves (each weaker, its extinction and phase softer), and the powder darkening of the edges facing away from the light
 		float powder = 1.0 - exp(-den * extinction * shadow * 160.0);
 		float pw = mix(1.0, powder, 0.5 - 0.5 * cs);

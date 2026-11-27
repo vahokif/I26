@@ -31,7 +31,7 @@ uniform float shape_tile = 1800.0;      // metres a tile of the shape noise (128
 uniform float detail_tile = 450.0;     // 64^3: 7 m a texel
 uniform float max_distance = 60000.0;
 uniform vec2 fine_reach = vec2(15.0, 60.0);   // the fine noise fades out, and the shape's finest billows with it, as a pixel grows from x to y metres on the layer
-uniform float haze_distance = 40000.0;  // far clouds fade into the horizon's colour over about this
+uniform float haze_distance = 13000.0;  // far clouds fade into the horizon's colour about this far off (aerial)
 uniform float high_fade = 24000.0;      // the high sheet over about this (further, its noise is finer than a pixel)
 uniform float extinction = 0.008;     // per metre at density 1
 uniform float slant_thin = 0.7;      // 0: Beer's law along the view; 1: a cloud as opaque at any angle as straight up
@@ -163,8 +163,10 @@ float hg(float c, float g) {
 	return (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5);   // times 4 pi: 1 for an even spread
 }
 
-// how much of a cloud's own light reaches the eye from a distance t (the rest is the horizon's colour)
-float aerial(float t) { return exp(-t / haze_distance); }
+// how much of a cloud's own light reaches the eye from a distance t (the rest is the horizon's colour): the air between
+// barely shows near by and takes over past haze_distance (exp(-(t/d)^2): clouds a few kilometres off keep their contrast,
+// the far field merges into the horizon's haze as the flat sky's does instead of rows of equally sharp clouds to the edge)
+float aerial(float t) { float x = t / haze_distance; return exp(-x * x); }
 
 // the eye in game coordinates from the camera's position (Godot frame)
 vec3 game_eye(vec3 cam) { return world_origin + vec3(cam.x, cam.y, -cam.z); }
@@ -277,6 +279,9 @@ vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
 			// drawn over the sky as the flat sky draws its clouds: their cover is what they stop of the light over 0.92 (the
 			// flat sky lets 8% of the sun through a whole cloud but paints the cloud over the sky entirely)
 			tr = 1.0 - min((1.0 - tr) / 0.92, 1.0);
+			// and thinning into the air: far off the rows of clouds merge into the sky's own haze rather than a band of
+			// their colour along the horizon
+			tr = 1.0 - (1.0 - tr) * sqrt(keep);
 			scat = lum * (1.0 - tr);
 		}
 		// between them, the texture's own sky (sky_modern's flat clouds do the same), a veil over the gradient: wherever the

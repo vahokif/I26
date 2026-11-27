@@ -163,6 +163,9 @@ float hg(float c, float g) {
 	return (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5);   // times 4 pi: 1 for an even spread
 }
 
+// how much of a cloud's own light reaches the eye from a distance t (the rest is the horizon's colour)
+float aerial(float t) { return exp(-t / haze_distance); }
+
 // the eye in game coordinates from the camera's position (Godot frame)
 vec3 game_eye(vec3 cam) { return world_origin + vec3(cam.x, cam.y, -cam.z); }
 
@@ -246,35 +249,40 @@ vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
 	float tr = clamp(v.a, 0.0, 1.0);
 	vec3 scat = vec3(0.0);
 	float tm = v.r * max_distance;
-	if (tr < 0.999 && tm > 0.0) {
-		float cs = dot(d, s);
+	if (tm > 0.0) {
 		float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
 		vec3 p = g * tm;
 		float span = pix * tm / sqrt(max(abs(g.y), 0.03));
 		float far = smoothstep(fine_reach.x, fine_reach.y, span) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, span);
 		float lod = log2(max(span / cover_texel, 1.0)) - 0.5;
 		float hf, broad, n; vec3 q; vec2 cuv;
-		float c = flat_cover(cover_at_uv(e, p, lod, true, hf, q, broad, cuv), q, true, far, n);
-		// toward the light, as the flat sky looks: the cloud at a few points further out toward the sun (whatever their
-		// height), the first with the fine noise
-		float acc = 0.0;
-		for (int j = 1; j <= 3; j++) {
-			float lhf, lb, ln; vec3 lq;
-			acc += flat_cover(cover_at(e, p + lg * (light_step * float(j)), lod, j == 1, lhf, lq, lb), lq, j == 1, far, ln);
-		}
-		float lit = exp(-acc * shadow);
-		float core = smoothstep(0.2, 0.95, c);
+		float cov = cover_at_uv(e, p, lod, true, hf, q, broad, cuv);
+		float keep = aerial(tm);
 		// the texture's own colour there, softened as the cover is (over at least what a pixel spans)
-		vec3 tex = sky_texel(cuv, max(0.006, span / cover_tile));
-		vec3 lum = cloud_light(tex, lit, core, cs, false);
-		// far off, the haze between: the cloud's light gives way to the horizon's colour
-		lum = mix(I76_COL(horizon_color), lum, exp(-tm / haze_distance));
-		// drawn over the sky as the flat sky draws its clouds: their cover is what they stop of the light over 0.92 (the flat
-		// sky lets 8% of the sun through a whole cloud but paints the cloud over the sky entirely)
-		tr = 1.0 - min((1.0 - tr) / 0.92, 1.0);
-		scat = lum * (1.0 - tr);
-		// between them, the texture's own sky (sky_modern's flat clouds do the same), a veil over the gradient
-		float k = cloud_albedo * sky_own * tr * exp(-tm / haze_distance);
+		vec3 tex = cloud_albedo > 0.0 ? sky_texel(cuv, max(0.006, span / cover_tile)) : vec3(0.0);
+		if (tr < 0.999) {
+			float c = flat_cover(cov, q, true, far, n);
+			// toward the light, as the flat sky looks: the cloud at a few points further out toward the sun (whatever their
+			// height), the first with the fine noise
+			float acc = 0.0;
+			for (int j = 1; j <= 3; j++) {
+				float lhf, lb, ln; vec3 lq;
+				acc += flat_cover(cover_at(e, p + lg * (light_step * float(j)), lod, j == 1, lhf, lq, lb), lq, j == 1, far, ln);
+			}
+			float lit = exp(-acc * shadow);
+			float core = smoothstep(0.2, 0.95, c);
+			vec3 lum = cloud_light(tex, lit, core, dot(d, s), false);
+			// far off, the air between: the cloud's light gives way to the horizon's colour
+			lum = mix(I76_COL(horizon_color), lum, keep);
+			// drawn over the sky as the flat sky draws its clouds: their cover is what they stop of the light over 0.92 (the
+			// flat sky lets 8% of the sun through a whole cloud but paints the cloud over the sky entirely)
+			tr = 1.0 - min((1.0 - tr) / 0.92, 1.0);
+			scat = lum * (1.0 - tr);
+		}
+		// between them, the texture's own sky (sky_modern's flat clouds do the same), a veil over the gradient: wherever the
+		// view crosses the layer, cloud or not (only where there was cloud, the clear pixels between showed the measured
+		// colour as flat patches with the reduced pass's stair-stepped edges)
+		float k = cloud_albedo * sky_own * tr * keep;
 		scat += k * tex;
 		tr *= 1.0 - k;
 	}

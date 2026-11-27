@@ -7,7 +7,7 @@
 // as fast as the dome's texture scrolls and in its direction, on the mission's clock (cloud_time), so every player sees the
 // same clouds in the same place. Each cloud is as dense as lets through, looking straight up, what the flat sky's cover lets
 // through, and as deep as it is dense: veils at the edges, lumpy cores whose roofs and floors the noise moves; tiling 3D
-// noise (CloudNoise: Perlin-Worley lumps, Worley fibres), drawn out along the wind, the layer sheared downwind with height
+// noise (CloudNoise: Perlin-Worley lumps, Worley fibres), drawn out a little along the wind, the layer sheared downwind with height
 // and the cover pushed about by a coarse noise, makes them streaky and frayed. They are lit as the flat sky lights its
 // clouds, in the texture's measured colours: Beer's law toward the sun or moon along a way drawn out sideways, so the lumps'
 // near sides are lit and their far sides and neighbours shaded, a powder term, and a silver lining and forward glow on the
@@ -36,12 +36,12 @@ uniform float high_fade = 24000.0;      // the high sheet over about this (furth
 uniform float extinction = 0.008;     // per metre at density 1
 uniform float slant_thin = 0.7;      // 0: Beer's law along the view; 1: a cloud as opaque at any angle as straight up
 uniform float light_rise = 0.3;     // the light's way toward the sun climbs this share as steeply
-uniform float shadow = 8.0;          // the way toward the sun as many times denser (the flat sky's clouds shade their far sides as deeply)
+uniform float shadow = 2.0;          // the way toward the sun as many times denser (the flat sky's clouds shade their far sides as deeply)
 uniform float rim = 1.4;             // the silver lining's strength (twice the flat sky's: it lights only the thin parts' share)
 uniform float lumps = 0.2;           // how far the shape noise moves the cover (the flat sky's detail 0.35 x 1.6)
 uniform float fray = 0.5;            // how far the fine noise frays them (most at the edges)
-uniform float stretch = 3.0;         // the noise's features this many times longer along the wind
-uniform float fibre_stretch = 8.0;   // the fine noise's, longer still
+uniform float stretch = 1.5;         // the noise's features this many times longer along the wind
+uniform float fibre_stretch = 3.0;   // the fine noise's, longer still
 uniform float warp = 250.0;          // metres the coarse noise pushes the cover about
 uniform float shear = 200.0;         // metres the cover moves downwind from the floor to the roof
 uniform float min_thick = 0.08;      // the thinnest veil, a share of the layer
@@ -69,9 +69,9 @@ float first_at(float h0, float gy, float k, float x) {
 vec2 wind_dir() { return dot(wind, wind) > 1e-6 ? normalize(wind) : vec2(-0.70710678, -0.70710678); }
 
 // cloud cover at a point p from the eye at e (game frame), its height in the layer (0 floor .. 1 roof) and the noise's place.
-// The noise's space is stretched along the wind (streaks), and the cover is looked up a little off the point: pushed
+// The noise's space is stretched a little along the wind (more combed the clouds), and the cover is looked up a little off the point: pushed
 // about by a coarse noise (frayed, fibrous edges) and carried downwind with height (the layer sheared, as cirrus is)
-float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q) {
+float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q, out float broad) {
 	hf = floor_height(e, p) / cloud_depth;
 	// carried by the wind: the cover and the noise together
 	vec2 w = e.xz + p.xz - wind * cloud_time;
@@ -80,19 +80,23 @@ float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q
 	q = vec3(ws.x, hf * cloud_depth, ws.y);
 	vec2 uv = w + wd * (shear * hf);
 	if (push_it) {
-		vec3 wq = q / (shape_tile * 1.3);
+		// (the same push all the way up: one varying with height laid the layer in strata, lines along every slanting cloud)
+		vec3 wq = vec3(q.x, 0.0, q.z) / (shape_tile * 1.3);
 		uv += (vec2(textureLod(shape_noise_far, wq, 0.0).r, textureLod(shape_noise_far, wq.zxy + vec3(0.31, 0.57, 0.13), 0.0).r) - 0.5) * (2.0 * warp);
 	}
 	uv /= cover_tile;
+	// the cover a few mip levels coarser: the clouds' depth follows it (the fine cover's wisps as the depth of every cloud's
+	// floor and roof made them corrugated, and seen slanting each fold was a bright line)
+	broad = textureLod(cover_map, uv, lod + 2.5).r;
 	return textureLod(cover_map, uv, lod).r;
 }
 
 // density from the cover and the noise: the cover moved a little more by 3D lumps and frayed by fibres (as the flat sky reshapes
 // its texture), then laid in a sheet: the clouds thin toward their edges into veils, with no flat floor or rounded roof.
 // erode adds the fibres, less of them far off (coarse 0 near .. 1 far, 2 farther still, the lumps gone too): finer than a
-// pixel or a step they would only sparkle
-float shape_density(float cov, float hf, vec3 q, bool erode, float coarse) {
-	if (cov < 0.01 || hf <= 0.0 || hf >= 1.0) return 0.0;
+// pixel or a step they would only sparkle. dh < 0: the density at the cloud's core whatever the height (the light's samples)
+float shape_density(float cov, float broad, float hf, vec3 q, bool erode, float coarse, float dh) {
+	if (cov < 0.01 || (dh >= 0.0 && (hf <= 0.0 || hf >= 1.0))) return 0.0;
 	float far = min(coarse, 1.0);
 	vec3 sq = q / shape_tile;
 	float n = far >= 1.0 ? textureLod(shape_noise_far, sq, 0.0).r
@@ -104,7 +108,7 @@ float shape_density(float cov, float hf, vec3 q, bool erode, float coarse) {
 	if (v <= 0.02 - fray * 0.25) return 0.0;
 	float dn = 0.5;
 	if (erode && far < 1.0) {
-		// fibres: the fine noise drawn out further along the wind, strongest at the edges but through the veils too
+		// fibres: the fine noise drawn out a little further along the wind, strongest at the edges but through the veils too
 		vec2 wd = wind_dir();
 		vec3 fq = vec3(q.x, q.y * 2.0, q.z);
 		fq.xz -= wd * dot(q.xz, wd) * (1.0 - stretch / fibre_stretch);
@@ -117,10 +121,15 @@ float shape_density(float cov, float hf, vec3 q, bool erode, float coarse) {
 	float c = smoothstep(0.03, 0.75, v);
 	// as deep as it is dense, and lumpy: veils at the edges, the cores' roofs raised and floors lowered by the noise, so the
 	// sun lights their near sides and they shade their neighbours (the flat sky's relief), with no flat floor or loaf top
-	float thick = clamp(c * (0.5 + 1.1 * (n - 0.35) + (dn - 0.5) * 0.5 * (1.0 - far)), min_thick, 1.0);
-	float mid = 0.4 + (n - 0.5) * 0.25;
-	float lo = mid - thick * 0.35, hi = mid + thick * 0.65;
-	float sheet = smoothstep(lo, lo + 0.2, hf) * smoothstep(hi, hi - 0.3, hf);
+	// (the depth's lumps from the noise averaged down: its finer billows made terraces of the floors and roofs too)
+	float nb = mix(textureLod(shape_noise_far, sq * 0.5, 0.0).r, 0.5, max(coarse - 1.0, 0.0));
+	float thick = clamp(smoothstep(0.03, 0.75, broad) * (0.5 + 1.1 * (nb - 0.35)), min_thick, 1.0);
+	float mid = 0.4 + (nb - 0.5) * 0.25;
+	// (inside the layer: a cloud cut off at its floor or roof is a hard edge the steps band)
+	float lo = max(mid - thick * 0.35, 0.02), hi = min(mid + thick * 0.65, 0.98);
+	// its floor and roof eased in over at least what a step of the march climbs (dh, a share of the layer): sharper, the
+	// steps would land in or out of them by turns, contour lines along every slanting cloud
+	float sheet = dh < 0.0 ? 1.0 : smoothstep(lo - dh * 0.5, lo + max(0.2, dh), hf) * smoothstep(hi + dh * 0.5, hi - max(0.3, dh), hf);
 	// as dense as lets through, straight up, what the flat sky's cover lets through
 	return sheet * -log(1.0 - 0.92 * c) / (extinction * cloud_depth * thick);
 }
@@ -156,6 +165,7 @@ vec4 march(vec3 eyedir, vec3 cam) {
 	float len = t1 - t0;
 	int n = int(clamp(len / max_step, float(steps), float(max_steps)));
 	float dt = len / float(n);
+	float dh = dt * abs(g.y) / cloud_depth;
 	// a texel of the cover in metres
 	float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
 
@@ -178,21 +188,24 @@ vec4 march(vec3 eyedir, vec3 cam) {
 		// what a pixel spans on the layer here: detail finer than that would only alias (stairs and crawling edges in the
 		// reduced pass), so the cover is read from a coarser mip and the fine noise fades out
 		float span = pix * t / sqrt(max(abs(g.y), 0.03));
-		// (and what a step spans: along a slanting path finer detail falls between the steps, a lattice of dots)
-		float reach = max(span, dt * 0.5);
+		// (and how far a step goes across the layer: on a slanting path, cover finer than that falls between the steps and
+		// is drawn as rows of lines and dots)
+		float reach = max(span, dt * length(g.xz));
 		float far = smoothstep(fine_reach.x, fine_reach.y, reach) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, reach);
 		float lod = log2(max(reach / cover_texel, 1.0));
-		float hf; vec3 q;
-		float cov = cover_at(e, p, lod, true, hf, q);
-		float den = shape_density(cov, hf, q, true, far);
+		float hf, broad; vec3 q;
+		float cov = cover_at(e, p, lod, true, hf, q, broad);
+		float den = shape_density(cov, broad, hf, q, true, far, dh);
 		if (den <= 0.0) continue;
 		// toward the light: a few samples, each further out, the far ones without the fine noise or the push
 		float od = 0.0, ls = 50.0, lt = 0.0;
 		for (int j = 0; j < 3; j++) {
 			lt += ls;
-			float lhf; vec3 lq;
-			float lc = cover_at(e, p + lg * lt, lod, j == 0, lhf, lq);
-			od += shape_density(lc, lhf, lq, j == 0, far) * ls;
+			float lhf, lb; vec3 lq;
+			float lc = cover_at(e, p + lg * lt, lod, j == 0, lhf, lq, lb);
+			// the cloud's core there whatever the height: the light then varies across the clouds and not with the height
+			// (it did, strongly, and the march's steps, each at its own share of the layer's height, drew it as contour lines)
+			od += shape_density(lc, lb, lhf, lq, j == 0, far, -1.0) * ls;
 			ls *= 2.4;
 		}
 		float sig = extinction * den * slant;

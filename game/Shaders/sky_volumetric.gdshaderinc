@@ -42,7 +42,8 @@ uniform float lumps = 0.2;           // how far the shape noise moves the cover 
 uniform float fray = 0.5;            // how far the fine noise frays them (most at the edges)
 uniform float stretch = 1.5;         // the noise's features this many times longer along the wind
 uniform float fibre_stretch = 3.0;   // the fine noise's, longer still
-uniform float warp = 250.0;          // metres the coarse noise pushes the cover about
+uniform float warp = 200.0;          // metres the coarse noise pushes the cover about
+uniform float push_scale = 7200.0;   // metres a repeat of that noise
 uniform float shear = 200.0;         // metres the cover moves downwind from the floor to the roof
 uniform float min_thick = 0.08;      // the thinnest veil, a share of the layer
 uniform int steps = 8;              // steps across the layer at least
@@ -80,9 +81,16 @@ float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q
 	q = vec3(ws.x, hf * cloud_depth, ws.y);
 	vec2 uv = w + wd * (shear * hf);
 	if (push_it) {
-		// (the same push all the way up: one varying with height laid the layer in strata, lines along every slanting cloud)
-		vec3 wq = vec3(q.x, 0.0, q.z) / (shape_tile * 1.3);
-		uv += (vec2(textureLod(shape_noise_far, wq, 0.0).r, textureLod(shape_noise_far, wq.zxy + vec3(0.31, 0.57, 0.13), 0.0).r) - 0.5) * (2.0 * warp);
+		// (the same push all the way up: one varying with height laid the layer in strata, lines along every slanting cloud;
+		// gentle, a push that changed faster than the distance folded the cover over on itself; and smooth: read linearly
+		// the noise creased the cover along its texel grid, parallel lines across the sky, so the place within a texel is
+		// eased first, a smooth slope across the grid)
+		float nn = float(textureSize(shape_noise_far, 0).x);
+		vec2 tc = q.xz / push_scale * nn + 0.5;
+		vec2 fc = fract(tc);
+		tc = (floor(tc) + fc * fc * (3.0 - 2.0 * fc) - 0.5) / nn;
+		vec2 push = vec2(textureLod(shape_noise_far, vec3(tc.x, 0.5 / nn, tc.y), 0.0).r, textureLod(shape_noise_far, vec3(tc.y + 0.37, 9.5 / nn, tc.x + 0.61), 0.0).r) - 0.5;
+		uv += push * (2.0 * warp);
 	}
 	uv /= cover_tile;
 	// the cover a few mip levels coarser: the clouds' depth follows it (the fine cover's wisps as the depth of every cloud's
@@ -163,8 +171,11 @@ vec4 march(vec3 eyedir, vec3 cam) {
 	// even steps across the layer, from the middle of each (no per-pixel jitter: in the reduced pass that drew every pixel's
 	// share of a step as a block of noise on the screen); a thin layer needs no skipping through clear air
 	float len = t1 - t0;
-	int n = int(clamp(len / max_step, float(steps), float(max_steps)));
-	float dt = len / float(n);
+	// the step's length changes smoothly with the path's (a whole number of steps across it changed by one from pixel to
+	// pixel, every sample moving at once: a line across the sky at each change, stacked lines over a cloud), the last
+	// step whatever is left
+	float dt = max(len / float(max_steps), min(max_step, len / float(steps)));
+	int n = int(ceil(len / dt - 1e-3));
 	float dh = dt * abs(g.y) / cloud_depth;
 	// a texel of the cover in metres
 	float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
@@ -183,14 +194,15 @@ vec4 march(vec3 eyedir, vec3 cam) {
 	float tr = 1.0;
 	for (int i = 0; i < n; i++) {
 		if (tr < 0.03) break;
-		float t = t0 + (float(i) + 0.5) * dt;
+		float sdt = min(dt, t1 - (t0 + float(i) * dt));
+		float t = t0 + float(i) * dt + 0.5 * sdt;
 		vec3 p = g * t;
 		// what a pixel spans on the layer here: detail finer than that would only alias (stairs and crawling edges in the
 		// reduced pass), so the cover is read from a coarser mip and the fine noise fades out
 		float span = pix * t / sqrt(max(abs(g.y), 0.03));
-		// (and how far a step goes across the layer: on a slanting path, cover finer than that falls between the steps and
-		// is drawn as rows of lines and dots)
-		float reach = max(span, dt * length(g.xz));
+		// (and twice how far a step goes across the layer: on a slanting path, detail finer than that falls between the
+		// steps and is drawn as rows of lines and dots)
+		float reach = max(span, 2.0 * dt * length(g.xz));
 		float far = smoothstep(fine_reach.x, fine_reach.y, reach) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, reach);
 		float lod = log2(max(reach / cover_texel, 1.0));
 		float hf, broad; vec3 q;
@@ -217,7 +229,7 @@ vec4 march(vec3 eyedir, vec3 cam) {
 		vec3 lum = mix(shade_col * mix(0.85, 1.05, hf), lit_col, lit) + rim_col * lit * exp(-den * extinction * 150.0);
 		// far off, the haze between: the cloud's light gives way to the horizon's colour
 		lum = mix(haze, lum, exp(-t / haze_distance));
-		float st = exp(-sig * dt);
+		float st = exp(-sig * sdt);
 		scat += tr * lum * (1.0 - st);
 		tr *= st;
 	}

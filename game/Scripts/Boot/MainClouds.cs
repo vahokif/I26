@@ -12,7 +12,7 @@ namespace I76.Game.Boot;
 public partial class Main
 {
     private ShaderMaterial? _modernSkyMat;
-    private ImageTexture? _cloudCover;
+    private ImageTexture? _cloudCover, _cloudAlbedo;
     private static Texture3D? _cloudShape, _cloudShapeFar, _cloudDetail;
     private static System.Threading.Tasks.Task<(byte[] Shape, byte[] Detail)>? _cloudNoise;
 
@@ -85,8 +85,16 @@ public partial class Main
             var coverImg = Image.CreateFromData(img.GetWidth() * up, img.GetHeight() * up, false, Image.Format.Rh, half);
             coverImg.GenerateMipmaps();   // far off a pixel spans many texels: the march reads a coarser level there
             _cloudCover = ImageTexture.CreateFromImage(coverImg);
+            // the texture's own colours, with mipmaps, for clouds drawn in them (cloud_albedo): far off and low down a pixel
+            // spans many of its texels, and read at full size they crawled as stair-stepped streaks in motion; and enlarged as
+            // the cover is (cubic B-spline): bilinear between its 128 texels, stretched low over the horizon, drew their grid
+            // as stairs along every cloud's edge
+            var albedo = Image.CreateFromData(img.GetWidth() * up, img.GetHeight() * up, false, Image.Format.Rgb8, CloudNoise.EnlargeRgb(img.GetData(), img.GetWidth(), img.GetHeight(), up));
+            albedo.GenerateMipmaps();
+            _cloudAlbedo = ImageTexture.CreateFromImage(albedo);
         }
         m.SetShaderParameter("cover_map", _cloudCover);
+        m.SetShaderParameter("albedo_map", _cloudAlbedo);
         // a layer fixed in the world: its floor 1.5 km over the map's average ground (one height for the map, as the horizon's)
         if (_builder?.World is { } world) m.SetShaderParameter("cloud_floor", (float)world.AverageGroundHeight() + 1500f);
         m.SetShaderParameter("world_origin", new Vector3(_origin.X, _origin.Y, _origin.Z));

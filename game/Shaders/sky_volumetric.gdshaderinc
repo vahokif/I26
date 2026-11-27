@@ -17,6 +17,7 @@
 #include "sky_modern.gdshaderinc"
 
 uniform sampler2D cover_map : filter_linear_mipmap, repeat_enable;   // the flat sky's cloud density 0..1 over a repeat of `clouds` (CloudNoise.Cover)
+uniform sampler2D albedo_map : source_color, filter_linear_mipmap, repeat_enable;   // `clouds` with mipmaps (cloud_albedo's colours)
 uniform sampler3D shape_noise : filter_linear, repeat_enable;        // 128^3 Perlin-Worley
 uniform sampler3D shape_noise_far : filter_linear, repeat_enable;    // the same shrunk to 32^3, for far clouds (CloudNoise.Shrink)
 uniform sampler3D detail_noise : filter_linear, repeat_enable;       // 64^3 Worley
@@ -172,8 +173,8 @@ float aerial(float t) { float x = t / haze_distance; return exp(-x * x); }
 vec3 game_eye(vec3 cam) { return world_origin + vec3(cam.x, cam.y, -cam.z); }
 
 // the clouds along a view direction from the camera at cam (both Godot frame), in the reduced pass: how much they let
-// through (a) and how far along the view they are seen (r, a share of max_distance: their opacity's mean depth along the
-// view; with no cloud, where the view crosses the layer's middle, so the full pass's blend between pixels stays sane).
+// through (a) and at what height in the layer they are seen (r, 0 floor .. 1 roof: their opacity's mean; with no cloud,
+// near the layer's middle, so the full pass's blend between pixels stays sane), g 1 where the view crosses the layer.
 // Only their opacity is marched; their light is the full pass's (clouds_light)
 vec4 march(vec3 eyedir, vec3 cam) {
 	vec3 d = normalize(eyedir);
@@ -223,12 +224,10 @@ vec4 march(vec3 eyedir, vec3 cam) {
 		float den = shape_density(cover_at(e, p, lod, true, hf, q, broad), broad, hf, q, true, far, dh, c);
 		if (den <= 0.0) continue;
 		float st = exp(-extinction * den * slant * sdt);
-		wt += tr * (1.0 - st) * t;
+		wt += tr * (1.0 - st) * hf;
 		tr *= st;
 	}
-	float tmid = first_at(h0, g.y, k, cloud_depth * 0.45);
-	float tm = tr < 0.999 ? wt / (1.0 - tr) : (tmid > 0.0 ? tmid : 0.5 * (t0 + t1));
-	return vec4(tm / max_distance, 0.0, 0.0, tr);
+	return vec4(tr < 0.999 ? clamp(wt / (1.0 - tr), 0.0, 1.0) : 0.45, 1.0, 0.0, tr);
 }
 
 // the clouds' light along a view direction, in the full pass, from the reduced pass's v (march): their light in rgb, what
@@ -250,20 +249,31 @@ vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
 	vec3 lg = normalize(vec3(sg.x, sg.y * light_rise, sg.z) + vec3(1e-4, 0.0, 0.0));
 	float tr = clamp(v.a, 0.0, 1.0);
 	vec3 scat = vec3(0.0);
-	float tm = v.r * max_distance;
-	if (tm > 0.0) {
+	// where along this pixel's own view the clouds are seen: where it reaches the height the reduced pass found them at
+	// (the distance itself, blended between the reduced pass's pixels, put the shading's samples hundreds of metres off
+	// along a low view, by a different amount in each 2x2 block: stair-stepped streaks that crawled in motion)
+	float tm = v.g > 0.5 ? first_at(e.y - cloud_floor, g.y, dot(g.xz, g.xz) / (2.0 * planet_radius), clamp(v.r, 0.0, 1.0) * cloud_depth) : -1.0;
+	if (tm > 0.0 && tm < max_distance) {
 		float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
 		vec3 p = g * tm;
-		float span = pix * tm / sqrt(max(abs(g.y), 0.03));
+		float span = pix * tm / max(abs(g.y), 0.03);
 		float far = smoothstep(fine_reach.x, fine_reach.y, span) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, span);
 		float lod = log2(max(span / cover_texel, 1.0)) - 0.5;
 		float hf, broad, n; vec3 q; vec2 cuv;
 		float cov = cover_at_uv(e, p, lod, true, hf, q, broad, cuv);
 		float keep = aerial(tm);
 		// the texture's own colour there, softened as the cover is (over at least what a pixel spans)
-		vec3 tex = cloud_albedo > 0.0 ? sky_texel(cuv, max(0.006, span / cover_tile)) : vec3(0.0);
+		vec3 tex = vec3(0.0);
+		if (cloud_albedo > 0.0) {
+			// softened as sky_texel softens it, from the mipmap level a pixel spans (a pixel's footprint on the layer stretches
+			// as 1/sin(elevation) along the view: low down a level of its short side's size aliased as stair-stepped streaks)
+			float r = max(0.006, span / cover_tile);
+			float al = log2(max(r * float(textureSize(albedo_map, 0).x), 1.0));
+			tex = (textureLod(albedo_map, cuv, al).rgb * 0.4 + (textureLod(albedo_map, cuv + vec2(r, 0.0), al).rgb + textureLod(albedo_map, cuv - vec2(r, 0.0), al).rgb
+				+ textureLod(albedo_map, cuv + vec2(0.0, r), al).rgb + textureLod(albedo_map, cuv - vec2(0.0, r), al).rgb) * 0.15);
+		}
+		float c = flat_cover(cov, q, true, far, n);
 		if (tr < 0.999) {
-			float c = flat_cover(cov, q, true, far, n);
 			// toward the light, as the flat sky looks: the cloud at a few points further out toward the sun (whatever their
 			// height), the first with the fine noise
 			float acc = 0.0;

@@ -231,6 +231,21 @@ public static class CloudNoise
         return s;
     }
 
+    /// <summary>RGB bytes (tiling) enlarged <paramref name="scale"/> times each way by <see cref="Enlarge"/>, channel by channel.</summary>
+    public static byte[] EnlargeRgb(ReadOnlySpan<byte> rgb, int w, int h, int scale)
+    {
+        int W = w * scale, H = h * scale;
+        var o = new byte[W * H * 3];
+        var ch = new float[w * h];
+        for (int c = 0; c < 3; c++)
+        {
+            for (int i = 0; i < w * h; i++) ch[i] = rgb[i * 3 + c];
+            var e = Enlarge(ch, w, h, scale);
+            for (int i = 0; i < W * H; i++) o[i * 3 + c] = (byte)Math.Clamp((int)MathF.Round(e[i]), 0, 255);
+        }
+        return o;
+    }
+
     /// <summary>A tiling image enlarged <paramref name="scale"/> times each way by a cubic B-spline through its texels' centres.</summary>
     public static float[] Enlarge(float[] src, int w, int h, int scale)
     {

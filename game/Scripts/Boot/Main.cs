@@ -1970,7 +1970,7 @@ public partial class Main : Node3D
     private ShaderMaterial ModernSky(ShaderMaterial dome, I76.Formats.Mission.LightPreset light)
     {
         var m = _modernSkyMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sky_modern.gdshader") };
-        _cloudCover = null;   // the mission's own (MainClouds.cs)
+        _cloudCover = _cloudAlbedo = null;   // the mission's own (MainClouds.cs)
         foreach (var p in new[] { "clouds", "horizon", "has_horizon", "sprite", "has_sprite", "sprite_dir", "sprite_radius" })
             m.SetShaderParameter(p, dome.GetShaderParameter(p));
         // a texture pack's sky, horizon and sprite where it has them (the dome, the 1997 look's, keeps the originals)

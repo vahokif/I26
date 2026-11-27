@@ -33,6 +33,7 @@ uniform float detail_tile = 450.0;     // 64^3: 7 m a texel
 uniform float max_distance = 60000.0;
 uniform vec2 fine_reach = vec2(15.0, 60.0);   // the fine noise fades out, and the shape's finest billows with it, as a pixel grows from x to y metres on the layer
 uniform float haze_distance = 13000.0;  // far clouds fade into the horizon's colour about this far off (aerial)
+uniform float high_rise = 8000.0;       // the high sheet's height over the map's average ground
 uniform float high_fade = 24000.0;      // the high sheet over about this (further, its noise is finer than a pixel)
 uniform float extinction = 0.008;     // per metre at density 1
 uniform float slant_thin = 0.7;      // 0: Beer's law along the view; 1: a cloud as opaque at any angle as straight up
@@ -301,12 +302,20 @@ vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
 		scat += k * tex;
 		tr *= 1.0 - k;
 	}
-	// behind them, the flat sky's fainter high layer (sky_modern), here a sheet fixed in the world 8 km up, drifting slower
+	// behind them, the flat sky's fainter high layer (sky_modern), here a sheet fixed in the world high_rise over the map's
+	// average ground, its pattern as large seen overhead as the flat one's (3000 m a repeat on the dome 600 m over the eye:
+	// at this height 5 x high_rise; at the main layer's scale its features were four times smaller in angle and their
+	// edges as much sharper) and drifting as it drifts (its texture's offset 0.4, -0.25 of the dome's scroll), on the
+	// mission's clock. Further off, a pixel spans more of it: its edges are widened to match (they would sharpen toward the
+	// horizon and alias), and it fades with the air
 	if (g.y > 0.0) {
-		float th = (cloud_floor + 6500.0 - e.y) / g.y;
+		float th = (cloud_floor - 1500.0 + high_rise - e.y) / g.y;
 		if (th > 0.0) {
-			vec2 hw = e.xz + g.xz * th - wind * 0.4 * cloud_time;
-			float high = smoothstep(0.3, 0.9, density(hw / (cover_tile * 2.0) + vec2(0.37, 0.61), 3)) * 0.35 * exp(-th / high_fade);
+			float rep = high_rise * 5.0;
+			vec2 uv2 = (e.xz + g.xz * th) / rep + scroll_per_second * cloud_time * vec2(0.4, -0.25) + vec2(0.37, 0.61);
+			float fp = pix * th / max(g.y, 0.03) / rep;   // a pixel's footprint, a share of a repeat
+			float soft = clamp(fp * 60.0, 0.0, 0.45);
+			float high = smoothstep(0.3 - soft, 0.9 + soft, density(uv2, 3)) * 0.35 * exp(-th / high_fade);
 			scat += tr * high * mix(I76_COL(cloud_color), I76_COL(horizon_color), 0.3);
 			tr *= 1.0 - high;
 		}

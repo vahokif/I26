@@ -4,7 +4,7 @@
 // ground, its floor curving down with the Earth's radius so distant clouds meet the horizon. The cover is the flat sky's own
 // cloud density laid flat over the world (cover_map, CloudNoise.Cover: the mission's sky texture ramped as the flat sky
 // ramps it, moved by the same lumps and frayed by the same fine noise), a repeat every cover_tile metres, carried by a wind
-// as fast as the dome's texture scrolls and in its direction, on the mission's clock (cloud_time), so every player sees the
+// as fast overhead as the dome's texture scrolls and in its direction, on the mission's clock (cloud_time), so every player sees the
 // same clouds in the same place. Each cloud is as dense as lets through, looking straight up, what the flat sky's cover lets
 // through, and as deep as it is dense: veils at the edges, lumpy cores whose roofs and floors the noise moves; tiling 3D
 // noise (CloudNoise: Perlin-Worley lumps, Worley fibres), drawn out a little along the wind, the layer sheared downwind with height
@@ -26,7 +26,7 @@ uniform float cloud_time = 0.0;         // the mission's seconds (Main), the win
 uniform float cloud_floor = 1500.0;     // game height of the layer's floor: the map's average ground + 1.5 km
 uniform float cloud_depth = 450.0;     // its depth (shallow against the clouds' width: sheets and veils, not heaps)
 uniform float planet_radius = 6371000.0;
-uniform vec2 wind = vec2(-45.0, -45.0); // m/s over game x, z: the dome's texture scroll at its 1500 m a repeat
+uniform vec2 wind = vec2(-129.0, -129.0); // m/s over game x, z: the dome's scroll overhead, at the layer's height (MainClouds)
 uniform float cover_tile = 5000.0;      // metres a repeat of the sky texture
 uniform float shape_tile = 1800.0;      // metres a tile of the shape noise (128^3: 14 m a texel, its finest cells 112 m)
 uniform float detail_tile = 450.0;     // 64^3: 7 m a texel

@@ -96,12 +96,16 @@ public partial class Main
         m.SetShaderParameter("cover_map", _cloudCover);
         m.SetShaderParameter("albedo_map", _cloudAlbedo);
         // a layer fixed in the world: its floor 1.5 km over the map's average ground (one height for the map, as the horizon's)
-        if (_builder?.World is { } world) m.SetShaderParameter("cloud_floor", (float)world.AverageGroundHeight() + 1500f);
+        if (_builder?.World is { } world) m.SetShaderParameter("cloud_floor", (float)world.AverageGroundHeight() + CloudRise);
         m.SetShaderParameter("world_origin", new Vector3(_origin.X, _origin.Y, _origin.Z));
-        // the wind: as fast as the dome's texture scrolls, 1500 m a repeat (its 6000 radius, the texture 4 times across the half),
-        // and its way (the texture's offset grows on both axes: the clouds go toward -x, -z)
+        // the wind: straight overhead the clouds cross the sky as fast as the dome's texture does. The dome's top is 600 over the
+        // eye and its texture moves 1500 m a repeat there (its 6000 radius, the texture 4 times across the half); the layer's
+        // middle is CloudRise + half its depth over the ground, so the wind is that many times faster. Its way: the texture's
+        // offset grows on both axes, the clouds go toward -x, -z
         float scroll = m.GetShaderParameter("scroll_per_second").VariantType == Variant.Type.Float ? m.GetShaderParameter("scroll_per_second").AsSingle() : 0.02997f;
-        m.SetShaderParameter("wind", new Vector2(-scroll * 1500f, -scroll * 1500f));
+        float depth = m.GetShaderParameter("cloud_depth").VariantType == Variant.Type.Float ? m.GetShaderParameter("cloud_depth").AsSingle() : 450f;
+        float speed = scroll * 1500f * (CloudRise + depth / 2) / DomeTop;
+        m.SetShaderParameter("wind", new Vector2(-speed, -speed));
         m.SetShaderParameter("vol_haze", 0.12f);   // the flat clouds' haze toward the horizon: the low sky as theirs, the far clouds' clutter in it
         m.SetShaderParameter("shape_noise", _cloudShape);
         m.SetShaderParameter("shape_noise_far", _cloudShapeFar);
@@ -109,6 +113,9 @@ public partial class Main
         GD.Print($"sky: volumetric inputs in {clock.ElapsedMilliseconds} ms");
         return true;
     }
+
+    /// <summary>The layer's floor over the map's average ground, and the 1997 dome's top over the eye (metres).</summary>
+    private const float CloudRise = 1500f, DomeTop = 600f;
 
     private double _cloudClock;
 

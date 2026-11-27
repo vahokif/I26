@@ -171,15 +171,16 @@ public static class CloudNoise
     // ---- the cover ----
 
     /// <summary>
-    /// The cover map from the sky texture (RGB bytes, sRGB, <paramref name="w"/> × <paramref name="h"/>, tiling): its linear
-    /// brightness ramped from the open sky's to the clouds' as the flat sky ramps it (sky_modern.gdshaderinc's density,
-    /// <paramref name="skyLum"/> and <paramref name="cloudLum"/> from MissionBuilder's SkyPalette, after the same small blur),
-    /// two values a texel: the cover softened a little (the clouds stand on it; the texture's finest streaks, the same all the
-    /// way up, would stripe their sides) and blurred wide (their height follows it, so they narrow as they rise). Enlarged
-    /// <paramref name="scale"/> times each way by a cubic B-spline: the stock skies are 128 texels, 62 m each laid over the
-    /// world, and sampled linearly their creases showed as facets in the clouds.
+    /// The cover map from the sky texture (RGB bytes, sRGB, <paramref name="w"/> × <paramref name="h"/>, tiling): the flat
+    /// sky's own cloud density laid out over one repeat of the texture (sky_modern.gdshaderinc's density), so the volumetric
+    /// clouds take its shapes, wisps and frayed edges. The texture's linear brightness after the same small blur, ramped from
+    /// the open sky's to the clouds' (<paramref name="skyLum"/> and <paramref name="cloudLum"/> from MissionBuilder's
+    /// SkyPalette), enlarged <paramref name="scale"/> times each way by a cubic B-spline (the stock skies' 128 texels sampled
+    /// linearly left creases that showed as facets in the clouds), then moved by the same large lumps and eaten at its edges by
+    /// the same fine, warped noise as the flat sky's, <paramref name="detail"/> its strength (the flat sky's detail): value
+    /// noise on the flat sky's lattices (5 and 17 cells a repeat), made to tile with the texture. One value a texel, 0..1.
     /// </summary>
-    public static float[] Cover(ReadOnlySpan<byte> rgb, int w, int h, float skyLum, float cloudLum, int scale = 4)
+    public static float[] Cover(ReadOnlySpan<byte> rgb, int w, int h, float skyLum, float cloudLum, float detail = 0.35f, int scale = 8)
     {
         var lum = new float[w * h];
         for (int i = 0; i < w * h; i++)
@@ -196,13 +197,41 @@ public static class CloudNoise
                 float t = Math.Clamp((l - lo) / MathF.Max(hi - lo, 1e-4f), 0f, 1f);
                 cover[y * w + x] = t * t * (3f - 2f * t);
             }
-        var soft = Blur(cover, w, h, w / 48f);
-        var wide = Blur(cover, w, h, w / 16f);
-        var a = Enlarge(soft, w, h, scale);
-        var b = Enlarge(wide, w, h, scale);
-        var outp = new float[a.Length * 2];
-        for (int i = 0; i < a.Length; i++) { outp[i * 2] = Math.Clamp(a[i], 0f, 1f); outp[i * 2 + 1] = Math.Clamp(b[i], 0f, 1f); }
-        return outp;
+        var b = Enlarge(cover, w, h, scale);
+        int W = w * scale, H = h * scale;
+        Parallel.For(0, H, y =>
+        {
+            float v = (y + 0.5f) / H;
+            for (int x = 0; x < W; x++)
+            {
+                float u = (x + 0.5f) / W;
+                float bs = Math.Clamp(b[y * W + x], 0f, 1f);
+                // billows: large lumps inside, fine erosion at the edges
+                float n = Fbm2(u * 5f, v * 5f, 5, 5, 11);
+                float e = Fbm2(u * 17f + n, v * 17f + n, 17, 4, 23);
+                float edge = 1f - MathF.Abs(bs * 2f - 1f);
+                b[y * W + x] = Math.Clamp(bs + (n - 0.5f) * detail * 1.6f + (e - 0.5f) * detail * 1.4f * edge, 0f, 1f);
+            }
+        });
+        return b;
+    }
+
+    /// <summary>Value noise on a lattice of <paramref name="period"/> cells a side, tiling, 0..1 (sky_modern's vnoise).</summary>
+    public static float ValueNoise2(float x, float y, int period, int seed)
+    {
+        int ix = (int)MathF.Floor(x), iy = (int)MathF.Floor(y);
+        float fx = x - ix, fy = y - iy;
+        float ux = fx * fx * (3f - 2f * fx), uy = fy * fy * (3f - 2f * fy);
+        float R(int i, int j) => Rand(Wrap(ix + i, period), Wrap(iy + j, period), 0, seed);
+        return Lerp(Lerp(R(0, 0), R(1, 0), ux), Lerp(R(0, 1), R(1, 1), ux), uy);
+    }
+
+    /// <summary>sky_modern's fbm, tiling: octaves of <see cref="ValueNoise2"/>, each twice as fine and half as strong (0 .. about 1).</summary>
+    public static float Fbm2(float x, float y, int period, int octaves, int seed)
+    {
+        float s = 0f, a = 0.5f;
+        for (int o = 0; o < octaves; o++) { s += a * ValueNoise2(x * (1 << o), y * (1 << o), period << o, seed + o); a *= 0.5f; }
+        return s;
     }
 
     /// <summary>A tiling image enlarged <paramref name="scale"/> times each way by a cubic B-spline through its texels' centres.</summary>

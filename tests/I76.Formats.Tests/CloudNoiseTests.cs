@@ -79,10 +79,8 @@ public class CloudNoiseTests
         Assert.Equal(s[0] + 8, s[1]);   // one block along x: two texels on
     }
 
-    [Fact]
-    public void TheCoverFollowsTheSkyTexturesBrightness()
+    private static byte[] HalfSkyHalfCloud(int n)
     {
-        const int n = 32;
         // the left half open sky (dark blue), the right half cloud (white)
         var rgb = new byte[n * n * 3];
         for (int y = 0; y < n; y++)
@@ -91,14 +89,49 @@ public class CloudNoiseTests
                 int i = (y * n + x) * 3;
                 (rgb[i], rgb[i + 1], rgb[i + 2]) = x < n / 2 ? ((byte)40, (byte)70, (byte)150) : ((byte)255, (byte)255, (byte)255);
             }
-        var cover = CloudNoise.Cover(rgb, n, n, skyLum: 0.06f, cloudLum: 0.9f, scale: 2);
+        return rgb;
+    }
+
+    [Fact]
+    public void TheCoverFollowsTheSkyTexturesBrightness()
+    {
+        const int n = 32;
+        // without the noise: one value a texel, enlarged twice, about clear in the open sky's middle and whole in the cloud's
+        var cover = CloudNoise.Cover(HalfSkyHalfCloud(n), n, n, skyLum: 0.06f, cloudLum: 0.9f, detail: 0f, scale: 2);
         int m = n * 2;
-        Assert.Equal(m * m * 2, cover.Length);
-        // two values a texel, enlarged twice: the softened cover, then the wide one; both about clear in the open sky's middle and whole in the cloud's
-        Assert.True(cover[(10 * m + m / 4) * 2] < 0.06f);
-        Assert.True(cover[(10 * m + 3 * m / 4) * 2] > 0.98f);
-        Assert.True(cover[(10 * m + m / 4) * 2 + 1] < 0.25f);
-        Assert.True(cover[(10 * m + 3 * m / 4) * 2 + 1] > 0.75f);
+        Assert.Equal(m * m, cover.Length);
+        Assert.True(cover[10 * m + m / 4] < 0.06f);
+        Assert.True(cover[10 * m + 3 * m / 4] > 0.98f);
+    }
+
+    [Fact]
+    public void TheFlatSkysNoiseReshapesTheCoverAndLeavesTheOpenSkyMostlyClear()
+    {
+        const int n = 32, m = n * 4;
+        var cover = CloudNoise.Cover(HalfSkyHalfCloud(n), n, n, skyLum: 0.06f, cloudLum: 0.9f, detail: 0.35f, scale: 4);
+        Assert.All(cover, v => Assert.InRange(v, 0f, 1f));
+        // the open sky's middle: the large lumps raise it a little in places (as the flat sky's do), never to a whole cloud
+        var open = Enumerable.Range(0, m).Select(y => cover[y * m + m / 4]).ToArray();
+        Assert.True(open.Max() < 0.4f);
+        Assert.True(open.Average() < 0.15f);
+        // the cloud's middle: lumps eat into it here and there but it stays mostly whole
+        var cloud = Enumerable.Range(0, m).Select(y => cover[y * m + 3 * m / 4]).ToArray();
+        Assert.True(cloud.Average() > 0.75f);
+        Assert.True(cloud.Min() < cloud.Max());
+    }
+
+    [Theory]
+    [InlineData(0.13f, 0.71f)]
+    [InlineData(0.98f, 0.02f)]
+    public void TheFlatSkysNoiseTilesWithTheTexture(float u, float v)
+    {
+        // the lattices the flat sky uses: 5 and 17 cells a repeat of its texture
+        foreach (int period in new[] { 5, 17 })
+        {
+            float a = CloudNoise.Fbm2(u * period, v * period, period, 5, 3);
+            Assert.Equal(a, CloudNoise.Fbm2((u + 1f) * period, v * period, period, 5, 3), 3);
+            Assert.Equal(a, CloudNoise.Fbm2(u * period, (v - 1f) * period, period, 5, 3), 3);
+        }
     }
 
     [Fact]

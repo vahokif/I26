@@ -3430,13 +3430,18 @@ public partial class Main : Node3D
             if (fa.Length == 6) _cam.Fov = fa[5];
             _car?.SetCockpit(false);
             if (!_cam.Current) _cam.MakeCurrent();
-            // I76_FREECAM_VEL=vx,vy,vz (game units a second) moves it on the mission's clock: a capture of the camera travelling
+            // I76_FREECAM_VEL=vx,vy,vz[,yaw] (game units, degrees a second) moves and turns it on the mission's clock: a capture of the camera travelling
             var held = new System.Numerics.Vector3(fa[0], fa[1], fa[2]);
-            if (System.Environment.GetEnvironmentVariable("I76_FREECAM_VEL") is { } fv && fv.Split(',').Select(t => float.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray() is { Length: 3 } va)
-                held += new System.Numerics.Vector3(va[0], va[1], va[2]) * (I76.Game.Sim.SimClock.Now * I76.Game.Sim.SimClock.Tick);
+            float yaw = fa[3];
+            if (System.Environment.GetEnvironmentVariable("I76_FREECAM_VEL") is { } fv && fv.Split(',').Select(t => float.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray() is { Length: 3 or 4 } va)
+            {
+                float secs = I76.Game.Sim.SimClock.Now * I76.Game.Sim.SimClock.Tick;
+                held += new System.Numerics.Vector3(va[0], va[1], va[2]) * secs;
+                if (va.Length == 4) yaw += va[3] * secs;
+            }
             Rebase(held);
             _cam.Position = Vector3.Zero;
-            _cam.SetYawPitch(fa[3], fa[4]);
+            _cam.SetYawPitch(yaw, fa[4]);
         }
         LeaveDeadCockpit();
         if (_car is not null) _car.HoodView = _preset is { Current: true, Mode: PresetCamera.View.Orbit };   // F6 does not draw the player's car

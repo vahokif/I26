@@ -40,6 +40,7 @@ public class PortableMathGuardTests
         ["I76.Net.OwnCarPredictor.Smooth"] = "the client's drawn correction of its own car after a reconcile; the predicted state itself is the sim's",
         ["I76.Net.Biquad"] = "the CB voice's radio filter coefficients (audio)",
         ["I76.Net.RadioVoice"] = "the CB voice's radio colouring and squelch (audio)",
+        ["I76.Sim.Views.MotionBlurRules"] = "the modern look's motion blur: the streaks' scale and which drawn frames are cuts (drawing only; never simulated)",
     };
 
     private static string Declaring(MetadataReader md, TypeDefinition t)

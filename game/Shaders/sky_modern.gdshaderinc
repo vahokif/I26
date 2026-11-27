@@ -123,7 +123,9 @@ vec3 modern_sky_with(vec3 eyedir, float time, bool cubemap, bool use_vol, vec4 v
 		if (g.y > 0.0) col = mix(I76_COL(horizon_color), col, smoothstep(0.0, vol_haze, g.y));
 		transmit = vol.a;
 		// a cloud in front of the sun glows round it (forward scattering), brightest where it is thin
-		if (procedural_sun) col += vec3(1.0, 0.95, 0.85) * (pow(sun, 300.0) * 1.6 + pow(sun, 40.0) * 0.25) * (1.0 - vol.a) * vol.a * 2.0 * light_strength;
+		// (as over the flat clouds: their cover, less over the thickest)
+		float vc = 1.0 - vol.a;
+		if (procedural_sun) col += vec3(1.0, 0.95, 0.85) * (pow(sun, 300.0) * 1.6 + pow(sun, 40.0) * 0.25) * vc * (1.0 - 0.5 * vc * vc) * light_strength;
 	} else if (g.y > 0.0) {
 		// the engine's dome projection
 		float b = g.y * drop;

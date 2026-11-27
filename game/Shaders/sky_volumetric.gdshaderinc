@@ -9,11 +9,11 @@
 // through, and as deep as it is dense: veils at the edges, lumpy cores whose roofs and floors the noise moves; tiling 3D
 // noise (CloudNoise: Perlin-Worley lumps, Worley fibres), drawn out a little along the wind, the layer sheared downwind with height
 // and the cover pushed about by a coarse noise, makes them streaky and frayed. They are lit as the flat sky lights its
-// clouds, in the texture's measured colours: Beer's law toward the sun or moon along a way drawn out sideways, so the lumps'
-// near sides are lit and their far sides and neighbours shaded, a powder term, and a silver lining and forward glow on the
-// thin parts toward the sun; far clouds fade into the horizon's haze. The march runs in one of Godot's reduced sky passes
-// (sky_volumetric.gdshader half, sky_volumetric_quarter.gdshader a quarter); the full pass lays it over the sky. The
-// radiance cube map keeps the flat clouds.
+// clouds, in the texture's measured colours, once a pixel at the point they are seen at (clouds_light): bright rims where
+// the way toward the sun is clear, shaded where it finds cloud, a silver lining on the thin parts toward the sun; far
+// clouds fade into the horizon's haze. Their opacity is marched in one of Godot's reduced sky passes (march;
+// sky_volumetric.gdshader half, sky_volumetric_quarter.gdshader a quarter), their light in the full pass, which lays them
+// over the sky. The radiance cube map keeps the flat clouds.
 #include "sky_modern.gdshaderinc"
 
 uniform sampler2D cover_map : filter_linear_mipmap, repeat_enable;   // the flat sky's cloud density 0..1 over a repeat of `clouds` (CloudNoise.Cover)
@@ -36,8 +36,9 @@ uniform float high_fade = 24000.0;      // the high sheet over about this (furth
 uniform float extinction = 0.008;     // per metre at density 1
 uniform float slant_thin = 0.7;      // 0: Beer's law along the view; 1: a cloud as opaque at any angle as straight up
 uniform float light_rise = 0.3;     // the light's way toward the sun climbs this share as steeply
-uniform float shadow = 2.0;          // the way toward the sun as many times denser (the flat sky's clouds shade their far sides as deeply)
-uniform float rim = 1.4;             // the silver lining's strength (twice the flat sky's: it lights only the thin parts' share)
+uniform float shadow = 0.5;          // the light let through: exp(-shadow x the cover summed toward the sun) (the flat sky's)
+uniform float light_step = 175.0;    // metres between the light's samples toward the sun (the flat sky's 0.035 of its texture)
+uniform float rim = 0.7;             // the silver lining's strength (twice the flat sky's: it lights only the thin parts' share)
 uniform float lumps = 0.2;           // how far the shape noise moves the cover (the flat sky's detail 0.35 x 1.6)
 uniform float fray = 0.5;            // how far the fine noise frays them (most at the edges)
 uniform float stretch = 1.5;         // the noise's features this many times longer along the wind
@@ -102,31 +103,40 @@ float cover_at(vec3 e, vec3 p, float lod, bool push_it, out float hf, out vec3 q
 // density from the cover and the noise: the cover moved a little more by 3D lumps and frayed by fibres (as the flat sky reshapes
 // its texture), then laid in a sheet: the clouds thin toward their edges into veils, with no flat floor or rounded roof.
 // erode adds the fibres, less of them far off (coarse 0 near .. 1 far, 2 farther still, the lumps gone too): finer than a
-// pixel or a step they would only sparkle. dh < 0: the density at the cloud's core whatever the height (the light's samples)
-float shape_density(float cov, float broad, float hf, vec3 q, bool erode, float coarse, float dh) {
-	if (cov < 0.01 || (dh >= 0.0 && (hf <= 0.0 || hf >= 1.0))) return 0.0;
+// pixel or a step they would only sparkle
+// the flat sky's cloud density there (0..1, its den: the cover is smoothstep(0.03, 0.75) of it), the shape noise's value in n
+float flat_cover(float cov, vec3 q, bool erode, float coarse, out float n) {
+	n = 0.5;
+	if (cov < 0.01) return 0.0;
 	float far = min(coarse, 1.0);
 	vec3 sq = q / shape_tile;
-	float n = far >= 1.0 ? textureLod(shape_noise_far, sq, 0.0).r
+	n = far >= 1.0 ? textureLod(shape_noise_far, sq, 0.0).r
 		: far <= 0.0 ? textureLod(shape_noise, sq, 0.0).r : mix(textureLod(shape_noise, sq, 0.0).r, textureLod(shape_noise_far, sq, 0.0).r, far);
 	// coarser still (1 .. 2), the lumps themselves even out
 	n = mix(n, 0.5, max(coarse - 1.0, 0.0));
 	// (where the texture has no cloud the noise makes none)
 	float v = cov + (n - 0.5) * lumps * min(cov * 5.0, 1.0);
 	if (v <= 0.02 - fray * 0.25) return 0.0;
-	float dn = 0.5;
 	if (erode && far < 1.0) {
 		// fibres: the fine noise drawn out a little further along the wind, strongest at the edges but through the veils too
 		vec2 wd = wind_dir();
 		vec3 fq = vec3(q.x, q.y * 2.0, q.z);
 		fq.xz -= wd * dot(q.xz, wd) * (1.0 - stretch / fibre_stretch);
-		dn = textureLod(detail_noise, fq / detail_tile, 0.0).r;
+		float dn = textureLod(detail_noise, fq / detail_tile, 0.0).r;
 		float edge = 1.0 - abs(clamp(v, 0.0, 1.0) * 2.0 - 1.0);
 		v += (dn - 0.5) * fray * (0.35 + 0.65 * edge) * (1.0 - far);
 	}
-	if (v <= 0.02) return 0.0;
-	// the flat sky's cover
+	return v <= 0.02 ? 0.0 : min(v, 1.0);
+}
+
+float shape_density(float cov, float broad, float hf, vec3 q, bool erode, float coarse, float dh, out float v) {
+	v = 0.0;
+	if (cov < 0.01 || hf <= 0.0 || hf >= 1.0) return 0.0;
+	float n;
+	v = flat_cover(cov, q, erode, coarse, n);
+	if (v <= 0.0) return 0.0;
 	float c = smoothstep(0.03, 0.75, v);
+	vec3 sq = q / shape_tile;
 	// as deep as it is dense, and lumpy: veils at the edges, the cores' roofs raised and floors lowered by the noise, so the
 	// sun lights their near sides and they shade their neighbours (the flat sky's relief), with no flat floor or loaf top
 	// (the depth's lumps from the noise averaged down: its finer billows made terraces of the floors and roofs too)
@@ -137,7 +147,7 @@ float shape_density(float cov, float broad, float hf, vec3 q, bool erode, float 
 	float lo = max(mid - thick * 0.35, 0.02), hi = min(mid + thick * 0.65, 0.98);
 	// its floor and roof eased in over at least what a step of the march climbs (dh, a share of the layer): sharper, the
 	// steps would land in or out of them by turns, contour lines along every slanting cloud
-	float sheet = dh < 0.0 ? 1.0 : smoothstep(lo - dh * 0.5, lo + max(0.2, dh), hf) * smoothstep(hi + dh * 0.5, hi - max(0.3, dh), hf);
+	float sheet = smoothstep(lo - dh * 0.5, lo + max(0.2, dh), hf) * smoothstep(hi + dh * 0.5, hi - max(0.3, dh), hf);
 	// as dense as lets through, straight up, what the flat sky's cover lets through
 	return sheet * -log(1.0 - 0.92 * c) / (extinction * cloud_depth * thick);
 }
@@ -147,25 +157,26 @@ float hg(float c, float g) {
 	return (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5);   // times 4 pi: 1 for an even spread
 }
 
-// the clouds along a view direction from the camera at cam (both Godot frame): their light in rgb, the transmittance in a
+// the eye in game coordinates from the camera's position (Godot frame)
+vec3 game_eye(vec3 cam) { return world_origin + vec3(cam.x, cam.y, -cam.z); }
+
+// the clouds along a view direction from the camera at cam (both Godot frame), in the reduced pass: how much they let
+// through (a) and how far along the view they are seen (r, a share of max_distance: their opacity's mean depth along the
+// view; with no cloud, where the view crosses the layer's middle, so the full pass's blend between pixels stays sane).
+// Only their opacity is marched; their light is the full pass's (clouds_light)
 vec4 march(vec3 eyedir, vec3 cam) {
 	vec3 d = normalize(eyedir);
 	// a pixel's angle (this pass's pixels), before any branch
 	float pix = max(length(fwidth(d)), 1e-5);
 	vec3 g = vec3(d.x, d.y, -d.z);
-	vec3 e = world_origin + vec3(cam.x, cam.y, -cam.z);   // the eye in game coordinates
-	vec3 s = normalize(sprite_dir);
-	vec3 sg = vec3(s.x, s.y, -s.z);
-	// the light's way through the layer drawn out sideways (as the flat sky looks for cloud toward the sun across its dome):
-	// lumps shade their neighbours and their far sides even with the sun high, the near sides lit, the relief inside them
-	vec3 lg = normalize(vec3(sg.x, sg.y * light_rise, sg.z) + vec3(1e-4, 0.0, 0.0));
+	vec3 e = game_eye(cam);
 	// where the ray is in the layer: its height over the curved floor is h0 + g.y t + k t^2
 	float h0 = e.y - cloud_floor, k = dot(g.xz, g.xz) / (2.0 * planet_radius);
 	float t0, t1;
 	if (h0 < 0.0) { t0 = first_at(h0, g.y, k, 0.0); t1 = first_at(h0, g.y, k, cloud_depth); }
 	else if (h0 <= cloud_depth) { t0 = 0.0; float a = first_at(h0, g.y, k, 0.0), b = first_at(h0, g.y, k, cloud_depth); t1 = a < 0.0 ? b : (b < 0.0 ? a : min(a, b)); }
 	else { t0 = first_at(h0, g.y, k, cloud_depth); float a = first_at(h0, g.y, k, 0.0); t1 = a >= 0.0 ? a : t0 + 4.0 * cloud_depth / max(abs(g.y), 0.05); }
-	if (t0 < 0.0 || t0 >= max_distance) return vec4(0.0, 0.0, 0.0, 1.0);
+	if (t0 < 0.0 || t0 >= max_distance) return vec4(0.0, 0.0, 0.0, 1.0);   // r 0: no layer this way
 	if (t1 < 0.0) t1 = max_distance;
 	t1 = min(t1, max_distance);
 	// even steps across the layer, from the middle of each (no per-pixel jitter: in the reduced pass that drew every pixel's
@@ -183,15 +194,7 @@ vec4 march(vec3 eyedir, vec3 cam) {
 	// a slanting path crosses the sheet's whole depth sideways: thinned toward the flat sky's look, where a cloud lets through
 	// as much low down as overhead (otherwise low clouds turn solid to their very edges, rounded and smooth)
 	float slant = pow(clamp(abs(g.y), 0.02, 1.0), slant_thin);
-	float cs = dot(d, s);
-	// lit as the flat sky lights its clouds, in the texture's own colours: the shade where the way to the sun is through
-	// cloud, the cloud colour where it is clear, and a silver lining on the thin parts toward the sun (the moon's cold)
-	vec3 shade_col = I76_COL(cloud_shade) * 0.9, lit_col = I76_COL(cloud_color) * 1.08;
-	vec3 rim_col = (procedural_moon ? vec3(0.75, 0.82, 1.0) : vec3(1.0, 0.92, 0.78)) * (pow(max(cs, 0.0), 10.0) * rim + (min(hg(cs, 0.7), 8.0) - 1.0) * 0.12) * light_strength;
-	vec3 haze = I76_COL(horizon_color);
-
-	vec3 scat = vec3(0.0);
-	float tr = 1.0;
+	float tr = 1.0, wt = 0.0;
 	for (int i = 0; i < n; i++) {
 		if (tr < 0.03) break;
 		float sdt = min(dt, t1 - (t0 + float(i) * dt));
@@ -205,33 +208,66 @@ vec4 march(vec3 eyedir, vec3 cam) {
 		float reach = max(span, 2.0 * dt * length(g.xz));
 		float far = smoothstep(fine_reach.x, fine_reach.y, reach) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, reach);
 		float lod = log2(max(reach / cover_texel, 1.0));
-		float hf, broad; vec3 q;
-		float cov = cover_at(e, p, lod, true, hf, q, broad);
-		float den = shape_density(cov, broad, hf, q, true, far, dh);
+		float hf, broad, c; vec3 q;
+		float den = shape_density(cover_at(e, p, lod, true, hf, q, broad), broad, hf, q, true, far, dh, c);
 		if (den <= 0.0) continue;
-		// toward the light: a few samples, each further out, the far ones without the fine noise or the push
-		float od = 0.0, ls = 50.0, lt = 0.0;
-		for (int j = 0; j < 3; j++) {
-			lt += ls;
-			float lhf, lb; vec3 lq;
-			float lc = cover_at(e, p + lg * lt, lod, j == 0, lhf, lq, lb);
-			// the cloud's core there whatever the height: the light then varies across the clouds and not with the height
-			// (it did, strongly, and the march's steps, each at its own share of the layer's height, drew it as contour lines)
-			od += shape_density(lc, lb, lhf, lq, j == 0, far, -1.0) * ls;
-			ls *= 2.4;
-		}
-		float sig = extinction * den * slant;
-		// the light let through toward the sun, and a little scattered on through the cloud (shadowed sides not black)
-		float k = extinction * shadow * od;
-		float lit = exp(-k) * 0.8 + exp(-k * 0.25) * 0.2;
-		// powder: the faces turned from the light darker
-		lit *= mix(1.0, 1.0 - exp(-den * extinction * shadow * 160.0), 0.5 - 0.5 * cs);
-		vec3 lum = mix(shade_col * mix(0.85, 1.05, hf), lit_col, lit) + rim_col * lit * exp(-den * extinction * 150.0);
-		// far off, the haze between: the cloud's light gives way to the horizon's colour
-		lum = mix(haze, lum, exp(-t / haze_distance));
-		float st = exp(-sig * sdt);
-		scat += tr * lum * (1.0 - st);
+		float st = exp(-extinction * den * slant * sdt);
+		wt += tr * (1.0 - st) * t;
 		tr *= st;
+	}
+	float tmid = first_at(h0, g.y, k, cloud_depth * 0.45);
+	float tm = tr < 0.999 ? wt / (1.0 - tr) : (tmid > 0.0 ? tmid : 0.5 * (t0 + t1));
+	return vec4(tm / max_distance, 0.0, 0.0, tr);
+}
+
+// the clouds' light along a view direction, in the full pass, from the reduced pass's v (march): their light in rgb, what
+// they let through in a. Lit as the flat sky lights its clouds, one look a pixel at the point they are seen at, at the full
+// resolution: the texture's shade where the way toward the sun is through cloud, a little brighter than its cloud colour
+// where it is clear (the bright rims of every lump, wisp and swirl facing the sun), the thickest cores darker, and a
+// silver lining on the thin parts toward the sun (the moon's cold). (Lit along the march, the light was averaged over
+// kilometres of a slanting view and the small lit and shaded sides were lost; and a single look has no steps to band, so
+// it keeps the detail a pixel allows.) Behind them, the flat sky's fainter high layer.
+vec4 clouds_light(vec3 eyedir, vec3 cam, vec4 v) {
+	vec3 d = normalize(eyedir);
+	float pix = max(length(fwidth(d)), 1e-5);
+	vec3 g = vec3(d.x, d.y, -d.z);
+	vec3 e = game_eye(cam);
+	vec3 s = normalize(sprite_dir);
+	vec3 sg = vec3(s.x, s.y, -s.z);
+	// the light's way drawn out sideways (as the flat sky looks for cloud toward the sun across its dome): lumps shade their
+	// neighbours and their far sides even with the sun high
+	vec3 lg = normalize(vec3(sg.x, sg.y * light_rise, sg.z) + vec3(1e-4, 0.0, 0.0));
+	float tr = clamp(v.a, 0.0, 1.0);
+	vec3 scat = vec3(0.0);
+	float tm = v.r * max_distance;
+	if (tr < 0.999 && tm > 0.0) {
+		float cs = dot(d, s);
+		vec3 shade_col = I76_COL(cloud_shade) * 0.9, lit_col = I76_COL(cloud_color) * 1.08, core_col = I76_COL(cloud_shade) * 0.8;
+		vec3 rim_col = (procedural_moon ? vec3(0.75, 0.82, 1.0) : vec3(1.0, 0.92, 0.78)) * pow(max(cs, 0.0), 10.0) * rim * light_strength;
+		float cover_texel = cover_tile / float(textureSize(cover_map, 0).x);
+		vec3 p = g * tm;
+		float span = pix * tm / sqrt(max(abs(g.y), 0.03));
+		float far = smoothstep(fine_reach.x, fine_reach.y, span) + smoothstep(fine_reach.y * 1.5, fine_reach.y * 4.0, span);
+		float lod = log2(max(span / cover_texel, 1.0)) - 0.5;
+		float hf, broad, n; vec3 q;
+		float c = flat_cover(cover_at(e, p, lod, true, hf, q, broad), q, true, far, n);
+		// toward the light, as the flat sky looks: the cloud at a few points further out toward the sun (whatever their
+		// height), the first with the fine noise
+		float acc = 0.0;
+		for (int j = 1; j <= 3; j++) {
+			float lhf, lb, ln; vec3 lq;
+			acc += flat_cover(cover_at(e, p + lg * (light_step * float(j)), lod, j == 1, lhf, lq, lb), lq, j == 1, far, ln);
+		}
+		float lit = exp(-acc * shadow);
+		float core = smoothstep(0.2, 0.95, c);
+		vec3 lum = mix(shade_col, lit_col, lit);
+		lum = mix(lum, core_col, core * core * 0.35) + rim_col * (1.0 - core);
+		// far off, the haze between: the cloud's light gives way to the horizon's colour
+		lum = mix(I76_COL(horizon_color), lum, exp(-tm / haze_distance));
+		// drawn over the sky as the flat sky draws its clouds: their cover is what they stop of the light over 0.92 (the flat
+		// sky lets 8% of the sun through a whole cloud but paints the cloud over the sky entirely)
+		tr = 1.0 - min((1.0 - tr) / 0.92, 1.0);
+		scat = lum * (1.0 - tr);
 	}
 	// behind them, the flat sky's fainter high layer (sky_modern), here a sheet fixed in the world 8 km up, drifting slower
 	if (g.y > 0.0) {
@@ -256,6 +292,6 @@ void sky() {
 		// the radiance (ambient light and reflections) keeps the flat clouds
 		COLOR = modern_sky(EYEDIR, TIME, true);
 	} else {
-		COLOR = modern_sky_with(EYEDIR, TIME, false, true, I76_VOL_COLOR);
+		COLOR = modern_sky_with(EYEDIR, TIME, false, true, clouds_light(EYEDIR, POSITION, I76_VOL_COLOR));
 	}
 }

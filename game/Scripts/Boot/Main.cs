@@ -1985,8 +1985,16 @@ public partial class Main : Node3D
             // blue-grey sky's slate clouds stay slate, and orange-pink ones do not turn peach-white
             bool day = light.IsDay;
             float lift = pal.Cloud.Luminance > pal.Sky.Luminance ? 0.4f * (1f - pal.Cloud.S) : 0f;
+            // clouds of their own colour, unlike the sky's (a sunset's orange to red-brown under lavender): drawn in the
+            // texture's own colours, its variation inside them kept, with a horizon that darkens as the original's does
+            // rather than paling (day clouds white or of the sky's own hue keep the measured colours)
+            float hueGap = Mathf.Abs(Mathf.Wrap(pal.Cloud.H - pal.Sky.H + 0.5f, 0f, 1f) - 0.5f) * 360f;
+            float albedo = day ? Mathf.SmoothStep(0.15f, 0.35f, pal.Cloud.S) * Mathf.SmoothStep(30f, 60f, hueGap) : 0f;
+            m.SetShaderParameter("cloud_albedo", albedo);
+            GD.Print($"sky: clouds in the texture's own colours {albedo:0.00} (cloud hue {hueGap:0}° from the sky's, saturation {pal.Cloud.S:0.00})");
             m.SetShaderParameter("zenith_color", day ? pal.Sky.Darkened(0.12f) : pal.Sky);
-            m.SetShaderParameter("horizon_color", day ? pal.Sky.Lerp(_builder.SkyAverage, 0.6f).Lerp(Colors.White, 0.25f) : pal.Sky.Lerp(_builder.SkyAverage, 0.5f));
+            var horizon = day ? pal.Sky.Lerp(_builder.SkyAverage, 0.6f).Lerp(Colors.White, 0.25f) : pal.Sky.Lerp(_builder.SkyAverage, 0.5f);
+            m.SetShaderParameter("horizon_color", horizon.Lerp(pal.Sky.Lerp(_builder.SkyAverage, 0.4f).Darkened(0.25f), albedo));
             m.SetShaderParameter("cloud_color", day ? pal.Cloud.Lerp(Colors.White, lift) : pal.Cloud);
             m.SetShaderParameter("sky_gain", day ? 1f : NightSkyGain);
             m.SetShaderParameter("cloud_shade", day ? pal.Shade.Lerp(pal.Sky, 0.35f).Darkened(0.1f) : pal.Shade.Lerp(pal.Cloud, 0.5f));

@@ -53,6 +53,8 @@ uniform vec3 zenith_color : source_color = vec3(0.25, 0.42, 0.75);
 uniform vec3 horizon_color : source_color = vec3(0.7, 0.75, 0.8);
 uniform vec3 cloud_color : source_color = vec3(1.0);
 uniform vec3 cloud_shade : source_color = vec3(0.55, 0.58, 0.65);
+uniform float sky_own = 0.8;       // with cloud_albedo, how much of the open sky is the texture's own there
+uniform float cloud_albedo = 0.0;   // 0: the clouds in the measured colours; 1: in the texture's own (a sunset's coloured clouds)
 uniform vec3 sky_ref = vec3(0.05, 0.12, 0.45);   // the open sky's colour and the clouds' (linear): a texel's cloudiness is its place
 uniform vec3 cloud_ref = vec3(0.8);               // between them (SkyColours.Measure), so clouds darker than the sky are clouds
 uniform float detail = 0.35;      // how much the noise reshapes the texture's clouds
@@ -78,12 +80,29 @@ float fbm(vec2 p, int octaves) {
 	return s;
 }
 
-// the texture's cloudiness at a dome coordinate, reshaped by noise
-float density(vec2 uv, int octaves) {
-	// a small blur: the texture's texels span tens of metres on the dome, and the ramp would sharpen their edges
-	const float r = 0.006;
-	vec3 c = i76_sky_tex(texture(clouds, uv)).rgb * 0.4 + (i76_sky_tex(texture(clouds, uv + vec2(r, 0))).rgb + i76_sky_tex(texture(clouds, uv - vec2(r, 0))).rgb
+// the sky texture's colour at a coordinate (linear), softened by a small blur of r (a share of the texture)
+vec3 sky_texel(vec2 uv, float r) {
+	return i76_sky_tex(texture(clouds, uv)).rgb * 0.4 + (i76_sky_tex(texture(clouds, uv + vec2(r, 0))).rgb + i76_sky_tex(texture(clouds, uv - vec2(r, 0))).rgb
 		+ i76_sky_tex(texture(clouds, uv + vec2(0, r))).rgb + i76_sky_tex(texture(clouds, uv - vec2(0, r))).rgb) * 0.15;
+}
+
+// a cloud's light: the measured shade where the way toward the sun is through cloud (lit 0), a little brighter than the
+// measured cloud colour where it is clear (lit 1), the thickest cores (core 0..1) darker, a silver lining on the thin parts
+// toward the sun (cs: the view's cosine to it). With cloud_albedo the cloud is the texture's own colour there (tex) lit
+// the same way: a sunset's clouds keep the texture's vivid orange to deep red-brown and its variation inside them, which
+// one measured colour flattened into a dusty pink-brown
+vec3 cloud_light(vec3 tex, float lit, float core, float cs, bool cubemap) {
+	vec3 cl = mix(I76_COL(cloud_shade) * 0.9, I76_COL(cloud_color) * 1.08, lit);
+	cl = mix(cl, I76_COL(cloud_shade) * 0.8, core * core * 0.35);
+	vec3 own = tex * mix(0.75, 1.12, lit) * (1.0 - core * core * 0.2);
+	cl = mix(cl, own, cloud_albedo);
+	return cl + (procedural_moon ? vec3(0.75, 0.82, 1.0) : vec3(1.0, 0.92, 0.78)) * pow(max(cs, 0.0), 10.0) * (1.0 - core) * 0.7 * light_strength;   // silver lining (the moon's cold)
+}
+
+// the texture's cloudiness at a dome coordinate, reshaped by noise; c: the texture's colour there, softened
+float density_col(vec2 uv, int octaves, out vec3 c) {
+	// a small blur: the texture's texels span tens of metres on the dome, and the ramp would sharpen their edges
+	c = sky_texel(uv, 0.006);
 	vec3 axis = cloud_ref - sky_ref;
 	float base = smoothstep(-0.1, 1.15, dot(c - sky_ref, axis) / max(dot(axis, axis), 1e-6));
 	// billows: large lumps inside, fine erosion at the edges
@@ -92,6 +111,7 @@ float density(vec2 uv, int octaves) {
 	float edge = 1.0 - abs(base * 2.0 - 1.0);
 	return clamp(base + (n - 0.5) * detail * 1.6 + (e - 0.5) * detail * 1.4 * edge, 0.0, 1.0);
 }
+float density(vec2 uv, int octaves) { vec3 c; return density_col(uv, octaves, c); }
 
 // the engine's dome projection: where a direction (game frame) meets the dome, relative to the eye
 vec2 dome_xz(vec3 g) {
@@ -134,16 +154,17 @@ vec3 modern_sky_with(vec3 eyedir, float time, bool cubemap, bool use_vol, vec4 v
 		float off = time * scroll_per_second;
 		vec2 uv = (xz / radius + 0.5) * 4.0 + vec2(off);
 		int oct = cubemap ? 2 : 5;
-		float den = density(uv, oct);
+		vec3 tex;
+		float den = density_col(uv, oct, tex);
 		// light from the sun's side: cloud between here and the sun shades this point
 		vec2 toward = normalize(vec2(s.x, -s.z) + vec2(1e-4)) * 0.035;
 		float acc = 0.0;
 		for (int i = 1; i <= 3; i++) acc += density(uv + toward * float(i), cubemap ? 1 : 3);
 		float lit = exp(-acc * 0.75);
 		float thick = smoothstep(0.2, 0.95, den);
-		vec3 cl = mix(I76_COL(cloud_shade) * 0.9, I76_COL(cloud_color) * 1.08, lit);
-		cl = mix(cl, I76_COL(cloud_shade) * 0.8, thick * thick * 0.35);
-		cl += (procedural_moon ? vec3(0.75, 0.82, 1.0) : vec3(1.0, 0.92, 0.78)) * pow(sun, 10.0) * (1.0 - thick) * 0.7 * light_strength;   // silver lining (the moon's cold)
+		vec3 cl = cloud_light(tex, lit, thick, dot(d, s), cubemap);
+		// and between them the texture's own sky (the measured one is muddied by the clouds' colour round it)
+		col = mix(col, tex, cloud_albedo * sky_own);
 		float cover = smoothstep(0.03, 0.75, den);
 		// a fainter, higher layer drifting slower, for depth
 		vec2 uv2 = (xz / radius + 0.5) * 2.0 + vec2(off * 0.4, -off * 0.25) + vec2(0.37, 0.61);

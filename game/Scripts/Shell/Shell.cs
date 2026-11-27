@@ -278,6 +278,9 @@ public partial class Shell : CanvasLayer
         Settings = ShellSettings.Load();
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(Settings.CarInteriors);
         I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
+        I76.Game.World.CloudShadow.SetEnabled(Settings.CloudShadows);   // the modern sky's shade and its drift (docs/cloud-shadows.md)
+        I76.Game.World.CloudShadow.SetSpeed(Settings.CloudSpeed);
+        I76.Game.World.DesertHaze.SetEnabled(Settings.DesertHaze);      // and the haze over the distance (docs/desert-haze.md)
         ApplyMusicLevel();
         I76.Game.Boot.Main.ApplyAudio(Settings);   // the SFX and voice levels Audio Control set live go back too
     }
@@ -337,6 +340,10 @@ public partial class Shell : CanvasLayer
         I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(Settings.CarInteriors);
         // the menus keep the pointer in the window too (Main's cursor state reads it every frame)
         I76.Game.MouseCamera.Confine = Settings.KeepMouseInWindow;
+        // the cloud speed the player chose is a global the sky and its shade share, so it is due before the first sky
+        I76.Game.World.CloudShadow.SetEnabled(Settings.CloudShadows);
+        I76.Game.World.CloudShadow.SetSpeed(Settings.CloudSpeed);
+        I76.Game.World.DesertHaze.SetEnabled(Settings.DesertHaze);
         AddChild(new ColorRect { Color = Colors.Black, AnchorRight = 1, AnchorBottom = 1, MouseFilter = Control.MouseFilterEnum.Ignore });
         _view = new TextureRect
         {
@@ -1235,6 +1242,21 @@ public sealed class ShellSettings
     /// <summary>The port's own: a 3D-projected aiming crosshair in the F2 chase view (shell.cfg [port] chase_crosshair; off).</summary>
     public bool ChaseCrosshair { get; set; }
     /// <summary>
+    /// The port's own: Play Options' Chase HUD Top Part — how big the top row of the external instruments (radar, weapons, damage panel)
+    /// is drawn over a chase view, as a choice of 1/4, 1/2 or 1/1 (shell.cfg [port] hud_top_row = the denominator; written only when not
+    /// the default). The original draws it full size; this defaults to a half. No version step: a file without the key gets the default.
+    /// </summary>
+    public int HudTopRow { get; set; } = I76.Sim.Views.HudScale.TopDefault;
+    /// <summary>The port's own: the same for the bottom row (compass, speedometer, tacho, gear, specials; [port] hud_bottom_row; a whole).</summary>
+    public int HudBottomRow { get; set; } = I76.Sim.Views.HudScale.BottomDefault;
+    /// <summary>
+    /// The port's own: Play Options' Original Chase Framing — the F2 chase view opens at, and End returns to, the original's 30 degrees
+    /// and zoom 3 rather than the port's 16 and 1.7 (shell.cfg [port] chase_framing_original, written only when on). No version step: a file
+    /// without the key gets the port's framing, which is what every earlier file meant. The 1997 look opens at the original's framing whatever
+    /// this holds. See docs/deviations.md.
+    /// </summary>
+    public bool OriginalChaseFraming { get; set; }
+    /// <summary>
     /// The port's own: the turrets turn as the 1997 CD build's, 1.5 rad/s times their health ratio, rather than the 1998 build's (GOG's
     /// and the Nitro Pack's) 1.7 times 0.75 + 0.25 of it (Play Options' Turrets; shell.cfg [port] turret_slew = 1997, written only then).
     /// Offline only: a network game's is the host's (<see cref="HostTurrets1997"/>).
@@ -1267,6 +1289,18 @@ public sealed class ShellSettings
     public bool KeepMouseInWindow { get; set; }
     /// <summary>The port's own: the modern look's procedural plants (Graphic Detail; 0 Off, 1 Low, 2 High; docs/modern-vegetation.md). Low unless the player chose.</summary>
     public int Vegetation { get; set; } = 1;
+    /// <summary>The port's own: the modern sky's clouds shade what hangs under them (Graphic Detail; World/CloudShadow.cs, docs/cloud-shadows.md; shell.cfg [port] cloud_shadows, written only when off). On unless the player chose.</summary>
+    public bool CloudShadows { get; set; } = true;
+    /// <summary>The port's own: Graphic Detail's Cloud Speed (index into I76.Game.World.CloudShadow.SpeedNames: 0 Normal, 1 Half, 2 Quarter; shell.cfg [port] cloud_speed, written only when not Normal). The sky and its shadows slow together.</summary>
+    public int CloudSpeed { get; set; }
+    /// <summary>The port's own: the haze lying in the distance of the modern look, and the sun's gold in it (Graphic Detail; World/DesertHaze.cs, docs/desert-haze.md; shell.cfg [port] desert_haze, written only when off). On unless the player chose.</summary>
+    public bool DesertHaze { get; set; } = true;
+    /// <summary>Cloud Shadows from shell.cfg's [port] cloud_shadows (null when absent): on, because the feature ships on; off only when the file says off.</summary>
+    public static bool CloudShadowsFrom(string? stored) => !string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Desert Haze from shell.cfg's [port] desert_haze (null when absent): on, because the feature ships on; off only when the file says off.</summary>
+    public static bool DesertHazeFrom(string? stored) => !string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Cloud Speed from shell.cfg's [port] cloud_speed (null when absent): an index into CloudShadow.SpeedNames, Normal when absent or out of range.</summary>
+    public static int CloudSpeedFrom(int? stored) => stored is null ? 0 : Math.Clamp(stored.Value, 0, I76.Game.World.CloudShadow.SpeedNames.Length - 1);
     /// <summary>The port's own: Graphic Detail's Draw Distance (I76.Formats.Imaging.DrawDistance: 0 Original, the 600 m clip; 1 Far, to 20 km). Far unless the player chose.</summary>
     public int DrawDistance { get; set; } = I76.Formats.Imaging.DrawDistance.Far;
     /// <summary>
@@ -1396,6 +1430,10 @@ public sealed class ShellSettings
         s.Dash3D = (bool)c.GetValue("port", "dash_3d", true);
         // no version step: a file without the key draws far, as before it existed
         s.DrawDistance = I76.Formats.Imaging.DrawDistance.Parse(c.HasSectionKey("port", "draw_distance") ? (int)c.GetValue("port", "draw_distance") : null);
+        // the modern look's cloud shadows (docs/cloud-shadows.md): no version step, a file without the keys has them on and drifting as the mission has them
+        s.CloudShadows = CloudShadowsFrom(c.HasSectionKey("port", "cloud_shadows") ? c.GetValue("port", "cloud_shadows").ToString() : null);
+        s.CloudSpeed = CloudSpeedFrom(c.HasSectionKey("port", "cloud_speed") ? (int)c.GetValue("port", "cloud_speed") : null);
+        s.DesertHaze = DesertHazeFrom(c.HasSectionKey("port", "desert_haze") ? c.GetValue("port", "desert_haze").ToString() : null);
         // no version step: a file without these keys has them off, which is what they were before they existed
         s.SoftwareRenderer = (bool)c.GetValue("port", "software_renderer", false);
         s.PaletteGrade = (bool)c.GetValue("port", "palette_grade", false);
@@ -1408,6 +1446,11 @@ public sealed class ShellSettings
         s.MouseInvertY = (bool)c.GetValue("port", "mouse_invert_y", false);
         s.MouseCockpit = (bool)c.GetValue("port", "mouse_cockpit", false);
         s.ChaseCrosshair = (bool)c.GetValue("port", "chase_crosshair", false);
+        // no version step: absent, the port's own sizes (the top row at a half of the original's, the bottom row as the original drew it)
+        s.HudTopRow = I76.Sim.Views.HudScale.Parse((int)c.GetValue("port", "hud_top_row", 0), I76.Sim.Views.HudScale.TopDefault);
+        s.HudBottomRow = I76.Sim.Views.HudScale.Parse((int)c.GetValue("port", "hud_bottom_row", 0), I76.Sim.Views.HudScale.BottomDefault);
+        // no version step: absent, the chase view opens at the port's framing, as it did before the row existed
+        s.OriginalChaseFraming = (bool)c.GetValue("port", "chase_framing_original", false);
         s.BriefingWhileLoading = (bool)c.GetValue("port", "briefing_while_loading", true);
         s.WheelCycleWeapon = (bool)c.GetValue("port", "wheel_cycle_weapon", false);
         // version 13 added Skip Intro Movies: older files have none, so it is off and the intro plays, as before
@@ -1504,6 +1547,10 @@ public sealed class ShellSettings
         if (MouseInvertY) c.SetValue("port", "mouse_invert_y", true);
         if (MouseCockpit) c.SetValue("port", "mouse_cockpit", true);
         if (ChaseCrosshair) c.SetValue("port", "chase_crosshair", true);
+        // each row's own default is left out of the file; 0 is not a denominator, so a file without the key reads back the default
+        if (HudTopRow != I76.Sim.Views.HudScale.TopDefault) c.SetValue("port", "hud_top_row", I76.Sim.Views.HudScale.Denominator(HudTopRow));
+        if (HudBottomRow != I76.Sim.Views.HudScale.BottomDefault) c.SetValue("port", "hud_bottom_row", I76.Sim.Views.HudScale.Denominator(HudBottomRow));
+        if (OriginalChaseFraming) c.SetValue("port", "chase_framing_original", true);
         if (!BriefingWhileLoading) c.SetValue("port", "briefing_while_loading", false);
         if (WheelCycleWeapon) c.SetValue("port", "wheel_cycle_weapon", true);
         if (SkipIntro) c.SetValue("port", "skip_intro", true);
@@ -1558,6 +1605,9 @@ public sealed class ShellSettings
         if (CoopRollingStart) c.SetValue("port", "coop_rolling_start", true);
         if (!Garage3D) c.SetValue("port", "garage_3d", false);
         if (!BrushImpacts) c.SetValue("port", "brush_impacts", "off");
+        if (!CloudShadows) c.SetValue("port", "cloud_shadows", "off");
+        if (CloudSpeed != 0) c.SetValue("port", "cloud_speed", CloudSpeed);
+        if (!DesertHaze) c.SetValue("port", "desert_haze", "off");
         if (!CarInteriors) c.SetValue("port", "car_interiors", false);
         if (!CameraReturn) c.SetValue("port", "camera_return", false);
         if (!ZoomReset) c.SetValue("port", "zoom_reset", false);

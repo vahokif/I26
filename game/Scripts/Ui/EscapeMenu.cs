@@ -324,6 +324,25 @@ public sealed partial class EscapeMenu : Control
                 else if (m == 9) { Settings.SkipIntro = _snap.SkipIntro; it.Value = Settings.SkipIntro ? 1 : 0; }
             },
         });
+        // Chase HUD Top / Bottom Part: the size each half of the 2D instruments over a chase view is drawn (the original's own
+        // size is 1/1, the cockpit's dash is always that, and so is the 1997 look's set whatever is chosen here); from the resume on, like the crosshair above
+        _play.Items.Add(Setting(Cycle, PlayOptionsScreen.HudTopPartRow, 35, I76.Sim.Views.HudScale.Fractions.Length, I76.Sim.Views.HudScale.Names,
+            s => s.HudTopRow, (s, v) => s.HudTopRow = v, live: false));
+        _play.Items.Add(Setting(Cycle, PlayOptionsScreen.HudBottomPartRow, 36, I76.Sim.Views.HudScale.Fractions.Length, I76.Sim.Views.HudScale.Names,
+            s => s.HudBottomRow, (s, v) => s.HudBottomRow = v, live: false));
+        // Original Chase Framing: the F2 view opens at, and End puts it back to, the original's 30 degrees and zoom 3 rather than the port's
+        // 16 and 1.7 (docs/deviations.md), and the 1997 look opens there whatever is ticked. The chase camera reads the choice at every
+        // End, so the resume that closes this menu is enough.
+        _play.Items.Add(new Item
+        {
+            Flags = Check, Label = PlayOptionsScreen.ChaseFramingRow, Pair = 37, N = 2,
+            Cb = (it, m) =>
+            {
+                if (m == 6) it.Value = Settings.OriginalChaseFraming ? 1 : 0;
+                else if (m == 8) { Settings.OriginalChaseFraming = it.Value != 0; _snap.OriginalChaseFraming = Settings.OriginalChaseFraming; }
+                else if (m == 9) { Settings.OriginalChaseFraming = _snap.OriginalChaseFraming; it.Value = Settings.OriginalChaseFraming ? 1 : 0; }
+            },
+        });
         // every row in one list that scrolls over the pad's rows, in the order added; Done and Cancel stay put
         int at = 1;
         foreach (var it in _play.Items) it.At = at++;
@@ -367,11 +386,19 @@ public sealed partial class EscapeMenu : Control
             Scrolling(12, Cycle, "Crash Blur", 2, I76.Sim.Views.CrashBlurMode.Names, s => Math.Clamp(s.CrashBlur, 0, 1), (s, v) => s.CrashBlur = v, apply: () => Live?.Invoke(Settings)),
             // the modern look's plants
             Scrolling(13, Cycle, "Vegetation", 3, offLowHigh, s => s.Vegetation, (s, v) => s.Vegetation = v, apply: () => Live?.Invoke(Settings)),
+            // the modern look's cloud shadows (docs/cloud-shadows.md); the 1997 look has nothing to turn off
+            Scrolling(14, Cycle, "Cloud Shadows", 2, offOn, s => s.CloudShadows ? 1 : 0, (s, v) => s.CloudShadows = v != 0, apply: () => Live?.Invoke(Settings)),
+            // and how fast the sky's sheet drifts, which is also how fast its shade crosses the ground
+            Scrolling(15, Cycle, "Cloud Speed", I76.Game.World.CloudShadow.SpeedNames.Length, I76.Game.World.CloudShadow.SpeedNames,
+                s => Math.Clamp(s.CloudSpeed, 0, I76.Game.World.CloudShadow.SpeedNames.Length - 1), (s, v) => s.CloudSpeed = v, apply: () => Live?.Invoke(Settings)),
             // and how far the world is drawn (either look), live
-            Scrolling(14, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(16, Cycle, "Draw Distance", 2, I76.Formats.Imaging.DrawDistance.Names, s => s.DrawDistance, (s, v) => s.DrawDistance = v, apply: () => Live?.Invoke(Settings)),
             // and the frame rate limiter and vsync (drawing only; the simulation keeps its own rate), live
-            Scrolling(15, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
-            Scrolling(16, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            Scrolling(17, Cycle, "Max FPS", I76.Sim.Views.FrameLimit.Names.Length, I76.Sim.Views.FrameLimit.Names, s => s.MaxFps, (s, v) => s.MaxFps = v, apply: () => Live?.Invoke(Settings)),
+            Scrolling(18, Cycle, "VSync", 2, offOn, s => s.VSync ? 1 : 0, (s, v) => s.VSync = v != 0, apply: () => Live?.Invoke(Settings)),
+            // the haze over the distance and the sun's gold in it (docs/desert-haze.md); the modern look only, and the
+            // pass it lives on is the one the draw distance decides about, which is why it is live through Live
+            Scrolling(19, Cycle, "Desert Haze", 2, offOn, s => s.DesertHaze ? 1 : 0, (s, v) => s.DesertHaze = v != 0, apply: () => Live?.Invoke(Settings)),
             new Item { Flags = Command, Label = "Reset", Pair = 17, Cb = (_, m) => { if (m == 4) ResetGraphics(); } },
             DoneButton(),
             CancelButton(),
@@ -452,6 +479,9 @@ public sealed partial class EscapeMenu : Control
         Settings.PaletteGrade = false;
         Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On;
         Settings.Vegetation = 1;
+        Settings.CloudShadows = true;
+        Settings.CloudSpeed = 0;
+        Settings.DesertHaze = true;
         Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far;
         Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited;
         Settings.VSync = true;

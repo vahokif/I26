@@ -18,11 +18,14 @@ namespace I76.Game.Camera;
 /// <item>It is kept 0.6 above the ground under it. The projection is the
 /// engine's one: 90° across a 4:3 view, 73.7° high.</item>
 /// <item>the world camera rebuild starts pitch at 30°, yaw at 0; the zoom
-/// (track_distance, clamped 1..10) reads 3 in the original game.</item>
+/// (track_distance, clamped 1..10) reads 3 in the original game. The port opens the view lower and nearer
+/// (16°, zoom 1.7) and End returns to those, not to the original's numbers — unless Play Options' Original Chase Framing
+/// row asks for the original's, or the 1997 look is in play, which always asks for them (ChaseFraming).</item>
 /// </list>
 /// Keys (input.map): the arrows swing it (track_yaw_minus/plus,
 /// track_pitch_minus/plus; pitch 1°..90°), Page Up/Down zoom
-/// (track_distance_minus/plus), End resets. The rates are approximate: the
+/// (track_distance_minus/plus), End resets, and the wheel zooms the distance too (MouseOptionsScreen's
+/// View Zoom; the Mouse Camera row). The rates are approximate: the
 /// engine ramps these axes in its binding layer, which is not
 /// modelled. The mouse (Mouse Camera, on by default) moves the same targets by its motion. An axis bound to the track_yaw_delta or track_pitch_delta rows
 /// (the pad's right stick in the port's preset) turns it in proportion.
@@ -49,19 +52,22 @@ public partial class ChaseCamera : Camera3D
     /// <summary>The track axes at full deflection, degrees a second (the original maps them to ±10° a frame; the port's keys turn at 90 and 45).</summary>
     private const float StickYawRate = 180, StickPitchRate = 90;
     private bool _orbiting;
-    private readonly I76.Sim.Views.ChaseOrbit _orbit = new() { Pitch = DefaultPitch };
+    private readonly I76.Sim.Views.ChaseOrbit _orbit = new();
     private int _epoch = MouseCamera.ZoomEpoch;
     private float _wheel = MouseCamera.ZoomOf(ViewZoom.Kind.Chase);
 
-    private const float DefaultPitch = 0.5235988f, DefaultZoom = 3f;   // the original game has zoom 3 in F2 on a01
+    // the framing the view opens at and End goes back to: the port's 16 degrees and zoom 1.7, or the original's 30 and 3
+    // with Play Options' Original Chase Framing or in the 1997 look (ChaseFraming); read again at every End, so either takes
+    // effect on resume
     // targets (pitch, yaw, zoom) and their eased values
-    private float _pitchT = DefaultPitch, _yawT, _zoomT = DefaultZoom;
-    private float _zoom = DefaultZoom;
+    private float _pitchT, _yawT, _zoomT;
+    private float _zoom;
     private float _heading = float.NaN;   // the slerped heading, as an angle: the rotations are all about up
 
     public ChaseCamera()
     {
         Fov = 73.74f;
+        _pitchT = ChaseFraming.Pitch; _zoomT = _zoom = ChaseFraming.Zoom; _orbit.Pitch = _pitchT;
         // I76_CHASE_YAW=degrees starts the camera swung round the car, for off-screen captures
         if (float.TryParse(System.Environment.GetEnvironmentVariable("I76_CHASE_YAW"), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var y))
@@ -70,6 +76,13 @@ public partial class ChaseCamera : Camera3D
         if (float.TryParse(System.Environment.GetEnvironmentVariable("I76_CHASE_ZOOM"), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var z))
             _zoomT = _zoom = System.Math.Clamp(z, 1f, 10f);
+        // I76_CHASE_PITCH=degrees starts it lower or higher (the track_pitch setting), for off-screen captures
+        if (float.TryParse(System.Environment.GetEnvironmentVariable("I76_CHASE_PITCH"), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var p))
+        {
+            p = Mathf.Clamp(Mathf.DegToRad(p), ChaseOrbit.MinPitch, ChaseOrbit.MaxPitch);
+            _pitchT = p; _orbit.Pitch = p;
+        }
     }
 
     private static Vector3 Game(Vector3 g) => new(g.X, g.Y, -g.Z);
@@ -114,7 +127,7 @@ public partial class ChaseCamera : Camera3D
         else { if (!MouseCamera.CockpitActive) MouseCamera.Take(); _orbit.Reset(); }
         if (mine && Controls.Down("track_distance_plus")) _zoomT += 2 * dt;
         if (mine && Controls.Down("track_distance_minus")) _zoomT -= 2 * dt;
-        if (mine && Controls.Down("zoom_factor_reset")) { _yawT = 0; _pitchT = DefaultPitch; _zoomT = DefaultZoom; MouseCamera.ResetZoom(ViewZoom.Kind.Chase); _orbit.Reset(); }
+        if (mine && Controls.Down("zoom_factor_reset")) { _yawT = 0; _pitchT = ChaseFraming.Pitch; _zoomT = ChaseFraming.Zoom; MouseCamera.ResetZoom(ViewZoom.Kind.Chase); _orbit.Reset(); }
         _pitchT = System.Math.Clamp(_pitchT, 0.017453292f, 1.5707963f);
         _zoomT = System.Math.Clamp(_zoomT, 1f, 10f);
 

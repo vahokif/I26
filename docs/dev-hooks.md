@@ -66,7 +66,7 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_CAP_CAM` | capture | `dx,dy,dz,yaw,pitch`: a fixed camera at that offset from the player's car (Godot axes, degrees). |
 | `I76_CAP_CAM_ON` | capture | `ODEF`: with `I76_CAP_CAM`, the offset is from the first car whose definition starts with this (`vcpolic`) instead of the player's. |
 | `I76_FREECAM` | capture | `x,y,z,yaw,pitch[,fov]`: hold the fly camera there during a mission (fov: vertical, degrees; the maintainers' tooling logs the original's camera in this form). |
-| `I76_CHASE_YAW`, `I76_CHASE_ZOOM` | capture | Start the chase camera swung round the car (degrees) or nearer or further (1..10). |
+| `I76_CHASE_YAW`, `I76_CHASE_PITCH`, `I76_CHASE_ZOOM` | capture | Start the chase camera swung round the car (degrees), lower or higher (degrees, 1..90) or nearer or further (1..10), over Play Options' Original Chase Framing row and its port default (`I76_CHASE_PITCH=30 I76_CHASE_ZOOM=3` is the original's opening). |
 | `I76_HEAD`, `I76_HEAD_STATE` | capture | Cockpit head look `yaw,pitch`, or hold a glance state 0..7. |
 | `I76_VEG_GALLERY` | capture | `x,z[,species,...]`: the mission's species (or the ones named, from any region, e.g. `creosote,ocotillo`; `all`: every one) in a row along game X from (x, z), 4.5 m apart, their variants in rows behind; nothing else grows there. T16's flat: `1652,50137` (`I76_FREECAM=1657.5,10,50128.5,0,-10,50` after the intro). `I76_VEG_GALLERY_STEP=1.4` packs small plants closer; `I76_VEG_GALLERY_TIER=1` or `2` shows the middle or far meshes. |
 | `I76_TUMBLEWEEDS` | capture | `N`: that many rolling tumbleweeds round the camera (16 at most) whatever the biome and Vegetation's level say, wherever there are plants (`0`: none; Vegetation Off and the 1997 look still have none) (docs/modern-vegetation.md, Tumbleweeds). |
@@ -211,6 +211,11 @@ Kinds: **capture** (put the game in a known state for a screenshot), **test** (d
 | `I76_DROP_SHADOWS` | tuning | `0`: cars and scenery cast into the sun's shadow map again. |
 | `I76_DROP_REACH` | tuning | `M`: the modern look's drop shadows reach M metres (Shadow Detail Low 250, High 500 by default; 130 was the old reach). |
 | `I76_SKY_REALTIME` | tuning | `1`: redraw the sky radiance every frame. |
+| `I76_CLOUD_SHADOW`, `I76_CLOUD_FILL` | tuning | The modern look's cloud shadows (docs/cloud-shadows.md): how much of the sun a thick cloud takes (0.65 by day, `0` turns the feature off) and the sky's fill added back in its place (1.0). |
+| `I76_CLOUD_SHINE` | tuning | The share of a gloss paint's mirror the thickest cloud takes (docs/cloud-shadows.md): 0.6, so a car in a shade still reflects the sky; `0` leaves cars mirror-bright under an overcast. |
+| `I76_CLOUD_SPAN=lo,hi` | capture | The sheet's open-sky and cloud levels, over the mission's own. `0,0.05` reads the whole sky as cloud, which is how a shade is looked at without waiting for one to blow over the car. |
+| `I76_CLOUD_SPEED` | tuning | How fast the modern sky and its shadows drift over Graphic Detail's Cloud Speed: `normal`/`0`, `half`/`1` or `quarter`/`2`. The sheet's own pan is the original's, 45 m/s of shadow; `quarter` is 11 m/s. |
+| `I76_HAZE_DENSITY`, `I76_HAZE_SCALE`, `I76_HAZE_MIE` | tuning | The modern look's haze over the distance (docs/desert-haze.md): what a metre of the air at the mission's own level takes (1e-4, so a kilometre of level air is a tenth), the height of the layer (400 m of climb leaves a third of it below) and the sun's share in it (0.55 by day, a fifth of that by moonlight). `I76_HAZE_DENSITY=0` is Graphic Detail's Desert Haze off, which is the A/B for a capture. |
 | `I76_SOFTWARE`, `I76_PALETTE_GRADE` | capture | `1`/`0`: Graphic Detail's 1997 Renderer: Software and Palette Grade on or off for the run, whatever the settings say. |
 | `I76_SW_LINES` | tuning | The Software renderer's grid height (480); `0`: the full resolution. |
 | `I76_SW_GRADE` | debug | `0`: the Software renderer without its final palette pass (the shading and assets alone). |

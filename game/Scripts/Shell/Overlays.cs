@@ -222,8 +222,8 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     private I76.Formats.Input.RumbleMode _savedRumble;
     private int _savedRumbleStrength;
     private bool _savedSteering;
-    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997, _savedSkipIntro;
-    private int _savedRate, _savedDownloads;
+    private bool _savedAutoReverse, _savedModern, _savedForce, _savedCheckpoints, _savedHidden, _savedTurrets, _savedCb, _savedUpdate, _savedCrosshair, _savedBriefing, _savedTurrets1997, _savedSkipIntro, _savedChaseFraming;
+    private int _savedRate, _savedDownloads, _savedHudTop, _savedHudBottom;
     /// <summary>The original's six check rows and their bits (Nitro's sheet has only Arcade Phys. and Unlim. Wiper Fluid).</summary>
     private static readonly (string Label, int Bit)[] Checks =
     [
@@ -237,6 +237,9 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         return o[(i + 1) % o.Length].Label;
     }
     private static readonly string[] Levels = ["Wimp", "Champion", "Badass"];
+    /// <summary>The choice after the current one for a Chase HUD row (1/4, 1/2, 1/1, then round again), and its label.</summary>
+    private static int NextHudRow(int choice) => (I76.Sim.Views.HudScale.Clamp(choice) + 1) % I76.Sim.Views.HudScale.Fractions.Length;
+    private static string HudRowName(int choice) => I76.Sim.Views.HudScale.Names[I76.Sim.Views.HudScale.Clamp(choice)];
     /// <summary>The list slots that are check rows (the others a value): their line gets the sheet's check box.</summary>
     private readonly HashSet<int> _checks = [];
 
@@ -253,10 +256,17 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     [
         "Hidden Wpns & Cars", "Modern Physics", "Simulation Rate", "Checkpoints", "Force Feedback", "Auto Reverse", "Map Downloads",
         "Unlim. Turrets", "CB Voice", "Check for Updates", "Chase Crosshair", "Rumble", "Rumble Strength", "Load During Briefing",
-        "Turrets", "Keyboard Steering Assist", SkipIntroRow,
+        "Turrets", "Keyboard Steering Assist", SkipIntroRow, HudTopPartRow, HudBottomPartRow, ChaseFramingRow,
     ];
-    /// <summary>The port's Skip Intro Movies row (<see cref="ShellSettings.SkipIntro"/>), in the front end's and the mission menu's Play Options.</summary>
+    /// <summary>The port's Skip Intro Movies row (<see cref="ShellSettings.SkipIntro"/>) in the front end's and the mission menu's Play Options.</summary>
     public const string SkipIntroRow = "Skip Intro Movies";
+    /// <summary>The port's two Chase HUD rows (<see cref="ShellSettings.HudTopRow"/> and <see cref="ShellSettings.HudBottomRow"/>): the size
+    /// of each half of the external instruments over a chase view, stepped 1/4, 1/2, 1/1.</summary>
+    public const string HudTopPartRow = "Chase HUD Top Part", HudBottomPartRow = "Chase HUD Bottom Part";
+    /// <summary>The port's Original Chase Framing row (<see cref="ShellSettings.OriginalChaseFraming"/>): the F2 chase view opens at, and End
+    /// returns to, the original's 30 degrees and zoom 3 rather than the port's 16 and 1.7 (docs/deviations.md). The 1997 look opens there
+    /// whatever the row says.</summary>
+    public const string ChaseFramingRow = "Original Chase Framing";
 
     /// <summary>Every row of the list, in order: the original's check rows (Nitro's two), Difficulty, then the port's rows.</summary>
     public static string[] ListRows(bool nitro) =>
@@ -283,6 +293,9 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         _savedTurrets1997 = s.Turrets1997;
         _savedSteering = s.AssistedSteering;
         _savedSkipIntro = s.SkipIntro;
+        _savedHudTop = s.HudTopRow;
+        _savedHudBottom = s.HudBottomRow;
+        _savedChaseFraming = s.OriginalChaseFraming;
         bool nitro = Shell.Install.IsNitro;
         (List.Top, List.Shown) = ListLines(nitro);
 
@@ -342,6 +355,14 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
         Toggle(PortRows[15], () => s.AssistedSteering, () => I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = !s.AssistedSteering);
         // Skip Intro Movies: the next start goes straight to the menu (briefings, outros and cut-scenes still play)
         Toggle(PortRows[16], () => s.SkipIntro, () => s.SkipIntro = !s.SkipIntro);
+        // Chase HUD Top / Bottom Part (docs/deviations.md): how big each half of the 2D instruments over a chase view is drawn.
+        // The original draws both at full size; a click steps 1/4, 1/2, 1/1, the row shrinking about the frame's middle line and
+        // its own edge so its panels stay as close together as they were. The cockpit's dash is always full size, and a network game draws each player's own choice.
+        Step(PortRows[17], () => s.HudTopRow = NextHudRow(s.HudTopRow), () => HudRowName(s.HudTopRow));
+        Step(PortRows[18], () => s.HudBottomRow = NextHudRow(s.HudBottomRow), () => HudRowName(s.HudBottomRow));
+        // Original Chase Framing (docs/deviations.md): the F2 view opens at, and End puts it back to, the original's 30 degrees and zoom 3
+        // instead of the port's 16 and 1.7. From the next mission here, and from the next End after a resume out of the mission menu.
+        Toggle(PortRows[19], () => s.OriginalChaseFraming, () => s.OriginalChaseFraming = !s.OriginalChaseFraming);
         Add(350, 438, "Done", Done, Small);
         Add(402, 438, "Cancel", Cancel, Small);
     }
@@ -384,6 +405,7 @@ public sealed class PlayOptionsScreen : ScrollingOverlayScreen
     {
         var s = Shell.Settings;
         s.CbVoice = _savedCb; s.UpdateCheck = _savedUpdate; s.ChaseCrosshair = _savedCrosshair; s.RumbleMode = _savedRumble; s.RumbleStrength = _savedRumbleStrength; s.BriefingWhileLoading = _savedBriefing; s.Turrets1997 = _savedTurrets1997; s.SkipIntro = _savedSkipIntro;
+        s.HudTopRow = _savedHudTop; s.HudBottomRow = _savedHudBottom; s.OriginalChaseFraming = _savedChaseFraming;
         I76.Game.Sim.SimDriver.AssistedSteering = s.AssistedSteering = _savedSteering;
         s.PlayOptions = _savedFlags; s.AutoReverse = _savedAutoReverse; s.ModernPhysics = _savedModern; s.ForceFeedback = _savedForce; s.Checkpoints = _savedCheckpoints;
         s.SimRate = _savedRate; s.MapDownloads = _savedDownloads; s.HiddenContent = _savedHidden; s.UnlimTurrets = _savedTurrets;   // the difficulty is not restored
@@ -484,9 +506,9 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
 {
     protected override int Record => 9;
     private byte[] _saved = [];
-    private bool _savedHd, _savedLook, _savedSoftware, _savedGrade;
+    private bool _savedHd, _savedLook, _savedSoftware, _savedGrade, _savedCloud, _savedHaze;
     private int _savedBlur;
-    private int _savedVeg, _savedDraw, _savedMaxFps;
+    private int _savedVeg, _savedDraw, _savedMaxFps, _savedCloudSpeed;
     private I76.Game.Boot.RendererChoice _savedRenderer;
     private string _savedRes = "";
     private int _savedScale, _savedFov;
@@ -534,6 +556,9 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         _savedGrade = Shell.Settings.PaletteGrade;
         _savedBlur = Shell.Settings.CrashBlur;
         _savedVeg = Shell.Settings.Vegetation;
+        _savedCloud = Shell.Settings.CloudShadows;
+        _savedHaze = Shell.Settings.DesertHaze;
+        _savedCloudSpeed = Shell.Settings.CloudSpeed;
         _savedDraw = Shell.Settings.DrawDistance;
         _savedMaxFps = Shell.Settings.MaxFps;
         _savedVSync = Shell.Settings.VSync;
@@ -582,6 +607,26 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
         // the modern look's plants (docs/modern-vegetation.md)
         string[] veg = ["Off", "Low", "High"];
         Row("Vegetation", () => veg[Math.Clamp(st.Vegetation, 0, 2)], () => st.Vegetation = (st.Vegetation + 1) % 3);
+        // the modern sky's clouds shade the ground, the cars and the plants under them (docs/cloud-shadows.md)
+        Row("Cloud Shadows", () => st.CloudShadows ? "On" : "Off", () =>
+        {
+            st.CloudShadows = !st.CloudShadows;
+            I76.Game.World.CloudShadow.SetEnabled(st.CloudShadows);
+        });
+        // and how fast the sheet drifts: the sky and its shade read one rate, so a shade never parts from its cloud
+        string[] speed = I76.Game.World.CloudShadow.SpeedNames;
+        Row("Cloud Speed", () => speed[Math.Clamp(st.CloudSpeed, 0, speed.Length - 1)], () =>
+        {
+            st.CloudSpeed = (st.CloudSpeed + 1) % speed.Length;
+            I76.Game.World.CloudShadow.SetSpeed(st.CloudSpeed);
+        });
+        // the haze lying in the distance, and the sun's gold in it (docs/desert-haze.md): the modern look's only air,
+        // and it reaches further than the draw distance does, so it is a row of its own
+        Row("Desert Haze", () => st.DesertHaze ? "On" : "Off", () =>
+        {
+            st.DesertHaze = !st.DesertHaze;
+            I76.Game.World.DesertHaze.SetEnabled(st.DesertHaze);
+        });
         // how far the world is drawn, in either look
         Row("Draw Distance", () => I76.Formats.Imaging.DrawDistance.Names[st.DrawDistance], () => st.DrawDistance = 1 - st.DrawDistance);
         // the frame rate limiter and vsync: drawing only, the simulation keeps the Play Options rate; both live (the engine's, so the shell shows it too)
@@ -600,9 +645,9 @@ public sealed class GraphicsScreen : ScrollingOverlayScreen
                 : new[] { I76.Game.Boot.RendererChoice.Auto, I76.Game.Boot.RendererChoice.Vulkan, I76.Game.Boot.RendererChoice.OpenGL };
             st.Renderer = all[(Math.Max(0, Array.IndexOf(all, st.Renderer)) + 1) % all.Length];
         });
-        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = 0; I76.Sim.Views.ViewFov.Apply(0); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); ApplyTextures(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
+        Add(288, 438, "Reset", () => { Shell.Settings.Resolution = ""; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = 0; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = 0; I76.Sim.Views.ViewFov.Apply(0); Shell.Settings.MaxFps = I76.Sim.Views.FrameLimit.Unlimited; Shell.Settings.VSync = true; I76.Game.FrameLimiter.Apply(Shell.Settings); Array.Copy(ShellSettings.DefaultGraphics, g, 16); Apply(true); ApplyTextures(true); Shell.Settings.Look1997 = false; Shell.Settings.SoftwareRenderer = false; Shell.Settings.PaletteGrade = false; Shell.Settings.CrashBlur = I76.Sim.Views.CrashBlurMode.On; Shell.Settings.Vegetation = 1; Shell.Settings.CloudShadows = true; Shell.Settings.CloudSpeed = 0; I76.Game.World.CloudShadow.SetEnabled(true); I76.Game.World.CloudShadow.SetSpeed(0); Shell.Settings.DesertHaze = true; I76.Game.World.DesertHaze.SetEnabled(true); Shell.Settings.DrawDistance = I76.Formats.Imaging.DrawDistance.Far; Shell.Settings.Garage3D = true; Shell.Settings.CarInteriors = true; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(true); }, Small);
         Add(350, 438, "Done", () => { Shell.Settings.Save(); Shell.Overlay(new OptionsScreen()); }, Small);
-        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); ApplyTextures(_savedHdTex); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = _savedFov; I76.Sim.Views.ViewFov.Apply(_savedFov); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
+        Add(402, 438, "Cancel", () => { Array.Copy(_saved, g, 16); Apply(_savedHd); ApplyTextures(_savedHdTex); Shell.Settings.Look1997 = _savedLook; Shell.Settings.SoftwareRenderer = _savedSoftware; Shell.Settings.PaletteGrade = _savedGrade; Shell.Settings.CrashBlur = _savedBlur; Shell.Settings.Vegetation = _savedVeg; Shell.Settings.CloudShadows = _savedCloud; Shell.Settings.CloudSpeed = _savedCloudSpeed; I76.Game.World.CloudShadow.SetEnabled(_savedCloud); I76.Game.World.CloudShadow.SetSpeed(_savedCloudSpeed); Shell.Settings.DesertHaze = _savedHaze; I76.Game.World.DesertHaze.SetEnabled(_savedHaze); Shell.Settings.DrawDistance = _savedDraw; Shell.Settings.LogFile = _savedLog; Shell.Settings.Renderer = _savedRenderer; Shell.Settings.Garage3D = _saved3D; Shell.Settings.CarInteriors = _savedInteriors; I76.Game.Assets.MaterialLibrary.ApplyCarInteriors(_savedInteriors); Shell.Settings.Resolution = _savedRes; I76.Game.Boot.WindowApplier.Apply(Shell.Settings); Shell.Settings.RenderScale = _savedScale; I76.Game.Boot.RenderScale.Apply(Shell.Settings); Shell.Settings.FieldOfView = _savedFov; I76.Sim.Views.ViewFov.Apply(_savedFov); Shell.Settings.MaxFps = _savedMaxFps; Shell.Settings.VSync = _savedVSync; I76.Game.FrameLimiter.Apply(Shell.Settings); Shell.Overlay(new OptionsScreen()); }, Small);
     }
 }
 

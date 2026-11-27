@@ -1,6 +1,7 @@
 // The modern sky as a function of the view direction (Godot frame), shared by
 // sky_modern.gdshader and the modern look's fog (sky_fog.gdshader), which fades
-// distant ground into exactly the sky behind it.
+// distant ground into exactly the sky behind it - and, for the air lying over
+// that ground, the same sky without its clouds or its sun (modern_air).
 // The Compatibility renderer (OpenGL, docs/compatibility-renderer.md) does not sRGB-decode an array texture's
 // source_color, nor a sky shader's textures, and its sky pass writes display values without the linear-to-sRGB
 // encode the other renderers' do: the sky shader there (I76_RAW_SKY) decodes by hand and encodes its colour at the end.
@@ -43,6 +44,9 @@ uniform float moon_radius = 0.05;     // radians (the real moon is 0.0045; drawn
 // (the compass), Godot's -Z. The moon's north points at it, so a moon rising in the east leans its north to the left, as it does there
 uniform vec3 moon_north = vec3(0.0, 0.5299, -0.8480);
 uniform float scroll_per_second = 0.02997;
+// Graphic Detail's Cloud Speed: one global for the sky's drift and the shade its clouds cast
+// (Shaders/cloud_shadow.gdshaderinc reads the same number), so a shadow cannot lag behind the cloud over it.
+global uniform float i76_cloud_speed = 1.0;
 uniform float radius = 6000.0;
 uniform float drop = 5400.0;
 uniform float horizon_height = 1170.6;
@@ -92,7 +96,9 @@ float density(vec2 uv, int octaves) {
 	return clamp(base + (n - 0.5) * detail * 1.6 + (e - 0.5) * detail * 1.4 * edge, 0.0, 1.0);
 }
 
-vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
+// The sky, with the switches its two users need: the cloud layer and the disc of the sun or moon in it are
+// optional, because the air between the eye and a distant thing is neither (modern_air, below).
+vec3 i76_sky_body(vec3 eyedir, float time, bool cubemap, bool with_clouds, bool with_disc) {
 	vec3 d = normalize(eyedir);
 	vec3 g = vec3(d.x, d.y, -d.z);    // Godot -> game: mirror Z
 	vec3 s = normalize(sprite_dir);
@@ -106,12 +112,12 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 
 	// what reaches the eye from the sun or moon through the clouds and the haze, added once the sky is done
 	float transmit = 1.0;
-	if (g.y > 0.0) {
+	if (with_clouds && g.y > 0.0) {
 		// the engine's dome projection
 		float b = g.y * drop;
 		float t = -b + sqrt(b * b - (drop * drop - radius * radius));
 		vec2 xz = (t * g).xz;
-		float off = time * scroll_per_second;
+		float off = time * scroll_per_second * i76_cloud_speed;
 		vec2 uv = (xz / radius + 0.5) * 4.0 + vec2(off);
 		int oct = cubemap ? 2 : 5;
 		float den = density(uv, oct);
@@ -141,7 +147,7 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 	float air = smoothstep(-0.02, 0.15, g.y);
 	transmit *= mix(0.25, 1.0, air);
 
-	if (procedural_sun) {
+	if (with_disc && procedural_sun) {
 		float c = dot(d, s);
 		float a = acos(clamp(c, -1.0, 1.0));
 		vec3 tint = mix(vec3(1.0, 0.55, 0.28), vec3(1.0, 0.96, 0.9), air);
@@ -154,7 +160,7 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 			float limb = 0.6 + 0.4 * sqrt(max(0.0, 1.0 - r * r));
 			col += tint * 14.0 * limb * edge * light_strength * transmit;
 		}
-	} else if (procedural_moon) {
+	} else if (with_disc && procedural_moon) {
 		float c = dot(d, s);
 		float a = acos(clamp(c, -1.0, 1.0));
 		// low down the haze warms it, as it reddens the sun
@@ -177,7 +183,7 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 			float limb = 0.82 + 0.18 * z;
 			col = mix(col, alb * 2.6 * limb * tint, edge * transmit);
 		}
-	} else if (has_sprite) {
+	} else if (with_disc && has_sprite) {
 		float c = dot(d, s);
 		if (c > cos(sprite_radius * 1.5)) {
 			vec3 right = normalize(cross(abs(s.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0), s));
@@ -222,3 +228,15 @@ vec3 modern_sky(vec3 eyedir, float time, bool cubemap) {
 	}
 	return col;
 }
+
+// The sky as the sky shader draws it: its clouds and its sun or moon in it.
+vec3 modern_sky(vec3 eyedir, float time, bool cubemap) { return i76_sky_body(eyedir, time, cubemap, true, true); }
+
+// What the air along a ray adds to what it lies over: the same sky with its clouds and its disc out of it.
+// Scattered light is the whole column's forward share, so it is smooth in direction: it brightens toward the
+// sun and says nothing about the shape of a cloud tens of kilometres up. Laying the sky's own colours over
+// distant ground with the clouds left in - which is what the haze pass used to do - stamps their pattern onto
+// the far ridges, and a cloud reads as painted through the mountain in front of it. Nothing moves where it
+// matters: the sky fades its clouds out below about seven degrees (above), and that is where any of these
+// fades complete, so the ground still meets the horizon in the colour the horizon is drawn with.
+vec3 modern_air(vec3 eyedir, float time, bool cubemap) { return i76_sky_body(eyedir, time, cubemap, false, false); }

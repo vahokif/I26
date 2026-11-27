@@ -83,12 +83,20 @@ public static class HudLayout
     /// rear-view mirror too, (384,125,256x64). The bottom ones (speedometer, gear, specials, compass) are not the top
     /// columns' business. With <paramref name="dash3d"/> (the 3D cockpit, whose instruments are the car's model) the same places
     /// as measured on its default dash: the radar's bezel reaches 31 units further left, and the mirror sits at (463,138,225x72).
+    /// <paramref name="top"/> is Play Options' Chase HUD Top Part (I76.Sim.Views.HudScale): the three panels drawn smaller, the row shrunk
+    /// about the frame's middle line and its own top edge, so the columns know how far down they may start and how far in the panels
+    /// reach. The mirror is the cockpit's own and stays where it is.
     /// </summary>
-    public static HudRect[] TopInstruments(float w, float h, bool mirror, bool dash3d = false)
+    public static HudRect[] TopInstruments(float w, float h, bool mirror, bool dash3d = false, float top = 1f)
     {
         float k = h / 480f, ox = (w - 640 * k) / 2;
         HudRect R(float x, float y, float rw, float rh) => new(ox + x * k, y * k, rw * k, rh * k);
-        var r = new List<HudRect> { dash3d ? R(-31, 0, 205, 119) : R(0, 0, 174, 119), R(190, 0, 183, 127), R(392, 0, 241, 123) };
+        HudRect T(float x, float y, float rw, float rh)
+        {
+            var (x0, y0, w0, h0) = I76.Sim.Views.HudScale.Shrink(x, y, rw, rh, top);
+            return R(x0, y0, w0, h0);
+        }
+        var r = new List<HudRect> { dash3d ? T(-31, 0, 205, 119) : T(0, 0, 174, 119), T(190, 0, 183, 127), T(392, 0, 241, 123) };
         if (mirror) r.Add(dash3d ? R(463, 138, 225, 72) : R(384, 125, 256, 64));
         return [.. r];
     }

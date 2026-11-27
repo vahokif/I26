@@ -20,6 +20,9 @@ public partial class Hud : CanvasLayer
     public Func<bool>? InCockpit { get; set; }
     /// <summary>Graphic Detail's Ext. Instrum. Disp.: the 2D panels drawn outside the cockpit.</summary>
     public Func<bool>? ExtInstruments { get; init; }
+    /// <summary>Play Options' Chase HUD Top Part and Bottom Part: the size each row of the external panels is drawn at
+    /// (I76.Sim.Views.HudScale). The cockpit's own dash is full size whatever it says, and so is the 1997 look's set (HudScale.ForLook).</summary>
+    public Func<(float Top, float Bottom)>? ChaseScale { get; set; }
     /// <summary>The player's cockpit, whose panel textures the external instruments draw.</summary>
     public Func<I76.Game.Sim.Cockpit?>? Pit { get; set; }
     /// <summary>True while the script holds the camera (pushCam, camera mode 5): the cut-scene shows no driving readouts.</summary>
@@ -64,7 +67,8 @@ public partial class Hud : CanvasLayer
         if (Combat is not null && Origin is not null)
             AddChild(new ChaseCrosshair { Player = () => Car?.Invoke(), Combat = Combat, Origin = Origin, CarOf = CarOf, Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Faithful = () => Faithful?.Invoke() == true, Name = "Crosshair" });
         yield return null;
-        if (Pit is not null) AddChild(_instruments = new ExtInstruments { Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Name = "ExtInstruments", Visible = false });
+        if (Pit is not null) AddChild(_instruments = new ExtInstruments { Pit = Pit, InCockpit = () => InCockpit?.Invoke() == true, Name = "ExtInstruments", Visible = false,
+            RowScale = () => ChaseScale?.Invoke() ?? (1f, 1f) });
         _cb = Label(18);
         _cb.HorizontalAlignment = HorizontalAlignment.Left;
         _cb.AnchorTop = _cb.AnchorBottom = 1;

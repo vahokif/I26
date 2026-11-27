@@ -9,6 +9,7 @@
 // (fading in, a burst piece fading out, by the same dither), and nothing sways, parts round a car or carries dust at its foot.
 shader_type spatial;
 #include "res://Shaders/cab_clip.gdshaderinc"
+#include "res://Shaders/cloud_shadow.gdshaderinc"
 render_mode cull_disabled, world_vertex_coords;
 
 uniform sampler2D atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
@@ -53,6 +54,7 @@ varying float v_sway;
 varying vec2 v_vary;
 varying float v_tin;
 varying float v_tout;
+varying vec3 v_cloud_world;   // where the plant stands, for the cloud overhead (docs/cloud-shadows.md)
 
 void vertex() {
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
@@ -127,6 +129,7 @@ void vertex() {
 		VERTEX.y -= t * give * height * 0.6;
 	}
 	if (grow_in && !rolling) VERTEX = origin + (VERTEX - origin) * mix(0.2, 1.0, v_fade);
+	v_cloud_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;   // after the sway and the give, where the leaf actually is
 }
 
 // a 4x4 ordered dither: the fade thins plants out pixel by pixel, never pops them
@@ -163,6 +166,12 @@ void fragment() {
 	AO_LIGHT_AFFECT = ao_light;
 	// light through the leaves and the thin blades
 	BACKLIGHT = vec3(0.18, 0.2, 0.1) * UV2.y * ao;
+	// under the same cloud as the ground it grows in (docs/cloud-shadows.md), the sun's part in the
+	// leaves' translucency with it
+	float cloud = i76_cloud_shade(v_cloud_world);
+	EMISSION += i76_cloud_fill_back(cloud, 0.0) * ALBEDO;
+	ALBEDO *= cloud;
+	BACKLIGHT *= cloud;
 	if (debug_view == 1) ALBEDO = vec3(0.35);
 	if (debug_view == 2) ALBEDO = vec3(ao);
 }

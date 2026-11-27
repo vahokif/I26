@@ -37,6 +37,7 @@ uniform float haze_floor = 0.0;      // air this much hazier from the start (nig
 // without the ring's depth and masks, so the GPU can reject hidden fragments early): the ring gives way under them (near_mask,
 // horizon_mask.gdshaderinc).
 #include "res://Shaders/horizon_mask.gdshaderinc"
+#include "res://Shaders/cloud_shadow.gdshaderinc"
 #ifndef HORIZON_RING
 // the chunks near the camera ease onto the ring's own surface (UV2.x, where UV2.y is 1) between these distances from the camera, so
 // where they end the ring goes on at their height; a little over it, so that where the ring is drawn a little higher than the chunks'
@@ -67,6 +68,7 @@ varying vec3 g_nrm;
 varying vec4 v_data;   // sun visibility, rockiness, style (0 peaks .. 1 mesas)
 varying vec2 v_aux;    // height above the base, distance from the map
 varying vec3 v_up;     // world up in view space, for light()
+varying vec3 v_world;  // the point in the world, for the cloud overhead: light() is not given a position to ask
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 // one without sin, for cell indices in the thousands (Hoskins' hash12)
@@ -97,6 +99,7 @@ void vertex() {
 	g_nrm = vec3(NORMAL.x, NORMAL.y, -NORMAL.z);
 	v_data = COLOR;
 	v_aux = UV;
+	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
@@ -218,7 +221,11 @@ uniform float bounce = 3.0;
 
 void light() {
 	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
-	float vis = LIGHT_IS_DIRECTIONAL ? v_data.r : 1.0;
+	// the cloud over this part of the ring is just another reason the sun does not reach it, and the
+	// bounced light below fills in against it as it does against a slope. It reaches the ring only as far as
+	// the sky's own sheet does, which is the point: past that the mountains have their sun from open sky
+	// (docs/cloud-shadows.md)
+	float vis = LIGHT_IS_DIRECTIONAL ? v_data.r * i76_cloud_shade(v_world) : 1.0;
 	DIFFUSE_LIGHT += ndl * ATTENUATION * LIGHT_COLOR / PI * vis;
 	if (LIGHT_IS_DIRECTIONAL) {
 		float elev = dot(LIGHT, v_up);

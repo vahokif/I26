@@ -1,6 +1,7 @@
 using Godot;
 using I76.Game.Sim;
 using I76.Net.Hud;
+using I76.Sim.Views;
 
 namespace I76.Game.Ui;
 
@@ -13,7 +14,9 @@ namespace I76.Game.Ui;
 /// the layout table). The original draws them at their own size whatever the
 /// display; here the 640x480 frame is scaled with the window's height and
 /// centred, as the CB handset is, nearest-neighbour in both looks. Palette
-/// index 255 is transparent.
+/// index 255 is transparent. Play Options' Chase HUD Top Part and Bottom Part draw either row of the external set smaller
+/// (I76.Sim.Views.HudScale); the 2D dash and the CB handset are always full size, and so is the whole set in the 1997 look,
+/// whose frame is the original's own (HudScale.ForLook).
 ///
 /// The same panels are the cockpit's 2D dash (dash3d == 0, F1 twice): all nine
 /// (the mirror too, from its live view), the reticles, and none of
@@ -25,6 +28,11 @@ public partial class ExtInstruments : Control
     public required Func<Cockpit?> Pit { get; init; }
     /// <summary>The cockpit view is current: the 2D dash rather than the external instruments.</summary>
     public required Func<bool> InCockpit { get; init; }
+    /// <summary>Play Options' Chase HUD Top Part and Bottom Part: the size the two rows of panels are drawn at over an external view.
+    /// Not asked in the cockpit — the 2D dash is the car's own instrument board and is drawn as the original drew it.</summary>
+    public Func<(float Top, float Bottom)>? RowScale { get; init; }
+
+    private (float Top, float Bottom) Row => InCockpit() || RowScale is not { } s ? (1f, 1f) : s();
 
     private static ExtInstruments? _live;
 
@@ -39,7 +47,8 @@ public partial class ExtInstruments : Control
         if (cockpit && pit.Binoculars) return [];
         // the 3D cockpit's instruments are the car's model at the same places; the 2D dash and the chase view's own set are these panels
         if (cockpit && pit.Dash3D) return HudLayout.TopInstruments(w, h, mirror && pit.MirrorFace is not null, dash3d: true);
-        return l.Visible ? HudLayout.TopInstruments(w, h, mirror && cockpit && pit.MirrorFace is not null) : [];
+        var (top, _) = l.Row;   // the chase view's own set at its chosen size; the 2D dash reports (1, 1)
+        return l.Visible ? HudLayout.TopInstruments(w, h, mirror && cockpit && pit.MirrorFace is not null, top: top) : [];
     }
 
     public override void _EnterTree() => _live = this;
@@ -102,16 +111,20 @@ public partial class ExtInstruments : Control
         if (TextureFilter != filter) TextureFilter = filter;
         var origin = new Vector2((size.X - 640 * k) / 2, 0);
         bool dash = InCockpit();
+        var (topRow, bottomRow) = Row;
         foreach (var (panel, x, y, w, h) in Slots)
         {
             if (dash && pit.LookingAway) break;   // The nine panels wait for the head to come forward
             // a panel not drawn into yet is the original's empty descriptor: its slot is skipped
             if ((panel is null ? pit.RadarTexture : pit.Panels.Texture(panel)) is not { } tex) continue;
-            // the slot is the original's pixels; a panel drawn from a pack (s texels a pixel) is read at its scale
-            int th = tex.GetHeight(), s = panel is null ? pit.RadarScale : pit.Panels.Scale(panel);
-            // y flipped about the slot: local row 0 (stored row th − h·s, the picture's row h − 1) lands at the slot's foot
-            DrawSetTransformMatrix(new Transform2D(new Vector2(k, 0), new Vector2(0, -k), origin + new Vector2(x, y + h) * k));
-            DrawTextureRectRegion(tex, new Rect2(0, 0, w, h), new Rect2(0, th - h * s, w * s, h * s));
+            // the slot is the original's pixels; a panel drawn from a pack (ps texels a pixel) is read at its scale
+            int th = tex.GetHeight(), ps = panel is null ? pit.RadarScale : pit.Panels.Scale(panel);
+            // Play Options' Chase HUD parts: the slot shrunk with its row about the frame's middle line and the row's own edge (1 in the dash)
+            float s = y + h / 2 < HudScale.FrameHeight / 2 ? topRow : bottomRow;
+            var (sx, sy, _, sh) = HudScale.Shrink(x, y, w, h, s);
+            // y flipped about the slot: local row 0 (stored row th − h·ps, the picture's row h − 1) lands at the slot's foot
+            DrawSetTransformMatrix(new Transform2D(new Vector2(k * s, 0), new Vector2(0, -k * s), origin + new Vector2(sx, sy + sh) * k));
+            DrawTextureRectRegion(tex, new Rect2(0, 0, w, h), new Rect2(0, th - h * ps, w * ps, h * ps));
         }
         DrawSetTransformMatrix(Transform2D.Identity);
         // the reticles are drawn whatever the head does, the 2D dash only

@@ -224,6 +224,50 @@ public class NetBotTests(ITestOutputHelper output)
         Assert.All(host.Bots, b => Assert.Equal(0, b.Player.Team));
     }
 
+    /// <summary>
+    /// Team play with bots (docs/multiplayer.md "Bots", "Teams"): the listen host's pick keeps the bots off its team before it sits, the
+    /// people are one side and the bots the other; a guest who asks for no team joins the people, one who picks the bots' team is
+    /// let (a pick wins), and a bot coming back for a seat freed still sides with the bots.
+    /// </summary>
+    [Fact]
+    public void InTeamPlayThePeopleAreOneSideAndTheBotsTheOther()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m05", TeamPlay = true, HostTeam = 3, Bots = 4, MaxPlayers = 8 });
+        Assert.Equal(4, host.Bots.Count);
+        Assert.All(host.Bots, b => Assert.Equal(1, b.Player.Team));               // the lowest team no person is on
+        var me = host.Join("host", "vppirna1.vcf", 3);
+        var guest = host.Join("guest", "vcgcour1.vcf", 0);                          // asked for none: the people's team
+        Assert.Equal(3, me.Player.Team);
+        Assert.Equal(3, guest.Player.Team);
+        var odd = host.Join("odd", "valepre1.vcf", 1);                              // a pick of the bots' team wins
+        Assert.Equal(1, odd.Player.Team);
+        var late = host.Join("late", "vppirna1.vcf", 0);
+        Assert.Equal(3, late.Player.Team);                                           // most people are on 3
+        Assert.Equal(4, host.Bots.Count);
+        var fill = host.Join("fill", "vppirna1.vcf", 5);                            // eight seats: a bot makes room
+        Assert.Equal(3, host.Bots.Count);
+        host.Leave(fill, "left");
+        Assert.Equal(4, host.Bots.Count);
+        Assert.All(host.Bots, b => Assert.Equal(1, b.Player.Team));               // the one back sides with the bots
+        Assert.All(host.Scoreboard().Players.Where(r => BotNames.IsBot(r.Name)), r => Assert.Equal(1, r.Team));
+    }
+
+    /// <summary>Two people of a listen host's game on its team (the X's first row, team 1) and every bot on team 2, however many: the old rule put every third bot with the people.</summary>
+    [Fact]
+    public void TwoPeopleOnTheFirstTeamHaveEveryBotAgainstThem()
+    {
+        if (HostTests.InstallDir is not { } install) return;
+        var host = new MeleeHost(new ServerOptions { Install = install, Arena = "m05", TeamPlay = true, HostTeam = 1, Bots = 6, MaxPlayers = 8 });
+        var a = host.Join("host", "vppirna1.vcf", 1);
+        var b = host.Join("guest", "vcgcour1.vcf", 1);
+        Assert.Equal((1, 1), (a.Player.Team, b.Player.Team));
+        Assert.Equal(6, host.Bots.Count);
+        Assert.All(host.Bots, x => Assert.Equal(2, x.Player.Team));
+        // the session list the guest's CHOOSE A TEAM reads: people on 1, bots on 2
+        Assert.All(host.Info().Drivers, d => Assert.Equal(BotNames.IsBot(d.Name) ? 2 : 1, d.Team));
+    }
+
     // ---- seats ----
 
     /// <summary>

@@ -24,6 +24,18 @@ public class TeamPopupTests
         Assert.Equal(["Grey Hounds", "Puce Panthers", "Crimson Kings", "Yellow Jackets", "Aqua Marines", "Mauve Mayhem", "Mr. Brown's Clowns", "Men In Black"], l.Names);
     }
 
+    /// <summary>A joiner's CHOOSE A TEAM starts on the people's team (the session list's drivers, a bot known by its name), else a team without bots.</summary>
+    [Fact]
+    public void AJoinersPopupStartsOnThePeoplesTeam()
+    {
+        I76.Net.SessionDriver D(string name, int team) => new(name, "vppirna1.vcf", (byte)team);
+        Assert.Equal(3, TeamPopup.StartFor([D("Taurus", 3), D("Jade (bot)", 1), D("Skeeter (bot)", 1)], 0));
+        Assert.Equal(1, TeamPopup.StartFor([D("Taurus", 1), D("Jade (bot)", 2)], 0));
+        Assert.Equal(3, TeamPopup.StartFor([D("Jade (bot)", 1), D("Skeeter (bot)", 2)], 0));     // a dedicated server's bots alone
+        Assert.Equal(1, TeamPopup.StartFor([], 0));                                               // the original's first row
+        Assert.Equal(2, TeamPopup.StartFor([D("Taurus", 2), D("Jade (bot)", 1)], 3));             // a CTF arena's teams
+    }
+
     [Fact]
     public void NoTeamPlayAndCoopOpenNone()
     {

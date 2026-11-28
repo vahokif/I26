@@ -373,8 +373,16 @@ but `Combat.IsBot` makes its weapons fire as an AI car's, with no missile lock h
   to the clients by content as a player's own variant is. **Random under restrictions:** a bot on Random prefers a random one of the host's saved variants that carry none of
   the restricted weapons and specials as they are (`MeleeHost.LegalSavedCars`; with All Weapons restricted, the weaponless ones), else the rolled stock car stripped as above. The choices are in
   the savestate's options (the migration extras), so a successor host fills a seat the same way; no protocol or savestate change.
-- **Teams.** None in a free for all. In CTF the team with the fewest players. In other team play the smaller of the teams the humans are on
-  (two, if they are all on one: the next one over), so that bots fill the side that is short.
+- **Teams** (`TeamSides`). None in a free for all. In team play the people are one side and the bots the other: a bot
+  goes to a team no person is on (the listen host's own CHOOSE A TEAM pick, `ServerOptions.HostTeam`, counts as a person's from the
+  start, so the bots seated before the host sits keep off it). In combat and race that is the team the bots already hold, else the lowest
+  free one, so the bots are one team; a person who picks the bots' team is let, and the bots stay with them. In CTF the bots share out over
+  the teams the people left free, the fewest first, so each base has defenders; with no team free, over all teams. A game nobody sits in
+  yet with no host pick (i26-server, the tests' bots-only games) shares the bots over teams 1 and 2 (CTF: all its teams), the fewest first.
+  A person's pick always wins; one who asks for none (the command line's `--connect` without `--team`) joins the team most people are on
+  (`MeleeMode.TeamFor`), and a joiner's CHOOSE A TEAM starts on that team (below). The bots' teams are fixed once they sit: the default
+  places bots as they come, it never moves anyone. Before (upstream's rule) a bot took the smaller of the people's teams, so two people
+  on team 1 had every third bot with them.
 - **Skill.** The host form's Easy, Normal and Hard are the AI's setSkill tiers 4, 3 and 1 (`MeleeGame.SkillTier`; the single-player melee's
   waves go 3 to 1): `AiBlock.SetSkill` for its steering, throttle and aim, and the tactic table's aggression row `tier - 1`.
 - **Seats.** Bots take the seats humans leave free: `MeleeMode.BalanceBots` keeps `min(Bots, MaxPlayers - humans)`. A human who joins a
@@ -1390,7 +1398,9 @@ same way, so the base game needs no Nitro file:
 
 **CHOOSE A TEAM** is the original's popup (bank 36 sprite 19).
 A team is 1–8, every row a pick (the eighth, MEN IN BLACK, is `Entity.Team8`). The popup lists teams, not players, so it is the same
-for 64. A CTF game opens the Nitro Pack's own popup instead, host and joiner alike and whether or not TEAM PLAY is set (as the
+for 64. The host's X starts on the first row (the original's); a joiner's starts on the team most of the game's people are on in its
+listing (a bot known by its " (bot)" name), else the lowest team no bot is on (`TeamPopup.StartFor`, `TeamSides.ForPerson`): DONE alone
+puts a joiner with the people, not with the bots. A CTF game opens the Nitro Pack's own popup instead, host and joiner alike and whether or not TEAM PLAY is set (as the
 original does): its bank 30's sprite 46, 45 or 44 for an arena of 2, 3 or 4 teams (231x208, centred at (205,136)), the CTF teams by
 name (Red Dawn, Gang Green, Purple Reign, Black Plague; the art greys out those the arena has not) and only the arena's rows
 picking (`TeamPopup.ChoiceFor`/`LayoutOf`). The server still puts a CTF joiner who asks for a team the arena has not (an older

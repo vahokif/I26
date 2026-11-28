@@ -33,6 +33,12 @@ public sealed record ServerOptions
     public IReadOnlyList<string> AiCars { get; init; } = ["vppirna1.vcf", "vcgcour1.vcf", "valepre1.vcf"];
     public bool TeamPlay { get; init; }
     /// <summary>
+    /// The listen host's own CHOOSE A TEAM pick (0: none, a dedicated server): the bots keep off it from the start, before the host
+    /// sits (docs/multiplayer.md "Bots"). Not carried in a host migration (the successor has the people seated).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int HostTeam { get; init; }
+    /// <summary>
     /// Bots: players the server drives by the game's mode (docs/multiplayer.md "Bots"; the host form's Bots, i26-server --bots-ai).
     /// They take the seats humans leave free: up to this many, fewer as humans join a game that would be over its
     /// <see cref="MaxPlayers"/>, back as they leave. Not the <see cref="Ai"/> fill.

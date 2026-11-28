@@ -59,7 +59,7 @@ public partial class Main
             var (arenaKind, arenaTeams) = ServerOptions.KindOf(_opt.Arena);
             var o = new ServerOptions
             {
-                Install = _opt.Install!, Arena = _opt.Arena, Port = _opt.Port, Ai = _opt.Fill, TeamPlay = _opt.Teams, Bots = System.Math.Max(0, System.Math.Min(_opt.Bots, _opt.MaxPlayers - 1)), BotSkill = _opt.BotSkill, BotChoices = _opt.BotCars, PaintOfCar = I76.Game.Shell.CarPaints.Of,
+                Install = _opt.Install!, Arena = _opt.Arena, Port = _opt.Port, Ai = _opt.Fill, TeamPlay = _opt.Teams, HostTeam = _opt.Team, Bots = System.Math.Max(0, System.Math.Min(_opt.Bots, _opt.MaxPlayers - 1)), BotSkill = _opt.BotSkill, BotChoices = _opt.BotCars, PaintOfCar = I76.Game.Shell.CarPaints.Of,
                 MaxScore = _opt.MaxScore, TimeLimit = _opt.TimeLimit,
                 Kind = _opt.MeleeKindGiven ? _opt.MeleeKind : arenaKind, Goal = _opt.MeleeGoal, GoalValue = _opt.GoalValue,
                 CtfTeams = _opt.CtfTeams > 2 ? _opt.CtfTeams : arenaTeams, Seed = unchecked((int)I76.Sim.Rng.RandSeed.Pick(_opt.FixedSeed)),

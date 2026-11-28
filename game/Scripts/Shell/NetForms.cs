@@ -880,9 +880,12 @@ public sealed partial class MeleeScreen
         Draw();
     }
 
-    /// <summary>CHOOSE A TEAM (<paramref name="ctfTeams"/> 2–4: the Nitro Pack's CTF popup of that many teams), then the team (1..) picked.</summary>
-    private void ChooseTeam(int ctfTeams, Action<int> then) =>
-        Shell.Modal(new TeamPopup { Font = _font, CtfTeams = Nitro ? ctfTeams : 0, Picked = t => { Draw(); if (t >= 0) then(t + 1); } });
+    /// <summary>
+    /// CHOOSE A TEAM (<paramref name="ctfTeams"/> 2–4: the Nitro Pack's CTF popup of that many teams), its X first on team
+    /// <paramref name="start"/> (1..; the original's first row), then the team (1..) picked.
+    /// </summary>
+    private void ChooseTeam(int ctfTeams, Action<int> then, int start = 1) =>
+        Shell.Modal(new TeamPopup { Font = _font, CtfTeams = Nitro ? ctfTeams : 0, Start = start - 1, Picked = t => { Draw(); if (t >= 0) then(t + 1); } });
 
     /// <summary>BROADCAST GAME: CHOOSE A TEAM with team play or CTF, then a listen server with the form's rules, joined at once.</summary>
     private void Broadcast()
@@ -1008,7 +1011,8 @@ public sealed partial class MeleeScreen
         }
         void Team(string password)
         {
-            if (TeamPopup.ChoiceFor(g.Info.Kind, g.Info.TeamPlay, g.Info.Teams, g.Info.Coop) is { } teams) ChooseTeam(teams, t => Go(t, password));
+            // the X starts on the people's team, so a joiner sides with them and not the bots unless they pick otherwise
+            if (TeamPopup.ChoiceFor(g.Info.Kind, g.Info.TeamPlay, g.Info.Teams, g.Info.Coop) is { } teams) ChooseTeam(teams, t => Go(t, password), TeamPopup.StartFor(g.Info.Drivers, Nitro ? teams : 0));
             else Go(0, password);
         }
         // a locked game (its listing says so, or it refused us before) asks for its password first
@@ -1057,7 +1061,16 @@ public sealed class TeamPopup : ShellScreen
     public int CtfTeams { get; init; }
     /// <summary>The row picked (0..), or −1 for CANCEL.</summary>
     public required Action<int> Picked { get; init; }
+    /// <summary>The row the X starts on (0..): the original's first, or for a joiner the people's team (<see cref="StartFor"/>).</summary>
+    public int Start { get; init; }
     public override bool EscapeOpensOptions => false;
+
+    /// <summary>
+    /// The team (1..) a joiner's CHOOSE A TEAM starts on: the one most of the game's people are on, else the lowest no bot is on
+    /// (<see cref="I76.Sim.Missions.TeamSides.ForPerson"/>; a bot is known by its name). <paramref name="ctfTeams"/> as <see cref="CtfTeams"/>.
+    /// </summary>
+    public static int StartFor(IEnumerable<SessionDriver> drivers, int ctfTeams) =>
+        I76.Sim.Missions.TeamSides.ForPerson(drivers.Select(d => ((int)d.Team, I76.Sim.Missions.BotNames.IsBot(d.Name))), ctfTeams > 0 ? Math.Clamp(ctfTeams, 2, 4) : 8);
 
     /// <summary>
     /// Which CHOOSE A TEAM a game opens before it starts: null for none (no team play, or co-op), 0 for the eight teams,
@@ -1088,7 +1101,7 @@ public sealed class TeamPopup : ShellScreen
     private Layout? _layout;
     private int _team;
 
-    public override void Enter() => Draw();
+    public override void Enter() { _team = Math.Clamp(Start, 0, L.Names.Count - 1); Draw(); }
 
     private void Draw()
     {

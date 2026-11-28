@@ -82,16 +82,19 @@ public sealed class MeleeMode : IHostMode
 
     /// <summary>
     /// A joiner's team: 0 in a free for all; in CTF one of 1..teams (the asked one, else the team with the fewest players);
-    /// else the asked one (1–8, Grey Hounds to Men In Black, 1 if none).
+    /// else the asked one (1–8, Grey Hounds to Men In Black), and with none asked the people's team (<see cref="TeamSides.ForPerson"/>).
     /// </summary>
     public int TeamFor(int asked)
     {
         if (!Game.Rules.TeamPlay) return 0;
-        if (Game.Rules.Kind != MeleeKind.Ctf) return Math.Clamp(asked, 1, 8);
+        if (Game.Rules.Kind != MeleeKind.Ctf) return asked >= 1 ? Math.Min(asked, 8) : TeamSides.ForPerson(Members(), 8, _o.HostTeam);
         int n = Game.Rules.CtfTeams;
         if (asked >= 1 && asked <= n) return asked;
         return Enumerable.Range(1, n).OrderBy(t => _host.Seats.Count(x => x.Actor.Team == t)).First();
     }
+
+    /// <summary>Everyone in the game as the team rules see them: the team, and whether a bot.</summary>
+    private IEnumerable<(int Team, bool Bot)> Members() => Game.Players.Select(p => (p.Team, p.IsBot));
 
     public string? RaiseDead(Seat s) =>
         // RAISE_DEAD: the dead player's SR, refused before 5 s and once won
@@ -181,20 +184,14 @@ public sealed class MeleeMode : IHostMode
     }
 
     /// <summary>
-    /// A bot's team: none in a free for all; in CTF the team with the fewest players; in other team play the smaller of the teams
-    /// the humans are on (two, if they are all on one: the next one over), so that the bots fill the side that is short.
+    /// A bot's team: none in a free for all; in team play a team no person is on (<see cref="TeamSides.ForBot"/>; the listen host's
+    /// own pick counts as a person's before it sits): in combat and race the bots are one side, in CTF they share out over the
+    /// teams the people left free. A bots-only game shares them out over two teams (CTF: all of them).
     /// </summary>
-    private int BotTeam()
-    {
-        if (!Game.Rules.TeamPlay) return 0;
-        var members = Game.Players;
-        if (Game.Rules.Kind == MeleeKind.Ctf)
-            return Enumerable.Range(1, Game.Rules.CtfTeams).OrderBy(t => members.Count(x => x.Team == t)).First();
-        var used = members.Where(x => !x.IsBot).Select(x => x.Team).Where(t => t >= 1).Distinct().OrderBy(t => t).ToList();
-        if (used.Count == 0) used = [1, 2];
-        else if (used.Count == 1) used.Add(used[0] == 1 ? 2 : 1);
-        return used.OrderBy(t => members.Count(x => x.Team == t)).ThenBy(t => t).First();
-    }
+    private int BotTeam() =>
+        !Game.Rules.TeamPlay ? 0
+        : Game.Rules.Kind == MeleeKind.Ctf ? TeamSides.ForBot(Members(), Game.Rules.CtfTeams, _o.HostTeam, spread: true)
+        : TeamSides.ForBot(Members(), 8, _o.HostTeam);
 
     // ---- the tick ----
 
